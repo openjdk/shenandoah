@@ -1,0 +1,11 @@
+rootProject.name = 'corretto-jdk'
+
+import org.apache.tools.ant.taskdefs.condition.Os
+
+def subProjects = []
+
+if (Os.isFamily(Os.FAMILY_UNIX)) {
+    subProjects += [':installers:brazil']
+}
+
+include subProjects as String[]

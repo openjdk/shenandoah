@@ -1,0 +1,78 @@
+import java.text.MessageFormat
+
+apply plugin: 'jdk'
+
+def sourceDir = file("$rootDir")
+def editableSource = file("$buildDir/editable-source")
+
+jdkBuild {
+    imageDir = file("$brazilGradle.buildDir/jdk-16")
+}
+
+validation {
+    internalVersion = MessageFormat.format('OpenJDK 64-Bit Server VM ({0}+{1}) for linux-amd64 JRE ({0}+{1})',
+                                           project.jdkversion, project.build)
+}
+
+task conf(type: Exec) {
+    commandLine = [
+            'bash',
+            "$sourceDir/configure",
+            '--with-jvm-features=zgc',
+            '--with-version-feature=16',
+            '--with-version-build=' + project.build,
+            '--with-version-pre=',
+            '--with-version-opt=',
+            '--with-x=' + bp('[X11Libs]lib.libfarm').file.toString(),
+            '--with-cups=' + bp('[Cups]lib.libfarm').file.toString(),
+            '--with-fontconfig=' + bp('[Fontconfig]lib.libfarm').file.toString(),
+            '--with-freetype=bundled',
+            '--with-alsa=' + bp('[AlsaLib]lib.libfarm').file.toString()
+    ]
+    workingDir editableSource
+    outputs.file "$editableSource/configure-support/config.log"
+    inputs.dir 'src'
+}
+
+task images(type: Exec, dependsOn: conf) {
+    commandLine 'make', 'images'
+    workingDir editableSource
+    outputs.dir "$editableSource/images/jdk"
+    inputs.dir 'src'
+}
+
+task docs(type: Exec, dependsOn: images) {
+    commandLine 'make', 'docs'
+    workingDir editableSource
+    outputs.dir "$editableSource/images/docs"
+    inputs.dir 'src'
+}
+
+task copyArtifacts(type: Copy) {
+    from(images) {
+        into 'jdk-16'
+    }
+    from(docs) {
+        into 'brazil-documentation'
+    }
+    from("$editableSource/images/jdk/lib/src.zip") {
+        into 'generated-src'
+    }
+    into brazilGradle.buildDir
+}
+
+publishMetadata.mustRunAfter(copyArtifacts)
+task assembleOutput {
+    dependsOn copyArtifacts
+    dependsOn publishMetadata
+}
+
+task test {
+    dependsOn checkMetadata
+    mustRunAfter assembleOutput
+}
+
+task release {
+    dependsOn assembleOutput
+    dependsOn test
+}
