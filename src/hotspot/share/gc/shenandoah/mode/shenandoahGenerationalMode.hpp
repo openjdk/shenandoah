@@ -22,21 +22,21 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
-#define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
+#ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
+#define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
 
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 
 class ShenandoahHeuristics;
 
-class ShenandoahSATBMode : public ShenandoahMode {
+class ShenandoahGenerationalMode : public ShenandoahMode {
 public:
   virtual void initialize_flags() const;
   virtual ShenandoahHeuristics* initialize_heuristics() const;
-  virtual const char* name()     { return "Snapshot-At-The-Beginning (SATB)"; }
+  virtual const char* name()     { return "Generational"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
-  virtual bool is_generational() { return false; }
+  virtual bool is_generational() { return true; }
 };
 
-#endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
+#endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
