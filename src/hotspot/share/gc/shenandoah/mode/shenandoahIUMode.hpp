@@ -37,6 +37,7 @@ public:
   virtual const char* name()     { return "Incremental-Update (IU)"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return true; }
+  virtual bool is_generational() { return false; }
 };
 
 #endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHIUMODE_HPP

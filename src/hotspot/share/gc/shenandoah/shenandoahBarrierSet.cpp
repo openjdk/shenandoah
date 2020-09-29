@@ -53,15 +53,18 @@ static BarrierSetNMethod* make_barrier_set_nmethod(ShenandoahHeap* heap) {
 }
 
 ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap) :
-  BarrierSet(make_barrier_set_assembler<ShenandoahBarrierSetAssembler>(),
-             make_barrier_set_c1<ShenandoahBarrierSetC1>(),
-             make_barrier_set_c2<ShenandoahBarrierSetC2>(),
-             make_barrier_set_nmethod(heap),
-             BarrierSet::FakeRtti(BarrierSet::ShenandoahBarrierSet)),
+   CardTableBarrierSet(make_barrier_set_assembler<ShenandoahBarrierSetAssembler>(),
+                       make_barrier_set_c1<ShenandoahBarrierSetC1>(),
+                       make_barrier_set_c2<ShenandoahBarrierSetC2>(),
+                       make_barrier_set_nmethod(heap),
+                       heap->card_table(),
+                       BarrierSet::FakeRtti(BarrierSet::ShenandoahBarrierSet)),
   _heap(heap),
   _satb_mark_queue_buffer_allocator("SATB Buffer Allocator", ShenandoahSATBBufferSize),
   _satb_mark_queue_set(&_satb_mark_queue_buffer_allocator)
 {
+  assert(heap->mode()->is_generational() == (heap->card_table() != NULL),
+         "the heap's having a card table does not match the GC mode being generational");
 }
 
 ShenandoahBarrierSetAssembler* ShenandoahBarrierSet::assembler() {
@@ -182,6 +185,12 @@ void ShenandoahBarrierSet::on_thread_detach(Thread *thread) {
 void ShenandoahBarrierSet::clone_barrier_runtime(oop src) {
   if (_heap->has_forwarded_objects() || (ShenandoahStoreValEnqueueBarrier && _heap->is_concurrent_mark_in_progress())) {
     clone_barrier(src);
+  }
+}
+
+void ShenandoahBarrierSet::write_ref_array_work(MemRegion mr) {
+  if (_heap->mode()->is_generational()) {
+    CardTableBarrierSet::write_ref_array_work(mr);
   }
 }
 

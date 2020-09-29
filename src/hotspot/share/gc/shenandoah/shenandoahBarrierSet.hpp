@@ -26,13 +26,13 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSET_HPP
 
 #include "gc/shared/accessBarrierSupport.hpp"
-#include "gc/shared/barrierSet.hpp"
+#include "gc/shared/cardTableBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahSATBMarkQueueSet.hpp"
 
 class ShenandoahBarrierSetAssembler;
 
-class ShenandoahBarrierSet: public BarrierSet {
+class ShenandoahBarrierSet: public CardTableBarrierSet {
 private:
 
   ShenandoahHeap* _heap;
@@ -95,6 +95,11 @@ public:
 
   template <class T>
   inline oop load_reference_barrier_native(oop obj, T* load_addr);
+
+  template <DecoratorSet decorators, typename T>
+  void write_ref_field_post(T* field, oop newVal);
+
+  virtual void write_ref_array_work(MemRegion mr);
 
 private:
   template <class T>

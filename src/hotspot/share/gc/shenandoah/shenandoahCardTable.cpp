@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2001, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,11 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
-#define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
+#include "precompiled.hpp"
+#include "gc/shenandoah/shenandoahCardTable.hpp"
+#include "logging/log.hpp"
 
-#include "gc/shenandoah/mode/shenandoahMode.hpp"
-
-class ShenandoahHeuristics;
-
-class ShenandoahSATBMode : public ShenandoahMode {
-public:
-  virtual void initialize_flags() const;
-  virtual ShenandoahHeuristics* initialize_heuristics() const;
-  virtual const char* name()     { return "Snapshot-At-The-Beginning (SATB)"; }
-  virtual bool is_diagnostic()   { return false; }
-  virtual bool is_experimental() { return false; }
-  virtual bool is_generational() { return false; }
-};
-
-#endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
+void ShenandoahCardTable::initialize() {
+  CardTable::initialize();
+  resize_covered_region(_whole_heap);
+}

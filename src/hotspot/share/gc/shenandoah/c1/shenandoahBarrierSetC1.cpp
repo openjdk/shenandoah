@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "c1/c1_IR.hpp"
 #include "gc/shared/satbMarkQueue.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -53,7 +54,7 @@ ShenandoahBarrierSetC1::ShenandoahBarrierSetC1() :
   _pre_barrier_c1_runtime_code_blob(NULL),
   _load_reference_barrier_rt_code_blob(NULL) {}
 
-void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
+void ShenandoahBarrierSetC1::satb_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
   // First we test whether marking is in progress.
   BasicType flag_type;
   bool patch = (decorators & C1_NEEDS_PATCHING) != 0;
@@ -173,7 +174,7 @@ LIR_Opr ShenandoahBarrierSetC1::ensure_in_register(LIRGenerator* gen, LIR_Opr ob
 LIR_Opr ShenandoahBarrierSetC1::storeval_barrier(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, DecoratorSet decorators) {
   if (ShenandoahStoreValEnqueueBarrier) {
     obj = ensure_in_register(gen, obj, T_OBJECT);
-    pre_barrier(gen, info, decorators, LIR_OprFact::illegalOpr, obj);
+    satb_barrier(gen, info, decorators, LIR_OprFact::illegalOpr, obj);
   }
   return obj;
 }
@@ -181,11 +182,21 @@ LIR_Opr ShenandoahBarrierSetC1::storeval_barrier(LIRGenerator* gen, LIR_Opr obj,
 void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
   if (access.is_oop()) {
     if (ShenandoahSATBBarrier) {
-      pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), access.resolved_addr(), LIR_OprFact::illegalOpr /* pre_val */);
+      satb_barrier(access.gen(), access.access_emit_info(), access.decorators(), access.resolved_addr(), LIR_OprFact::illegalOpr /* pre_val */);
     }
     value = storeval_barrier(access.gen(), value, access.access_emit_info(), access.decorators());
   }
   BarrierSetC1::store_at_resolved(access, value);
+
+  if (access.is_oop()) {
+    DecoratorSet decorators = access.decorators();
+    bool is_array = (decorators & IS_ARRAY) != 0;
+    bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
+
+    bool precise = is_array || on_anonymous;
+    LIR_Opr post_addr = precise ? access.resolved_addr() : access.base().opr();
+    post_barrier(access, post_addr, value);
+  }
 }
 
 LIR_Opr ShenandoahBarrierSetC1::resolve_address(LIRAccess& access, bool resolve_in_register) {
@@ -232,7 +243,7 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
         Lcont_anonymous = new LabelObj();
         generate_referent_check(access, Lcont_anonymous);
       }
-      pre_barrier(gen, access.access_emit_info(), decorators, LIR_OprFact::illegalOpr /* addr_opr */,
+      satb_barrier(gen, access.access_emit_info(), decorators, LIR_OprFact::illegalOpr /* addr_opr */,
                   result /* pre_val */);
       if (is_anonymous) {
         __ branch_destination(Lcont_anonymous->label());
@@ -278,5 +289,11 @@ void ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) 
     _load_reference_barrier_native_rt_code_blob = Runtime1::generate_blob(buffer_blob, -1,
                                                                    "shenandoah_load_reference_barrier_native_slow",
                                                                    false, &lrb_native_code_gen_cl);
+  }
+}
+
+void ShenandoahBarrierSetC1::post_barrier(LIRAccess& access, LIR_OprDesc* addr, LIR_OprDesc* new_val) {
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    CardTableBarrierSetC1::post_barrier(access, addr, new_val);
   }
 }

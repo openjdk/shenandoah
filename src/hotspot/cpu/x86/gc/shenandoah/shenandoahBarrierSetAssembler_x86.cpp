@@ -31,6 +31,7 @@
 #include "gc/shenandoah/shenandoahRuntime.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "interpreter/interpreter.hpp"
 #include "interpreter/interp_masm.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -607,7 +608,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
       BarrierSetAssembler::store_at(masm, decorators, type, Address(tmp1, 0), val, noreg, noreg);
     } else {
       storeval_barrier(masm, val, tmp3);
-      BarrierSetAssembler::store_at(masm, decorators, type, Address(tmp1, 0), val, noreg, noreg);
+      oop_store_at(masm, decorators, type, Address(tmp1, 0), val, noreg, noreg);
     }
     NOT_LP64(imasm->restore_bcp());
   } else {
@@ -1071,5 +1072,17 @@ void ShenandoahBarrierSetAssembler::barrier_stubs_init() {
     CodeBuffer buf(bb);
     StubCodeGenerator cgen(&buf);
     _shenandoah_lrb = generate_shenandoah_lrb(&cgen);
+  }
+}
+
+void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj, Address dst) {
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    CardTableBarrierSetAssembler::store_check(masm, obj, dst);
+  }
+}
+
+void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators, Register addr, Register count, Register tmp) {
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    CardTableBarrierSetAssembler::gen_write_ref_array_post_barrier(masm, decorators, addr, count, tmp);
   }
 }

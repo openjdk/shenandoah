@@ -25,7 +25,7 @@
 #ifndef SHARE_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP
 #define SHARE_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP
 
-#include "gc/shared/c2/barrierSetC2.hpp"
+#include "gc/shared/c2/cardTableBarrierSetC2.hpp"
 #include "gc/shenandoah/c2/shenandoahSupport.hpp"
 #include "utilities/growableArray.hpp"
 
@@ -48,7 +48,7 @@ public:
   void remove_load_reference_barrier(ShenandoahLoadReferenceBarrierNode * n);
 };
 
-class ShenandoahBarrierSetC2 : public BarrierSetC2 {
+class ShenandoahBarrierSetC2 : public CardTableBarrierSetC2 {
 private:
   void shenandoah_eliminate_wb_pre(Node* call, PhaseIterGVN* igvn) const;
 
@@ -63,15 +63,15 @@ private:
                               Node* pre_val,
                               BasicType bt) const;
 
-  void shenandoah_write_barrier_pre(GraphKit* kit,
-                                    bool do_load,
-                                    Node* obj,
-                                    Node* adr,
-                                    uint alias_idx,
-                                    Node* val,
-                                    const TypeOopPtr* val_type,
-                                    Node* pre_val,
-                                    BasicType bt) const;
+  virtual void shenandoah_write_barrier_pre(GraphKit* kit,
+                                            bool do_load,
+                                            Node* obj,
+                                            Node* adr,
+                                            uint alias_idx,
+                                            Node* val,
+                                            const TypeOopPtr* val_type,
+                                            Node* pre_val,
+                                            BasicType bt) const;
 
   Node* shenandoah_enqueue_barrier(GraphKit* kit, Node* val) const;
   Node* shenandoah_storeval_barrier(GraphKit* kit, Node* obj) const;
@@ -82,6 +82,17 @@ private:
   static bool clone_needs_barrier(Node* src, PhaseGVN& gvn);
 
 protected:
+  virtual void pre_barrier(GraphKit* kit,
+                           bool do_load,
+                           Node* ctl,
+                           Node* obj,
+                           Node* adr,
+                           uint adr_idx,
+                           Node* val,
+                           const TypeOopPtr* val_type,
+                           Node* pre_val,
+                           BasicType bt) const;
+
   virtual Node* load_at_resolved(C2Access& access, const Type* val_type) const;
   virtual Node* store_at_resolved(C2Access& access, C2AccessValue& val) const;
   virtual Node* atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
@@ -89,6 +100,16 @@ protected:
   virtual Node* atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                 Node* new_val, const Type* value_type) const;
   virtual Node* atomic_xchg_at_resolved(C2AtomicParseAccess& access, Node* new_val, const Type* val_type) const;
+
+  virtual void post_barrier(GraphKit* kit,
+                            Node* ctl,
+                            Node* store,
+                            Node* obj,
+                            Node* adr,
+                            uint adr_idx,
+                            Node* val,
+                            BasicType bt,
+                            bool use_precise) const;
 
 public:
   static ShenandoahBarrierSetC2* bsc2();

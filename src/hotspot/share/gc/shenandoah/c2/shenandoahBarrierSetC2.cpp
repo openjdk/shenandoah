@@ -32,6 +32,7 @@
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #include "gc/shenandoah/c2/shenandoahSupport.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "opto/arraycopynode.hpp"
 #include "opto/escape.hpp"
 #include "opto/graphKit.hpp"
@@ -494,6 +495,11 @@ const TypeFunc* ShenandoahBarrierSetC2::shenandoah_load_reference_barrier_Type()
   return TypeFunc::make(domain, range);
 }
 
+void ShenandoahBarrierSetC2::pre_barrier(GraphKit* kit, bool do_load, Node* ctl, Node* obj, Node* adr, uint adr_idx, Node* val,
+                                         const TypeOopPtr* val_type, Node* pre_val, BasicType bt) const {
+  shenandoah_write_barrier_pre(kit, do_load, obj, adr, adr_idx, val, val_type, pre_val, bt);
+}
+
 Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) const {
   DecoratorSet decorators = access.decorators();
 
@@ -501,9 +507,9 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
   Node* adr = access.addr().node();
 
   bool anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
-  bool on_heap = (decorators & IN_HEAP) != 0;
+  bool in_heap = (decorators & IN_HEAP) != 0;
 
-  if (!access.is_oop() || (!on_heap && !anonymous)) {
+  if (!access.is_oop() || (!in_heap && !anonymous)) {
     return BarrierSetC2::store_at_resolved(access, val);
   }
 
@@ -516,8 +522,14 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
     Node* value = val.node();
     value = shenandoah_storeval_barrier(kit, value);
     val.set_node(value);
-    shenandoah_write_barrier_pre(kit, true /* do_load */, /*kit->control(),*/ access.base(), adr, adr_idx, val.node(),
-                                 static_cast<const TypeOopPtr*>(val.type()), NULL /* pre_val */, access.type());
+    pre_barrier(kit, true /*x do_load */, kit->control(), access.base(), adr, adr_idx, val.node(),
+                static_cast<const TypeOopPtr*>(val.type()), NULL /* pre_val */, access.type());
+
+    Node* result = BarrierSetC2::store_at_resolved(access, val);
+    bool is_array = (decorators & IS_ARRAY) != 0;
+    bool use_precise = is_array || anonymous;
+    post_barrier(kit, kit->control(), access.raw_access(), access.base(), adr, adr_idx, val.node(), access.type(), use_precise);
+    return result;
   } else {
     assert(access.is_opt_access(), "only for optimization passes");
     assert(((decorators & C2_TIGHTLY_COUPLED_ALLOC) != 0 || !ShenandoahSATBBarrier) && (decorators & C2_ARRAY_COPY) != 0, "unexpected caller of this code");
@@ -528,8 +540,8 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
       Node* enqueue = gvn.transform(new ShenandoahEnqueueBarrierNode(val.node()));
       val.set_node(enqueue);
     }
+    return BarrierSetC2::store_at_resolved(access, val);
   }
-  return BarrierSetC2::store_at_resolved(access, val);
 }
 
 Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val_type) const {
@@ -602,7 +614,7 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
 }
 
 Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
-                                                   Node* new_val, const Type* value_type) const {
+                                                             Node* new_val, const Type* value_type) const {
   GraphKit* kit = access.kit();
   if (access.is_oop()) {
     new_val = shenandoah_storeval_barrier(kit, new_val);
@@ -644,6 +656,7 @@ Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess
     }
 #endif
     load_store = kit->gvn().transform(new ShenandoahLoadReferenceBarrierNode(NULL, load_store, false));
+    post_barrier(kit, kit->control(), access.raw_access(), access.base(), access.addr().node(), access.alias_idx(), new_val, T_OBJECT, true);
     return load_store;
   }
   return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, new_val, value_type);
@@ -699,6 +712,8 @@ Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicParseAcces
     }
     access.set_raw_access(load_store);
     pin_atomic_op(access);
+    post_barrier(kit, kit->control(), access.raw_access(), access.base(),
+                 access.addr().node(), access.alias_idx(), new_val, T_OBJECT, true);
     return load_store;
   }
   return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, new_val, value_type);
@@ -715,8 +730,24 @@ Node* ShenandoahBarrierSetC2::atomic_xchg_at_resolved(C2AtomicParseAccess& acces
     shenandoah_write_barrier_pre(kit, false /* do_load */,
                                  NULL, NULL, max_juint, NULL, NULL,
                                  result /* pre_val */, T_OBJECT);
+    post_barrier(kit, kit->control(), access.raw_access(), access.base(),
+                 access.addr().node(), access.alias_idx(), val, T_OBJECT, true);
   }
   return result;
+}
+
+void ShenandoahBarrierSetC2::post_barrier(GraphKit* kit,
+                                          Node* ctl,
+                                          Node* oop_store,
+                                          Node* obj,
+                                          Node* adr,
+                                          uint  adr_idx,
+                                          Node* val,
+                                          BasicType bt,
+                                          bool use_precise) const {
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    CardTableBarrierSetC2::post_barrier(kit, ctl, oop_store, obj, adr, adr_idx, val, bt, use_precise);
+  }
 }
 
 // Support for GC barriers emitted during parsing
@@ -911,6 +942,9 @@ void ShenandoahBarrierSetC2::unregister_potential_barrier_node(Node* node) const
 void ShenandoahBarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* n) const {
   if (is_shenandoah_wb_pre_call(n)) {
     shenandoah_eliminate_wb_pre(n, &macro->igvn());
+  }
+  if (n->Opcode() == Op_CastP2X && ShenandoahHeap::heap()->mode()->is_generational()) {
+    CardTableBarrierSetC2::eliminate_gc_barrier(macro, n);
   }
 }
 

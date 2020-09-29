@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2001, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,23 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
-#define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
+#ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP
+#define SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP
 
-#include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "gc/g1/g1RegionToSpaceMapper.hpp"
+#include "gc/shared/cardTable.hpp"
+#include "oops/oopsHierarchy.hpp"
+#include "utilities/macros.hpp"
 
-class ShenandoahHeuristics;
+class ShenandoahCardTable: public CardTable {
+  friend class VMStructs;
 
-class ShenandoahSATBMode : public ShenandoahMode {
 public:
-  virtual void initialize_flags() const;
-  virtual ShenandoahHeuristics* initialize_heuristics() const;
-  virtual const char* name()     { return "Snapshot-At-The-Beginning (SATB)"; }
-  virtual bool is_diagnostic()   { return false; }
-  virtual bool is_experimental() { return false; }
-  virtual bool is_generational() { return false; }
+  ShenandoahCardTable(MemRegion whole_heap): CardTable(whole_heap, /* conc_scan */ false) { }
+
+  virtual void initialize();
+
+  inline bool is_in_young(oop obj) const { return false; }
 };
 
-#endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHSATBMODE_HPP
+#endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP

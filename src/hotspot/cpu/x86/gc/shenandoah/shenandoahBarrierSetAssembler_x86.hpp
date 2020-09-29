@@ -26,7 +26,7 @@
 #define CPU_X86_GC_SHENANDOAH_SHENANDOAHBARRIERSETASSEMBLER_X86_HPP
 
 #include "asm/macroAssembler.hpp"
-#include "gc/shared/barrierSetAssembler.hpp"
+#include "gc/shared/cardTableBarrierSetAssembler.hpp"
 #ifdef COMPILER1
 class LIR_Assembler;
 class ShenandoahPreBarrierStub;
@@ -35,7 +35,7 @@ class StubAssembler;
 #endif
 class StubCodeGenerator;
 
-class ShenandoahBarrierSetAssembler: public BarrierSetAssembler {
+class ShenandoahBarrierSetAssembler: public CardTableBarrierSetAssembler {
 private:
 
   static address _shenandoah_lrb;
@@ -89,6 +89,11 @@ public:
                                              Register obj, Register tmp, Label& slowpath);
   virtual void barrier_stubs_init();
 
+protected:
+
+  virtual void store_check(MacroAssembler* masm, Register obj, Address dst);
+
+  virtual void gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators, Register addr, Register count, Register tmp);
 };
 
 #endif // CPU_X86_GC_SHENANDOAH_SHENANDOAHBARRIERSETASSEMBLER_X86_HPP

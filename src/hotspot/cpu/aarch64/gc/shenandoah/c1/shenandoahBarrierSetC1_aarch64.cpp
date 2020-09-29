@@ -73,7 +73,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
   if (access.is_oop()) {
     LIRGenerator *gen = access.gen();
     if (ShenandoahSATBBarrier) {
-      pre_barrier(gen, access.access_emit_info(), access.decorators(), access.resolved_addr(),
+      satb_barrier(gen, access.access_emit_info(), access.decorators(), access.resolved_addr(),
                   LIR_OprFact::illegalOpr /* pre_val */);
     }
     if (ShenandoahCASBarrier) {
@@ -114,7 +114,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
     __ move(result, tmp);
     result = tmp;
     if (ShenandoahSATBBarrier) {
-      pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), LIR_OprFact::illegalOpr,
+      satb_barrier(access.gen(), access.access_emit_info(), access.decorators(), LIR_OprFact::illegalOpr,
                   result /* pre_val */);
     }
   }
