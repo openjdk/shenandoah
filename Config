@@ -28,7 +28,7 @@ package.OpenJDKTipSrc = {
       CFlagsGCC = 9.x;
       GCC = 9.x;
       GnuMake = 4.x;
-      JDK14 = 1.0;
+      JDK15 = 1.0;
       Rsync = 2.6.9;
       Zlib = 1;
     };
