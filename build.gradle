@@ -9,9 +9,23 @@ jdkBuild {
     imageDir = file("$brazilGradle.buildDir/jdk-16")
 }
 
+ext {
+    arch = ['uname', '-m'].execute().text.trim()
+    switch (arch) {
+        case 'aarch64':
+            arch_alias = arch
+            break;
+        case 'x86_64':
+            arch_alias = 'amd64'
+            break;
+        default:
+            throw new GradleException("${arch} is not suported")
+    }
+}
+
 validation {
-    internalVersion = MessageFormat.format('OpenJDK 64-Bit Server VM ({0}+{1}) for linux-amd64 JRE ({0}+{1})',
-                                           project.jdkversion, project.build)
+    internalVersion = MessageFormat.format('OpenJDK 64-Bit Server VM ({0}+{1}) for linux-{2} JRE ({0}+{1})',
+                                           project.jdkversion, project.build, arch_alias)
 }
 
 task conf(type: Exec) {
