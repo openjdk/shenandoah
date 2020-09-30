@@ -22,11 +22,4 @@
  *
  */
 
-#include "precompiled.hpp"
-#include "gc/shared/memset_with_concurrent_readers.hpp"
-#include "gc/shenandoah/shenandoahCardTable.hpp"
-
-void ShenandoahCardTable::initialize() {
-  CardTable::initialize();
-  resize_covered_region(_whole_heap);
-}
+#include "gc/shenandoah/shenandoahGeneration.hpp"

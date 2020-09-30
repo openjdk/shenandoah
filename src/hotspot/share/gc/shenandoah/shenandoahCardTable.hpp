@@ -38,7 +38,7 @@ public:
 
   virtual void initialize();
 
-  inline bool is_in_young(oop obj) const {
+  virtual inline bool is_in_young(oop obj) const {
     ShouldNotReachHere();
     return false;
   }

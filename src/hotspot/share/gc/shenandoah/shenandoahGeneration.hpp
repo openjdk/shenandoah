@@ -22,11 +22,18 @@
  *
  */
 
-#include "precompiled.hpp"
-#include "gc/shared/memset_with_concurrent_readers.hpp"
-#include "gc/shenandoah/shenandoahCardTable.hpp"
+#ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
+#define SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
 
-void ShenandoahCardTable::initialize() {
-  CardTable::initialize();
-  resize_covered_region(_whole_heap);
-}
+class ShenandoahGeneration {
+public:
+  ShenandoahGeneration();
+};
+
+class ShenandoahYoungGeneration : public ShenandoahGeneration {
+};
+
+class ShenandoahOldGeneration : public ShenandoahGeneration {
+};
+
+#endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
