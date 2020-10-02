@@ -48,9 +48,9 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(
   _overreach_map_base = (_overreach_map -
 			 (uintptr_t(_whole_heap_base) >> _card_shift));
       
-  assert(_card_count % ShenandoahCardCluster::CardsPerCluster == 0);
-  assert(_card_count > 0);
-  assert(_overreach_cards != NULL);
+  assert(_card_count % ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster == 0, "Invalid card count.");
+  assert(_card_count > 0, "Card count cannot be zero.");
+  // assert(_overreach_cards != NULL);
 }
 
 ShenandoahDirectCardMarkRememberedSet::~ShenandoahDirectCardMarkRememberedSet()
@@ -174,7 +174,7 @@ bool ShenandoahCardCluster<RememberedSet>::hasObject(uint32_t card_no) {
   ShenandoahHeapRegion *region = heap->heap_region_containing(addr);
   HeapWord *obj = region->block_start(addr);
 
-  assert(obj != NULL);
+  assert(obj != NULL, "Object cannot be null");
   if (obj >= addr)
     return true;
   else {
@@ -195,7 +195,7 @@ uint32_t ShenandoahCardCluster<RememberedSet>::getFirstStart(uint32_t card_no)
   ShenandoahHeapRegion *region = heap->heap_region_containing(addr);
   HeapWord *obj = region->block_start(addr);
 
-  assert(obj != NULL);
+  assert(obj != NULL, "Object cannot be null.");
   if (obj >= addr)
     return obj - addr;
   else {
@@ -203,7 +203,6 @@ uint32_t ShenandoahCardCluster<RememberedSet>::getFirstStart(uint32_t card_no)
     obj += oop(obj)->size();
     if (obj < end_addr)
       return obj - addr;
-    assert(false);
   }
 }
 
@@ -215,7 +214,7 @@ uint32_t ShenandoahCardCluster<RememberedSet>::getLastStart(uint32_t card_no) {
   ShenandoahHeapRegion *region = heap->heap_region_containing(addr);
   HeapWord *obj = region->block_start(addr);
 
-  assert(obj != NULL);
+  assert(obj != NULL, "Object cannot be null.");
 
   HeapWord *end_obj = obj + oop(obj)->size();
   while (end_obj < end_addr) {
@@ -223,7 +222,7 @@ uint32_t ShenandoahCardCluster<RememberedSet>::getLastStart(uint32_t card_no) {
     end_obj = obj + oop(obj)->size();
   }
 
-  assert(obj >= addr);
+  assert(obj >= addr, "Object out of range.");
   return obj - addr;
 }
 
@@ -267,11 +266,11 @@ void ShenandoahScanRemembered<RememberedSet>::processClusters(
 	ShenandoahCardCluster<ShenandoahBufferWithSATBRememberedSet>::CardsPerCluster;
 
     while (card_no < end_card_no) {
-      if (_scc.isCardDirty(card_no)) {
-        if (_scc.hasObject(card_no)) {
+      if (_scc->isCardDirty(card_no)) {
+        if (_scc->hasObject(card_no)) {
           // Scan all objects that start within this card region.
-          uint32_t start_offset = _scc.getFirstStart(card_no);
-          HeapWord *p = _scc.getAddrForCard(card_no);
+          uint32_t start_offset = _scc->getFirstStart(card_no);
+          HeapWord *p = _scc->getAddrForCard(card_no);
           HeapWord *endp = p + CardTable::card_size_in_words;
           p += start_offset;
 
@@ -295,28 +294,28 @@ void ShenandoahScanRemembered<RememberedSet>::processClusters(
 	  // p either points to start of next card region, or to
 	  // the next object that needs to be scanned, which may
 	  // reside in some successor card region.
-	  card_no = _scc.cardAtAddress(p);
+	  card_no = _scc->cardAtAddress(p);
 	} else {
           // otherwise, this card will have been scanned during
           // scan of a previous cluster.
           card_no++;
         }
-      } else if (_scc.hasObject(card_no)) {
+      } else if (_scc->hasObject(card_no)) {
         // Scan the last object that starts within this card memory if
         // it spans at least one dirty card within this cluster or
         // if it reaches into the next cluster. 
-        uint32_t start_offset = _scc.getFirstStart(card_no);
-        HeapWord *p = _scc.getAddrForCard(card_no) + start_offset;
+        uint32_t start_offset = _scc->getFirstStart(card_no);
+        HeapWord *p = _scc->getAddrForCard(card_no) + start_offset;
         oop obj = oop(p);
         HeapWord *nextp = p + obj->size();
-        uint32_t last_card = _scc.cardAtAddress(nextp);
+        uint32_t last_card = _scc->cardAtAddress(nextp);
 
         bool reaches_next_cluster = (last_card > end_card_no);
         bool spans_dirty_within_this_cluster = false;
         if (!reaches_next_cluster) {
-          int span_card;
+          uint32_t span_card;
           for (span_card = card_no+1; span_card < end_card_no; span_card++)
-            if (_scc.isCardDirty(span_card)) {
+            if (_scc->isCardDirty(span_card)) {
               spans_dirty_within_this_cluster = true;
 	      break;
 	    }
@@ -331,7 +330,7 @@ void ShenandoahScanRemembered<RememberedSet>::processClusters(
 	}
 	// Increment card_no to account for the spanning object,
 	// even if we didn't scan it.
-	card_no = _scc.cardAtAddress(end_card_no);
+	card_no = _scc->cardAtAddress(end_card_no);
       } else
 	card_no++;
     }
