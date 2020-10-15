@@ -55,6 +55,13 @@ task images(type: Exec, dependsOn: conf) {
     inputs.dir 'src'
 }
 
+task testImages(type: Exec, dependsOn: conf) {
+    commandLine 'make', 'test-image-hotspot-jtreg-native','test-image-jdk-jtreg-native'
+    workingDir editableSource
+    outputs.dir "$editableSource/images/test"
+    inputs.dir 'src'
+}
+
 task docs(type: Exec, dependsOn: images) {
     commandLine 'make', 'docs'
     workingDir editableSource
@@ -65,6 +72,9 @@ task docs(type: Exec, dependsOn: images) {
 task copyArtifacts(type: Copy) {
     from(images) {
         into 'jdk-16'
+    }
+    from(testImages) {
+        into 'testimage'
     }
     from(docs) {
         into 'brazil-documentation'
