@@ -260,18 +260,13 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
 
-  size_t size = p->size();
   ShenandoahGeneration target_gen = heap_region_containing(p)->generation();
   if (target_gen == YOUNG_GEN) {
-    markWord mark = p->mark();
-    if (mark.is_marked()) {
-      // Already forwarded.
+    if (ShenandoahForwarding::is_forwarded(p)) {
       return ShenandoahBarrierSet::resolve_forwarded(p);
-    } else {
-      if (mark.age() > InitialTenuringThreshold) {
-        //tty->print_cr("promoting object: " PTR_FORMAT, p2i(p));
-        //target_gen = OLD_GEN;
-      }
+    } else if (p->mark().age() > InitialTenuringThreshold) {
+      //tty->print_cr("promoting object: " PTR_FORMAT, p2i(p));
+      //target_gen = OLD_GEN;
     }
   }
 
@@ -279,6 +274,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   bool alloc_from_gclab = true;
   HeapWord* copy = NULL;
+  size_t size = p->size();
 
 #ifdef ASSERT
   if (ShenandoahOOMDuringEvacALot &&
