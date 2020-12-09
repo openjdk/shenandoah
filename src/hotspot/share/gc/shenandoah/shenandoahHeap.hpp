@@ -520,10 +520,8 @@ private:
 
   // Prepare concurrent root processing
   void prepare_concurrent_roots();
-
   // Prepare and finish concurrent unloading
   void prepare_concurrent_unloading();
-
   void finish_concurrent_unloading();
   // Heap iteration support
   void scan_roots_for_iteration(ShenandoahScanObjectStack* oop_stack, ObjectIterateScanRootClosure* oops);
@@ -672,7 +670,6 @@ public:
 
 // ---------- Evacuation support
 //
-
 private:
   ShenandoahCollectionSet* _collection_set;
   ShenandoahEvacOOMHandler _oom_evac_handler;
@@ -727,7 +724,6 @@ private:
 
 // ---------- Testing helpers functions
 //
-
 private:
   ShenandoahSharedFlag _inject_alloc_failure;
 
