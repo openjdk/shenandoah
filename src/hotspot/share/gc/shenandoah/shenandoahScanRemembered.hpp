@@ -45,7 +45,7 @@
 //               that object will be scanned in its entirety). For these
 //               reasons, it is advisable for the multiple worker threads
 //               to be flexible in the number of clusters to be
-//               processed by each thread. 
+//               processed by each thread.
 
 
 
@@ -96,7 +96,7 @@
 //  Let old_regions = number of ShenandoahHeapRegion comprising
 //    old-gen memory
 //  Let region_size = ShenandoahHeapRegion::region_size_bytes()
-//    represent the number of bytes in each region 
+//    represent the number of bytes in each region
 //  Let clusters_per_region = region_size / 512
 //  Let rs represent the relevant RememberedSet implementation
 //    (an instance of ShenandoahBufferWithSATBRememberedSet or
@@ -123,7 +123,7 @@
 //    for each cluster contained within that region
 //      Assure that exactly one worker thread processes each
 //      cluster, each thread making a series of invocations of the
-//      following: 
+//      following:
 //
 //        rs->process_clusters(worker_id, ReferenceProcessor *,
 //                            ShenandoahConcurrentMark *, cluster_no, cluster_count,
@@ -144,7 +144,7 @@
 //           this cluster, the processing of this cluster gets a
 //           "free ride" because the thread responsible for processing
 //           the cluster that holds the object's header does the
-//           processing. 
+//           processing.
 //        d) in the case that the end of this cluster is spanned by a
 //           very large object, the processing of this cluster will
 //           be responsible for examining the entire object,
@@ -171,7 +171,7 @@
 //           associated with previous cluster scanning assignments,
 //           multiples of these next assignments may be serviced by
 //           the server threads that were previously assigned lighter
-//           workloads. 
+//           workloads.
 //        4. Make subsequent scanning assignments as follows:
 //             a) 8 assignments of size 16 clusters
 //             b) 8 assignments of size 8 clusters
@@ -204,7 +204,7 @@
 // into strong_roots_do and roots_do methods of ShenandoahRootScanner
 // (source file shenandoahRootProcessor.cpp) following the
 // construction of tc_cl and rm and before the call to
-// _serial_roots.oops_do(). 
+// _serial_roots.oops_do().
 //
 // To initiate concurrent evacuation, insert the above code sequences
 // into ShenandoahRootEvacuator::roots_do() before the invocation of
@@ -332,13 +332,13 @@ public:
 //     which some portions of the object will not be scanned by this
 //     thread:
 //     a) If an object spans multiple card regions, all of which are
-//        contained within the same cluster, the scanning thread 
+//        contained within the same cluster, the scanning thread
 //        consults the existing card-table entries and does not scan
 //        portions of the object that are not currently dirty.
 //     b) For any cluster that is spanned in its entirety by a very
 //        large object, the GC thread that scans this object assumes
 //        full responsibility for maintenance of the associated
-//        card-table entries. 
+//        card-table entries.
 //     c) If a cluster is partially spanned by an object originating
 //        in a preceding cluster, the portion of the object that
 //        partially spans the following cluster is scanned in its
@@ -405,7 +405,7 @@ public:
 //     unnecessary overscan, but it introduces different sorts of
 //     overhead effort:
 //       i) For each spanned cluster, we have to look up the start of
-//          the crossing object. 
+//          the crossing object.
 //      ii) Each time we scan the very large object, we have to
 //          sequentially walk through its pointer location
 //          descriptors, skipping over all of the pointers that
@@ -414,7 +414,7 @@ public:
 
 
 // Because old-gen heap memory is not necessarily contiguous, and
-// because cards are not necessarily maintained for young-gen memory, 
+// because cards are not necessarily maintained for young-gen memory,
 // consecutive card numbers do not necessarily correspond to consecutive
 // address ranges.  For the traditional direct-card-marking
 // implementation of this interface, consecutive card numbers are
@@ -430,7 +430,7 @@ public:
 //  3. (A corollary) In the case that an old-gen object spans the
 //     boundary between two heap regions, the card regions that
 //     correspond to the span of this object will be consecutively
-//     numbered. 
+//     numbered.
 
 
 // ShenandoahCardCluster abstracts access to the remembered set
@@ -505,7 +505,7 @@ public:
   //              stored in these bits is the special value 0x7fff.
   //              (Note that the maximum value required to represent a
   //              spanning object from within the current cluster is
-  //              ((63 * 64) - 8), which equals 0x0fbf. 
+  //              ((63 * 64) - 8), which equals 0x0fbf.
   //
   // In the absence of the need to support get_crossing_object_start(),
   // here is discussion of performance:
@@ -539,7 +539,7 @@ public:
   //
   // Consider further the following observations regarding object
   // registration costs:
-  // 
+  //
   //   1. The cost is paid once for each old-gen object (Except when
   //      an object is demoted and repromoted, in which case we would
   //      pay the cost again).
@@ -551,7 +551,7 @@ public:
   //      because:
   //      a) Most objects die young and objects that die in young-gen
   //         memory never need to be registered with the object_starts
-  //         array. 
+  //         array.
   //      b) Most objects that are promoted into old-gen memory live
   //         there without further relocation for a relatively long
   //         time, so we get a lot of benefit from each investment
@@ -635,7 +635,7 @@ public:
   //     time to do the post-processing of each GCLAB.
   //  3. Since only one GC thread at a time is registering objects
   //     belonging to a particular allocation buffer, no locking
-  //     is performed when registering these objects.  
+  //     is performed when registering these objects.
   //  4. Any remnant of unallocated memory within an expended GC
   //     allocation buffer is not returned to the old-gen allocation
   //     pool until after the GC allocation buffer has been post
@@ -651,7 +651,7 @@ public:
   //     by way of GCLAB buffers.  Multiple independent GC threads may
   //     attempt to tenure objects into a shared cluster.  This is why
   //     sychronization may be necessary.  Consider the following
-  //     scenarios: 
+  //     scenarios:
   //
   //     a) If two objects are tenured into the same card region, each
   //        registration may attempt to modify the first-start or
@@ -755,12 +755,12 @@ public:
       //    entirety, then card_at_end will identify the card region
       //    that follows the object rather than the last region spanned
       //    by the object.
-      
+
       // Bottom line: no further work to be done in any of these cases.
     }
     // Otherwise, the last card region of this cluster is not
     // completely spanned by this new object.  Leave the object_starts
-    // array entry alone.  Two cases: 
+    // array entry alone.  Two cases:
     //
     //  a) This newly registered object represents a consolidation of
     //     multiple smaller objects, not including the object that
@@ -869,7 +869,7 @@ public:
   //     ShenandoahScanRememberd<ShenandoahDirectCardMarkRememberedSet>(rs);
   //
   // or, when fully implemented:
-  // 
+  //
   //   ShenandoahBufferWithSATBRememberedSet *rs =
   //       new ShenandoahBufferWithSATBRememberedSet();
   //   scr = new

@@ -48,7 +48,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(Car
   _overreach_map = (uint8_t *) malloc(total_card_count);
   _overreach_map_base = (_overreach_map -
                          (uintptr_t(_whole_heap_base) >> _card_shift));
-      
+
   assert(total_card_count % ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster == 0, "Invalid card count.");
   assert(total_card_count > 0, "Card count cannot be zero.");
   // assert(_overreach_cards != NULL);
@@ -96,7 +96,7 @@ ShenandoahBufferWithSATBRememberedSet::ShenandoahBufferWithSATBRememberedSet(siz
   _card_shift = CardTable::card_shift;
 
   _whole_heap_base = _heap->base();
-  _whole_heap_end = _whole_heap_base + _card_count * 
+  _whole_heap_end = _whole_heap_base + _card_count *
       ShenandoahCardCluster<ShenandoahBufferWithSATBRememberedSet>::CardsPerCluster;
 }
 
