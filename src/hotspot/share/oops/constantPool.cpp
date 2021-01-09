@@ -1183,35 +1183,15 @@ void ConstantPool::copy_bootstrap_arguments_at_impl(const constantPoolHandle& th
   }
 }
 
-#undef TRACE_STRING_AT_IMPL
-
 oop ConstantPool::string_at_impl(const constantPoolHandle& this_cp, int which, int obj_index, TRAPS) {
   // If the string has already been interned, this entry will be non-null
-#ifdef TRACE_STRING_AT_IMPL
-  printf("ConstantPool::string_at_impl(which: %d, obj_index: %d)\n", which, obj_index);
-#endif
   oop str = this_cp->resolved_references()->obj_at(obj_index);
-#ifdef TRACE_STRING_AT_IMPL
-  printf(" str is %llx\n", (unsigned long long) cast_from_oop<HeapWord *>(str));
-#endif
   assert(str != Universe::the_null_sentinel(), "");
   if (str != NULL) return str;
   Symbol* sym = this_cp->unresolved_string_at(which);
-#ifdef TRACE_STRING_AT_IMPL
-  printf(" sym is %llx\n", (unsigned long long) sym);
-#endif
   str = StringTable::intern(sym, CHECK_(NULL));
-#ifdef TRACE_STRING_AT_IMPL
-  printf(" Interned str is %llx\n", (unsigned long long) cast_from_oop<HeapWord *>(str));
-#endif
   this_cp->string_at_put(which, obj_index, str);
-#ifdef TRACE_STRING_AT_IMPL
-  printf(" put string at which: %d, obj_index: %d\n", which, obj_index);
-#endif
   assert(java_lang_String::is_instance(str), "must be string");
-#ifdef TRACE_STRING_AT_IMPL
-  printf(" returning string %llx\n", (unsigned long long) cast_from_oop<HeapWord *>(str));
-#endif
   return str;
 }
 
