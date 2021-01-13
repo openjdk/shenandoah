@@ -37,7 +37,6 @@
 #include "gc/shenandoah/shenandoahUnload.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "memory/metaspace.hpp"
-#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "services/memoryManager.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/stack.hpp"
@@ -46,7 +45,6 @@ class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
 class ShenandoahCollectorPolicy;
 class ShenandoahControlThread;
-class ShenandoahDirectCardMarkRememberedSet;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahGeneration;
@@ -67,7 +65,6 @@ class ShenandoahPacer;
 class ShenandoahVerifier;
 class ShenandoahWorkGang;
 class VMStructs;
-
 
 // Used for buffering per-region liveness data.
 // Needed since ShenandoahHeapRegion uses atomics to update liveness.

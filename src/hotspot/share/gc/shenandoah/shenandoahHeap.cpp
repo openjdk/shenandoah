@@ -1156,7 +1156,6 @@ public:
     ShenandoahEvacOOMScope oom_evac_scope;
     ShenandoahEvacuateUpdateRootsClosure<> cl;
     MarkingCodeBlobClosure blobsCl(&cl, CodeBlobToOopClosure::FixRelocations);
-
     _rp->roots_do(worker_id, &cl);
   }
 };
@@ -2718,16 +2717,18 @@ private:
         // an old-gen region as part of an old-gen collection.  Otherwise, a subseqent update-refs scan of
         // the same region will see stale pointers and crash.
         //
-        // Kelvin believes (but has not confirmed) the following:
         //   r->top() represents the upper end of memory that has been allocated within this region.
         //       As new objects are allocated, the value of r->top() increases to accomodate each new
         //       object.
-        //   r->get_update_watermark() represents the value that was held in r->top() at the start of
-        //       evacuation.  During evacuation, new objects may be allocated within this heap region
-        //       and this will cause r->top() to increase.  But any objects allocated during the evacuation
-        //       phase do not need to be scanned by update-refs because the to-space invariant is in force
-        //       during evacuation and this will assure that any objects residing between
-        //       r->get_update_watermark() and r->top() hold no pointers to from-space.
+        //   At the start of evacuation, "update_watermark" is initalized to represent the value of top().
+        //       Objects newly allocated during evacuation do not need to be visited during update-refs
+        //       because the to-space invariant which is in force throughout evacuation assures that no from-space
+        //       pointer is written to any newly allocated object.  In the case that survivor objects are evacuated
+        //       into this region during evacuation, the region's watermark is incremented to represent the end of
+        //       of the memory range known to hold newly evacuated objects.  Note that incrementing watermark to
+        //       account for objects newly evacuated into the region may result in otherwise unnecessary updating
+        //       of references contained within newly allocated objects that happen to be located between the
+        //       initial value of watermark and the updated value of watermark.
 
         HeapWord *p = r->bottom();
         ShenandoahObjectToOopBoundedClosure<T> objs(&cl, p, update_watermark);
@@ -2738,10 +2739,13 @@ private:
         // if we are trying to scan one of these free memory regions while a different thread is trying to
         // allocate from within a free region.
         //
-        // Reality is that this code is likely to be replaced with JVM-292 code before we ever get around to
-        // sweeping up garbage objects within old-gen memory.
+        // Alternative approaches are also under consideration.  For example:
+        //  1. Coalesce, fill, and register each range of contiguous dead objects so that subsequent updating of
+        //     references can be done more efficiently.
+        //  2. Retain the mark bitmap from the most recently completed old GC effort and use this bitmap to allow
+        //     skipping over objects that were not live as of the most recently completed old-gen GC effort.
 
-        // Anything beyond update_watermark is not yet allocated or initialized
+        // Anything beyond update_watermark does not need to be updated.
         while (p < update_watermark) {
           oop obj = oop(p);
 

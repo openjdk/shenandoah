@@ -34,8 +34,6 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 
-#include "gc/shenandoah/shenandoahBufferWithSATBRememberedSet.inline.hpp"
-
 inline uint32_t
 ShenandoahDirectCardMarkRememberedSet::card_index_for_addr(HeapWord *p) {
   return (uint32_t) _card_table->index_for(p);

@@ -23,6 +23,17 @@
  *
  */
 
+
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
+
+#include <stdint.h>
+#include "memory/iterator.hpp"
+#include "gc/shenandoah/shenandoahCardTable.hpp"
+#include "gc/shared/referenceDiscoverer.hpp"
+#include "gc/shared/referencePolicy.hpp"
+#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
+
 // Terminology used within this source file:
 //
 // Card Entry:   This is the information that identifies whether a
@@ -46,9 +57,7 @@
 //               reasons, it is advisable for the multiple worker threads
 //               to be flexible in the number of clusters to be
 //               processed by each thread.
-
-
-
+//
 // A cluster represents a "natural" quantum of work to be performed by
 // a parallel GC thread's background remembered set scanning efforts.
 // The notion of cluster is similar to the notion of stripe in the
@@ -85,13 +94,9 @@
 //       total of 32 KB
 //     The number of clusters per region is 128 MB / 32 KB = 4K
 //
-
-// The typical parallel remembered set scanning effort consists of the
-// following steps, all of which are performed during a JVM safetpoint:
-//
-// At the start of a new concurrent mark or concurrent evacuation
-// pass, the gang of Shenandoah worker threads collaborate in
-// performing the following actions:
+// At the start of a new young-gen concurrent mark pass, the gang of
+// Shenandoah worker threads collaborate in performing the following
+// actions:
 //
 //  Let old_regions = number of ShenandoahHeapRegion comprising
 //    old-gen memory
@@ -99,8 +104,8 @@
 //    represent the number of bytes in each region
 //  Let clusters_per_region = region_size / 512
 //  Let rs represent the relevant RememberedSet implementation
-//    (an instance of ShenandoahBufferWithSATBRememberedSet or
-//     ShenandoahDirectCardMarkRememberedSet)
+//    (an instance of ShenandoahDirectCardMarkRememberedSet or an instance
+//     of a to-be-implemented ShenandoahBufferWithSATBRememberedSet)
 //
 //  for each ShenandoahHeapRegion old_region in the whole heap
 //    determine the cluster number of the first cluster belonging
@@ -116,7 +121,7 @@
 //      clusters.  Initialization cost is essentially identical for
 //      each cluster.)
 //
-//  Next, we repeat the process for invocations of examineCluster:
+//  Next, we repeat the process for invocations of process_Clusters.
 //  for each ShenandoahHeapRegion old_region in the whole heap
 //    determine the cluster number of the first cluster belonging
 //      to that region
@@ -126,14 +131,13 @@
 //      following:
 //
 //        rs->process_clusters(worker_id, ReferenceProcessor *,
-//                            ShenandoahConcurrentMark *, cluster_no, cluster_count,
-//                            HeapWord *end_of_range, OopClosure *oops);
-//        // Use the same approach for invocations of replaceClusters()
+//                             ShenandoahConcurrentMark *, cluster_no, cluster_count,
+//                             HeapWord *end_of_range, OopClosure *oops);
 //
-//      Divide up the clusters so that different threads are
-//      responsible for processing different clusters.  Processing
-//      cost may vary greatly between clusters for the following
-//      reasons:
+//  For efficiency, divide up the clusters so that different threads
+//  are responsible for processing different clusters.  Processing costs
+//  may vary greatly between clusters for the following reasons:
+//
 //        a) some clusters contain mostly dirty cards and other
 //           clusters contain mostly clean cards
 //        b) some clusters contain mostly primitive data and other
@@ -151,14 +155,13 @@
 //           potentially requiring this thread to process large amounts
 //           of memory pertaining to other clusters.
 //
-//      Though an initial division of labor between marking threads
-//      may assign equal numbers of clusters to be scanned by each
-//      thread, it should be expected that some threads will finish
-//      their assigned work before others.  Therefore, some amount
-//      of the full remembered set scanning effort should be held
-//      back and assigned incrementally to the threads that end up with
-//      excess capacity.  Consider the following strategy for dividing
-//      labor:
+// Though an initial division of labor between marking threads may
+// assign equal numbers of clusters to be scanned by each thread, it
+// should be expected that some threads will finish their assigned
+// work before others.  Therefore, some amount of the full remembered
+// set scanning effort should be held back and assigned incrementally
+// to the threads that end up with excess capacity.  Consider the
+// following strategy for dividing labor:
 //
 //        1. Assume there are 8 marking threads and 1024 remembered
 //           set clusters to be scanned.
@@ -178,7 +181,7 @@
 //             c) 16 assignments of size 4 clusters
 //
 //    When there is no more remembered set processing work to be
-//    assigned to a newly idled worker threads, that thread can move
+//    assigned to a newly idled worker thread, that thread can move
 //    on to work on other tasks associated with root scanning until such
 //    time as all clusters have been examined.
 //
@@ -199,32 +202,21 @@
 //      clusters.  Merging cost is essentially identical for
 //      each cluster.)
 //
+// Though remembered set scanning is designed to run concurrently with
+// mutator threads, the current implementation of remembered set
+// scanning runs in parallel during a GC safepoint.  Furthermore, the
+// current implementation of remembered set scanning never clears a
+// card once it has been marked.  Since the current implementation
+// never clears marked pages, the current implementation does not
+// invoke initialize_overreach() or merge_overreach().
 //
-// To initiate concurrent scanning, insert the above code sequences
-// into strong_roots_do and roots_do methods of ShenandoahRootScanner
-// (source file shenandoahRootProcessor.cpp) following the
-// construction of tc_cl and rm and before the call to
-// _serial_roots.oops_do().
-//
-// To initiate concurrent evacuation, insert the above code sequences
-// into ShenandoahRootEvacuator::roots_do() before the invocation of
-// _serial_roots.oops_do(oops, worker_id).
-
-
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
-
-#include <stdint.h>
-#include "memory/iterator.hpp"
-#include "gc/shenandoah/shenandoahCardTable.hpp"
-#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
+// These limitations will be addressed in future enhancements to the
+// existing implementation.
 
 class ReferenceProcessor;
 class ShenandoahConcurrentMark;
 class ShenandoahHeap;
 class CardTable;
-
-#include "gc/shenandoah/shenandoahBufferWithSATBRememberedSet.hpp"
 
 class ShenandoahDirectCardMarkRememberedSet: public CHeapObj<mtGC> {
 
@@ -459,7 +451,7 @@ public:
 //    its starting location.
 //
 // The RememberedSet template parameter is intended to represent either
-//     ShenandoahDirectCardMarkRememberedSet, or
+//     ShenandoahDirectCardMarkRememberedSet, or a to-be-implemented
 //     ShenandoahBufferWithSATBRememberedSet.
 template<typename RememberedSet>
 class ShenandoahCardCluster: public CHeapObj<mtGC> {
@@ -782,10 +774,6 @@ public:
 #endif  // IMPLEMENT_THIS_OPTIMIZATION_LATER
   }
 
-  // What card number corresponds to old-gen heap addresss p.  (If p
-  // does not refer to old-gen memory, the returned value is undefined.)
-  uint32_t cardNoForAddr(HeapWord *p);
-
   // The typical use case is going to look something like this:
   //   for each heapregion that comprises olg-gen memory
   //     for each card number that corresponds to this heap region
@@ -868,7 +856,8 @@ public:
   //   scr = new
   //     ShenandoahScanRememberd<ShenandoahDirectCardMarkRememberedSet>(rs);
   //
-  // or, when fully implemented:
+  // or, after the planned implementation of
+  // ShenandoahBufferWithSATBRememberedSet has been completed:
   //
   //   ShenandoahBufferWithSATBRememberedSet *rs =
   //       new ShenandoahBufferWithSATBRememberedSet();
