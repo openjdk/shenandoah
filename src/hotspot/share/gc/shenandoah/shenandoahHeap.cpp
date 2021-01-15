@@ -33,7 +33,6 @@
 #include "gc/shared/memAllocator.hpp"
 #include "gc/shared/plab.hpp"
 
-#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahClosures.inline.hpp"
@@ -60,6 +59,7 @@
 #include "gc/shenandoah/shenandoahParallelCleaning.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.inline.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
@@ -73,7 +73,6 @@
 #include "gc/shenandoah/mode/shenandoahIUMode.hpp"
 #include "gc/shenandoah/mode/shenandoahPassiveMode.hpp"
 #include "gc/shenandoah/mode/shenandoahSATBMode.hpp"
-#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 
 #if INCLUDE_JFR
 #include "gc/shenandoah/shenandoahJfrSupport.hpp"
@@ -2725,10 +2724,9 @@ private:
         //       because the to-space invariant which is in force throughout evacuation assures that no from-space
         //       pointer is written to any newly allocated object.  In the case that survivor objects are evacuated
         //       into this region during evacuation, the region's watermark is incremented to represent the end of
-        //       of the memory range known to hold newly evacuated objects.  Note that incrementing watermark to
-        //       account for objects newly evacuated into the region may result in otherwise unnecessary updating
-        //       of references contained within newly allocated objects that happen to be located between the
-        //       initial value of watermark and the updated value of watermark.
+        //       the memory range known to hold newly evacuated objects.  Regions that receive evacuated objects
+        //       are distinct from regions that serve new object allocation requests.  A region's watermark is not
+        //       increased when objects are newly allocated within that region during evacuation.
 
         HeapWord *p = r->bottom();
         ShenandoahObjectToOopBoundedClosure<T> objs(&cl, p, update_watermark);
