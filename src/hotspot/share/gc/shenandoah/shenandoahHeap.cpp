@@ -211,7 +211,7 @@ jint ShenandoahHeap::initialize() {
   }
 
   BarrierSet::set_barrier_set(new ShenandoahBarrierSet(this, _heap_region));
-  
+
   //
   // After reserving the Java heap, create the card table, barriers, and workers, in dependency order
   //
