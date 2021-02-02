@@ -35,7 +35,7 @@ import java.util.Random;
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
  * @run main/othervm -Xbootclasspath/a:.
- *      -XX:+IgnoreUnrecognizedVMOptions 
+ *      -XX:+IgnoreUnrecognizedVMOptions
  *      -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
  *      gc.shenandoah.generational.TestSimpleGenerational
@@ -63,7 +63,7 @@ public class TestSimpleGenerational {
     // Each Node instance holds references to two "private" arrays.
     // One array holds raw seething bits (primitive integers) and the
     // holds references.
-    
+
     private int[] field_ints;
     private Node [] neighbors;
 
@@ -102,7 +102,7 @@ public class TestSimpleGenerational {
       int second_val = random.nextInt();
       if (second_val < 0) second_val = -second_val;
       if (second_val < 0) second_val = 0;
-    
+
       int overwrite_index = first_val % NeighborCount;
       result.neighbors[overwrite_index] = new Node(second_val);
       return result;
@@ -112,7 +112,7 @@ public class TestSimpleGenerational {
   public static void main(String args[]) throws Exception {
     Node n = null;
 
-    if (!wb.getBooleanVMFlag("UseShenandoahGC") || 
+    if (!wb.getBooleanVMFlag("UseShenandoahGC") ||
         !wb.getStringVMFlag("ShenandoahGCMode").equals("generational"))
       throw new IllegalStateException("Command-line options not honored!");
 

@@ -33,7 +33,7 @@ import sun.hotspot.WhiteBox;
  * @build sun.hotspot.WhiteBox
  * @run driver ClassFileInstaller sun.hotspot.WhiteBox
  * @run main/othervm -Xbootclasspath/a:.
- *      -XX:+IgnoreUnrecognizedVMOptions 
+ *      -XX:+IgnoreUnrecognizedVMOptions
  *      -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
  *      gc.shenandoah.generational.TestCLIModeGenerational
