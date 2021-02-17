@@ -35,60 +35,46 @@
 #include "utilities/macros.hpp"
 
 GCName GCConfiguration::young_collector() const {
-#if INCLUDE_G1GC
   if (UseG1GC) {
     return G1New;
   }
-#endif
 
-#if INCLUDE_PARALLELGC
   if (UseParallelGC) {
     return ParallelScavenge;
   }
-#endif
 
-#if INCLUDE_SHENANDOAHGC
   if (UseShenandoahGC) {
+#if INCLUDE_SHENANDOAHGC
     if (strcmp(ShenandoahGCMode, "generational") == 0) {
       return Shenandoah;
     }
+#endif
     return NA;
   }
-#endif
 
-#if INCLUDE_ZGC
   if (UseZGC) {
     return NA;
   }
-#endif
 
   return DefNew;
 }
 
 GCName GCConfiguration::old_collector() const {
-#if INCLUDE_G1GC
   if (UseG1GC) {
     return G1Old;
   }
-#endif
 
-#if INCLUDE_PARALLELGC
   if (UseParallelGC) {
     return ParallelOld;
   }
-#endif
 
-#if INCLUDE_ZGC
   if (UseZGC) {
     return Z;
   }
-#endif
 
-#if INCLUDE_SHENANDOAHGC
   if (UseShenandoahGC) {
     return Shenandoah;
   }
-#endif
 
   return SerialOld;
 }
