@@ -163,7 +163,8 @@ private:
           Atomic::add(&_ld[obj_reg->index()], (uint) obj->size(), memory_order_relaxed);
           // fallthrough for fast failure for un-live regions:
         case ShenandoahVerifier::_verify_liveness_conservative:
-          check(ShenandoahAsserts::_safe_oop, obj, obj_reg->has_live(),
+          check(ShenandoahAsserts::_safe_oop, obj, obj_reg->has_live() ||
+                (obj_reg->is_old() && ShenandoahHeap::heap()->is_gc_generation_young()),
                    "Object must belong to region with live data");
           break;
         default:
@@ -218,11 +219,11 @@ private:
         // skip
         break;
       case ShenandoahVerifier::_verify_marked_incomplete:
-        check(ShenandoahAsserts::_safe_all, obj, _heap->marking_context()->is_marked(obj),
+        check(ShenandoahAsserts::_safe_all, obj, _heap->marking_context()->is_marked_or_old(obj),
                "Must be marked in incomplete bitmap");
         break;
       case ShenandoahVerifier::_verify_marked_complete:
-        check(ShenandoahAsserts::_safe_all, obj, _heap->complete_marking_context()->is_marked(obj),
+        check(ShenandoahAsserts::_safe_all, obj, _heap->complete_marking_context()->is_marked_or_old(obj),
                "Must be marked in complete bitmap");
         break;
       case ShenandoahVerifier::_verify_marked_complete_except_references:
@@ -742,6 +743,10 @@ void ShenandoahVerifier::verify_at_safepoint(const char *label,
   if (ShenandoahVerifyLevel >= 4 && marked == _verify_marked_complete && liveness == _verify_liveness_complete) {
     for (size_t i = 0; i < _heap->num_regions(); i++) {
       ShenandoahHeapRegion* r = _heap->get_region(i);
+      if (r->is_old() && _heap->is_gc_generation_young()) {
+        // Old regions don't have computed live data during young collections.
+        continue;
+      }
 
       juint verf_live = 0;
       if (r->is_humongous()) {
@@ -954,7 +959,7 @@ private:
       oop obj = CompressedOops::decode_not_null(o);
       ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-      if (!heap->marking_context()->is_marked(obj)) {
+      if (!heap->marking_context()->is_marked_or_old(obj)) {
         ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, NULL,
                 "Verify Roots In To-Space", "Should be marked", __FILE__, __LINE__);
       }

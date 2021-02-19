@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahConcurrentMark.hpp"
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMetrics.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
@@ -99,13 +100,12 @@ void ShenandoahDegenGC::op_degenerated() {
 
       // Degenerated from concurrent root mark, reset the flag for STW mark
       if (heap->is_concurrent_mark_in_progress()) {
-        ShenandoahConcurrentMark::cancel();
-        heap->set_concurrent_mark_in_progress(false);
+        heap->cancel_concurrent_mark();
       }
 
       // Note that we can only do this for "outside-cycle" degens, otherwise we would risk
       // changing the cycle parameters mid-cycle during concurrent -> degenerated handover.
-      heap->set_unload_classes(heap->heuristics()->can_unload_classes());
+      heap->set_unload_classes(heap->global_generation()->heuristics()->can_unload_classes());
 
       op_reset();
 
@@ -213,20 +213,19 @@ void ShenandoahDegenGC::op_degenerated() {
 }
 
 void ShenandoahDegenGC::op_reset() {
-  ShenandoahHeap::heap()->prepare_gc();
+  ShenandoahHeap::heap()->global_generation()->prepare_gc();
 }
 
 void ShenandoahDegenGC::op_mark() {
   assert(!ShenandoahHeap::heap()->is_concurrent_mark_in_progress(), "Should be reset");
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_stw_mark);
   ShenandoahSTWMark mark(false /*full gc*/);
-  mark.clear();
   mark.mark();
 }
 
 void ShenandoahDegenGC::op_finish_mark() {
-  ShenandoahConcurrentMark mark;
-  mark.finish_mark(ShenandoahHeap::heap()->global_generation());
+  ShenandoahConcurrentMark mark(ShenandoahHeap::heap()->global_generation());
+  mark.finish_mark();
 }
 
 void ShenandoahDegenGC::op_prepare_evacuation() {
@@ -238,7 +237,7 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
   // STW cleanup weak roots and unload classes
   heap->parallel_cleaning(false /*full gc*/);
   // Prepare regions and collection set
-  heap->prepare_regions_and_collection_set(false /*concurrent*/);
+  heap->global_generation()->prepare_regions_and_collection_set(false /*concurrent*/);
 
   // Retire the TLABs, which will force threads to reacquire their TLABs after the pause.
   // This is needed for two reasons. Strong one: new allocations would be with new freeset,

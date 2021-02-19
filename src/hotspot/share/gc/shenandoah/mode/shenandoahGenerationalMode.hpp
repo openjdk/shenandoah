@@ -32,7 +32,6 @@ class ShenandoahHeuristics;
 class ShenandoahGenerationalMode : public ShenandoahMode {
 public:
   virtual void initialize_flags() const;
-  virtual ShenandoahHeuristics* initialize_heuristics() const;
   virtual const char* name()     { return "Generational"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }

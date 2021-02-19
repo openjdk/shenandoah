@@ -45,9 +45,11 @@ class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
 class ShenandoahCollectorPolicy;
 class ShenandoahControlThread;
+class ShenandoahRegulatorThread;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahGeneration;
+class ShenandoahYoungGeneration;
 class ShenandoahHeuristics;
 class ShenandoahMarkingContext;
 class ShenandoahMode;
@@ -103,10 +105,26 @@ public:
   bool has_next() const;
 };
 
+enum GenerationMode {
+  YOUNG,
+  OLD,
+  GLOBAL
+};
+
 class ShenandoahHeapRegionClosure : public StackObj {
 public:
   virtual void heap_region_do(ShenandoahHeapRegion* r) = 0;
   virtual bool is_thread_safe() { return false; }
+};
+
+template<GenerationMode GENERATION>
+class ShenandoahGenerationRegionClosure : public ShenandoahHeapRegionClosure {
+ public:
+  explicit ShenandoahGenerationRegionClosure(ShenandoahHeapRegionClosure* cl) : _cl(cl) {}
+  void heap_region_do(ShenandoahHeapRegion* r);
+  virtual bool is_thread_safe() { return _cl->is_thread_safe(); }
+ private:
+  ShenandoahHeapRegionClosure* _cl;
 };
 
 typedef ShenandoahLock    ShenandoahHeapLock;
@@ -133,11 +151,23 @@ class ShenandoahHeap : public CollectedHeap {
 //
 private:
   ShenandoahHeapLock _lock;
+  ShenandoahGeneration* _gc_generation;
 
 public:
   ShenandoahHeapLock* lock() {
     return &_lock;
   }
+
+  ShenandoahGeneration* active_generation() {
+    // last or latest generation might be a better name here.
+    return _gc_generation;
+  }
+
+  void set_gc_generation(ShenandoahGeneration* generation) {
+    _gc_generation = generation;
+  }
+
+  bool is_gc_generation_young() const;
 
 // ---------- Initialization, termination, identification, printing routines
 //
@@ -252,22 +282,26 @@ public:
     // Heap has forwarded objects: needs LRB barriers.
     HAS_FORWARDED_BITPOS   = 0,
 
-    // Heap is under marking: needs SATB barriers.
-    MARKING_BITPOS    = 1,
+    // Young regions are under marking: needs SATB barriers.
+    YOUNG_MARKING_BITPOS    = 1,
 
     // Heap is under evacuation: needs LRB barriers. (Set together with HAS_FORWARDED)
     EVACUATION_BITPOS = 2,
 
     // Heap is under updating: needs no additional barriers.
     UPDATEREFS_BITPOS = 3,
+
+    // Old regions are under marking, still need SATB barriers.
+    OLD_MARKING_BITPOS = 4
   };
 
   enum GCState {
     STABLE        = 0,
     HAS_FORWARDED = 1 << HAS_FORWARDED_BITPOS,
-    MARKING       = 1 << MARKING_BITPOS,
+    YOUNG_MARKING = 1 << YOUNG_MARKING_BITPOS,
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
   };
 
 private:
@@ -286,7 +320,8 @@ public:
   char gc_state() const;
   static address gc_state_addr();
 
-  void set_concurrent_mark_in_progress(bool in_progress);
+  void set_concurrent_young_mark_in_progress(bool in_progress);
+  void set_concurrent_old_mark_in_progress(bool in_progress);
   void set_evacuation_in_progress(bool in_progress);
   void set_update_refs_in_progress(bool in_progress);
   void set_degenerated_gc_in_progress(bool in_progress);
@@ -299,6 +334,8 @@ public:
   inline bool is_stable() const;
   inline bool is_idle() const;
   inline bool is_concurrent_mark_in_progress() const;
+  inline bool is_concurrent_young_mark_in_progress() const;
+  inline bool is_concurrent_old_mark_in_progress() const;
   inline bool is_update_refs_in_progress() const;
   inline bool is_evacuation_in_progress() const;
   inline bool is_degenerated_gc_in_progress() const;
@@ -330,13 +367,12 @@ private:
   bool try_cancel_gc();
 
 public:
-  static address cancelled_gc_addr();
-
   inline bool cancelled_gc() const;
   inline bool check_cancelled_gc_and_yield(bool sts_active = true);
 
-  inline void clear_cancelled_gc();
+  inline void clear_cancelled_gc(bool clear_oom_handler = true);
 
+  void cancel_concurrent_mark();
   void cancel_gc(GCCause::Cause cause);
 
 public:
@@ -346,9 +382,6 @@ public:
 
 private:
   // GC support
-  // Reset bitmap, prepare regions for new GC cycle
-  void prepare_gc();
-  void prepare_regions_and_collection_set(bool concurrent);
   // Evacuation
   void prepare_evacuation(bool concurrent);
   void evacuate_collection_set(bool concurrent);
@@ -374,12 +407,13 @@ public:
 //
 // Mark support
 private:
-  ShenandoahGeneration*      _young_generation;
+  ShenandoahYoungGeneration* _young_generation;
   ShenandoahGeneration*      _global_generation;
+  ShenandoahGeneration*      _old_generation;
   ShenandoahControlThread*   _control_thread;
+  ShenandoahRegulatorThread* _regulator_thread;
   ShenandoahCollectorPolicy* _shenandoah_policy;
   ShenandoahMode*            _gc_mode;
-  ShenandoahHeuristics*      _heuristics;
   ShenandoahFreeSet*         _free_set;
   ShenandoahPacer*           _pacer;
   ShenandoahVerifier*        _verifier;
@@ -387,13 +421,16 @@ private:
   ShenandoahPhaseTimings*    _phase_timings;
 
   ShenandoahControlThread*   control_thread()          { return _control_thread;    }
+  ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
 
 public:
-  ShenandoahGeneration*      young_generation()  const { return _young_generation;  }
+  ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
+  ShenandoahGeneration*      old_generation()    const { return _old_generation;    }
+  ShenandoahGeneration*      get_generation(oop obj) const;
+  ShenandoahGeneration*      get_generation(ShenandoahHeapRegion* region) const;
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
   ShenandoahMode*            mode()              const { return _gc_mode;           }
-  ShenandoahHeuristics*      heuristics()        const { return _heuristics;        }
   ShenandoahFreeSet*         free_set()          const { return _free_set;          }
   ShenandoahPacer*           pacer()             const { return _pacer;             }
 
@@ -468,6 +505,8 @@ public:
   bool is_in(const void* p) const;
 
   bool is_in_young(const void* p) const;
+  bool is_in_old(const void* p) const;
+  inline bool is_old(oop pobj) const;
 
   MemRegion reserved_region() const { return _reserved; }
   bool is_in_reserved(const void* addr) const { return _reserved.contains(addr); }
@@ -584,8 +623,6 @@ public:
   template<class T>
   inline void marked_object_oop_iterate(ShenandoahHeapRegion* region, T* cl, HeapWord* limit);
 
-  void reset_mark_bitmap();
-
   // SATB barriers hooks
   inline bool requires_marking(const void* entry) const;
 
@@ -606,6 +643,8 @@ private:
   ShenandoahCollectionSet* _collection_set;
   ShenandoahEvacOOMHandler _oom_evac_handler;
 
+  inline oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahRegionAffiliation target_gen);
+
 public:
   static address in_cset_fast_test_addr();
 
@@ -617,7 +656,7 @@ public:
   // Checks if location is in the collection set. Can be interior pointer, not the oop itself.
   inline bool in_collection_set_loc(void* loc) const;
 
-  // Evacuates object src. Returns the evacuated object, either evacuated
+  // Evacuates or promotes object src. Returns the evacuated object, either evacuated
   // by this thread, or by some other thread.
   inline oop evacuate_object(oop src, Thread* thread);
 
@@ -632,7 +671,7 @@ private:
 
 public:
   inline RememberedScanner* card_scan() { return _card_scan; }
-
+  void clear_cards_for(ShenandoahHeapRegion* region);
 
 // ---------- Helper functions
 //
@@ -650,6 +689,10 @@ public:
   void trash_humongous_region_at(ShenandoahHeapRegion *r);
 
   void deduplicate_string(oop str);
+
+  static uint object_age(oop obj);
+
+  static void increase_object_age(oop obj, uint additional_age);
 
 private:
   void trash_cset_regions();

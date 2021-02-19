@@ -370,3 +370,4 @@ void ShenandoahBarrierSetC1::post_barrier(LIRAccess& access, LIR_OprDesc* addr, 
     __ move(dirty, card_addr);
   }
 }
+

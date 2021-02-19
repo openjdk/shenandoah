@@ -47,17 +47,13 @@
 #include "utilities/events.hpp"
 
 ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
-  _mark(),
+  _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
   _generation(generation) {
 }
 
 ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
   return _degen_point;
-}
-
-void ShenandoahConcurrentGC::cancel() {
-  ShenandoahConcurrentMark::cancel();
 }
 
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
@@ -436,7 +432,7 @@ void ShenandoahConcurrentGC::op_reset() {
     heap->pacer()->setup_for_reset();
   }
 
-  heap->prepare_gc();
+  _generation->prepare_gc();
 }
 
 class ShenandoahInitMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -467,8 +463,8 @@ void ShenandoahConcurrentGC::op_init_mark() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(Thread::current()->is_VM_thread(), "can only do this in VMThread");
 
-  assert(heap->marking_context()->is_bitmap_clear(), "need clear marking bitmap");
-  assert(!heap->marking_context()->is_complete(), "should not be complete");
+  assert(_generation->is_bitmap_clear(), "need clear marking bitmap");
+  assert(!_generation->is_mark_complete(), "should not be complete");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
 
   if (ShenandoahVerify) {
@@ -479,12 +475,12 @@ void ShenandoahConcurrentGC::op_init_mark() {
     Universe::verify();
   }
 
-  heap->set_concurrent_mark_in_progress(true);
+  _generation->set_concurrent_mark_in_progress(true);
 
   {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
-    heap->parallel_heap_region_iterate(&cl);
+    _generation->parallel_heap_region_iterate(&cl);
   }
 
   // Weak reference processing
@@ -494,6 +490,11 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
   // Make above changes visible to worker threads
   OrderAccess::fence();
+
+  if (_generation->generation_mode() == YOUNG) {
+    _generation->scan_remembered_set();
+  }
+
   // Arm nmethods for concurrent marking. When a nmethod is about to be executed,
   // we need to make sure that all its metadata are marked. alternative is to remark
   // thread roots at final mark pause, but it can be potential latency killer.
@@ -508,11 +509,11 @@ void ShenandoahConcurrentGC::op_init_mark() {
 }
 
 void ShenandoahConcurrentGC::op_mark_roots() {
-  _mark.mark_concurrent_roots(_generation);
+  _mark.mark_concurrent_roots();
 }
 
 void ShenandoahConcurrentGC::op_mark() {
-  _mark.concurrent_mark(_generation);
+  _mark.concurrent_mark();
 }
 
 void ShenandoahConcurrentGC::op_final_mark() {
@@ -525,13 +526,13 @@ void ShenandoahConcurrentGC::op_final_mark() {
   }
 
   if (!heap->cancelled_gc()) {
-    _mark.finish_mark(_generation);
+    _mark.finish_mark();
     assert(!heap->cancelled_gc(), "STW mark cannot OOM");
 
     // Notify JVMTI that the tagmap table will need cleaning.
     JvmtiTagMap::set_needs_cleaning();
 
-    heap->prepare_regions_and_collection_set(true /*concurrent*/);
+    _generation->prepare_regions_and_collection_set(true /*concurrent*/);
 
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();

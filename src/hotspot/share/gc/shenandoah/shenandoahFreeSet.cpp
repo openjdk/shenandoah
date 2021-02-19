@@ -28,9 +28,14 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
+#include "gc/shenandoah/shenandoahBarrierSet.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
+
+#undef DEBUG_TRACE
 
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
@@ -99,8 +104,24 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       for (size_t c = _collector_rightmost + 1; c > _collector_leftmost; c--) {
         size_t idx = c - 1;
         if (is_collector_free(idx)) {
-          HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
+          ShenandoahHeapRegion* r = _heap->get_region(idx);
+          if (r->is_young() && req.is_old()) {
+            // We don't want to cannibalize a young region to satisfy
+            // an evacuation from an old region.
+            continue;
+          }
+          HeapWord* result = try_allocate_in(r, req, in_new_region);
           if (result != NULL) {
+            if (r->is_old()) {
+              // HEY! This is a very coarse card marking. We hope to repair
+              // such cards during remembered set scanning.
+
+              // HEY! To support full generality with alternative remembered set implementations,
+              // is preferable to not make direct access to the current card_table implementation.
+              //  Try ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(result, req.actual_size());
+
+              ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(result, req.actual_size()));
+            }
             return result;
           }
         }
@@ -117,9 +138,23 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
         if (is_mutator_free(idx)) {
           ShenandoahHeapRegion* r = _heap->get_region(idx);
           if (can_allocate_from(r)) {
+            if (r->is_young() && req.is_old()) {
+              continue;
+            }
+
             flip_to_gc(r);
             HeapWord *result = try_allocate_in(r, req, in_new_region);
             if (result != NULL) {
+              if (r->is_old()) {
+                // HEY! This is a very coarse card marking. We hope to repair
+                // such cards during remembered set scanning.
+
+                // HEY! To support full generality with alternative remembered set implementations,
+                // is preferable to not make direct access to the current card_table implementation.
+                //  Try ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(result, req.actual_size());
+
+                ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(result, req.actual_size()));
+              }
               return result;
             }
           }
@@ -139,6 +174,23 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return NULL;
 }
 
+#ifdef DEBUG_TRACE
+static const char *affiliation_name(ShenandoahRegionAffiliation a) {
+
+  switch (a) {
+    case ShenandoahRegionAffiliation::FREE:
+        return "FREE";
+        break;
+    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+        return "YOUNG_GENERATION";
+    case ShenandoahRegionAffiliation::OLD_GENERATION:
+        return "OLD_GENERATION";
+    default:
+        return "UnrecognizedAffiliation";
+  }
+}
+#endif
+
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
 
@@ -149,7 +201,15 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
   try_recycle_trashed(r);
 
-  if (r->affiliation() == FREE) {
+  if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
+#ifdef DEBUG_TRACE
+    printf("try_allocate_in(), converting region @ (%llx, %llx, %llx) to %s\n",
+           (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->end(),
+           affiliation_name(req.affiliation()));
+    fflush(stdout);
+#endif
+    // This free region might have garbage in its remembered set representation.
+    _heap->clear_cards_for(r);
     r->set_affiliation(req.affiliation());
   } else if (r->affiliation() != req.affiliation()) {
     return NULL;
@@ -184,6 +244,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
     if (req.is_gc_alloc()) {
       r->set_update_watermark(r->top());
+    }
+
+    if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+      _heap->young_generation()->increase_used(size * HeapWordSize);
     }
   }
 
@@ -312,6 +376,12 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     }
 
     r->set_top(r->bottom() + used_words);
+#ifdef DEBUG_TRACE
+    printf("allocate_contiguous(), setting region (%llx, %llx, %llx) to %s\n",
+           (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->end(),
+           affiliation_name(req.affiliation()));
+    fflush(stdout);
+#endif
     r->set_affiliation(req.affiliation());
 
     _mutator_free_bitmap.clear_bit(r->index());
@@ -320,6 +390,10 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   // While individual regions report their true use, all humongous regions are
   // marked used in the free set.
   increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
+
+  if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+    _heap->young_generation()->increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
+  }
 
   if (remainder != 0) {
     // Record this remainder as allocation waste
@@ -355,6 +429,9 @@ bool ShenandoahFreeSet::has_no_alloc_capacity(ShenandoahHeapRegion *r) {
 
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
   if (r->is_trash()) {
+    if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+      _heap->young_generation()->decrease_used(r->used());
+    }
     _heap->decrease_used(r->used());
     r->recycle();
   }

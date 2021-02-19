@@ -30,6 +30,8 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
+#undef DEBUG_TRACE
+
 HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest::Type type) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
@@ -106,6 +108,13 @@ inline bool ShenandoahHeapRegion::has_live() const {
 }
 
 inline size_t ShenandoahHeapRegion::garbage() const {
+
+#ifdef DEBUG_TRACE
+  printf("SHR::garbage(), used: %lld\n", (long long) used());
+  fflush(stdout);
+  printf("   get_live_data_bytes: %lld\n", (long long) get_live_data_bytes());
+  fflush(stdout);
+#endif
   assert(used() >= get_live_data_bytes(),
          "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT,
          get_live_data_bytes(), used());

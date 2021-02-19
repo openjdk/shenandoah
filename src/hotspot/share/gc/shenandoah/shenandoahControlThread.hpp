@@ -76,14 +76,18 @@ public:
   void run_service();
   void stop_service();
 
+  size_t get_gc_id();
+
 private:
+  ShenandoahSharedFlag _allow_old_preemption;
+  ShenandoahSharedFlag _preemption_requested;
   ShenandoahSharedFlag _gc_requested;
   ShenandoahSharedFlag _alloc_failure_gc;
   ShenandoahSharedFlag _graceful_shutdown;
-  ShenandoahSharedFlag _heap_changed;
   ShenandoahSharedFlag _do_counters_update;
   ShenandoahSharedFlag _force_counters_update;
   GCCause::Cause       _requested_gc_cause;
+  GenerationMode       _requested_generation;
   ShenandoahGC::ShenandoahDegenPoint _degen_point;
 
   shenandoah_padding(0);
@@ -93,7 +97,8 @@ private:
   shenandoah_padding(2);
 
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
-  void service_concurrent_normal_cycle(GCCause::Cause cause, ShenandoahGeneration* generation);
+  void resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause);
+  void service_concurrent_cycle(ShenandoahGeneration* generation, GCCause::Cause cause);
   void service_stw_full_cycle(GCCause::Cause cause);
   void service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point);
   void service_uncommit(double shrink_before, size_t shrink_until);
@@ -104,7 +109,6 @@ private:
 
   void reset_gc_id();
   void update_gc_id();
-  size_t get_gc_id();
 
   void notify_gc_waiters();
 
@@ -113,6 +117,9 @@ private:
   void handle_requested_gc(GCCause::Cause cause);
 
   bool is_explicit_gc(GCCause::Cause cause) const;
+  bool is_implicit_gc(GCCause::Cause cause) const;
+
+  bool preempt_old_marking(GenerationMode generation);
 
   bool check_soft_max_changed() const;
 
@@ -130,6 +137,7 @@ public:
   void handle_alloc_failure_evac(size_t words);
 
   void request_gc(GCCause::Cause cause);
+  void request_concurrent_gc(GenerationMode generation);
 
   void handle_counters_update();
   void handle_force_counters_update();
@@ -148,6 +156,13 @@ public:
   // Printing
   void print_on(outputStream* st) const;
   void print() const;
+
+  void service_concurrent_normal_cycle(const ShenandoahHeap* heap,
+                                       const GenerationMode generation,
+                                       GCCause::Cause cause);
+
+  void service_concurrent_old_cycle(const ShenandoahHeap* heap,
+                                    GCCause::Cause &cause);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONTROLTHREAD_HPP

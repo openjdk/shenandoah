@@ -84,6 +84,8 @@ protected:
   // There may be many threads that contend to set this flag
   ShenandoahSharedFlag _metaspace_oom;
 
+  ShenandoahGeneration* _generation;
+
   static int compare_by_garbage(RegionData a, RegionData b);
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
@@ -92,8 +94,10 @@ protected:
 
   void adjust_penalty(intx step);
 
+  bool in_generation(ShenandoahHeapRegion* region);
+
 public:
-  ShenandoahHeuristics();
+  ShenandoahHeuristics(ShenandoahGeneration* generation);
   virtual ~ShenandoahHeuristics();
 
   void record_metaspace_oom()     { _metaspace_oom.set(); }

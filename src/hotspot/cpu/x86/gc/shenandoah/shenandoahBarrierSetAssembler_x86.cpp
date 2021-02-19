@@ -152,7 +152,7 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
       if (ShenandoahSATBBarrier && dest_uninitialized) {
         flags = ShenandoahHeap::HAS_FORWARDED;
       } else {
-        flags = ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::MARKING;
+        flags = ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING;
       }
       __ testb(gc_state, flags);
       __ jcc(Assembler::zero, done);
@@ -180,6 +180,39 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
     }
   }
 
+}
+
+void ShenandoahBarrierSetAssembler::arraycopy_epilogue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
+                                                       Register src, Register dst, Register count) {
+  bool checkcast = (decorators & ARRAYCOPY_CHECKCAST) != 0;
+  bool disjoint = (decorators & ARRAYCOPY_DISJOINT) != 0;
+  bool obj_int = type == T_OBJECT LP64_ONLY(&& UseCompressedOops);
+#ifdef _LP64
+  Register tmp = rscratch1;
+#else
+  Register tmp = rax;
+#endif
+
+if (is_reference_type(type)) {
+#ifdef _LP64
+#if COMPILER2_OR_JVMCI
+    if (VM_Version::supports_avx512vlbw() && MaxVectorSize  >= 32 && !checkcast) {
+      if (!obj_int) {
+        // Save count for barrier
+        count = r11;
+      } else if (disjoint) {
+        // Use the saved dst in the disjoint case
+        dst = r11;
+      }
+    }
+#  endif
+#else
+    if (disjoint) {
+      __ mov(dst, rdx); // restore 'to'
+    }
+#endif
+    gen_write_ref_array_post_barrier(masm, decorators, dst, count, tmp);
+  }
 }
 
 void ShenandoahBarrierSetAssembler::shenandoah_write_barrier_pre(MacroAssembler* masm,
@@ -225,7 +258,7 @@ void ShenandoahBarrierSetAssembler::satb_write_barrier_pre(MacroAssembler* masm,
   Address buffer(thread, in_bytes(ShenandoahThreadLocalData::satb_mark_queue_buffer_offset()));
 
   Address gc_state(thread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
-  __ testb(gc_state, ShenandoahHeap::MARKING);
+  __ testb(gc_state, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
   __ jcc(Assembler::zero, done);
 
   // Do we need to load the previous value?
@@ -1043,7 +1076,7 @@ void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAss
 
   // Is SATB still active?
   Address gc_state(thread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
-  __ testb(gc_state, ShenandoahHeap::MARKING);
+  __ testb(gc_state, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
   __ jcc(Assembler::zero, done);
 
   // Can we store original value in the thread's buffer?

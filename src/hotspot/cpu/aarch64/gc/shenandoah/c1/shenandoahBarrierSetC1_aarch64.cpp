@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 
 #define __ masm->masm()->
 
@@ -87,10 +88,20 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
       LIR_Opr result = gen->new_register(T_INT);
 
       __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2, result));
+
+      if (access.is_oop()) {
+        post_barrier(access, access.resolved_addr(), new_value.result());
+      }
       return result;
     }
   }
-  return BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
+  LIR_Opr result =  BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
+
+  if (access.is_oop()) {
+    post_barrier(access, access.resolved_addr(), new_value.result());
+  }
+
+  return result;
 }
 
 LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
@@ -118,6 +129,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
       pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), LIR_OprFact::illegalOpr,
                   result /* pre_val */);
     }
+    post_barrier(access, access.resolved_addr(), result);
   }
 
   return result;

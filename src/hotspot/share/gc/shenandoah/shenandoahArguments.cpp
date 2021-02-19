@@ -156,6 +156,16 @@ void ShenandoahArguments::initialize() {
     FLAG_SET_DEFAULT(ShenandoahUncommit, false);
   }
 
+  if (strcmp(ShenandoahGCMode, "generational") == 0) {
+    // When we fill in dead objects during update refs, we use oop::size,
+    // which depends on the klass being loaded. However, if these dead objects
+    // were the last referrers to the klass, it will be unloaded and we'll
+    // crash. Class unloading is disabled until we're able to sort this out.
+    FLAG_SET_DEFAULT(ClassUnloading, false);
+    FLAG_SET_DEFAULT(ClassUnloadingWithConcurrentMark, false);
+    FLAG_SET_DEFAULT(ShenandoahUnloadClassesFrequency, 0);
+  }
+
   // If class unloading is disabled, no unloading for concurrent cycles as well.
   if (!ClassUnloading) {
     FLAG_SET_DEFAULT(ClassUnloadingWithConcurrentMark, false);
