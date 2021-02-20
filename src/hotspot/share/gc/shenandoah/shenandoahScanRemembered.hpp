@@ -519,7 +519,7 @@ public:
     // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
     object_starts = (uint16_t *) malloc(rs->total_cards() * sizeof(uint16_t));
     if (object_starts == NULL)
-      fatal("Insufficient memory for initializing heap"); 
+      fatal("Insufficient memory for initializing heap");
     for (size_t i = 0; i < rs->total_cards(); i++)
       object_starts[i] = 0;
 #endif
@@ -757,7 +757,7 @@ public:
   // by carving new objects out of the range of memory that represents the coalesced dead objects.
   //
   // In its current implementation, unregister_object() serves the needs of coalescing objects.
-  // 
+  //
 
   // Suppose we want to combine several dead objects into a single coalesced object.  How does this
   // impact our representation of crossing map information?

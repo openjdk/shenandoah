@@ -831,7 +831,8 @@ void ShenandoahHeapRegion::promote() {
     heap->card_scan()->register_object(bottom(), obj->size());
     for (int i = index(); i < index_limit; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
-      log_debug(gc)("promoting region %lu, clear cards from %lx to %lx", r->index(), (size_t) r->bottom(), (size_t) r->top());
+      log_debug(gc)("promoting region " SIZE_FORMAT ", clear cards from " SIZE_FORMAT " to " SIZE_FORMAT,
+        r->index(), (size_t) r->bottom(), (size_t) r->top());
 
       ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(r->bottom(), r->end()));
 #ifdef DEBUG_TRACE
@@ -848,7 +849,8 @@ void ShenandoahHeapRegion::promote() {
     // of memory in the last humongous region that is not spanned by obj is currently not used.
     obj->oop_iterate(&update_card_values);
   } else {
-    log_debug(gc)("promoting region %lu, clear cards from %lx to %lx", index(), (size_t) bottom(), (size_t) top());
+    log_debug(gc)("promoting region " SIZE_FORMAT ", clear cards from " SIZE_FORMAT " to " SIZE_FORMAT,
+      index(), (size_t) bottom(), (size_t) top());
     assert(!is_humongous_continuation(), "should not promote humongous object continuation in isolation");
 
     // Rather than scanning entire contents of the promoted region right now to determine which

@@ -122,7 +122,7 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, size_t n
     *bp++ = CardTable::clean_card_val();
 }
 
-inline void 
+inline void
 ShenandoahDirectCardMarkRememberedSet::mark_overreach_card_as_dirty(void *p) {
   uint8_t *bp = &_overreach_map_base[uintptr_t(p) >> _card_shift];
   bp[0] = CardTable::dirty_card_val();
@@ -140,7 +140,7 @@ ShenandoahCardCluster<RememberedSet>::register_object(HeapWord *address, uint32_
   uint32_t card_at_start = _rs->card_index_for_addr(address);
   HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
   uint8_t offset_in_card = address - card_start_address;
-  
+
   if ((object_starts[card_at_start] & ObjectStartsInCardRegion) == 0) {
     set_has_object_bit(card_at_start);
     set_first_start(card_at_start, offset_in_card);
@@ -165,7 +165,7 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, uint32
   uint32_t card_at_start = _rs->card_index_for_addr(address);
   HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
   uint32_t card_at_end = card_at_start + ((address + length_in_words) - card_start_address) / CardTable::card_size_in_words;
-  
+
   if (card_at_start == card_at_end) {
     // No changes to object_starts array.  Either:
     //  get_first_start(card_at_start) returns this coalesced object,
@@ -220,7 +220,7 @@ ShenandoahCardCluster<RememberedSet>::has_object(uint32_t card_index) {
   else
     return false;
 #else // FAST_REMEMBERED_SET_SCANNING'
-  
+
   HeapWord *addr = _rs->addr_for_card_index(card_index);
   ShenandoahHeapRegion *region = heap->heap_region_containing(addr);
 
@@ -334,7 +334,7 @@ ShenandoahCardCluster<RememberedSet>::get_crossing_object_start(uint32_t card_in
     return 0x7fff;
 }
 #endif
-  
+
 template<typename RememberedSet>
 inline size_t
 ShenandoahScanRemembered<RememberedSet>::total_cards() { return _rs->total_cards(); }
@@ -429,7 +429,7 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, uin
 
 template<typename RememberedSet>
 template <typename ClosureType>
-inline void 
+inline void
 ShenandoahScanRemembered<RememberedSet>::process_clusters(uint32_t first_cluster, uint32_t count, HeapWord *end_of_range,
                                                           ClosureType *cl) {
 
@@ -501,7 +501,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint32_t first_cluster
       } else if (has_object) {
 
         // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
-        // or if it reaches into the next cluster. 
+        // or if it reaches into the next cluster.
         uint32_t start_offset = _scc->get_last_start(card_index);
         HeapWord *card_start = _rs->addr_for_card_index(card_index);
         HeapWord *p = card_start + start_offset;
@@ -511,7 +511,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint32_t first_cluster
         // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
         // failure if nextp points to end of heap.
         uint32_t last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words;
-        
+
         bool reaches_next_cluster = (last_card > end_card_index);
         bool spans_dirty_within_this_cluster = false;
 
