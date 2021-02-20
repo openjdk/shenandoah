@@ -51,7 +51,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   if (heap->is_concurrent_strong_root_in_progress()) {
     entry_strong_roots();
   }
-  
+
   entry_rendezvous_roots();
   return true;
 }
