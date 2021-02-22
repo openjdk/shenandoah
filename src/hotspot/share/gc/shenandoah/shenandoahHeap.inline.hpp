@@ -22,8 +22,6 @@
  *
  */
 
-#undef TRACE_PROMOTION
-
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_INLINE_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_INLINE_HPP
 
@@ -255,12 +253,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   HeapWord* copy = NULL;
   size_t size = p->size();
 
-#ifdef TRACE_PROMOTION
-  const char *source_region = ((from_region->affiliation() == YOUNG_GENERATION)? "young"
-                               : ((from_region->affiliation() == OLD_GENERATION)? "old": "free"));
-  const char *dest_region = (target_gen == OLD_GENERATION)? "old": "young";
-#endif
-
 #ifdef ASSERT
   if (ShenandoahOOMDuringEvacALot &&
       (os::random() & 1) == 0) { // Simulate OOM every ~2nd slow-path call
@@ -300,14 +292,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     // Increment the age in young copies, absorbing region age.
     // (Only retired regions will have more than zero age to pass along.)
 
-#ifdef TRACE_PROMOTION
-    printf("endeavoring to increase young-gen object %llx (previously known as %llx) age of %d by %d\n",
-           (unsigned long long) cast_from_oop<HeapWord *>(copy_val),
-           (unsigned long long) cast_from_oop<HeapWord *>(p),
-           ShenandoahHeap::object_age(copy_val), from_region->age() + 1);
-    fflush(stdout);
-#endif
-
     ShenandoahHeap::increase_object_age(copy_val, from_region->age() + 1);
 
     // Note that p may have been forwarded by another thread,
@@ -322,13 +306,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
     shenandoah_assert_correct(NULL, copy_val);
-#ifdef TRACE_PROMOTION
-    printf("successfully copied %s object %llx to %s %llx\n",
-           source_region, (unsigned long long) cast_from_oop<HeapWord *>(p),
-           dest_region, (unsigned long long) copy);
-    fflush(stdout);
-#endif
-
     return copy_val;
   }  else {
     // Failed to evacuate. We need to deal with the object that is left behind. Since this
@@ -343,32 +320,10 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     // have to explicitly overwrite the copy with the filler object. With that overwrite,
     // we have to keep the fwdptr initialized and pointing to our (stale) copy.
 
-#ifdef TRACE_PROMOTION
-    ShenandoahHeapRegion* r = ShenandoahHeap::heap_region_containing(p);
-    const char *source_region = ((r->affiliation() == YOUNG_GENERATION)? "young"
-                                 : ((r->affiliation() == OLD_GENERATION)? "old": "free"));
-    const char *dest_region = (target_gen == OLD_GENERATION)? "old": "young";
-
-    printf("attempt to copy %s object %llx to %s %llx failed because another thread won race!\n",
-           source_region, (unsigned long long) cast_from_oop<HeapWord *>(p), dest_region, (unsigned long long) copy);
-    fflush(stdout);
-#endif
 
     if (alloc_from_gclab) {
-#ifdef TRACE_PROMOTION
-      if (target_gen == OLD_GENERATION) {
-        printf(" ... undoing gclab allocation\n");
-        fflush(stdout);
-      }
-#endif
       ShenandoahThreadLocalData::gclab(thread)->undo_allocation(copy, size);
     } else {
-#ifdef TRACE_PROMOTION
-      if (target_gen == OLD_GENERATION) {
-        printf(" ... filling abandoned copy with innocence\n");
-        fflush(stdout);
-      }
-#endif
       fill_with_object(copy, size);
       shenandoah_assert_correct(NULL, copy_val);
     }
@@ -376,6 +331,17 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     return result;
   }
 }
+
+void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
+  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
+  w = w.set_age(MIN2(markWord::max_age, w.age() + additional_age));
+  if (obj->has_displaced_mark()) {
+    obj->set_displaced_mark(w);
+  } else {
+    obj->set_mark(w);
+  }
+}
+
 
 inline bool ShenandoahHeap::is_old(oop obj) const {
   return is_gc_generation_young() && is_in_old(obj);

@@ -2286,22 +2286,6 @@ void ShenandoahHeap::deduplicate_string(oop str) {
   }
 }
 
-// Used mainly for debugging.  Otherwise, should be in-lined.
-uint ShenandoahHeap::object_age(oop obj) {
-  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
-  return w.age();
-}
-
-void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
-  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
-  w = w.set_age(MIN2(markWord::max_age, w.age() + additional_age));
-  if (obj->has_displaced_mark()) {
-    obj->set_displaced_mark(w);
-  } else {
-    obj->set_mark(w);
-  }
-}
-
 ShenandoahLiveData* ShenandoahHeap::get_liveness_cache(uint worker_id) {
 #ifdef ASSERT
   assert(_liveness_cache != NULL, "sanity");
