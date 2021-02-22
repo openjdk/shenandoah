@@ -594,14 +594,6 @@ inline ShenandoahHeapRegion* const ShenandoahHeap::get_region(size_t region_idx)
   }
 }
 
-inline void ShenandoahHeap::mark_complete_marking_context() {
-  _marking_context->mark_complete();
-}
-
-inline void ShenandoahHeap::mark_incomplete_marking_context() {
-  _marking_context->mark_incomplete();
-}
-
 inline ShenandoahMarkingContext* ShenandoahHeap::complete_marking_context() const {
   assert (_marking_context->is_complete()," sanity");
   return _marking_context;

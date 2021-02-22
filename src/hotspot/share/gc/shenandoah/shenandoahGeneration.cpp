@@ -117,6 +117,7 @@ void ShenandoahGeneration::log_status() const {
 void ShenandoahGeneration::reset_mark_bitmap() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
+  set_mark_incomplete();
 
   ShenandoahResetBitmapTask task;
   parallel_heap_region_iterate(&task);

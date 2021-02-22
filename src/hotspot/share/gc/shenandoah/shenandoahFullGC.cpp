@@ -174,7 +174,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // d. Reset the bitmaps for new marking
     heap->global_generation()->reset_mark_bitmap();
     assert(heap->marking_context()->is_bitmap_clear(), "sanity");
-    assert(!heap->marking_context()->is_complete(), "sanity");
+    assert(!heap->global_generation()->is_mark_complete(), "sanity");
 
     // e. Abandon reference discovery and clear all discovered references.
     ShenandoahReferenceProcessor* rp = heap->ref_processor();
