@@ -694,7 +694,7 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
 }
 
 void ShenandoahControlThread::request_concurrent_gc(GenerationMode generation) {
-  if (_preemption_requested.is_set()) {
+  if (_preemption_requested.is_set() || _gc_requested.is_set()) {
     // ignore subsequent requests from the heuristics
     return;
   }
