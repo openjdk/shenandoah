@@ -54,7 +54,7 @@ private:
                                     bool tosca_live,
                                     bool expand_call);
 
-  void store_check(MacroAssembler* masm, Register obj, Address dst);
+  void store_check(MacroAssembler* masm, Register obj);
 
   void resolve_forward_pointer(MacroAssembler* masm, Register dst, Register tmp = noreg);
   void resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst, Register tmp = noreg);

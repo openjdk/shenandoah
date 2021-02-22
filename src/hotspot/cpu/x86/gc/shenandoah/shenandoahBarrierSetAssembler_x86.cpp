@@ -620,16 +620,15 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
   }
 }
 
-void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj, Address dst) {
+void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj) {
   if (!ShenandoahHeap::heap()->mode()->is_generational()) {
     return;
   }
 
   // Does a store check for the oop in register obj. The content of
   // register obj is destroyed afterwards.
-  BarrierSet* bs = BarrierSet::barrier_set();
 
-  ShenandoahBarrierSet* ctbs = barrier_set_cast<ShenandoahBarrierSet>(bs);
+  ShenandoahBarrierSet* ctbs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = ctbs->card_table();
 
   __ shrptr(obj, CardTable::card_shift);
@@ -712,7 +711,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
     } else {
       iu_barrier(masm, val, tmp3);
       BarrierSetAssembler::store_at(masm, decorators, type, Address(tmp1, 0), val, noreg, noreg);
-      store_check(masm, tmp1, dst);
+      store_check(masm, tmp1);
     }
     NOT_LP64(imasm->restore_bcp());
   } else {

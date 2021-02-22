@@ -374,14 +374,12 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
   }
 }
 
-void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj, Address dst) {
+void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj) {
   if (!ShenandoahHeap::heap()->mode()->is_generational()) {
       return;
   }
-  BarrierSet* bs = BarrierSet::barrier_set();
-  assert(bs->kind() == BarrierSet::ShenandoahBarrierSet, "Wrong barrier set kind");
 
-  ShenandoahBarrierSet* ctbs = barrier_set_cast<ShenandoahBarrierSet>(bs);
+  ShenandoahBarrierSet* ctbs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = ctbs->card_table();
 
   __ lsr(obj, obj, CardTable::card_shift);
