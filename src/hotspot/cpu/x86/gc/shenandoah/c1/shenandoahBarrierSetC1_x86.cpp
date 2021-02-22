@@ -88,9 +88,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
 
       __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2, result));
 
-      if (access.is_oop()) {
-        post_barrier(access, access.resolved_addr(), new_value.result());
-      }
+      post_barrier(access, access.resolved_addr(), new_value.result());
       return result;
     }
   }
