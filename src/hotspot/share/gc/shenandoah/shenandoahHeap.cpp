@@ -2361,6 +2361,6 @@ ShenandoahGeneration* ShenandoahHeap::get_generation(ShenandoahHeapRegion* regio
     return old_generation();
   }
 
-  fatal("Now what!? can't get generation for free region.");
-  return nullptr;
+  // TODO?
+  return global_generation();
 }
