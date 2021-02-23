@@ -111,10 +111,10 @@ size_t ShenandoahYoungGeneration::available() const {
 void ShenandoahYoungGeneration::set_concurrent_mark_in_progress(bool in_progress) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->set_concurrent_young_mark_in_progress(in_progress);
-  if (_old_gen_task_queues != NULL) { // && in_progress) {
+  if (_old_gen_task_queues != nullptr && in_progress) {
     // This is not a bug. When the young generation marking is complete,
     // the old generation marking is still in progress.
-    heap->set_concurrent_old_mark_in_progress(true);
+    heap->set_concurrent_old_mark_in_progress(in_progress);
   }
 }
 
