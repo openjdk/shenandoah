@@ -267,11 +267,11 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
 
     if (in_generation<GENERATION>(obj)) {
       mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
+      shenandoah_assert_marked(p, obj);
     } else if (old != nullptr) {
       mark_ref<STRING_DEDUP>(old, mark_context, weak, obj);
+      shenandoah_assert_marked(p, obj);
     }
-
-    shenandoah_assert_marked(p, obj);
   }
 }
 
