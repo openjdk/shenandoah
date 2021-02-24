@@ -182,7 +182,8 @@ void ShenandoahConcurrentGC::vmop_entry_final_updaterefs() {
 }
 
 void ShenandoahConcurrentGC::entry_init_mark() {
-  const char* msg = init_mark_event_message();
+  char msg[1024];
+  init_mark_event_message(msg, sizeof(msg));
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::init_mark);
   EventMark em("%s", msg);
 
@@ -194,7 +195,8 @@ void ShenandoahConcurrentGC::entry_init_mark() {
 }
 
 void ShenandoahConcurrentGC::entry_final_mark() {
-  const char* msg = final_mark_event_message();
+  char msg[1024];
+  final_mark_event_message(msg, sizeof(msg));
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_mark);
   EventMark em("%s", msg);
 
@@ -257,9 +259,10 @@ void ShenandoahConcurrentGC::entry_mark_roots() {
 }
 
 void ShenandoahConcurrentGC::entry_mark() {
+  char msg[1024];
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  const char* msg = conc_mark_event_message();
+  conc_mark_event_message(msg, sizeof(msg));
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_mark);
   EventMark em("%s", msg);
 
@@ -976,32 +979,32 @@ bool ShenandoahConcurrentGC::check_cancellation_and_abort(ShenandoahDegenPoint p
   return false;
 }
 
-const char* ShenandoahConcurrentGC::init_mark_event_message() const {
+void ShenandoahConcurrentGC::init_mark_event_message(char* buf, size_t len) const {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(!heap->has_forwarded_objects(), "Should not have forwarded objects here");
   if (heap->unload_classes()) {
-    return "Pause Init Mark (unload classes)";
+    jio_snprintf(buf, len, "Pause Init Mark (%s) (unload classes)", _generation->name());
   } else {
-    return "Pause Init Mark";
+    jio_snprintf(buf, len, "Pause Init Mark (%s)", _generation->name());
   }
 }
 
-const char* ShenandoahConcurrentGC::final_mark_event_message() const {
+void ShenandoahConcurrentGC::final_mark_event_message(char* buf, size_t len) const {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(!heap->has_forwarded_objects(), "Should not have forwarded objects here");
   if (heap->unload_classes()) {
-    return "Pause Final Mark (unload classes)";
+    jio_snprintf(buf, len, "Pause Final Mark (%s) (unload classes)", _generation->name());
   } else {
-    return "Pause Final Mark";
+    jio_snprintf(buf, len, "Pause Final Mark (%s)", _generation->name());
   }
 }
 
-const char* ShenandoahConcurrentGC::conc_mark_event_message() const {
+void ShenandoahConcurrentGC::conc_mark_event_message(char* buf, size_t len) const {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(!heap->has_forwarded_objects(), "Should not have forwarded objects here");
   if (heap->unload_classes()) {
-    return "Concurrent marking (unload classes)";
+    jio_snprintf(buf, len, "Concurrent marking (%s) (unload classes)", _generation->name());
   } else {
-    return "Concurrent marking";
+    jio_snprintf(buf, len, "Concurrent marking (%s)", _generation->name());
   }
 }
