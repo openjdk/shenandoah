@@ -446,15 +446,12 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   // mark so clean it up.
   young_generation->set_old_gen_task_queues(NULL);
 
-  // XXX: For debugging
-  old_generation->set_mark_complete();
-
   // From here we will 'resume' the old concurrent mark. This will skip reset
   // and init mark for the concurrent mark. All of that work will have been
   // done by the bootstrapping young cycle. In order to simplify the debugging
   // effort, the old cycle will ONLY complete the mark phase. No actual
   // collection of the old generation is happening here.
-  // resume_concurrent_old_cycle(old_generation, cause);
+  resume_concurrent_old_cycle(old_generation, cause);
 }
 
 bool ShenandoahControlThread::check_soft_max_changed() const {
