@@ -922,7 +922,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   // different heap regions.  But that effort will come later.
   //
   if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-    ShenandoahHeap::heap()->card_scan()->register_object(result, req.actual_size());
+    ShenandoahHeap::heap()->card_scan()->register_object(result);
   }
   return result;
 }

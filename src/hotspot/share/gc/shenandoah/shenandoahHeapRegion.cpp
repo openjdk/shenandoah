@@ -415,7 +415,7 @@ void ShenandoahHeapRegion::oop_iterate(OopIterateClosure* blk, bool fill_dead_ob
   if (is_humongous()) {
     if (fill_dead_objects && !reregister_coalesced_objects) {
      oop obj = oop(bottom());
-     ShenandoahHeap::heap()->card_scan()->register_object(bottom(), obj->size());
+      ShenandoahHeap::heap()->card_scan()->register_object(bottom());
     }
     oop_iterate_humongous(blk);
   } else {
@@ -448,14 +448,14 @@ void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill
            if (reregister_coalesced_objects) { // change existing crossing map information
             heap->card_scan()->coalesce_objects(fill_addr, fill_size);
           } else {              // establish new crossing map information
-            heap->card_scan()->register_object(fill_addr, fill_size);
+             heap->card_scan()->register_object(fill_addr);
           }
           ShenandoahHeap::fill_with_object(fill_addr, fill_size);
           fill_addr = NULL;
         }
         assert(obj->klass() != NULL, "klass should not be NULL");
         if (!reregister_coalesced_objects)
-          heap->card_scan()->register_object(obj_addr, obj->size());
+          heap->card_scan()->register_object(obj_addr);
         obj_addr += obj->oop_iterate_size(blk);
       } else {
         int size = obj->size();
@@ -473,7 +473,7 @@ void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill
       if (reregister_coalesced_objects) { // change existing crossing map information
         heap->card_scan()->coalesce_objects(fill_addr, fill_size);
       } else {              // establish new crossing map information
-        heap->card_scan()->register_object(fill_addr, fill_size);
+        heap->card_scan()->register_object(fill_addr);
       }
     }
   }
@@ -828,7 +828,7 @@ void ShenandoahHeapRegion::promote() {
     assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
     int index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
-    heap->card_scan()->register_object(bottom(), obj->size());
+    heap->card_scan()->register_object(bottom());
     for (int i = index(); i < index_limit; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       log_debug(gc)("promoting region " SIZE_FORMAT ", clear cards from " SIZE_FORMAT " to " SIZE_FORMAT,
