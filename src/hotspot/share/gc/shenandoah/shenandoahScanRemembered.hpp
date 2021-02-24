@@ -739,12 +739,7 @@ public:
   // maybe I just piggy back on the lock that we already hold for
   // managing the free lists and register each object newly allocated by
   // the shared allocator.
-
-  // Note that length_in_bytes is unused in the current implementation.  Its presence
-  // was required for a more general solution that provided more lookup services than
-  // are currently implemented.
-
-  void register_object(HeapWord *address, uint32_t length_in_words);
+  void register_object(HeapWord* address);
 
   // During the reference updates phase of GC, we walk through each old-gen memory region that was
   // not part of the collection set and we invalidate all unmarked objects.  As part of this effort,
@@ -894,7 +889,7 @@ public:
   void merge_overreach(uint32_t first_cluster, uint32_t count);
 
   uint32_t cluster_for_addr(HeapWord *addr);
-  void register_object(HeapWord *addr, uint32_t length_in_words);
+  void register_object(HeapWord *addr);
   void coalesce_objects(HeapWord *addr, uint32_t length_in_words);
 
   // clear the cards to clean, and clear the object_starts info to no objects

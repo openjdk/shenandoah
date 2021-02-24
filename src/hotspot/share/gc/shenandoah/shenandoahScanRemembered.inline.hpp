@@ -135,8 +135,7 @@ ShenandoahDirectCardMarkRememberedSet::cluster_count() {
 
 template<typename RememberedSet>
 inline void
-ShenandoahCardCluster<RememberedSet>::register_object(HeapWord *address, uint32_t length_in_words) {
-#ifdef FAST_REMEMBERED_SET_SCANNING
+ShenandoahCardCluster<RememberedSet>::register_object(HeapWord* address) {
   uint32_t card_at_start = _rs->card_index_for_addr(address);
   HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
   uint8_t offset_in_card = address - card_start_address;
@@ -151,11 +150,6 @@ ShenandoahCardCluster<RememberedSet>::register_object(HeapWord *address, uint32_
     if (offset_in_card > get_last_start(card_at_start))
       set_last_start(card_at_start, offset_in_card);
   }
-
-#else  // FAST_REMEMBERED_SET_SCANNING
-  // Do nothing for now as we have a brute-force implementation
-  // of findSpanningObject().
-#endif // FAST_REMEMBERED_SET_SCANNING
 }
 
 template<typename RememberedSet>
@@ -410,9 +404,9 @@ ShenandoahScanRemembered<RememberedSet>::merge_overreach(uint32_t first_cluster,
 
 template<typename RememberedSet>
 inline void
-ShenandoahScanRemembered<RememberedSet>::register_object(HeapWord *addr, uint32_t length_in_words) {
-    _scc->register_object(addr, length_in_words);
-  }
+ShenandoahScanRemembered<RememberedSet>::register_object(HeapWord *addr) {
+  _scc->register_object(addr);
+}
 
 template<typename RememberedSet>
 inline void

@@ -21,6 +21,7 @@
  * questions.
  *
  */
+#include "precompiled.hpp"
 
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"

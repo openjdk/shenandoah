@@ -1,3 +1,5 @@
+#include "precompiled.hpp"
+
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 
 void ShenandoahFinalMarkUpdateRegionStateClosure::heap_region_do(ShenandoahHeapRegion* r) {

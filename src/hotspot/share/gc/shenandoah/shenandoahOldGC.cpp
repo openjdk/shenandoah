@@ -1,3 +1,5 @@
+#include "precompiled.hpp"
+
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahOldGC.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
