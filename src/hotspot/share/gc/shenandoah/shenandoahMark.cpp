@@ -51,7 +51,7 @@ ShenandoahMark::ShenandoahMark(ShenandoahGeneration* generation) :
 
 template <GenerationMode GENERATION, bool CANCELLABLE>
 void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahReferenceProcessor *rp,
-                                       bool strdedup) {
+                                       bool strdedup, bool update_refs) {
   ShenandoahObjToScanQueue* q = get_queue(w);
   ShenandoahObjToScanQueue* old = get_old_queue(w);
 
@@ -61,7 +61,7 @@ void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahRefe
   // TODO: We can clean up this if we figure out how to do templated oop closures that
   // play nice with specialized_oop_iterators.
   if (heap->unload_classes()) {
-    if (heap->has_forwarded_objects()) {
+    if (update_refs) {
       if (strdedup) {
         ShenandoahMarkUpdateRefsMetadataDedupClosure<GENERATION> cl(q, rp, old);
         mark_loop_work<ShenandoahMarkUpdateRefsMetadataDedupClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
@@ -79,7 +79,7 @@ void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahRefe
       }
     }
   } else {
-    if (heap->has_forwarded_objects()) {
+    if (update_refs) {
       if (strdedup) {
         ShenandoahMarkUpdateRefsDedupClosure<GENERATION> cl(q, rp, old);
         mark_loop_work<ShenandoahMarkUpdateRefsDedupClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
@@ -179,28 +179,30 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
 
 void ShenandoahMark::mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
                bool cancellable, bool strdedup) {
+  bool update_refs = ShenandoahHeap::heap()->has_forwarded_objects();
   switch (generation) {
     case YOUNG: {
       if (cancellable) {
-        mark_loop_prework<YOUNG, true>(worker_id, terminator, rp, strdedup);
+        mark_loop_prework<YOUNG, true>(worker_id, terminator, rp, strdedup, update_refs);
       } else {
-        mark_loop_prework<YOUNG, false>(worker_id, terminator, rp, strdedup);
+        mark_loop_prework<YOUNG, false>(worker_id, terminator, rp, strdedup, update_refs);
       }
       break;
     }
     case OLD: {
+      // Old generation collection only performs marking, it should to update references.
       if (cancellable) {
-        mark_loop_prework<OLD, true>(worker_id, terminator, rp, strdedup);
+        mark_loop_prework<OLD, true>(worker_id, terminator, rp, strdedup, false);
       } else {
-        mark_loop_prework<OLD, false>(worker_id, terminator, rp, strdedup);
+        mark_loop_prework<OLD, false>(worker_id, terminator, rp, strdedup, false);
       }
       break;
     }
     case GLOBAL: {
       if (cancellable) {
-        mark_loop_prework<GLOBAL, true>(worker_id, terminator, rp, strdedup);
+        mark_loop_prework<GLOBAL, true>(worker_id, terminator, rp, strdedup, update_refs);
       } else {
-        mark_loop_prework<GLOBAL, false>(worker_id, terminator, rp, strdedup);
+        mark_loop_prework<GLOBAL, false>(worker_id, terminator, rp, strdedup, update_refs);
       }
       break;
     }

@@ -88,7 +88,8 @@ private:
   void mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *t);
 
   template <GenerationMode GENERATION, bool CANCELLABLE>
-  void mark_loop_prework(uint worker_id, TaskTerminator *terminator, ShenandoahReferenceProcessor *rp, bool strdedup);
+  void mark_loop_prework(uint worker_id, TaskTerminator *terminator,
+                         ShenandoahReferenceProcessor *rp, bool strdedup, bool update_refs);
 
   template <GenerationMode GENERATION>
   static bool in_generation(oop obj);
