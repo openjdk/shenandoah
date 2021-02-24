@@ -1987,8 +1987,8 @@ private:
   void do_work() {
     T cl;
     ShenandoahHeapRegion* r = _regions->next();
-    // With M7 we no longer update references in the global/old cycle.
-    assert(_heap->young_generation()->is_mark_complete(), "Expected complete marking");
+    // We update references for global and young collections.
+    assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
 
     while (r != NULL) {
@@ -2331,21 +2331,4 @@ void ShenandoahGenerationRegionClosure<OLD>::heap_region_do(ShenandoahHeapRegion
 template<>
 void ShenandoahGenerationRegionClosure<GLOBAL>::heap_region_do(ShenandoahHeapRegion* region) {
   _cl->heap_region_do(region);
-}
-
-ShenandoahGeneration* ShenandoahHeap::get_generation(oop obj) const {
-  return get_generation(heap_region_containing(obj));
-}
-
-ShenandoahGeneration* ShenandoahHeap::get_generation(ShenandoahHeapRegion* region) const {
-  if (region->affiliation() == YOUNG_GENERATION) {
-    return young_generation();
-  }
-
-  if (region->affiliation() == OLD_GENERATION) {
-    return old_generation();
-  }
-
-  // TODO?
-  return global_generation();
 }

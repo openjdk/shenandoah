@@ -383,7 +383,6 @@ public:
 private:
   // GC support
   // Evacuation
-  void prepare_evacuation(bool concurrent);
   void evacuate_collection_set(bool concurrent);
   // Concurrent root processing
   void prepare_concurrent_roots();
@@ -427,8 +426,7 @@ public:
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
   ShenandoahGeneration*      old_generation()    const { return _old_generation;    }
-  ShenandoahGeneration*      get_generation(oop obj) const;
-  ShenandoahGeneration*      get_generation(ShenandoahHeapRegion* region) const;
+
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
   ShenandoahMode*            mode()              const { return _gc_mode;           }
   ShenandoahFreeSet*         free_set()          const { return _free_set;          }

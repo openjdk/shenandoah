@@ -273,10 +273,7 @@ void ShenandoahHeapRegion::make_trash_immediate() {
 
   // On this path, we know there are no marked objects in the region,
   // tell marking context about it to bypass bitmap resets.
-  // HEY! Should we just set the generation instance directly on the region?
-  // Rather than setting its affiliation and having this extra indirection to
-  // get to the generation?
-  assert(ShenandoahHeap::heap()->get_generation(this)->is_mark_complete(), "Marking should be complete here.");
+  assert(ShenandoahHeap::heap()->active_generation()->is_mark_complete(), "Marking should be complete here.");
   ShenandoahHeap::heap()->marking_context()->reset_top_bitmap(this);
 }
 
@@ -437,7 +434,7 @@ void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill
   } else {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahMarkingContext* marking_context = heap->marking_context();
-    assert(heap->get_generation(this)->is_mark_complete(), "sanity");
+    assert(heap->active_generation()->is_mark_complete(), "sanity");
 
     HeapWord* fill_addr = NULL;
     size_t fill_size = 0;
@@ -819,7 +816,7 @@ void ShenandoahHeapRegion::promote() {
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
-  assert(heap->get_generation(this)->is_mark_complete(), "sanity");
+  assert(heap->active_generation()->is_mark_complete(), "sanity");
 
   UpdateCardValuesClosure update_card_values;
 
