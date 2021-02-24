@@ -991,7 +991,8 @@ void ShenandoahConcurrentGC::init_mark_event_message(char* buf, size_t len) cons
 
 void ShenandoahConcurrentGC::final_mark_event_message(char* buf, size_t len) const {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  assert(!heap->has_forwarded_objects(), "Should not have forwarded objects here");
+  assert(!heap->has_forwarded_objects() || heap->is_concurrent_old_mark_in_progress(),
+         "Should not have forwarded objects during final mark (unless old gen concurrent mark is running)");
   if (heap->unload_classes()) {
     jio_snprintf(buf, len, "Pause Final Mark (%s) (unload classes)", _generation->name());
   } else {
@@ -1001,7 +1002,8 @@ void ShenandoahConcurrentGC::final_mark_event_message(char* buf, size_t len) con
 
 void ShenandoahConcurrentGC::conc_mark_event_message(char* buf, size_t len) const {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  assert(!heap->has_forwarded_objects(), "Should not have forwarded objects here");
+  assert(!heap->has_forwarded_objects() || heap->is_concurrent_old_mark_in_progress(),
+         "Should not have forwarded objects concurrent mark (unless old gen concurrent mark is running");
   if (heap->unload_classes()) {
     jio_snprintf(buf, len, "Concurrent marking (%s) (unload classes)", _generation->name());
   } else {

@@ -239,7 +239,7 @@ public:
   }
 
   void do_buffer(void **buffer, size_t size) {
-    assert(size == 0 || !_heap->has_forwarded_objects(), "Forwarded objects are not expected here");
+    assert(size == 0 || !_heap->has_forwarded_objects() || _heap->is_concurrent_old_mark_in_progress(), "Forwarded objects are not expected here");
     if (ShenandoahStringDedup::is_enabled()) {
       do_buffer_impl<ENQUEUE_DEDUP>(buffer, size);
     } else {
