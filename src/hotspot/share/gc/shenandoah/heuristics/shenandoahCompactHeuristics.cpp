@@ -28,6 +28,7 @@
 #include "gc/shenandoah/heuristics/shenandoahCompactHeuristics.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 
