@@ -757,7 +757,7 @@ void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAss
   // Is marking still active?
   Address gc_state(thread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
   __ ldrb(tmp, gc_state);
-  __ mov(rscratch2, ShenandoahHeap::MARKING);
+  __ mov(rscratch2, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
   __ tst(tmp, rscratch2);
   __ br(Assembler::EQ, done);
 
