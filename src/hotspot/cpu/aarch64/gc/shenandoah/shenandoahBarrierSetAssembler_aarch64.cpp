@@ -61,7 +61,7 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
       if (ShenandoahSATBBarrier && dest_uninitialized) {
         __ tbz(rscratch1, ShenandoahHeap::HAS_FORWARDED_BITPOS, done);
       } else {
-        __ mov(rscratch2, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::MARKING);
+        __ mov(rscratch2, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::OLD_MARKING);
         __ tst(rscratch1, rscratch2);
         __ br(Assembler::EQ, done);
       }
@@ -396,9 +396,9 @@ void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register o
     __ strb(zr, Address(obj, rscratch1));
     __ bind(L_already_dirty);
   } else {
-    if (ct->scanned_concurrently()) {
-      __ membar(Assembler::StoreStore);
-    }
+    // if (ct->scanned_concurrently()) {
+    //  __ membar(Assembler::StoreStore);
+    // }
     __ strb(zr, Address(obj, rscratch1));
   }
 }
@@ -439,7 +439,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
       __ mov(new_val, val);
     }
     BarrierSetAssembler::store_at(masm, decorators, type, Address(r3, 0), val, noreg, noreg);
-    store_check(masm, r3, dst);
+    store_check(masm, r3);
   }
 
 }
@@ -647,9 +647,9 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 
   __ load_byte_map_base(scratch);
   __ add(start, start, scratch);
-  if (ct->scanned_concurrently()) {
-    __ membar(__ StoreStore);
-  }
+  // if (ct->scanned_concurrently()) {
+  //   __ membar(__ StoreStore);
+  // }
   __ bind(L_loop);
   __ strb(zr, Address(start, count));
   __ subs(count, count, 1);
