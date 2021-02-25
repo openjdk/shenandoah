@@ -35,7 +35,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(Car
   _heap = ShenandoahHeap::heap();
   _card_table = card_table;
   _total_card_count = total_card_count;
-  _cluster_count = uint32_t(total_card_count / ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster);
+  _cluster_count = total_card_count / ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   _card_shift = CardTable::card_shift;
 
   _byte_map = _card_table->byte_for_index(0);
@@ -58,23 +58,23 @@ ShenandoahDirectCardMarkRememberedSet::~ShenandoahDirectCardMarkRememberedSet() 
   free(_overreach_map);
 }
 
-void ShenandoahDirectCardMarkRememberedSet::initialize_overreach(uint32_t first_cluster, uint32_t count) {
+void ShenandoahDirectCardMarkRememberedSet::initialize_overreach(size_t first_cluster, size_t count) {
 
   // We can make this run faster in the future by explicitly
   // unrolling the loop and doing wide writes if the compiler
   // doesn't do this for us.
-  uint32_t first_card_index = first_cluster * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+  size_t first_card_index = first_cluster * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   uint8_t *omp = &_overreach_map[first_card_index];
   uint8_t *endp = omp + count * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   while (omp < endp)
     *omp++ = CardTable::clean_card_val();
 }
 
-void ShenandoahDirectCardMarkRememberedSet::merge_overreach(uint32_t first_cluster, uint32_t count) {
+void ShenandoahDirectCardMarkRememberedSet::merge_overreach(size_t first_cluster, size_t count) {
 
   // We can make this run faster in the future by explicitly unrolling the loop and doing wide writes if the compiler
   // doesn't do this for us.
-  uint32_t first_card_index = first_cluster * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+  size_t first_card_index = first_cluster * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   uint8_t *bmp = &_byte_map[first_card_index];
   uint8_t *endp = bmp + count * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   uint8_t *omp = &_overreach_map[first_card_index];
@@ -108,7 +108,7 @@ void ShenandoahScanRememberedTask::work(uint worker_id) {
   while (region != NULL) {
     if (region->affiliation() == OLD_GENERATION) {
       HeapWord *start_of_range = region->bottom();
-      uint32_t start_cluster_no = rs->cluster_for_addr(start_of_range);
+      size_t start_cluster_no = rs->cluster_for_addr(start_of_range);
 
       // region->end() represents the end of memory spanned by this region, but not all of this
       //   memory is eligible to be scanned because some of this memory has not yet been allocated.
@@ -124,7 +124,7 @@ void ShenandoahScanRememberedTask::work(uint worker_id) {
       size_t num_heapwords = end_of_range - start_of_range;
       unsigned int cluster_size = CardTable::card_size_in_words *
         ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
-      uint32_t num_clusters = (uint32_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
+      size_t num_clusters = (size_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
 
       // Remembered set scanner
       rs->process_clusters(start_cluster_no, num_clusters, end_of_range, &cl);

@@ -236,9 +236,9 @@ private:
 
   ShenandoahHeap *_heap;
   CardTable *_card_table;
-  uint32_t _card_shift;
+  size_t _card_shift;
   size_t _total_card_count;
-  uint32_t _cluster_count;
+  size_t _cluster_count;
   HeapWord *_whole_heap_base;   // Points to first HeapWord of data contained within heap memory
   HeapWord *_whole_heap_end;
   uint8_t *_byte_map;           // Points to first entry within the card table
@@ -253,29 +253,29 @@ public:
 
   // Card index is zero-based relative to _byte_map.
   size_t total_cards();
-  uint32_t card_index_for_addr(HeapWord *p);
-  HeapWord *addr_for_card_index(uint32_t card_index);
-  bool is_card_dirty(uint32_t card_index);
-  void mark_card_as_dirty(uint32_t card_index);
-  void mark_range_as_dirty(uint32_t card_index, uint32_t num_cards);
-  void mark_card_as_clean(uint32_t card_index);
-  void mark_range_as_clean(uint32_t card_index, uint32_t num_cards);
-  void mark_overreach_card_as_dirty(uint32_t card_index);
+  size_t card_index_for_addr(HeapWord *p);
+  HeapWord *addr_for_card_index(size_t card_index);
+  bool is_card_dirty(size_t card_index);
+  void mark_card_as_dirty(size_t card_index);
+  void mark_range_as_dirty(size_t card_index, size_t num_cards);
+  void mark_card_as_clean(size_t card_index);
+  void mark_range_as_clean(size_t card_index, size_t num_cards);
+  void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
   void mark_overreach_card_as_dirty(void *p);
-  uint32_t cluster_count();
+  size_t cluster_count();
 
   // Called by multiple GC threads at start of concurrent mark and evacuation phases.  Each parallel GC thread typically
   // initializes a different subranges of all overreach entries.
-  void initialize_overreach(uint32_t first_cluster, uint32_t count);
+  void initialize_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at end of concurrent mark or evacuation phase.  Each parallel GC thread typically merges different
   // subranges of all overreach entries.
-  void merge_overreach(uint32_t first_cluster, uint32_t count);
+  void merge_overreach(size_t first_cluster, size_t count);
 };
 
 // A ShenandoahCardCluster represents the minimal unit of work
@@ -469,7 +469,7 @@ private:
   RememberedSet *_rs;
 
 public:
-  static const uint32_t CardsPerCluster = 64;
+  static const size_t CardsPerCluster = 64;
 
 #ifdef FAST_REMEMBERED_SET_SCANNING
 private:
@@ -486,27 +486,27 @@ private:
   uint16_t *object_starts;
 
 public:
-  inline void set_first_start(uint32_t card_index, uint8_t value) {
+  inline void set_first_start(size_t card_index, uint8_t value) {
     object_starts[card_index] &= ~FirstStartBits;
     object_starts[card_index] |= (FirstStartBits & (value << FirstStartShift));
   }
 
-  inline void set_last_start(uint32_t card_index, uint8_t value) {
+  inline void set_last_start(size_t card_index, uint8_t value) {
     object_starts[card_index] &= ~LastStartBits;
     object_starts[card_index] |= (LastStartBits & (value << LastStartShift));
   }
 
-  inline void set_has_object_bit(uint32_t card_index) {
+  inline void set_has_object_bit(size_t card_index) {
     object_starts[card_index] |= ObjectStartsInCardRegion;
   }
 
-  inline void clear_has_object_bit(uint32_t card_index) {
+  inline void clear_has_object_bit(size_t card_index) {
     object_starts[card_index] &= ~ObjectStartsInCardRegion;
   }
 
-  inline void clear_objects_in_range(HeapWord *addr, uint32_t num_words) {
-    uint32_t card_index = _rs->card_index_for_addr(addr);
-    uint32_t last_card_index = _rs->card_index_for_addr(addr + num_words - 1);
+  inline void clear_objects_in_range(HeapWord *addr, size_t num_words) {
+    size_t card_index = _rs->card_index_for_addr(addr);
+    size_t last_card_index = _rs->card_index_for_addr(addr + num_words - 1);
     while (card_index <= last_card_index)
       object_starts[card_index++] = 0;
   }
@@ -612,8 +612,8 @@ public:
   //         in registering an object.
 
 private:
-  const uint32_t CardByteOffsetMultiplier = 8;
-  const uint32_t CardWordOffsetMultiplier = 1;
+  const size_t CardByteOffsetMultiplier = 8;
+  const size_t CardWordOffsetMultiplier = 1;
 
 public:
 #ifdef CROSSING_OFFSETS_NO_LONGER_NEEDED
@@ -623,7 +623,7 @@ private:
 public:
 
   // This has side effect of clearing ObjectStartsInCardRegion bit.
-  inline void set_crossing_object_start(uint32_t card_index, uint16_t crossing_offset) {
+  inline void set_crossing_object_start(size_t card_index, uint16_t crossing_offset) {
     object_starts[card_index] = crossing_offset;
   }
 #endif  // CROSSING_OFFSETS_NO_LONGER_NEEDED
@@ -769,7 +769,7 @@ public:
   // of memory that was previously occupied exactly by one or more previously registered objects.  For
   // convenience, it is legal to invoke coalesce_objects() with arguments that span a single previously
   // registered object.
-  void coalesce_objects(HeapWord* address, uint32_t length_in_words);
+  void coalesce_objects(HeapWord* address, size_t length_in_words);
 
   // The typical use case is going to look something like this:
   //   for each heapregion that comprises old-gen memory
@@ -783,17 +783,17 @@ public:
   // associated with addr p.
   // Returns true iff an object is known to start within the card memory
   // associated with addr p.
-  bool has_object(uint32_t card_index);
+  bool has_object(size_t card_index);
 
   // If has_object(card_index), this returns the word offset within this card
   // memory at which the first object begins.  If !has_object(card_index), the
   // result is a don't care value.
-  uint32_t get_first_start(uint32_t card_index);
+  size_t get_first_start(size_t card_index);
 
   // If has_object(card_index), this returns the word offset within this card
   // memory at which the last object begins.  If !has_object(card_index), the
   // result is a don't care value.
-  uint32_t get_last_start(uint32_t card_index);
+  size_t get_last_start(size_t card_index);
 
 };
 
@@ -870,30 +870,30 @@ public:
 
   // Card index is zero-based relative to first spanned card region.
   size_t total_cards();
-  uint32_t card_index_for_addr(HeapWord *p);
-  HeapWord *addr_for_card_index(uint32_t card_index);
-  bool is_card_dirty(uint32_t card_index);
-  void mark_card_as_dirty(uint32_t card_index);
-  void mark_range_as_dirty(uint32_t card_index, uint32_t num_cards);
-  void mark_card_as_clean(uint32_t card_index);
-  void mark_range_as_clean(uint32_t card_index, uint32_t num_cards);
-  void mark_overreach_card_as_dirty(uint32_t card_index);
+  size_t card_index_for_addr(HeapWord *p);
+  HeapWord *addr_for_card_index(size_t card_index);
+  bool is_card_dirty(size_t card_index);
+  void mark_card_as_dirty(size_t card_index);
+  void mark_range_as_dirty(size_t card_index, size_t num_cards);
+  void mark_card_as_clean(size_t card_index);
+  void mark_range_as_clean(size_t card_index, size_t num_cards);
+  void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
   void mark_overreach_card_as_dirty(void *p);
-  uint32_t cluster_count();
-  void initialize_overreach(uint32_t first_cluster, uint32_t count);
-  void merge_overreach(uint32_t first_cluster, uint32_t count);
+  size_t cluster_count();
+  void initialize_overreach(size_t first_cluster, size_t count);
+  void merge_overreach(size_t first_cluster, size_t count);
 
-  uint32_t cluster_for_addr(HeapWord *addr);
+  size_t cluster_for_addr(HeapWord *addr);
   void register_object(HeapWord *addr);
-  void coalesce_objects(HeapWord *addr, uint32_t length_in_words);
+  void coalesce_objects(HeapWord *addr, size_t length_in_words);
 
   // clear the cards to clean, and clear the object_starts info to no objects
-  void mark_range_as_empty(HeapWord *addr, uint32_t length_in_words);
+  void mark_range_as_empty(HeapWord *addr, size_t length_in_words);
 
   // process_clusters() scans a portion of the remembered set during a JVM
   // safepoint as part of the root scanning activities that serve to
@@ -927,7 +927,7 @@ public:
   // the template expansions were making it difficult for the link/loader to resolve references to the template-
   // parameterized implementations of this service.
   template <typename ClosureType>
-  inline void process_clusters(uint32_t first_cluster, uint32_t count, HeapWord *end_of_range, ClosureType *oops);
+  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops);
 
 
   // To Do:

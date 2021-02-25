@@ -411,7 +411,6 @@ void ShenandoahHeapRegion::oop_iterate(OopIterateClosure* blk, bool fill_dead_ob
   if (!is_active()) return;
   if (is_humongous()) {
     if (fill_dead_objects && !reregister_coalesced_objects) {
-     oop obj = oop(bottom());
       ShenandoahHeap::heap()->card_scan()->register_object(bottom());
     }
     oop_iterate_humongous(blk);
@@ -824,9 +823,9 @@ void ShenandoahHeapRegion::promote() {
     oop obj = oop(bottom());
     assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
-    int index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+    size_t index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
     heap->card_scan()->register_object(bottom());
-    for (int i = index(); i < index_limit; i++) {
+    for (size_t i = index(); i < index_limit; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       log_debug(gc)("promoting region " SIZE_FORMAT ", clear cards from " SIZE_FORMAT " to " SIZE_FORMAT,
         r->index(), (size_t) r->bottom(), (size_t) r->top());
