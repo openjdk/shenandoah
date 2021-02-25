@@ -56,6 +56,7 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _requested_gc_cause(GCCause::_no_cause_specified),
   _requested_generation(GenerationMode::GLOBAL),
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
+  _degen_generation(NULL),
   _allocs_seen(0) {
 
   reset_gc_id();
@@ -124,23 +125,30 @@ void ShenandoahControlThread::run_service() {
       // Allocation failure takes precedence: we have to deal with it first thing
       log_info(gc)("Trigger: Handle Allocation Failure");
 
-      generation = GLOBAL;
       cause = GCCause::_allocation_failure;
 
       // Consume the degen point, and seed it with default value
       degen_point = _degen_point;
       _degen_point = ShenandoahGC::_degenerated_outside_cycle;
 
-      if (ShenandoahDegeneratedGC && global_heuristics->should_degenerate_cycle()) {
-        global_heuristics->record_allocation_failure_gc();
+      if (degen_point == ShenandoahGC::_degenerated_outside_cycle) {
+        _degen_generation = heap->global_generation();
+      } else {
+        assert(_degen_generation != NULL, "Need to know which generation to resume.");
+      }
+
+      ShenandoahHeuristics* heuristics = _degen_generation->heuristics();
+      generation = _degen_generation->generation_mode();
+
+      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle()) {
+        heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_degenerated(degen_point);
         mode = stw_degenerated;
       } else {
-        global_heuristics->record_allocation_failure_gc();
+        heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_full();
         mode = stw_full;
       }
-
     } else if (explicit_gc_requested) {
       generation = GLOBAL;
       cause = _requested_gc_cause;
@@ -363,27 +371,21 @@ void ShenandoahControlThread::run_service() {
 // degeneration in these cycles must begin with a global (complete) marking.
 //
 //
-//                    +------------+                         +--------------+
-//                    |            |                         |              |
-//        +-----------+    Idle    +----------+              |   Bootstrap  |
-//        |           |            |          |              |              |
-//        |           +------+-----+          |              +------+-------+
-//        v                  |                v                     ^
-// +--------------+          |         +-------------+              |
-// |              |          |         |             |<-------------+
-// |    Young     |          |         |     Old     |
-// |              |          |         |             |<-------------+
-// +------+-------+          |         +------+------+              |
-//        |                  |                |                     v
-//        |                  |                |             +-------+-------+
-//        |                  |                |             |               |
-//        |                  |                |             |  Young (Conc) |
-//        |                  v                |             |               |
-//        |           +------------+          |             +-------+-------+
-//        |           |            |<---------+                     |
-//        +---------->|   Global   |                                |
-//                    |            |<-------------------------------+
-//                    +------------+
+//              +-----------+  Idle  +-----------+
+//              |               +                |
+//              v               |                v
+//                              |
+//            Young             |               Old +------> Young
+//              +               v                +             +
+//              |                                |             |
+//              |             Global             |             |
+//              |               +                |             |
+//              |               |                |             |
+//              |               |                |             |
+//              v               v                |             v
+//                                               |
+//            Degen           Degen   <----------+           Degen
+//            Young           Global                         Young
 //
 void ShenandoahControlThread::service_concurrent_normal_cycle(
   const ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
@@ -432,26 +434,33 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
 
   service_concurrent_cycle(young_generation, cause);
 
-  // Reset the degenerated point. Normally this would happen at the top
-  // of the control loop, but here we have just completed a young cycle
-  // which has bootstrapped the old concurrent marking.
-  _degen_point = ShenandoahGC::_degenerated_outside_cycle;
-
-  // Bit of a hack here to keep the phase timings happy as we transition
-  // to concurrent old marking. We need to revisit this.
-  heap->phase_timings()->flush_par_workers_to_cycle();
-  heap->phase_timings()->flush_cycle_to_global();
-
   // Young generation no longer needs this reference to the old concurrent
   // mark so clean it up.
   young_generation->set_old_gen_task_queues(NULL);
 
-  // From here we will 'resume' the old concurrent mark. This will skip reset
-  // and init mark for the concurrent mark. All of that work will have been
-  // done by the bootstrapping young cycle. In order to simplify the debugging
-  // effort, the old cycle will ONLY complete the mark phase. No actual
-  // collection of the old generation is happening here.
-  resume_concurrent_old_cycle(old_generation, cause);
+  if (heap->cancelled_gc()) {
+    // Bootstrap cycle was cancelled. Now we expect to run a degenerated
+    // young cycle. Clear anything out of old generation mark queues.
+    old_generation->task_queues()->clear();
+    old_generation->set_mark_incomplete();
+  } else {
+    // Reset the degenerated point. Normally this would happen at the top
+    // of the control loop, but here we have just completed a young cycle
+    // which has bootstrapped the old concurrent marking.
+    _degen_point = ShenandoahGC::_degenerated_outside_cycle;
+
+    // Bit of a hack here to keep the phase timings happy as we transition
+    // to concurrent old marking. We need to revisit this.
+    heap->phase_timings()->flush_par_workers_to_cycle();
+    heap->phase_timings()->flush_cycle_to_global();
+
+    // From here we will 'resume' the old concurrent mark. This will skip reset
+    // and init mark for the concurrent mark. All of that work will have been
+    // done by the bootstrapping young cycle. In order to simplify the debugging
+    // effort, the old cycle will ONLY complete the mark phase. No actual
+    // collection of the old generation is happening here.
+    resume_concurrent_old_cycle(old_generation, cause);
+  }
 }
 
 bool ShenandoahControlThread::check_soft_max_changed() const {
@@ -492,6 +501,15 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   } else {
     assert(heap->cancelled_gc(), "Old marking must be interrupted.");
     check_cancellation_or_degen(gc.degen_point());
+    if (is_alloc_failure_gc()) {
+      // Cancelled for degeneration, not just to run a young cycle.
+      // We can't complete a global cycle with the partial marking
+      // information in the old generation mark queues so we force
+      // the degenerated cycle to be global and from outside the cycle.
+      generation->task_queues()->clear();
+      generation->set_mark_incomplete();
+      _degen_point = ShenandoahGC::_degenerated_outside_cycle;
+    }
   }
   _allow_old_preemption.unset();
 }
@@ -548,6 +566,7 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
+    _degen_generation = generation;
   }
 }
 
@@ -565,15 +584,7 @@ bool ShenandoahControlThread::check_cancellation_or_degen(ShenandoahGC::Shenando
          "Should not be set yet: %s", ShenandoahGC::degen_point_to_string(_degen_point));
 
   if (is_alloc_failure_gc()) {
-    // Presently, young and old cycles degenerate to a global collection.
-    // Since we cannot safely reclaim globally based on a partial old or
-    // young marking we force the degenerated cycle to begin with a global
-    // reset and mark.
-    if (_requested_generation == YOUNG || _requested_generation == OLD) {
-      _degen_point = ShenandoahGC::_degenerated_outside_cycle;
-    } else {
-      _degen_point = point;
-    }
+    _degen_point = point;
     return true;
   }
 
@@ -631,12 +642,12 @@ void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
   GCIdMark gc_id_mark;
-  ShenandoahGCSession session(cause, heap->global_generation());
+  ShenandoahGCSession session(cause, _degen_generation);
 
-  ShenandoahDegenGC gc(point);
+  ShenandoahDegenGC gc(point, _degen_generation);
   gc.collect(cause);
 
-  heap->global_generation()->heuristics()->record_success_degenerated();
+  _degen_generation->heuristics()->record_success_degenerated();
   heap->shenandoah_policy()->record_success_degenerated();
 }
 

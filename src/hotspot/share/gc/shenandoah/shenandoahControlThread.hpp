@@ -89,6 +89,7 @@ private:
   GCCause::Cause       _requested_gc_cause;
   GenerationMode       _requested_generation;
   ShenandoahGC::ShenandoahDegenPoint _degen_point;
+  ShenandoahGeneration* _degen_generation;
 
   shenandoah_padding(0);
   volatile size_t _allocs_seen;

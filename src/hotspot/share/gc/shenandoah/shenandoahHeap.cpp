@@ -1618,12 +1618,7 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
     set_gc_state_mask(YOUNG_MARKING, in_progress);
   }
 
-  // Leave the SATB barriers alone if an old mark is in progress.
-  if (is_concurrent_old_mark_in_progress()) {
-    assert(ShenandoahBarrierSet::satb_mark_queue_set().is_active(), "SATB barrier should still be active.");
-  } else {
-    ShenandoahBarrierSet::satb_mark_queue_set().set_active_all_threads(in_progress, !in_progress);
-  }
+  manage_satb_barrier(in_progress);
 }
 
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
@@ -1633,12 +1628,22 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
     set_gc_state_mask(OLD_MARKING, in_progress);
   }
 
-  // Assert the barriers are on if we are already in a concurrent old mark and
-  // we are asked to turn them on. Otherwise, set the barrier state accordingly.
-  if (in_progress) {
-    assert(ShenandoahBarrierSet::satb_mark_queue_set().is_active(), "SATB barrier should have been activated by bootstrapping young mark.");
+  manage_satb_barrier(in_progress);
+}
+
+void ShenandoahHeap::manage_satb_barrier(bool active) {
+  if (is_concurrent_mark_in_progress()) {
+    // Ignore request to deactivate barrier while concurrent mark is in progress.
+    // Do not attempt to re-activate the barrier if it is already active.
+    if (active && !ShenandoahBarrierSet::satb_mark_queue_set().is_active()) {
+      ShenandoahBarrierSet::satb_mark_queue_set().set_active_all_threads(active, !active);
+    }
   } else {
-    ShenandoahBarrierSet::satb_mark_queue_set().set_active_all_threads(in_progress, !in_progress);
+    // No concurrent marking is in progress so honor request to deactivate,
+    // but only if the barrier is already active.
+    if (!active && ShenandoahBarrierSet::satb_mark_queue_set().is_active()) {
+      ShenandoahBarrierSet::satb_mark_queue_set().set_active_all_threads(active, !active);
+    }
   }
 }
 

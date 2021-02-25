@@ -348,6 +348,8 @@ public:
   inline bool is_concurrent_weak_root_in_progress() const;
 
 private:
+  void manage_satb_barrier(bool active);
+
   enum CancelState {
     // Normal state. GC has not been cancelled and is open for cancellation.
     // Worker threads can suspend for safepoint.
