@@ -24,13 +24,13 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/tlab_globals.hpp"
+#include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
-#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
-#include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
@@ -248,6 +248,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
     if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
       _heap->young_generation()->increase_used(size * HeapWordSize);
+    } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      _heap->old_generation()->increase_used(size * HeapWordSize);
     }
   }
 
@@ -393,6 +395,8 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
     _heap->young_generation()->increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
+  } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+    _heap->old_generation()->increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
   }
 
   if (remainder != 0) {
@@ -429,9 +433,6 @@ bool ShenandoahFreeSet::has_no_alloc_capacity(ShenandoahHeapRegion *r) {
 
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
   if (r->is_trash()) {
-    if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-      _heap->young_generation()->decrease_used(r->used());
-    }
     _heap->decrease_used(r->used());
     r->recycle();
   }

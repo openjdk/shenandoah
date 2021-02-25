@@ -46,6 +46,7 @@
 #include "runtime/os.hpp"
 #include "runtime/safepoint.hpp"
 #include "utilities/powerOfTwo.hpp"
+#include "shenandoahGeneration.hpp"
 
 #undef DEBUG_TRACE
 
@@ -500,12 +501,20 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 }
 
 void ShenandoahHeapRegion::recycle() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+
+  if (affiliation() == YOUNG_GENERATION) {
+    heap->young_generation()->decrease_used(used());
+  } else if (affiliation() == OLD_GENERATION) {
+    heap->old_generation()->decrease_used(used());
+  }
+
   set_top(bottom());
   clear_live_data();
 
   reset_alloc_metadata();
 
-  ShenandoahHeap::heap()->marking_context()->reset_top_at_mark_start(this);
+  heap->marking_context()->reset_top_at_mark_start(this);
   set_update_watermark(bottom());
 
   make_empty();
@@ -761,7 +770,9 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   }
 
   if (_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-      heap->young_generation()->decrement_affiliated_region_count();
+    heap->young_generation()->decrement_affiliated_region_count();
+  } else if (_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+    heap->old_generation()->decrement_affiliated_region_count();
   }
 
   CardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
@@ -775,6 +786,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
       heap->young_generation()->increment_affiliated_region_count();
       break;
     case OLD_GENERATION:
+      heap->old_generation()->increment_affiliated_region_count();
       break;
     default:
       ShouldNotReachHere();

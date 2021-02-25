@@ -161,9 +161,6 @@ jint ShenandoahHeap::initialize() {
 
   _num_regions = ShenandoahHeapRegion::region_count();
 
-  // Now we know the number of regions, initialize the heuristics.
-  initialize_heuristics();
-
   size_t num_committed_regions = init_byte_size / reg_size_bytes;
   num_committed_regions = MIN2(num_committed_regions, _num_regions);
   assert(num_committed_regions <= _num_regions, "sanity");
@@ -178,6 +175,10 @@ jint ShenandoahHeap::initialize() {
   _soft_max_size = _num_regions * reg_size_bytes;
 
   _committed = _initial_size;
+
+  // Now we know the number of regions and heap sizes, initialize the heuristics.
+  initialize_generations();
+  initialize_heuristics();
 
   size_t heap_page_size   = UseLargePages ? (size_t)os::large_page_size() : (size_t)os::vm_page_size();
   size_t bitmap_page_size = UseLargePages ? (size_t)os::large_page_size() : (size_t)os::vm_page_size();
@@ -439,6 +440,17 @@ jint ShenandoahHeap::initialize() {
   return JNI_OK;
 }
 
+void ShenandoahHeap::initialize_generations() {
+  size_t max_capacity_new      = young_generation_capacity(max_capacity());
+  size_t soft_max_capacity_new = young_generation_capacity(soft_max_capacity());
+  size_t max_capacity_old      = max_capacity() - max_capacity_new;
+  size_t soft_max_capacity_old = soft_max_capacity() - soft_max_capacity_new;
+
+  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_new, soft_max_capacity_new);
+  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, soft_max_capacity_old);
+  _global_generation = new ShenandoahGlobalGeneration(_max_workers);
+}
+
 void ShenandoahHeap::initialize_heuristics() {
   if (ShenandoahGCMode != NULL) {
     if (strcmp(ShenandoahGCMode, "satb") == 0) {
@@ -491,9 +503,9 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _num_regions(0),
   _regions(NULL),
   _update_refs_iterator(this),
-  _young_generation(new ShenandoahYoungGeneration(_max_workers)),
-  _global_generation(new ShenandoahGlobalGeneration(_max_workers)),
-  _old_generation(new ShenandoahOldGeneration(_max_workers)),
+  _young_generation(NULL),
+  _global_generation(NULL),
+  _old_generation(NULL),
   _control_thread(NULL),
   _regulator_thread(NULL),
   _shenandoah_policy(policy),
@@ -610,6 +622,32 @@ bool ShenandoahHeap::is_gc_generation_young() const {
   return _gc_generation != NULL && _gc_generation->generation_mode() == YOUNG;
 }
 
+// There are three JVM parameters for setting young gen capacity:
+//    NewSize, MaxNewSize, NewRatio.
+//
+// If only NewSize is set, it assigns a fixed size and the other two parameters are ignored.
+// Otherwise NewRatio applies.
+//
+// If NewSize is set in any combination, it provides a lower bound.
+//
+// If MaxNewSize is set it provides an upper bound.
+// If this bound is smaller than NewSize, it supersedes,
+// resulting in a fixed size given by MaxNewSize.
+size_t ShenandoahHeap::young_generation_capacity(size_t capacity) {
+  if (FLAG_IS_CMDLINE(NewSize) && !FLAG_IS_CMDLINE(MaxNewSize) && !FLAG_IS_CMDLINE(NewRatio)) {
+    capacity = MIN2(NewSize, capacity);
+  } else {
+    capacity /= NewRatio + 1;
+    if (FLAG_IS_CMDLINE(NewSize)) {
+      capacity = MAX2(NewSize, capacity);
+    }
+    if (FLAG_IS_CMDLINE(MaxNewSize)) {
+      capacity = MIN2(MaxNewSize, capacity);
+    }
+  }
+  return capacity;
+}
+
 size_t ShenandoahHeap::used() const {
   return Atomic::load_acquire(&_used);
 }
@@ -681,6 +719,13 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
          "Should be in bounds: " SIZE_FORMAT " <= " SIZE_FORMAT " <= " SIZE_FORMAT,
          min_capacity(), v, max_capacity());
   Atomic::store(&_soft_max_size, v);
+
+  if (mode()->is_generational()) {
+    size_t soft_max_capacity_young = young_generation_capacity(_soft_max_size);
+    size_t soft_max_capacity_old = _soft_max_size - soft_max_capacity_young;
+    _young_generation->set_soft_max_capacity(soft_max_capacity_young);
+    _old_generation->set_soft_max_capacity(soft_max_capacity_old);
+  }
 }
 
 size_t ShenandoahHeap::min_capacity() const {

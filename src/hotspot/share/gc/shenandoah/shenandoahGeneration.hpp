@@ -26,6 +26,7 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
 
 #include "memory/allocation.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
@@ -36,11 +37,19 @@ private:
   GenerationMode const _generation_mode;
   ShenandoahHeuristics* _heuristics;
 
-  ShenandoahSharedFlag _is_marking_complete;
-  // Marking task queues
+  // Marking task queues and completeness
   ShenandoahObjToScanQueueSet* _task_queues;
+  ShenandoahSharedFlag _is_marking_complete;
+
+protected:
+  // Usage
+  size_t _affiliated_region_count;
+  size_t _used;
+  size_t _max_capacity;
+  size_t _soft_max_capacity;
+
 public:
-  ShenandoahGeneration(GenerationMode generation_mode, uint max_queues);
+  ShenandoahGeneration(GenerationMode generation_mode, uint max_queues, size_t max_capacity, size_t soft_max_capacity);
   ~ShenandoahGeneration();
 
   inline GenerationMode generation_mode() const { return _generation_mode; }
@@ -51,11 +60,15 @@ public:
 
   void initialize_heuristics(ShenandoahMode* gc_mode);
 
-  virtual size_t soft_max_capacity() const = 0;
-  virtual size_t max_capacity() const = 0;
-  virtual size_t used_regions_size() const = 0;
-  virtual size_t used() const = 0;
-  virtual size_t available() const = 0;
+  virtual size_t soft_max_capacity() const { return _soft_max_capacity; }
+  virtual size_t max_capacity() const      { return _max_capacity; }
+  virtual size_t used_regions_size() const;
+  virtual size_t used() const { return _used; }
+  virtual size_t available() const;
+
+  void set_soft_max_capacity(size_t soft_max_capacity) {
+    _soft_max_capacity = soft_max_capacity;
+  }
 
   virtual size_t bytes_allocated_since_gc_start();
 
@@ -96,6 +109,12 @@ public:
   virtual ShenandoahObjToScanQueueSet* old_gen_task_queues() const;
 
   void scan_remembered_set();
+
+  void increment_affiliated_region_count();
+  void decrement_affiliated_region_count();
+
+  void increase_used(size_t bytes);
+  void decrease_used(size_t bytes);
 
  protected:
 

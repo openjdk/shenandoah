@@ -5,31 +5,11 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 
-ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues)
-  : ShenandoahGeneration(OLD, max_queues) {}
+ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
+  : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity) {}
 
 const char* ShenandoahOldGeneration::name() const {
   return "OLD";
-}
-
-size_t ShenandoahOldGeneration::soft_max_capacity() const {
-  return 0;
-}
-
-size_t ShenandoahOldGeneration::max_capacity() const {
-  return 0;
-}
-
-size_t ShenandoahOldGeneration::used_regions_size() const {
-  return 0;
-}
-
-size_t ShenandoahOldGeneration::used() const {
-  return 0;
-}
-
-size_t ShenandoahOldGeneration::available() const {
-  return 0;
 }
 
 bool ShenandoahOldGeneration::contains(ShenandoahHeapRegion* region) const {

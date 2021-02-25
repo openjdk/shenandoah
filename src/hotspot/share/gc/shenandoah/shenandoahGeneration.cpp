@@ -198,9 +198,14 @@ void ShenandoahGeneration::cancel_marking() {
   }
 }
 
-ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode, uint max_queues) :
+ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
+                                           uint max_queues,
+                                           size_t max_capacity,
+                                           size_t soft_max_capacity) :
   _generation_mode(generation_mode),
-  _task_queues(new ShenandoahObjToScanQueueSet(max_queues)) {
+  _task_queues(new ShenandoahObjToScanQueueSet(max_queues)),
+  _affiliated_region_count(0), _used(0),
+  _max_capacity(max_capacity), _soft_max_capacity(soft_max_capacity) {
   _is_marking_complete.set();
   assert(max_queues > 0, "At least one queue");
   for (uint i = 0; i < max_queues; ++i) {
@@ -242,3 +247,31 @@ void ShenandoahGeneration::scan_remembered_set() {
   heap->workers()->run_task(&task);
 }
 
+void ShenandoahGeneration::increment_affiliated_region_count() {
+  _affiliated_region_count++;
+}
+
+void ShenandoahGeneration::decrement_affiliated_region_count() {
+  _affiliated_region_count--;
+}
+
+void ShenandoahGeneration::increase_used(size_t bytes) {
+  shenandoah_assert_heaplocked();
+  _used += bytes;
+}
+
+void ShenandoahGeneration::decrease_used(size_t bytes) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
+  _used -= bytes;
+}
+
+size_t ShenandoahGeneration::used_regions_size() const {
+  return _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes();
+}
+
+size_t ShenandoahGeneration::available() const {
+  size_t in_use = used();
+  size_t soft_capacity = soft_max_capacity();
+  return in_use > soft_capacity ? 0 : soft_capacity - in_use;
+}

@@ -33,80 +33,13 @@
 
 #undef TRACE_PROMOTION
 
-ShenandoahYoungGeneration::ShenandoahYoungGeneration(uint max_queues) :
-  ShenandoahGeneration(YOUNG, max_queues),
-  _affiliated_region_count(0),
-  _used(0),
+ShenandoahYoungGeneration::ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity) :
+  ShenandoahGeneration(YOUNG, max_queues, max_capacity, soft_max_capacity),
   _old_gen_task_queues(nullptr) {
 }
 
 const char* ShenandoahYoungGeneration::name() const {
   return "YOUNG";
-}
-
-void ShenandoahYoungGeneration::increment_affiliated_region_count() {
-  _affiliated_region_count++;
-}
-
-void ShenandoahYoungGeneration::decrement_affiliated_region_count() {
-  _affiliated_region_count--;
-}
-
-void ShenandoahYoungGeneration::increase_used(size_t bytes) {
-  shenandoah_assert_heaplocked();
-  _used += bytes;
-}
-
-void ShenandoahYoungGeneration::decrease_used(size_t bytes) {
-  shenandoah_assert_heaplocked_or_safepoint();
-  assert(used() >= bytes, "cannot reduce bytes used by young generation below zero");
-  _used -= bytes;
-}
-
-// There are three JVM parameters for setting young gen capacity:
-//    NewSize, MaxNewSize, NewRatio.
-//
-// If only NewSize is set, it assigns a fixed size and the other two parameters are ignored.
-// Otherwise NewRatio applies.
-//
-// If NewSize is set in any combination, it provides a lower bound.
-//
-// If MaxNewSize is set it provides an upper bound.
-// If this bound is smaller than NewSize, it supersedes,
-// resulting in a fixed size given by MaxNewSize.
-size_t ShenandoahYoungGeneration::configured_capacity(size_t capacity) const {
-  if (FLAG_IS_CMDLINE(NewSize) && !FLAG_IS_CMDLINE(MaxNewSize) && !FLAG_IS_CMDLINE(NewRatio)) {
-    capacity = MIN2(NewSize, capacity);
-  } else {
-    capacity /= NewRatio + 1;
-    if (FLAG_IS_CMDLINE(NewSize)) {
-      capacity = MAX2(NewSize, capacity);
-    }
-    if (FLAG_IS_CMDLINE(MaxNewSize)) {
-      capacity = MIN2(MaxNewSize, capacity);
-    }
-  }
-  return capacity;
-}
-
-size_t ShenandoahYoungGeneration::soft_max_capacity() const {
-  size_t capacity = ShenandoahHeap::heap()->soft_max_capacity();
-  return configured_capacity(capacity);
-}
-
-size_t ShenandoahYoungGeneration::max_capacity() const {
-  size_t capacity = ShenandoahHeap::heap()->max_capacity();
-  return configured_capacity(capacity);
-}
-
-size_t ShenandoahYoungGeneration::used_regions_size() const {
-  return _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes();
-}
-
-size_t ShenandoahYoungGeneration::available() const {
-  size_t in_use = used();
-  size_t soft_capacity = soft_max_capacity();
-  return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
 void ShenandoahYoungGeneration::set_concurrent_mark_in_progress(bool in_progress) {

@@ -181,6 +181,7 @@ public:
   jint initialize();
   void post_initialize();
   void initialize_heuristics();
+  void initialize_generations();
 
   void initialize_serviceability();
 
@@ -205,6 +206,8 @@ private:
   volatile size_t _committed;
   volatile size_t _bytes_allocated_since_gc_start;
   shenandoah_padding(1);
+
+  static size_t young_generation_capacity(size_t total_capacity);
 
 public:
   void increase_used(size_t bytes);

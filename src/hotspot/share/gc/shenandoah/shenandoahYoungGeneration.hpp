@@ -29,30 +29,12 @@
 
 class ShenandoahYoungGeneration : public ShenandoahGeneration {
 private:
-  size_t _affiliated_region_count;
-  size_t _used;
   ShenandoahObjToScanQueueSet* _old_gen_task_queues;
 
 public:
-  ShenandoahYoungGeneration(uint max_queues);
+  ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t max_soft_capacity);
 
   virtual const char* name() const;
-
-  void increment_affiliated_region_count();
-  void decrement_affiliated_region_count();
-
-  void increase_used(size_t bytes);
-  void decrease_used(size_t bytes);
-
-private:
-  size_t configured_capacity(size_t capacity) const;
-
-public:
-  virtual size_t max_capacity() const;
-  virtual size_t soft_max_capacity() const;
-  virtual size_t used_regions_size() const;
-  virtual size_t used() const { return _used; }
-  virtual size_t available() const;
 
   virtual void set_concurrent_mark_in_progress(bool in_progress);
   virtual void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl);

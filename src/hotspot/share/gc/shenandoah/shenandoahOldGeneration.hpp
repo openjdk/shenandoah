@@ -6,15 +6,9 @@
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
  public:
-  ShenandoahOldGeneration(uint max_queues);
+  ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity);
 
   const char* name() const;
-
-  size_t soft_max_capacity() const;
-  size_t max_capacity() const;
-  size_t used_regions_size() const;
-  size_t used() const;
-  size_t available() const;
 
   bool contains(ShenandoahHeapRegion* region) const;
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl);
