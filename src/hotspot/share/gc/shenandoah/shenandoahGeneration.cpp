@@ -233,12 +233,12 @@ void ShenandoahGeneration::scan_remembered_set() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   // TODO: Add a phase for rset scan.
   // ShenandoahGCPhase phase(ShenandoahPhaseTimings::finish_mark);
-  uint nworkers = heap->safepoint_workers()->active_workers();
+  uint nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
   ShenandoahRegionIterator regions;
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &regions);
-  heap->safepoint_workers()->run_task(&task);
+  heap->workers()->run_task(&task);
 }
 
