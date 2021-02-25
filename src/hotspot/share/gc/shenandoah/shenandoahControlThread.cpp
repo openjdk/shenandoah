@@ -183,26 +183,29 @@ void ShenandoahControlThread::run_service() {
         mode = stw_full;
       }
     } else {
-      // We should only be here if the regulator requested a cycle.
-      if (_requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
-
-        // Don't want to spin in this loop and start a cycle every time, so
-        // clear requested gc cause. This creates a race with callers of the
-        // blocking 'request_gc' method, but there it loops and resets the
-        // '_requested_gc_cause' until a full cycle is completed.
-        _requested_gc_cause = GCCause::_no_gc;
-        _preemption_requested.unset();
-
+      // We should only be here if the regulator requested a cycle or if
+      // there is an old generation mark in progress.
+      if (_preemption_requested.try_unset() || _requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
+        // preemption was requested or this is a regular cycle
+        cause = GCCause::_shenandoah_concurrent_gc;
         generation = _requested_generation;
-        cause = default_cause;
         mode = default_mode;
-
         if (generation == GLOBAL) {
           heap->set_unload_classes(global_heuristics->should_unload_classes());
         } else {
           heap->set_unload_classes(false);
         }
+      } else if (heap->is_concurrent_old_mark_in_progress()) {
+        cause = GCCause::_shenandoah_concurrent_gc;
+        generation = OLD;
+        mode = resume_old;
       }
+
+      // Don't want to spin in this loop and start a cycle every time, so
+      // clear requested gc cause. This creates a race with callers of the
+      // blocking 'request_gc' method, but there it loops and resets the
+      // '_requested_gc_cause' until a full cycle is completed.
+      _requested_gc_cause = GCCause::_no_gc;
     }
 
     // Blow all soft references on this cycle, if handling allocation failure,
@@ -243,6 +246,11 @@ void ShenandoahControlThread::run_service() {
           }
           case stw_full: {
             service_stw_full_cycle(cause);
+            break;
+          }
+          case resume_old: {
+            assert(generation == OLD, "Expected old generation here");
+            resume_concurrent_old_cycle(heap->old_generation(), cause);
             break;
           }
           default: {
@@ -375,7 +383,7 @@ void ShenandoahControlThread::run_service() {
 //              |               +                |
 //              v               |                v
 //                              |
-//            Young             |               Old +------> Young
+//            Young             |               Old +------> Young (bootstrap)
 //              +               v                +             +
 //              |                                |             |
 //              |             Global             |             |
@@ -483,6 +491,7 @@ bool ShenandoahControlThread::check_soft_max_changed() const {
 }
 
 void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause) {
+  assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress(), "Old mark should be in progress");
 
   _allow_old_preemption.set();
 
@@ -711,7 +720,7 @@ void ShenandoahControlThread::request_concurrent_gc(GenerationMode generation) {
   _requested_generation = generation;
 
   if (preempt_old_marking(generation)) {
-    log_info(gc)("Preempting concurrent global mark to allow young GC.");
+    log_info(gc)("Preempting old generation mark to allow young GC.");
     _preemption_requested.set();
     ShenandoahHeap::heap()->cancel_gc(GCCause::_shenandoah_concurrent_gc);
   }

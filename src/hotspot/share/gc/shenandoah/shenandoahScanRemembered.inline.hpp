@@ -166,7 +166,7 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
     //  get_last_start(card_at_start) returns the object that immediately follows the coalesced object,
     //    or it returns an object that comes after the object immediately following the coalesced object.
   } else {
-    size_t coalesced_offset = address - card_start_address;
+    uint8_t coalesced_offset = static_cast<uint8_t>(address - card_start_address);
     if (get_last_start(card_at_start) > coalesced_offset) {
       // Existing last start is being coalesced, create new last start
       set_last_start(card_at_start, coalesced_offset);
@@ -178,7 +178,7 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
       clear_has_object_bit(i);
     }
 
-    size_t follow_offset = (address + length_in_words) - _rs->addr_for_card_index(card_at_end);
+    uint8_t follow_offset = static_cast<uint8_t>((address + length_in_words) - _rs->addr_for_card_index(card_at_end));
     if (has_object(card_at_end) && (get_first_start(card_at_end) < follow_offset)) {
       // It may be that after coalescing within this last card's memory range, the last card
       // no longer holds an object.

@@ -61,7 +61,8 @@ private:
     none,
     concurrent_normal,
     stw_degenerated,
-    stw_full
+    stw_full,
+    resume_old
   } GCMode;
 
   // While we could have a single lock for these, it may risk unblocking
