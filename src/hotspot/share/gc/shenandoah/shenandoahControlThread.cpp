@@ -436,7 +436,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   ShenandoahGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
 
-  young_generation->set_old_gen_task_queues(young_generation->task_queues());
+  young_generation->set_old_gen_task_queues(old_generation->task_queues());
 
   old_generation->set_mark_incomplete();
 
@@ -492,6 +492,7 @@ bool ShenandoahControlThread::check_soft_max_changed() const {
 
 void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause) {
   assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress(), "Old mark should be in progress");
+  log_debug(gc)("Resuming old generation with " UINT32_FORMAT " marking tasks queued.", generation->task_queues()->tasks());
 
   _allow_old_preemption.set();
 
