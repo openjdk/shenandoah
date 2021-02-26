@@ -432,11 +432,11 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
 
     first_cluster++;
-    int next_card_index = 0;
+    size_t next_card_index = 0;
     while (card_index < end_card_index) {
 
-      int is_dirty = _rs->is_card_dirty(card_index);
-      int has_object = _scc->has_object(card_index);
+      bool is_dirty = _rs->is_card_dirty(card_index);
+      bool has_object = _scc->has_object(card_index);
 
       if (is_dirty) {
         if (has_object) {
