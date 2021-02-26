@@ -57,11 +57,13 @@ private:
   ShenandoahRegionIterator* _regions;
 public:
   volatile size_t _used;
+  volatile size_t _promoted;
 
   ShenandoahPromoteTenuredRegionsTask(ShenandoahRegionIterator* regions) :
     AbstractGangTask("Shenandoah Promote Tenured Regions"),
     _regions(regions),
-    _used(0) {
+    _used(0),
+    _promoted(0) {
   }
 
   void work(uint worker_id) {
@@ -71,6 +73,7 @@ public:
       if (r->is_young()) {
         if (r->age() >= InitialTenuringThreshold && !r->is_humongous_continuation()) {
           r->promote();
+          Atomic::inc(&_promoted);
         } else {
           Atomic::add(&_used, r->used());
         }
@@ -85,6 +88,7 @@ void ShenandoahYoungGeneration::promote_tenured_regions() {
   ShenandoahPromoteTenuredRegionsTask task(&regions);
   ShenandoahHeap::heap()->workers()->run_task(&task);
   _used = task._used;
+  log_info(gc)("Promoted " SIZE_FORMAT " regions.", task._promoted);
 }
 
 void ShenandoahYoungGeneration::promote_all_regions() {
@@ -95,11 +99,6 @@ void ShenandoahYoungGeneration::promote_all_regions() {
   for (size_t index = 0; index < heap->num_regions(); index++) {
     ShenandoahHeapRegion* r = heap->get_region(index);
     if (r->is_young()) {
-#ifdef TRACE_PROMOTION
-      printf("promote_all_regions(), setting region (%llx, %llx, %llx) to OLD_GENERATION\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->end());
-      fflush(stdout);
-#endif
       r->promote();
     }
   }
