@@ -194,8 +194,8 @@ ShenandoahMarkingContext* ShenandoahGeneration::complete_marking_context() {
 void ShenandoahGeneration::cancel_marking() {
   if (is_concurrent_mark_in_progress()) {
     set_concurrent_mark_in_progress(false);
-    _task_queues->clear();
   }
+  _task_queues->clear();
 }
 
 ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,

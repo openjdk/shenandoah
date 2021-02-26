@@ -656,6 +656,10 @@ void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
   ShenandoahDegenGC gc(point, _degen_generation);
   gc.collect(cause);
 
+  assert(heap->young_generation()->task_queues()->is_empty(), "Unexpected young generation marking tasks");
+  assert(heap->old_generation()->task_queues()->is_empty(), "Unexpected old generation marking tasks");
+  assert(heap->global_generation()->task_queues()->is_empty(), "Unexpected global generation marking tasks");
+
   _degen_generation->heuristics()->record_success_degenerated();
   heap->shenandoah_policy()->record_success_degenerated();
 }

@@ -1739,9 +1739,9 @@ bool ShenandoahHeap::try_cancel_gc() {
 }
 
 void ShenandoahHeap::cancel_concurrent_mark() {
-  _global_generation->cancel_marking();
   _young_generation->cancel_marking();
   _old_generation->cancel_marking();
+  _global_generation->cancel_marking();
 
   ShenandoahBarrierSet::satb_mark_queue_set().abandon_partial_marking();
 
