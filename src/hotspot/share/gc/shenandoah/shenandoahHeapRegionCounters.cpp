@@ -23,6 +23,8 @@
  */
 
 #include "precompiled.hpp"
+
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
@@ -82,13 +84,16 @@ void ShenandoahHeapRegionCounters::update() {
 
       ShenandoahHeap* heap = ShenandoahHeap::heap();
       jlong status = 0;
-      // HEY! Update visualizer to render concurrent old marking
-      if (heap->is_concurrent_mark_in_progress())      status |= 1 << 0;
-      if (heap->is_evacuation_in_progress())           status |= 1 << 1;
-      if (heap->is_update_refs_in_progress())          status |= 1 << 2;
-      if (heap->is_gc_generation_young())              status |= 1 << 3;
-      if (heap->is_degenerated_gc_in_progress())       status |= 1 << 4;
-      if (heap->is_full_gc_in_progress())              status |= 1 << 5;
+
+      if (heap->is_concurrent_young_mark_in_progress()) status |= 1 << 0;
+      if (heap->is_concurrent_old_mark_in_progress())   status |= 1 << 1;
+      if (heap->is_evacuation_in_progress())            status |= 1 << 2;
+      if (heap->is_update_refs_in_progress())           status |= 1 << 3;
+      if (heap->is_degenerated_gc_in_progress())        status |= 1 << 4;
+      if (heap->is_full_gc_in_progress())               status |= 1 << 5;
+      if (heap->active_generation() != NULL) {
+        status |= (heap->active_generation()->generation_mode() << 6);
+      }
 
       _status->set_value(status);
 
@@ -114,7 +119,6 @@ void ShenandoahHeapRegionCounters::update() {
           _regions_data[i]->set_value(data);
         }
       }
-
     }
   }
 }
