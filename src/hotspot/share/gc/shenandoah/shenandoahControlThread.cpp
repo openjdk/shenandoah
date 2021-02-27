@@ -185,7 +185,7 @@ void ShenandoahControlThread::run_service() {
     } else {
       // We should only be here if the regulator requested a cycle or if
       // there is an old generation mark in progress.
-      if (_preemption_requested.try_unset() || _requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
+      if (_preemption_requested.is_set() || _requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
         // preemption was requested or this is a regular cycle
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = _requested_generation;
@@ -600,7 +600,7 @@ bool ShenandoahControlThread::check_cancellation_or_degen(ShenandoahGC::Shenando
 
   if (_preemption_requested.is_set()) {
     assert(_requested_generation == YOUNG, "Only young GCs may preempt old.");
-    assert(_requested_gc_cause == GCCause::_shenandoah_concurrent_gc, "Should be normal concurrent young gc.");
+    _preemption_requested.unset();
 
     if (point != ShenandoahGC::_degenerated_mark) {
       // Okay, cancel is set in the heap now whether we are in concurrent old marking
