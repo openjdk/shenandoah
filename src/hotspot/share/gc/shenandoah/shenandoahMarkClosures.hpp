@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,7 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contac    _ctx(ShenandoahHeap::heap()->complete_marking_context()), _lock(ShenandoahHeap::heap()->lock()) {}
- Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  *
@@ -26,20 +25,17 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHMARKCLOSURES_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHMARKCLOSURES_HPP
 
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.hpp"
-#include "gc/shenandoah/shenandoahSharedVariables.hpp"
-#include "gc/shenandoah/shenandoahMarkingContext.hpp"
-#include "gc/shenandoah/shenandoahMarkClosures.hpp"
+
+class ShenandoahMarkingContext;
+class ShenandoahHeapRegion;
 
 class ShenandoahFinalMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
 private:
   ShenandoahMarkingContext* const _ctx;
   ShenandoahHeapLock* const _lock;
 public:
-  ShenandoahFinalMarkUpdateRegionStateClosure(ShenandoahMarkingContext* ctx) :
-    _ctx(ctx), _lock(ShenandoahHeap::heap()->lock()) {}
+  ShenandoahFinalMarkUpdateRegionStateClosure(ShenandoahMarkingContext* ctx);
 
   void heap_region_do(ShenandoahHeapRegion* r);
 
