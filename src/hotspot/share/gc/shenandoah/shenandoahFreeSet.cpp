@@ -35,7 +35,6 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
-#undef DEBUG_TRACE
 
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
@@ -174,23 +173,6 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return NULL;
 }
 
-#ifdef DEBUG_TRACE
-static const char *affiliation_name(ShenandoahRegionAffiliation a) {
-
-  switch (a) {
-    case ShenandoahRegionAffiliation::FREE:
-        return "FREE";
-        break;
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-        return "YOUNG_GENERATION";
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-        return "OLD_GENERATION";
-    default:
-        return "UnrecognizedAffiliation";
-  }
-}
-#endif
-
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
 
@@ -202,12 +184,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   try_recycle_trashed(r);
 
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
-#ifdef DEBUG_TRACE
-    printf("try_allocate_in(), converting region @ (%llx, %llx, %llx) to %s\n",
-           (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->end(),
-           affiliation_name(req.affiliation()));
-    fflush(stdout);
-#endif
     // This free region might have garbage in its remembered set representation.
     _heap->clear_cards_for(r);
     r->set_affiliation(req.affiliation());
@@ -378,12 +354,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     }
 
     r->set_top(r->bottom() + used_words);
-#ifdef DEBUG_TRACE
-    printf("allocate_contiguous(), setting region (%llx, %llx, %llx) to %s\n",
-           (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->end(),
-           affiliation_name(req.affiliation()));
-    fflush(stdout);
-#endif
     r->set_affiliation(req.affiliation());
 
     _mutator_free_bitmap.clear_bit(r->index());

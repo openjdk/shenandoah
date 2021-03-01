@@ -26,12 +26,7 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHALLOCREQUEST_HPP
 
 #include "memory/allocation.hpp"
-
-enum ShenandoahRegionAffiliation {
-  FREE,
-  YOUNG_GENERATION,
-  OLD_GENERATION
-};
+#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 
 class ShenandoahAllocRequest : StackObj {
 public:

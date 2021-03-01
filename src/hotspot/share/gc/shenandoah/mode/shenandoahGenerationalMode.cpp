@@ -24,9 +24,6 @@
 
 #include "precompiled.hpp"
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
-#include "logging/log.hpp"
-#include "logging/logTag.hpp"
-#include "runtime/globals_extension.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
@@ -50,4 +47,17 @@ void ShenandoahGenerationalMode::initialize_flags() const {
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahSATBBarrier);
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahCASBarrier);
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahCloneBarrier);
+}
+
+const char *affiliation_name(ShenandoahRegionAffiliation type) {
+  switch (type) {
+    case ShenandoahRegionAffiliation::FREE:
+      return "FREE";
+    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+      return "YOUNG";
+    case ShenandoahRegionAffiliation::OLD_GENERATION:
+      return "OLD";
+    default:
+      return "UnrecognizedAffiliation";
+  }
 }

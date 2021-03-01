@@ -46,9 +46,7 @@
 #include "runtime/os.hpp"
 #include "runtime/safepoint.hpp"
 #include "utilities/powerOfTwo.hpp"
-#include "shenandoahGeneration.hpp"
 
-#undef DEBUG_TRACE
 
 size_t ShenandoahHeapRegion::RegionCount = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytes = 0;
@@ -518,11 +516,7 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
-#ifdef DEBUG_TRACE
-  printf("SHR::recycle(), setting region (%llx, %llx, %llx) to FREE\n",
-         (unsigned long long) bottom(), (unsigned long long) top(), (unsigned long long) end());
-  fflush(stdout);
-#endif
+
   set_affiliation(FREE);
 
   if (ZapUnusedHeapArea) {
@@ -769,6 +763,9 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
     return;
   }
 
+  log_trace(gc)("Changing affiliation of region %zu from %s to %s",
+    index(), affiliation_name(_affiliation), affiliation_name(new_affiliation));
+
   if (_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
     heap->young_generation()->decrement_affiliated_region_count();
   } else if (_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
@@ -843,11 +840,6 @@ void ShenandoahHeapRegion::promote() {
         r->index(), (size_t) r->bottom(), (size_t) r->top());
 
       ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(r->bottom(), r->end()));
-#ifdef DEBUG_TRACE
-      printf("promoting humongous region (%llx, %llx, %llx), setting affiliation to OLD_GENERATION\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->end());
-      fflush(stdout);
-#endif
       r->set_affiliation(OLD_GENERATION);
     }
     // HEY!  Better to call ShenandoahHeap::heap()->card_scan()->mark_range_as_clean(r->bottom(), obj->size())
@@ -871,11 +863,6 @@ void ShenandoahHeapRegion::promote() {
 
     // HEY!  Better to call ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(r->bottom(), obj->size());
     ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(bottom(), end()));
-#ifdef DEBUG_TRACE
-    printf("promoting normal region (%llx, %llx, %llx), setting affiliation to OLD_GENERATION\n",
-           (unsigned long long) bottom(), (unsigned long long) top(), (unsigned long long) end());
-    fflush(stdout);
-#endif
     set_affiliation(OLD_GENERATION);
     oop_iterate_objects(&update_card_values, /*fill_dead_objects*/ true, /* reregister_coalesced_objects */ false);
   }

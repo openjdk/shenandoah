@@ -28,6 +28,7 @@
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
+#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
@@ -52,7 +53,6 @@ class ShenandoahGeneration;
 class ShenandoahYoungGeneration;
 class ShenandoahHeuristics;
 class ShenandoahMarkingContext;
-class ShenandoahMode;
 class ShenandoahPhaseTimings;
 class ShenandoahHeap;
 class ShenandoahHeapRegion;
@@ -103,12 +103,6 @@ public:
   // This is *not* MT safe. However, in the absence of multithreaded access, it
   // can be used to determine if there is more work to do.
   bool has_next() const;
-};
-
-enum GenerationMode {
-  YOUNG,
-  OLD,
-  GLOBAL
 };
 
 class ShenandoahHeapRegionClosure : public StackObj {

@@ -27,7 +27,19 @@
 
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 
-class ShenandoahHeuristics;
+enum GenerationMode {
+  YOUNG,
+  OLD,
+  GLOBAL
+};
+
+enum ShenandoahRegionAffiliation {
+  FREE,
+  YOUNG_GENERATION,
+  OLD_GENERATION
+};
+
+const char *affiliation_name(ShenandoahRegionAffiliation type);
 
 class ShenandoahGenerationalMode : public ShenandoahMode {
 public:
