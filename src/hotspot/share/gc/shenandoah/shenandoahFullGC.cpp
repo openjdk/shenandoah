@@ -1077,5 +1077,5 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     }
   }
 
-  heap->clear_cancelled_gc();
+  heap->clear_cancelled_gc(true /* clear oom handler */);
 }
