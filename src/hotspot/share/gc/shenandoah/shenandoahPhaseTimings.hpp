@@ -99,8 +99,8 @@ class outputStream;
   f(conc_rendezvous_roots,                          "Rendezvous")                      \
   f(conc_evac,                                      "Concurrent Evacuation")           \
                                                                                        \
-  f(init_update_refs_gross,                         "Pause Init Update Refs (G)")      \
-  f(init_update_refs,                               "Pause Init Update Refs (N)")      \
+  f(init_update_refs_gross,                         "Pause Init  Update Refs (G)")      \
+  f(init_update_refs,                               "Pause Init  Update Refs (N)")      \
   f(init_update_refs_manage_gclabs,                 "  Manage GCLABs")                 \
                                                                                        \
   f(conc_update_refs,                               "Concurrent Update Refs")          \
