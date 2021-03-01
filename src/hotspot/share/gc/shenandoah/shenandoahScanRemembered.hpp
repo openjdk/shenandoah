@@ -23,6 +23,9 @@
  *
  */
 
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
+
 // During development of this new feature, we want the option to test
 // with and without, and to compare performance before and after.
 #define FAST_REMEMBERED_SET_SCANNING
@@ -205,9 +208,6 @@
 //
 // These limitations will be addressed in future enhancements to the
 // existing implementation.
-
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
 
 #include <stdint.h>
 #include "memory/iterator.hpp"
