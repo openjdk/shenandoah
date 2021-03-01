@@ -319,8 +319,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     // do this. For non-GCLAB allocations, we have no way to retract the allocation, and
     // have to explicitly overwrite the copy with the filler object. With that overwrite,
     // we have to keep the fwdptr initialized and pointing to our (stale) copy.
-
-
     if (alloc_from_gclab) {
       ShenandoahThreadLocalData::gclab(thread)->undo_allocation(copy, size);
     } else {
