@@ -96,6 +96,10 @@ void ShenandoahFullGC::entry_full(GCCause::Cause cause) {
 }
 
 void ShenandoahFullGC::op_full(GCCause::Cause cause) {
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    fatal("Full GC not yet supported for generational mode.");
+  }
+
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
 

@@ -633,9 +633,6 @@ void ShenandoahControlThread::stop_service() {
 
 void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational()) {
-    fatal("Full GC not yet supported for generational mode.");
-  }
 
   GCIdMark gc_id_mark;
   ShenandoahGCSession session(cause, heap->global_generation());
