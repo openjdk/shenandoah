@@ -30,7 +30,16 @@
 #include "runtime/globals_extension.hpp"
 
 void ShenandoahGenerationalMode::initialize_flags() const {
+  // When we fill in dead objects during update refs, we use oop::size,
+  // which depends on the klass being loaded. However, if these dead objects
+  // were the last referrers to the klass, it will be unloaded and we'll
+  // crash. Class unloading is disabled until we're able to sort this out.
+  FLAG_SET_ERGO(ClassUnloading, false);
+  FLAG_SET_ERGO(ClassUnloadingWithConcurrentMark, false);
+  FLAG_SET_ERGO(ShenandoahUnloadClassesFrequency, 0);
+
   if (ClassUnloading) {
+    // Leaving this here for the day we re-enable class unloading
     FLAG_SET_DEFAULT(ShenandoahSuspendibleWorkers, true);
     FLAG_SET_DEFAULT(VerifyBeforeExit, false);
   }
@@ -38,15 +47,13 @@ void ShenandoahGenerationalMode::initialize_flags() const {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
 
-  // HEY! Disabled while M7 work is in progress.
-  FLAG_SET_ERGO(ShenandoahUnloadClassesFrequency, 0);
-
   // Final configuration checks
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahLoadRefBarrier);
   SHENANDOAH_CHECK_FLAG_UNSET(ShenandoahIUBarrier);
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahSATBBarrier);
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahCASBarrier);
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahCloneBarrier);
+  SHENANDOAH_CHECK_FLAG_UNSET(ClassUnloading);
 }
 
 const char *affiliation_name(ShenandoahRegionAffiliation type) {
