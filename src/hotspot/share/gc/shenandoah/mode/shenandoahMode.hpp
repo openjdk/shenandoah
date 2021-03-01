@@ -25,7 +25,6 @@
 #ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHMODE_HPP
 #define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHMODE_HPP
 
-#include "runtime/java.hpp"
 #include "memory/allocation.hpp"
 
 class ShenandoahGeneration;

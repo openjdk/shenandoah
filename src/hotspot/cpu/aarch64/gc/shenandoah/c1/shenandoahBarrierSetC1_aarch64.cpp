@@ -29,7 +29,6 @@
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
-#include "gc/shenandoah/mode/shenandoahMode.hpp"
 
 #define __ masm->masm()->
 
