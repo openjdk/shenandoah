@@ -43,7 +43,6 @@ void ShenandoahGenerationalMode::initialize_flags() const {
 
   // HEY! Disabled while M7 work is in progress.
   FLAG_SET_ERGO(ShenandoahUnloadClassesFrequency, 0);
-  FLAG_SET_ERGO(RegisterReferences, false);
 
   // Final configuration checks
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahLoadRefBarrier);
