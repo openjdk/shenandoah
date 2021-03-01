@@ -61,7 +61,7 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
       if (ShenandoahSATBBarrier && dest_uninitialized) {
         __ tbz(rscratch1, ShenandoahHeap::HAS_FORWARDED_BITPOS, done);
       } else {
-        __ mov(rscratch2, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::OLD_MARKING);
+        __ mov(rscratch2, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
         __ tst(rscratch1, rscratch2);
         __ br(Assembler::EQ, done);
       }
