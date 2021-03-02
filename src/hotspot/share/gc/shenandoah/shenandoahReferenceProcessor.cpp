@@ -201,7 +201,8 @@ ShenandoahReferenceProcessor::ShenandoahReferenceProcessor(uint max_workers) :
   _pending_list(NULL),
   _pending_list_tail(&_pending_list),
   _iterate_discovered_list_id(0U),
-  _stats() {
+  _stats(),
+  _enabled(true) {
   for (size_t i = 0; i < max_workers; i++) {
     _ref_proc_thread_locals[i].reset();
   }
@@ -366,7 +367,7 @@ bool ShenandoahReferenceProcessor::discover(oop reference, ReferenceType type, u
 }
 
 bool ShenandoahReferenceProcessor::discover_reference(oop reference, ReferenceType type) {
-  if (!RegisterReferences) {
+  if (!RegisterReferences || !_enabled) {
     // Reference processing disabled
     return false;
   }
