@@ -185,17 +185,25 @@ void ShenandoahControlThread::run_service() {
     } else {
       // We should only be here if the regulator requested a cycle or if
       // there is an old generation mark in progress.
-      if (_preemption_requested.is_set() || _requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
+      if (_requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
         // preemption was requested or this is a regular cycle
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = _requested_generation;
         mode = default_mode;
+
+        // Don't start a new old marking if there is one already in progress.
+        if (generation == OLD && heap->is_concurrent_old_mark_in_progress()) {
+          mode = resume_old;
+        }
+
         if (generation == GLOBAL) {
           heap->set_unload_classes(global_heuristics->should_unload_classes());
         } else {
           heap->set_unload_classes(false);
         }
       } else if (heap->is_concurrent_old_mark_in_progress()) {
+        // Nobody asked us to do anything, but we have an old generation mark
+        // in progress, so resume working on that.
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = OLD;
         mode = resume_old;
@@ -435,6 +443,9 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   // mark but it will not traverse them.
   ShenandoahGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
+
+  assert(!heap->is_concurrent_old_mark_in_progress(), "Old already in progress.");
+  assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");
 
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
 
