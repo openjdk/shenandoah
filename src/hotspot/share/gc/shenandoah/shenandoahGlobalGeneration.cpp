@@ -57,6 +57,15 @@ size_t ShenandoahGlobalGeneration::available() const {
 
 void ShenandoahGlobalGeneration::set_concurrent_mark_in_progress(bool in_progress) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if (in_progress && heap->is_concurrent_old_mark_in_progress()) {
+    // Global collection has preempted an old generation mark. This is fine
+    // because the global generation includes the old generation, but we
+    // want the global collect to start from a clean slate and we don't want
+    // any stale state in the old generation.
+    heap->purge_old_satb_buffers();
+    heap->old_generation()->cancel_marking();
+  }
+
   heap->set_concurrent_young_mark_in_progress(in_progress);
   heap->set_concurrent_old_mark_in_progress(in_progress);
 }
