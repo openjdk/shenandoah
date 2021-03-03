@@ -382,26 +382,28 @@ void ShenandoahControlThread::run_service() {
 // Young and old concurrent cycles are initiated by the regulator. Implicit
 // and explicit GC requests are handled by the controller thread and always
 // run a global cycle (which is concurrent by default, but may be overridden
-// by command line options). Old and young cycles always degenerate to a
-// global cycle. Since the mark data for young and old cycles is partial,
-// degeneration in these cycles must begin with a global (complete) marking.
+// by command line options). Old cycles always degenerate to a global cycle.
+// Young cycles are degenerated to complete the young cycle.
 //
 //
-//              +-----------+  Idle  +-----------+
-//              |               +                |
-//              v               |                v
-//                              |
-//            Young             |               Old +------> Young (bootstrap)
-//              +               v                +             +
-//              |                                |             |
-//              |             Global             |             |
-//              |               +                |             |
-//              |               |                |             |
-//              |               |                |             |
-//              v               v                |             v
-//                                               |
-//            Degen           Degen   <----------+           Degen
-//            Young           Global                         Young
+//      +-------------+----------+  Idle  +--------------+
+//      |             |              +                   |
+//      |             |              |                   |
+//      |             |              |                   |
+//      |             |              |                   |
+//      |             v              v                   v
+//      |
+//      |           Young  <---+ Resume Old  <----+ Bootstrap Old
+//      |             +            +     +               +
+//      |             |            |     |               |
+//      |             v            |     |               v
+//      v        Young Degen       |     |           Young Degen
+//                                 |     |
+//   Global  <--------------------+      |
+//      +                                |
+//      |                                v
+//      |
+//      +--------------------->  Global Degen
 //
 void ShenandoahControlThread::service_concurrent_normal_cycle(
   const ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
