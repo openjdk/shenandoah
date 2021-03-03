@@ -26,6 +26,8 @@
 #define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHMODE_HPP
 
 #include "memory/allocation.hpp"
+#include "runtime/java.hpp"
+#include "utilities/formatBuffer.hpp"
 
 class ShenandoahGeneration;
 class ShenandoahHeuristics;

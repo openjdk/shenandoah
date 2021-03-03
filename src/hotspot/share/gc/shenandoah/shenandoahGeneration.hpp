@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
 class ShenandoahHeapRegion;
+class ShenandoahHeapRegionClosure;
 
 class ShenandoahGeneration : public CHeapObj<mtGC> {
 private:
