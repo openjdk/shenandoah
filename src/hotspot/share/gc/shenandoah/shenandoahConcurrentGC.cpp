@@ -959,6 +959,10 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
 
   heap->update_heap_region_states(true /*concurrent*/);
 
+  if (heap->is_concurrent_old_mark_in_progress()) {
+    heap->purge_old_satb_buffers();
+  }
+
   heap->set_update_refs_in_progress(false);
   heap->set_has_forwarded_objects(false);
 

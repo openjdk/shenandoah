@@ -697,6 +697,8 @@ private:
 
   void try_inject_alloc_failure();
   bool should_inject_alloc_failure();
+
+  void purge_old_satb_buffers();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP

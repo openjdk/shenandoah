@@ -2362,6 +2362,10 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   }
 }
 
+void ShenandoahHeap::purge_old_satb_buffers() {
+  static_cast<ShenandoahOldGeneration*>(_old_generation)->purge_satb_buffers();
+}
+
 template<>
 void ShenandoahGenerationRegionClosure<YOUNG>::heap_region_do(ShenandoahHeapRegion* region) {
   // Visit young and free regions
