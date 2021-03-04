@@ -488,12 +488,6 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
   // Weak reference processing
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
-  // Reference processing is disabled when old generation mark is in progress.
-  // This is because we must leave the SATB barrier on to cover the old generation
-  // snapshot. However, in some cases, the referent of a weak reference may be
-  // NULL'd out after final mark. With the SATB barrier enabled, this reference
-  // will be enqueued in the SATB buffer and will thereby poison the next cycle.
-  rp->set_enabled(!heap->is_concurrent_old_mark_in_progress());
   rp->reset_thread_locals();
   rp->set_soft_reference_policy(heap->soft_ref_policy()->should_clear_all_soft_refs());
 

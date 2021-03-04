@@ -140,8 +140,6 @@ private:
 
   ReferenceProcessorStats _stats;
 
-  bool _enabled;
-
   template <typename T>
   bool is_inactive(oop reference, oop referent, ReferenceType type) const;
   bool is_strongly_live(oop referent) const;
@@ -190,10 +188,6 @@ public:
   void work();
 
   void abandon_partial_discovery();
-
-  void set_enabled(bool enabled) {
-    _enabled = enabled;
-  }
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHREFERENCEPROCESSOR_HPP
