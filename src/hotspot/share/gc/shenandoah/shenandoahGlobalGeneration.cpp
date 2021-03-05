@@ -62,7 +62,7 @@ void ShenandoahGlobalGeneration::set_concurrent_mark_in_progress(bool in_progres
     // because the global generation includes the old generation, but we
     // want the global collect to start from a clean slate and we don't want
     // any stale state in the old generation.
-    heap->purge_old_satb_buffers();
+    heap->purge_old_satb_buffers(true /* abandon */);
     heap->old_generation()->cancel_marking();
   }
 

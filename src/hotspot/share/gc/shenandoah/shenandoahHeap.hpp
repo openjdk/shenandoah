@@ -408,6 +408,7 @@ private:
   ShenandoahYoungGeneration* _young_generation;
   ShenandoahGeneration*      _global_generation;
   ShenandoahGeneration*      _old_generation;
+
   ShenandoahControlThread*   _control_thread;
   ShenandoahRegulatorThread* _regulator_thread;
   ShenandoahCollectorPolicy* _shenandoah_policy;
@@ -687,7 +688,7 @@ public:
 
   static inline void increase_object_age(oop obj, uint additional_age);
 
-  void purge_old_satb_buffers();
+  void purge_old_satb_buffers(bool abandon);
 private:
   void trash_cset_regions();
 

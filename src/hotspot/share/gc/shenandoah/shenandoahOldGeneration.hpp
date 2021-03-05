@@ -58,7 +58,7 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   // Alternatively, we could inspect the state of the heap and the age of the
   // object at the barrier, but we reject this approach because it is likely
   // the performance impact would be too severe.
-  void purge_satb_buffers();
+  void purge_satb_buffers(bool abandon);
  protected:
   bool is_concurrent_mark_in_progress();
 };

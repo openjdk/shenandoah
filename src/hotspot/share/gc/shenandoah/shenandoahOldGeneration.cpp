@@ -144,14 +144,18 @@ bool ShenandoahOldGeneration::is_concurrent_mark_in_progress() {
   return ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress();
 }
 
-void ShenandoahOldGeneration::purge_satb_buffers() {
+void ShenandoahOldGeneration::purge_satb_buffers(bool abandon) {
   ShenandoahHeap *heap = ShenandoahHeap::heap();
-
   shenandoah_assert_safepoint();
   assert(heap->is_concurrent_old_mark_in_progress(), "Only necessary during old marking.");
-  uint nworkers = heap->workers()->active_workers();
-  StrongRootsScope scope(nworkers);
 
-  ShenandoahPurgeSATBTask purge_satb_task(task_queues());
-  heap->workers()->run_task(&purge_satb_task);
+  if (abandon) {
+    ShenandoahBarrierSet::satb_mark_queue_set().abandon_partial_marking();
+  } else {
+    uint nworkers = heap->workers()->active_workers();
+    StrongRootsScope scope(nworkers);
+
+    ShenandoahPurgeSATBTask purge_satb_task(task_queues());
+    heap->workers()->run_task(&purge_satb_task);
+  }
 }

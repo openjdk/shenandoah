@@ -954,7 +954,10 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
   heap->update_heap_region_states(true /*concurrent*/);
 
   if (heap->is_concurrent_old_mark_in_progress()) {
-    heap->purge_old_satb_buffers();
+    // Purge the SATB buffers, transferring any valid, old pointers to the
+    // old generation mark queue. From here on, no mutator will have access
+    // to anything that will be trashed and recycled.
+    heap->purge_old_satb_buffers(false /* abandon */);
   }
 
   heap->set_update_refs_in_progress(false);
