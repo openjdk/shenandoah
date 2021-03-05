@@ -206,8 +206,8 @@ bool ShenandoahHeuristics::should_start_gc() {
   if (ShenandoahGuaranteedGCInterval > 0) {
     double last_time_ms = (os::elapsedTime() - _last_cycle_end) * 1000;
     if (last_time_ms > ShenandoahGuaranteedGCInterval) {
-      log_info(gc)("Trigger: Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)",
-                   last_time_ms, ShenandoahGuaranteedGCInterval);
+      log_info(gc)("Trigger (%s): Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)",
+                   _generation->name(), last_time_ms, ShenandoahGuaranteedGCInterval);
       return true;
     }
   }
