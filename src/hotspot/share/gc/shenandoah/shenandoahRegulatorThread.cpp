@@ -39,9 +39,6 @@ static ShenandoahHeuristics* get_heuristics(ShenandoahGeneration* nullable) {
 ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahControlThread* control_thread) :
   ConcurrentGCThread(),
   _control_thread(control_thread),
-  _last_young_cycle(0),
-  _last_old_cycle(0),
-  _last_cycle(0),
   _sleep(ShenandoahControlIntervalMin),
   _last_sleep_adjust_time(os::elapsedTime()) {
 
@@ -72,14 +69,17 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
   assert(_old_heuristics != NULL, "Need old heuristics.");
 
   while (!should_terminate()) {
-    if (should_start_old_cycle()) {
-      log_info(gc)("Heuristics requesting old collection.");
-      _last_old_cycle = _control_thread->get_gc_id();
-      _control_thread->request_concurrent_gc(OLD);
-    } else if (should_start_young_cycle()) {
-      log_info(gc)("Heuristics requesting young collection.");
-      _last_young_cycle = _control_thread->get_gc_id();
-      _control_thread->request_concurrent_gc(YOUNG);
+    ShenandoahControlThread::GCMode mode = _control_thread->gc_mode();
+    if (mode == ShenandoahControlThread::none) {
+      if (start_old_cycle()) {
+        log_info(gc)("Heuristics request for old collection accepted");
+      } else if (start_young_cycle()) {
+        log_info(gc)("Heuristics request for young collection accepted");
+      }
+    } else if (mode == ShenandoahControlThread::marking_old) {
+      if (start_young_cycle()) {
+        log_info(gc)("Heuristics request for young collection accepted");
+      }
     }
 
     regulator_sleep();
@@ -91,14 +91,10 @@ void ShenandoahRegulatorThread::regulate_interleaved_cycles() {
   assert(_global_heuristics != NULL, "Need global heuristics.");
 
   while (!should_terminate()) {
-    if (should_start_cycle(_young_heuristics, _last_cycle)) {
-      log_info(gc)("Heuristics requesting young collection.");
-      _last_cycle = _control_thread->get_gc_id();
-      _control_thread->request_concurrent_gc(YOUNG);
-    } else if (should_start_cycle(_global_heuristics, _last_cycle)) {
-      log_info(gc)("Heuristics requesting global collection.");
-      _last_cycle = _control_thread->get_gc_id();
-      _control_thread->request_concurrent_gc(GLOBAL);
+    if (start_global_cycle()) {
+      log_info(gc)("Heuristics request for global collection accepted.");
+    } else if (start_young_cycle()) {
+      log_info(gc)("Heuristics request for young collection accepted.");
     }
 
     regulator_sleep();
@@ -109,9 +105,8 @@ void ShenandoahRegulatorThread::regulate_heap() {
   assert(_global_heuristics != NULL, "Need global heuristics.");
 
   while (!should_terminate()) {
-    if (should_start_cycle(_global_heuristics, _last_cycle)) {
-      _last_cycle = _control_thread->get_gc_id();
-      _control_thread->request_concurrent_gc(GLOBAL);
+    if (start_global_cycle()) {
+      log_info(gc)("Heuristics request for global collection accepted.");
     }
 
     regulator_sleep();
@@ -134,22 +129,16 @@ void ShenandoahRegulatorThread::regulator_sleep() {
   os::naked_short_sleep(_sleep);
 }
 
-bool ShenandoahRegulatorThread::should_start_young_cycle() {
-  return ShenandoahHeap::heap()->mode()->is_generational()
-      && should_start_cycle(_young_heuristics, _last_young_cycle);
+bool ShenandoahRegulatorThread::start_old_cycle() {
+  return _old_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(OLD);
 }
 
-bool ShenandoahRegulatorThread::should_start_old_cycle() {
-  return should_start_cycle(_old_heuristics, _last_old_cycle);
+bool ShenandoahRegulatorThread::start_young_cycle() {
+  return _young_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(YOUNG);
 }
 
-bool ShenandoahRegulatorThread::should_start_cycle(ShenandoahHeuristics* heuristics, size_t last_cycle_started) {
-  // We want to hold the last heuristic down so that it doesn't repeatedly try to start
-  // a cycle. We might consider invoking 'should_start_gc' because in some cases it has
-  // side effects (like sampling the allocation rate). On the other hand, the right thing™
-  // to do is probably factor allocation rate sampling outside of heuristics evaluation.
-  return (last_cycle_started == 0 || _control_thread->get_gc_id() > last_cycle_started)
-      && heuristics->should_start_gc();
+bool ShenandoahRegulatorThread::start_global_cycle() {
+  return _global_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(GLOBAL);
 }
 
 void ShenandoahRegulatorThread::stop_service() {

@@ -67,19 +67,15 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
   void regulate_concurrent_cycles();
   void regulate_heap();
 
-  bool should_start_young_cycle();
-  bool should_start_old_cycle();
-  bool should_start_cycle(ShenandoahHeuristics* heuristics, size_t last_cycle_started);
+  bool start_old_cycle();
+  bool start_young_cycle();
+  bool start_global_cycle();
 
   ShenandoahSharedFlag _heap_changed;
   ShenandoahControlThread* _control_thread;
   ShenandoahHeuristics* _young_heuristics;
   ShenandoahHeuristics* _old_heuristics;
   ShenandoahHeuristics* _global_heuristics;
-
-  size_t _last_young_cycle;
-  size_t _last_old_cycle;
-  size_t _last_cycle;
 
   int _sleep;
   double _last_sleep_adjust_time;

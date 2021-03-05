@@ -29,14 +29,16 @@
 #include "gc/shenandoah/shenandoahOldGC.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 
-ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation) :
-  ShenandoahConcurrentGC(generation) {}
+ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption) :
+  ShenandoahConcurrentGC(generation), _allow_preemption(allow_preemption) {}
 
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   // Continue concurrent mark, do not reset regions, do not mark roots, do not collect $200.
+  _allow_preemption.set();
   entry_mark();
+  _allow_preemption.unset();
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
 
   // Complete marking under STW

@@ -57,14 +57,6 @@ class ShenandoahControlThread: public ConcurrentGCThread {
   friend class VMStructs;
 
 private:
-  typedef enum {
-    none,
-    concurrent_normal,
-    stw_degenerated,
-    stw_full,
-    resume_old
-  } GCMode;
-
   // While we could have a single lock for these, it may risk unblocking
   // GC waiters when alloc failure GC cycle finishes. We want instead
   // to make complete explicit cycle for for demanding customers.
@@ -74,6 +66,15 @@ private:
   ShenandoahPeriodicPacerNotify _periodic_pacer_notify_task;
 
 public:
+  typedef enum {
+    none,
+    concurrent_normal,
+    stw_degenerated,
+    stw_full,
+    marking_old,
+    cancelling
+  } GCMode;
+
   void run_service();
   void stop_service();
 
@@ -97,6 +98,8 @@ private:
   shenandoah_padding(1);
   volatile size_t _gc_id;
   shenandoah_padding(2);
+  volatile GCMode _mode;
+  shenandoah_padding(3);
 
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
   void resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause);
@@ -139,7 +142,7 @@ public:
   void handle_alloc_failure_evac(size_t words);
 
   void request_gc(GCCause::Cause cause);
-  void request_concurrent_gc(GenerationMode generation);
+  bool request_concurrent_gc(GenerationMode generation);
 
   void handle_counters_update();
   void handle_force_counters_update();
@@ -165,6 +168,14 @@ public:
 
   void service_concurrent_old_cycle(const ShenandoahHeap* heap,
                                     GCCause::Cause &cause);
+
+  void set_gc_mode(GCMode new_mode);
+  GCMode gc_mode() {
+    return _mode;
+  }
+
+ private:
+  static const char* gc_mode_name(GCMode mode);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONTROLTHREAD_HPP
