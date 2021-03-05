@@ -86,10 +86,10 @@ void ShenandoahDegenGC::op_degenerated() {
   // We can't easily clear the old mark in progress flag because it must be done
   // on a safepoint (not sure if that is a hard requirement). At any rate, once
   // we are in a degenerated cycle, there should be no more old marking.
-  assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
   if (heap->is_concurrent_old_mark_in_progress()) {
-    heap->set_concurrent_old_mark_in_progress(false);
+    heap->old_generation()->cancel_marking();
   }
+  assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
 
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();

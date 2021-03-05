@@ -460,18 +460,13 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   // mark so clean it up.
   young_generation->set_old_gen_task_queues(NULL);
 
-  if (heap->cancelled_gc()) {
-    // Bootstrap cycle was cancelled. Now we expect to run a degenerated
-    // young cycle. Clear anything out of old generation mark queues.
-    old_generation->task_queues()->clear();
-    old_generation->set_mark_incomplete();
-  } else {
+  if (!heap->cancelled_gc()) {
     // Reset the degenerated point. Normally this would happen at the top
     // of the control loop, but here we have just completed a young cycle
     // which has bootstrapped the old concurrent marking.
     _degen_point = ShenandoahGC::_degenerated_outside_cycle;
 
-    // Bit of a hack here to keep the phase timings happy as we transition
+    // TODO: Bit of a hack here to keep the phase timings happy as we transition
     // to concurrent old marking. We need to revisit this.
     heap->phase_timings()->flush_par_workers_to_cycle();
     heap->phase_timings()->flush_cycle_to_global();
@@ -537,15 +532,6 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
     // cycle, then we are not actually going to a degenerated cycle,
     // so the degenerated point doesn't matter here.
     check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle);
-
-    if (is_alloc_failure_gc()) {
-      // Cancelled for degeneration, not just to run a young cycle.
-      // We can't complete a global cycle with the partial marking
-      // information in the old generation mark queues so we force
-      // the degenerated cycle to be global and from outside the cycle.
-      generation->task_queues()->clear();
-      generation->set_mark_incomplete();
-    }
   }
 }
 

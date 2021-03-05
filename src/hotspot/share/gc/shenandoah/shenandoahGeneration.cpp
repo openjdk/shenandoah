@@ -195,6 +195,7 @@ void ShenandoahGeneration::cancel_marking() {
   if (is_concurrent_mark_in_progress()) {
     set_concurrent_mark_in_progress(false);
   }
+  set_mark_incomplete();
   _task_queues->clear();
 }
 
