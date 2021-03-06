@@ -713,7 +713,7 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
 }
 
 bool ShenandoahControlThread::request_concurrent_gc(GenerationMode generation) {
-  if (_preemption_requested.is_set() || _gc_requested.is_set()) {
+  if (_preemption_requested.is_set() || _gc_requested.is_set() || ShenandoahHeap::heap()->cancelled_gc()) {
     // ignore subsequent requests from the heuristics
     return false;
   }
@@ -729,7 +729,6 @@ bool ShenandoahControlThread::request_concurrent_gc(GenerationMode generation) {
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     _preemption_requested.set();
-    set_gc_mode(cancelling);
     ShenandoahHeap::heap()->cancel_gc(GCCause::_shenandoah_concurrent_gc);
     return true;
   }
@@ -774,7 +773,6 @@ void ShenandoahControlThread::handle_alloc_failure(ShenandoahAllocRequest& req) 
                  byte_size_in_proper_unit(req.size() * HeapWordSize), proper_unit_for_byte_size(req.size() * HeapWordSize));
 
     // Now that alloc failure GC is scheduled, we can abort everything else
-    set_gc_mode(cancelling);
     heap->cancel_gc(GCCause::_allocation_failure);
   }
 
@@ -891,7 +889,6 @@ const char* ShenandoahControlThread::gc_mode_name(ShenandoahControlThread::GCMod
     case stw_degenerated:   return "degenerated";
     case stw_full:          return "full";
     case marking_old:       return "old mark";
-    case cancelling:        return "cancelling";
     default:                return "unknown";
   }
 }

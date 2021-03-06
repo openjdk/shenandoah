@@ -71,8 +71,7 @@ public:
     concurrent_normal,
     stw_degenerated,
     stw_full,
-    marking_old,
-    cancelling
+    marking_old
   } GCMode;
 
   void run_service();
