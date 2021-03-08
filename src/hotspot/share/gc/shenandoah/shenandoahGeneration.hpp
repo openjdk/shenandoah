@@ -46,7 +46,7 @@ private:
 protected:
   // Usage
   size_t _affiliated_region_count;
-  size_t _used;
+  volatile size_t _used;
   size_t _max_capacity;
   size_t _soft_max_capacity;
 

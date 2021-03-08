@@ -257,14 +257,12 @@ void ShenandoahGeneration::decrement_affiliated_region_count() {
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
-  shenandoah_assert_heaplocked();
-  _used += bytes;
+  Atomic::add(&_used, bytes);
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
-  shenandoah_assert_heaplocked_or_safepoint();
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
-  _used -= bytes;
+  Atomic::sub(&_used, bytes);
 }
 
 size_t ShenandoahGeneration::used_regions_size() const {

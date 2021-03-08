@@ -822,9 +822,12 @@ void ShenandoahHeapRegion::promote() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   assert(heap->active_generation()->is_mark_complete(), "sanity");
+  assert(affiliation() == YOUNG_GENERATION, "Only young regions can be promoted");
+
+  heap->young_generation()->decrease_used(used());
+  heap->old_generation()->increase_used(used());
 
   UpdateCardValuesClosure update_card_values;
-
   if (is_humongous_start()) {
     oop obj = oop(bottom());
     assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
