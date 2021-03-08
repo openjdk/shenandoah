@@ -503,6 +503,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _num_regions(0),
   _regions(NULL),
   _update_refs_iterator(this),
+  _cancel_requested_time(0),
   _young_generation(NULL),
   _global_generation(NULL),
   _old_generation(NULL),
@@ -1754,6 +1755,7 @@ void ShenandoahHeap::cancel_gc(GCCause::Cause cause) {
     FormatBuffer<> msg("Cancelling GC: %s", GCCause::to_string(cause));
     log_info(gc)("%s", msg.buffer());
     Events::log(Thread::current(), "%s", msg.buffer());
+    _cancel_requested_time = os::elapsedTime();
   }
 }
 

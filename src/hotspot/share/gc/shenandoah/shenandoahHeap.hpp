@@ -362,6 +362,7 @@ private:
     NOT_CANCELLED
   };
 
+  double _cancel_requested_time;
   ShenandoahSharedEnumFlag<CancelState> _cancelled_gc;
   bool try_cancel_gc();
 
