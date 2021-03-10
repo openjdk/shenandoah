@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahRootVerifier.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shared/oopStorage.inline.hpp"
@@ -109,6 +110,11 @@ void ShenandoahRootVerifier::oops_do(OopClosure* oops) {
     ShenandoahStringDedup::oops_do_slow(oops);
   }
 
+  if (ShenandoahHeap::heap()->mode()->is_generational() && verify(RememberedSetRoots)) {
+    shenandoah_assert_safepoint();
+    ShenandoahHeap::heap()->card_scan()->oops_do(oops);
+  }
+
   if (verify(ThreadRoots)) {
     shenandoah_assert_safepoint();
     // Do thread roots the last. This allows verification code to find
@@ -131,6 +137,10 @@ void ShenandoahRootVerifier::roots_do(OopClosure* oops) {
   JNIHandles::oops_do(oops);
   Universe::vm_global()->oops_do(oops);
 
+  if (ShenandoahHeap::heap()->mode()->is_generational() && verify(RememberedSetRoots)) {
+    ShenandoahHeap::heap()->card_scan()->oops_do(oops);
+  }
+
   // Do thread roots the last. This allows verification code to find
   // any broken objects from those special roots first, not the accidental
   // dangling reference from the thread root.
@@ -148,6 +158,10 @@ void ShenandoahRootVerifier::strong_roots_do(OopClosure* oops) {
 
   JNIHandles::oops_do(oops);
   Universe::vm_global()->oops_do(oops);
+
+  if (ShenandoahHeap::heap()->mode()->is_generational() && verify(RememberedSetRoots)) {
+    ShenandoahHeap::heap()->card_scan()->oops_do(oops);
+  }
 
   // Do thread roots the last. This allows verification code to find
   // any broken objects from those special roots first, not the accidental
