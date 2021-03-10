@@ -45,8 +45,9 @@ bool ShenandoahStaticHeuristics::should_start_gc() {
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
 
-  if (ShenandoahHeuristics::should_defer_gc())
+  if (ShenandoahHeuristics::should_defer_gc()) {
     return false;
+  }
 
   // Make sure the code below treats available without the soft tail.
   size_t soft_tail = max_capacity - capacity;
