@@ -71,8 +71,8 @@ class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
   bool is_thread_safe() { return true; }
 };
 
-void ShenandoahGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
-  _heuristics = gc_mode->initialize_heuristics(this);
+ShenandoahHeuristics* ShenandoahGeneration::initialize_heuristics(ShenandoahMode* gc_mode, ShenandoahHeuristics* old_heuristics) {
+  _heuristics = gc_mode->initialize_heuristics(this, old_heuristics);
 
   if (_heuristics->is_diagnostic() && !UnlockDiagnosticVMOptions) {
     vm_exit_during_initialization(
@@ -84,6 +84,7 @@ void ShenandoahGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
             err_msg("Heuristics \"%s\" is experimental, and must be enabled via -XX:+UnlockExperimentalVMOptions.",
                     _heuristics->name()));
   }
+  return _heuristics;
 }
 
 size_t ShenandoahGeneration::bytes_allocated_since_gc_start() {
@@ -126,7 +127,6 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
 void ShenandoahGeneration::prepare_gc() {
   reset_mark_bitmap();
-
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_heap_region_iterate(&cl);
 }

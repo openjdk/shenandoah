@@ -30,17 +30,17 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 
-ShenandoahHeuristics* ShenandoahMode::initialize_heuristics(ShenandoahGeneration* generation) const {
+ShenandoahHeuristics* ShenandoahMode::initialize_heuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* old_heuristics) const {
 
   if (ShenandoahGCHeuristics != NULL) {
     if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
-      return new ShenandoahAggressiveHeuristics(generation);
+      return new ShenandoahAggressiveHeuristics(generation, old_heuristics);
     } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
-      return new ShenandoahStaticHeuristics(generation);
+      return new ShenandoahStaticHeuristics(generation, old_heuristics);
     } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
-      return new ShenandoahAdaptiveHeuristics(generation);
+      return new ShenandoahAdaptiveHeuristics(generation, old_heuristics);
     } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
-      return new ShenandoahCompactHeuristics(generation);
+      return new ShenandoahCompactHeuristics(generation, old_heuristics);
     } else {
       vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
     }

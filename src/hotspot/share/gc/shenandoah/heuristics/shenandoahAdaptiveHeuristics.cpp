@@ -54,8 +54,8 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation) :
-  ShenandoahHeuristics(generation),
+ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* old_heuristics) :
+  ShenandoahHeuristics(generation, old_heuristics),
   _margin_of_error_sd(ShenandoahAdaptiveInitialConfidence),
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
   _last_trigger(OTHER) { }
@@ -95,6 +95,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                      byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free),
                      byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                      byte_size_in_proper_unit(min_garbage), proper_unit_for_byte_size(min_garbage));
+
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
@@ -200,6 +201,10 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
   size_t allocated = _generation->bytes_allocated_since_gc_start();
+
+  if (ShenandoahHeuristics::should_defer_gc()) {
+    return false;
+  }
 
   // Make sure the code below treats available without the soft tail.
   size_t soft_tail = max_capacity - capacity;

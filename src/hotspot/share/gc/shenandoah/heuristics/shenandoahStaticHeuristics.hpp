@@ -29,7 +29,7 @@
 
 class ShenandoahStaticHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahStaticHeuristics(ShenandoahGeneration* generation);
+  ShenandoahStaticHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* heuristics);
 
   virtual ~ShenandoahStaticHeuristics();
 

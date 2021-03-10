@@ -60,7 +60,7 @@ public:
 
   virtual const char* name() const = 0;
 
-  void initialize_heuristics(ShenandoahMode* gc_mode);
+  ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode, ShenandoahHeuristics* old_heuristics);
 
   virtual size_t soft_max_capacity() const { return _soft_max_capacity; }
   virtual size_t max_capacity() const      { return _max_capacity; }

@@ -479,9 +479,9 @@ void ShenandoahHeap::initialize_heuristics() {
                     _gc_mode->name()));
   }
 
-  _global_generation->initialize_heuristics(_gc_mode);
-  _young_generation->initialize_heuristics(_gc_mode);
-  _old_generation->initialize_heuristics(_gc_mode);
+  ShenandoahHeuristics* old_heuristics = _old_generation->initialize_heuristics(_gc_mode, NULL);
+  _global_generation->initialize_heuristics(_gc_mode, NULL);
+  _young_generation->initialize_heuristics(_gc_mode, old_heuristics);
 }
 
 #ifdef _MSC_VER

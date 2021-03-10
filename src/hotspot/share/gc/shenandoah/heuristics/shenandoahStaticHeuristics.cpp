@@ -32,8 +32,8 @@
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 
-ShenandoahStaticHeuristics::ShenandoahStaticHeuristics(ShenandoahGeneration* generation) :
-  ShenandoahHeuristics(generation) {
+ShenandoahStaticHeuristics::ShenandoahStaticHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* old_heuristics) :
+  ShenandoahHeuristics(generation, old_heuristics) {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
 }
@@ -44,6 +44,9 @@ bool ShenandoahStaticHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
+
+  if (ShenandoahHeuristics::should_defer_gc())
+    return false;
 
   // Make sure the code below treats available without the soft tail.
   size_t soft_tail = max_capacity - capacity;

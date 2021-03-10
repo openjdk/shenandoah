@@ -51,7 +51,7 @@ class ShenandoahHeuristics;
 class ShenandoahMode : public CHeapObj<mtGC> {
 public:
   virtual void initialize_flags() const = 0;
-  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahGeneration* generation) const;
+  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* old_heuristics) const;
   virtual const char* name() = 0;
   virtual bool is_diagnostic() = 0;
   virtual bool is_experimental() = 0;

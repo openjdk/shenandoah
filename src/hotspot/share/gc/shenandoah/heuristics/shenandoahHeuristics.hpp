@@ -58,6 +58,26 @@ class ShenandoahCollectionSet;
 class ShenandoahHeapRegion;
 class ShenandoahGeneration;
 
+// TODO: Probably want to subclass ShenandoahHeuristics.
+//
+// As currently implemented, we have three instances of
+// ShenandoahHeuristics, for GLOBAL, OLD, and YOUNG.  Each instance
+// needs different information.
+//
+// In particular:
+//  YOUNG needs a pointer to OLD so it can ask if there are OLD regions
+//   wanting to be evacuated.
+//  OLD needs to keep track of which OLD regions need to be evacuated and
+//   which OLD regions need their garbage to be coalesced and filled.
+//   OLD also needs to know when all of its candidate evacuation regions
+//   have been evacuated because it cannot trigger a new OLD
+//   concurrent mark until that has happened.
+//  GLOBAL: not sure what this needs, or how it interacts with OLD, YOUNG
+//   heuristics.
+//
+// For expediency, we'll have a single class that is a "union" of
+// necessary functionality.
+
 class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Concurrent_Adjust   = -1; // recover from penalties
   static const intx Degenerated_Penalty = 10; // how much to penalize average GC duration history on Degenerated GC
@@ -69,7 +89,57 @@ protected:
     size_t _garbage;
   } RegionData;
 
+  ShenandoahGeneration* _generation;
+
+  // if (_generation->generation_mode() != YOUNG)
+  //  _old_heuristics = NULL;
+  // else
+  //  _old_heuristcs points to the ShenandoahHeuristics object that
+  //  represents old-gen.
+  ShenandoahHeuristics *_old_heuristics;
+
+  // if (_generation->generation_mode() == GLOBAL) _region_data represents
+  //  the results of most recently completed global marking pass
+  // if (_generation->generation_mode() == OLD) _region_data represents
+  //  the results of most recently completed old-gen marking pass
+  // if (_generation->generation_mode() == YOUNG) _region_data represents
+  //  the resulits of most recently completed young-gen marking pass
+  //
+  // Note that there is some redundancy represented in _region_data because
+  // each instance is an array large enough to hold all regions.  However,
+  // any region in young-gen is not in old-gen.  And any time we are
+  // making use of the GLOBAL data, there is no need to maintain the
+  // YOUNG or OLD data.  Consider this redundancy of data structure to
+  // have negligible cost unless proven otherwise.
   RegionData* _region_data;
+
+  // if (_generation->generation_mode() == OLD) _old_collection_candidates
+  //  represent the number of regions selected for collection following the
+  //  most recently completed old-gen mark that have not yet been selected
+  //  for evacuation and _next_collection_candidate is the index within
+  //  _region_data of the next candidate region to be selected for evacuation.
+  // if (_generation->generation_mode() != OLD) these two variables are
+  //  not used.
+  uint _old_collection_candidates;
+  uint _next_old_collection_candidate;
+
+  // At the time we select the old-gen collection set, _hidden_old_collection_candidates
+  // and _hidden_next_old_collection_candidates are set to remember the intended old-gen
+  // collection set.  After all old-gen regions not in the old-gen collection set have been
+  // coalesced and filled, the content of these variables is copied to _old_collection_candidates
+  // and _next_old_collection_candidates so that evacuations can begin evacuating these regions.
+  uint _hidden_old_collection_candidates;
+  uint _hidden_next_old_collection_candidate;
+
+  // if (_generation->generation_mode() == OLD)
+  //  _old_coalesce_and_fill_candidates represents the number of regions
+  //  that were chosen for the garbage contained therein to be coalesced
+  //  and filled and _first_coalesce_and_fill_candidate represents the
+  //  the index of the first such region within the _region_data array.
+  // if (_generation->generation_mode() != OLD) these two variables are
+  //  not used.
+  uint _old_coalesce_and_fill_candidates;
+  uint _first_coalesce_and_fill_candidate;
 
   uint _degenerated_cycles_in_a_row;
   uint _successful_cycles_in_a_row;
@@ -84,9 +154,11 @@ protected:
   // There may be many threads that contend to set this flag
   ShenandoahSharedFlag _metaspace_oom;
 
-  ShenandoahGeneration* _generation;
-
   static int compare_by_garbage(RegionData a, RegionData b);
+
+  // TODO: We need to enhance this API to give visibility to accompanying old-gen evacuation effort.
+  // In the case that the old-gen evacuation effort is small or zero, the young-gen heuristics
+  // should feel free to dedicate increased efforts to young-gen evacuation.
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
                                                      RegionData* data, size_t data_size,
@@ -97,7 +169,8 @@ protected:
   bool in_generation(ShenandoahHeapRegion* region);
 
 public:
-  ShenandoahHeuristics(ShenandoahGeneration* generation);
+  ShenandoahHeuristics(ShenandoahGeneration* generation,
+                       ShenandoahHeuristics* old_heuristics);
   virtual ~ShenandoahHeuristics();
 
   void record_metaspace_oom()     { _metaspace_oom.set(); }
@@ -107,6 +180,8 @@ public:
   virtual void record_cycle_start();
 
   virtual void record_cycle_end();
+
+  bool should_defer_gc();
 
   virtual bool should_start_gc();
 
@@ -134,6 +209,39 @@ public:
   virtual void initialize();
 
   double time_since_last_gc() const;
+
+
+  // The following methods are only relevant if _generation->generation_mode() == OLD.  These methods perform no
+  // synchronization.  It is assumed that all of them are invoked by the same ShenandoahControlThread.
+
+  // Having coalesced and filled all old-gen heap regions that are not part of the old-gen collection set, begin
+  // evacuating the collection set.
+  void start_old_evacuations();
+
+  // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
+  void prepare_for_old_collections();
+
+  // How many old-collection candidates have not yet been processed?
+  uint unprocessed_old_collection_candidates();
+
+  // Return the next old-collection candidate in order of decreasing amounts of garbage.  (We process most-garbage regions
+  // first.)  This does not consume the candidate.  If the candidate is selected for inclusion in a collection set, then
+  // the candidate is consumed by invoking consume_old_collection_candidate().
+  ShenandoahHeapRegion* next_old_collection_candidate();
+
+  // Adjust internal state to reflect that one fewer old-collection candidate remains to be processed.
+  void consume_old_collection_candidate();
+
+  // How many old-collection regions were identified at the end of the most recent old-gen mark to require their
+  // unmarked objects to be coalesced and filled?
+  uint old_coalesce_and_fill_candidates();
+
+  // Fill in buffer with all of the old-collection regions that were identified at the end of the most recenet old-gen
+  // mark to require their unamrked objects to be coalesced and filled.  The buffer array must have at least
+  // old_coalesce_and_fill_candidates() entries, or memory may be corrupted when this function overwrites the
+  // end of the array.
+  uint get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
+
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEURISTICS_HPP

@@ -31,7 +31,7 @@
 #include "logging/logTag.hpp"
 #include "runtime/os.hpp"
 
-ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahGeneration* generation) : ShenandoahHeuristics(generation) {
+ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* old_heuristics) : ShenandoahHeuristics(generation, old_heuristics) {
   // Do not shortcut evacuation
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahImmediateThreshold, 100);
 
@@ -57,6 +57,9 @@ void ShenandoahAggressiveHeuristics::choose_collection_set_from_regiondata(Shena
 }
 
 bool ShenandoahAggressiveHeuristics::should_start_gc() {
+  if (ShenandoahHeuristics::should_defer_gc()) {
+    return false;
+  }
   log_info(gc)("Trigger: Start next cycle immediately");
   return true;
 }
