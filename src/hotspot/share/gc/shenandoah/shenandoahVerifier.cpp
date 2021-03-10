@@ -27,6 +27,7 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahForwarding.inline.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.hpp"
@@ -690,10 +691,35 @@ void ShenandoahVerifier::verify_at_safepoint(const char *label,
               byte_size_in_proper_unit(cl.committed()), proper_unit_for_byte_size(cl.committed()));
   }
 
+  ShenandoahGeneration *generation;
+  if (_heap->mode()->is_generational()) {
+    generation = _heap->active_generation();
+    guarantee(generation != NULL, "Need to know which generation to verify.");
+  } else {
+    generation = NULL;
+  }
+
+  if (generation != NULL) {
+    ShenandoahHeapLocker lock(_heap->lock());
+
+    ShenandoahCalculateRegionStatsClosure cl;
+    generation->heap_region_iterate(&cl);
+    size_t generation_used = generation->used();
+    guarantee(cl.used() == generation_used,
+              "%s: generation (%s) used size must be consistent: generation-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
+              label, generation->name(),
+              byte_size_in_proper_unit(generation_used), proper_unit_for_byte_size(generation_used),
+              byte_size_in_proper_unit(cl.used()), proper_unit_for_byte_size(cl.used()));
+  }
+
   // Internal heap region checks
   if (ShenandoahVerifyLevel >= 1) {
     ShenandoahVerifyHeapRegionClosure cl(label, regions);
-    _heap->heap_region_iterate(&cl);
+    if (generation != NULL) {
+      generation->heap_region_iterate(&cl);
+    } else {
+      _heap->heap_region_iterate(&cl);
+    }
   }
 
   OrderAccess::fence();
