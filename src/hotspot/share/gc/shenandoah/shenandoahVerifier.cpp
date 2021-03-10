@@ -68,6 +68,7 @@ private:
   ShenandoahLivenessData* _ld;
   void* _interior_loc;
   oop _loc;
+  ShenandoahGeneration* _generation;
 
 public:
   ShenandoahVerifyOopClosure(ShenandoahVerifierStack* stack, MarkBitMap* map, ShenandoahLivenessData* ld,
@@ -79,10 +80,16 @@ public:
     _map(map),
     _ld(ld),
     _interior_loc(NULL),
-    _loc(NULL) {
+    _loc(NULL),
+    _generation(NULL) {
     if (options._verify_marked == ShenandoahVerifier::_verify_marked_complete_except_references ||
         options._verify_marked == ShenandoahVerifier::_verify_marked_disable) {
       set_ref_discoverer_internal(new ShenandoahIgnoreReferenceDiscoverer());
+    }
+
+    if (_heap->mode()->is_generational()) {
+      _generation = _heap->active_generation();
+      assert(_generation != NULL, "Expected active generation in this mode");
     }
   }
 
@@ -107,11 +114,20 @@ private:
       // For performance reasons, only fully verify non-marked field values.
       // We are here when the host object for *p is already marked.
 
-      if (_map->par_mark(obj)) {
+      if ( in_generation(obj) && _map->par_mark(obj)) {
         verify_oop_at(p, obj);
         _stack->push(ShenandoahVerifierTask(obj));
       }
     }
+  }
+
+  bool in_generation(oop obj) {
+    if (_generation == NULL) {
+      return true;
+    }
+
+    ShenandoahHeapRegion* region = _heap->heap_region_containing(obj);
+    return _generation->contains(region);
   }
 
   void verify_oop(oop obj) {
@@ -498,6 +514,7 @@ private:
   ShenandoahLivenessData* _ld;
   volatile size_t _claimed;
   volatile size_t _processed;
+  ShenandoahGeneration* _generation;
 
 public:
   ShenandoahVerifierMarkedRegionTask(MarkBitMap* bitmap,
@@ -511,7 +528,13 @@ public:
           _bitmap(bitmap),
           _ld(ld),
           _claimed(0),
-          _processed(0) {};
+          _processed(0),
+          _generation(NULL) {
+    if (_heap->mode()->is_generational()) {
+      _generation = _heap->active_generation();
+      assert(_generation != NULL, "Expected active generation in this mode.");
+    }
+  };
 
   size_t processed() {
     return Atomic::load(&_processed);
@@ -527,6 +550,10 @@ public:
       size_t v = Atomic::fetch_and_add(&_claimed, 1u, memory_order_relaxed);
       if (v < _heap->num_regions()) {
         ShenandoahHeapRegion* r = _heap->get_region(v);
+        if (!in_generation(r)) {
+          continue;
+        }
+
         if (!r->is_humongous() && !r->is_trash()) {
           work_regular(r, stack, cl);
         } else if (r->is_humongous_start()) {
@@ -536,6 +563,10 @@ public:
         break;
       }
     }
+  }
+
+  bool in_generation(ShenandoahHeapRegion* r) {
+    return _generation == NULL || _generation->contains(r);
   }
 
   virtual void work_humongous(ShenandoahHeapRegion *r, ShenandoahVerifierStack& stack, ShenandoahVerifyOopClosure& cl) {
@@ -770,8 +801,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char *label,
   if (ShenandoahVerifyLevel >= 4 && marked == _verify_marked_complete && liveness == _verify_liveness_complete) {
     for (size_t i = 0; i < _heap->num_regions(); i++) {
       ShenandoahHeapRegion* r = _heap->get_region(i);
-      if (r->is_old() && _heap->is_gc_generation_young()) {
-        // Old regions don't have computed live data during young collections.
+      if (generation != NULL && !generation->contains(r)) {
         continue;
       }
 
