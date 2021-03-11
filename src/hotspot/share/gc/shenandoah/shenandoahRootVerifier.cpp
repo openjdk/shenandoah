@@ -110,9 +110,10 @@ void ShenandoahRootVerifier::oops_do(OopClosure* oops) {
     ShenandoahStringDedup::oops_do_slow(oops);
   }
 
-  if (ShenandoahHeap::heap()->mode()->is_generational() && verify(RememberedSetRoots)) {
+  ShenandoahHeap *heap = ShenandoahHeap::heap();
+  if (heap->mode()->is_generational() && heap->is_gc_generation_young() && verify(RememberedSetRoots)) {
     shenandoah_assert_safepoint();
-    ShenandoahHeap::heap()->card_scan()->oops_do(oops);
+    heap->card_scan()->oops_do(oops);
   }
 
   if (verify(ThreadRoots)) {
@@ -137,8 +138,9 @@ void ShenandoahRootVerifier::roots_do(OopClosure* oops) {
   JNIHandles::oops_do(oops);
   Universe::vm_global()->oops_do(oops);
 
-  if (ShenandoahHeap::heap()->mode()->is_generational() && verify(RememberedSetRoots)) {
-    ShenandoahHeap::heap()->card_scan()->oops_do(oops);
+  ShenandoahHeap *heap = ShenandoahHeap::heap();
+  if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
+    heap->card_scan()->oops_do(oops);
   }
 
   // Do thread roots the last. This allows verification code to find
@@ -159,8 +161,9 @@ void ShenandoahRootVerifier::strong_roots_do(OopClosure* oops) {
   JNIHandles::oops_do(oops);
   Universe::vm_global()->oops_do(oops);
 
-  if (ShenandoahHeap::heap()->mode()->is_generational() && verify(RememberedSetRoots)) {
-    ShenandoahHeap::heap()->card_scan()->oops_do(oops);
+  ShenandoahHeap *heap = ShenandoahHeap::heap();
+  if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
+    heap->card_scan()->oops_do(oops);
   }
 
   // Do thread roots the last. This allows verification code to find
