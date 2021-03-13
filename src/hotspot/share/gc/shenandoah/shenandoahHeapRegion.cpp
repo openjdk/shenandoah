@@ -838,7 +838,7 @@ void ShenandoahHeapRegion::promote() {
 
       ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(r->bottom(), r->end()));
       r->set_affiliation(OLD_GENERATION);
-      heap->old_generation()->increase_used(used());
+      heap->old_generation()->increase_used(r->used());
     }
     // HEY!  Better to call ShenandoahHeap::heap()->card_scan()->mark_range_as_clean(r->bottom(), obj->size())
     //  and skip the calls to clear_MemRegion() above.
