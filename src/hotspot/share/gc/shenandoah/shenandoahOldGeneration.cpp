@@ -32,7 +32,6 @@
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
-#include "gc/shenandoah/shenandoanRootProcessor.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 
