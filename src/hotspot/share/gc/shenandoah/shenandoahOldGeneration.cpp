@@ -90,7 +90,6 @@ class ShenandoahProcessOldSATB : public SATBBufferClosure {
 class ShenandoahPurgeSATBTask : public AbstractGangTask {
 private:
   ShenandoahObjToScanQueueSet* _mark_queues;
-  uintx _claim_token;
 
 public:
   size_t _trashed_oops;
@@ -98,7 +97,6 @@ public:
   explicit ShenandoahPurgeSATBTask(ShenandoahObjToScanQueueSet* queues) :
     AbstractGangTask("Purge SATB"),
     _mark_queues(queues),
-    _claim_token(Threads::thread_claim_token()),
     _trashed_oops(0) {}
 
   ~ShenandoahPurgeSATBTask() {
