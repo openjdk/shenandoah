@@ -825,8 +825,8 @@ size_t ShenandoahHeapRegion::promote() {
   assert(affiliation() == YOUNG_GENERATION, "Only young regions can be promoted");
 
   UpdateCardValuesClosure update_card_values;
-  ShenandoahGeneration *old_generation = heap->old_generation();
-  ShenandoahGeneration *young_generation = heap->young_generation();
+  ShenandoahGeneration* old_generation = heap->old_generation();
+  ShenandoahGeneration* young_generation = heap->young_generation();
 
   if (is_humongous_start()) {
     oop obj = oop(bottom());

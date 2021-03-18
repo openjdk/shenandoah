@@ -125,7 +125,7 @@ void ShenandoahYoungGeneration::parallel_heap_region_iterate(ShenandoahHeapRegio
   }
 }
 
-void ShenandoahYoungGeneration::heap_region_iterate(ShenandoahHeapRegionClosure *cl) {
+void ShenandoahYoungGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
   ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
   ShenandoahHeap::heap()->heap_region_iterate(&young_regions);
 }

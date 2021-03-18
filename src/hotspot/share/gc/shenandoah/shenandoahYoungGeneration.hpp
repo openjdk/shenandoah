@@ -39,7 +39,7 @@ public:
   virtual void set_concurrent_mark_in_progress(bool in_progress);
   virtual void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl);
 
-  void heap_region_iterate(ShenandoahHeapRegionClosure *cl) override;
+  void heap_region_iterate(ShenandoahHeapRegionClosure* cl);
 
   bool contains(ShenandoahHeapRegion* region) const;
 

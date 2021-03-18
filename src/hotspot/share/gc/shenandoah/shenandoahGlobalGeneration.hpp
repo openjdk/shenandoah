@@ -48,7 +48,7 @@ public:
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl);
 
-  void heap_region_iterate(ShenandoahHeapRegionClosure *cl) override;
+  void heap_region_iterate(ShenandoahHeapRegionClosure* cl);
 
  protected:
   bool is_concurrent_mark_in_progress();

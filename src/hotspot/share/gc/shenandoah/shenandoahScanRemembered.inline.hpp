@@ -577,26 +577,26 @@ class ShenandoahOopIterateAdapter : public BasicOopIterateClosure {
  private:
   OopClosure* _cl;
  public:
-  explicit ShenandoahOopIterateAdapter(OopClosure *cl) : _cl(cl) {}
+  explicit ShenandoahOopIterateAdapter(OopClosure* cl) : _cl(cl) {}
 
-  void do_oop(oop *o) override {
+  void do_oop(oop* o) {
     _cl->do_oop(o);
   }
 
-  void do_oop(narrowOop *o) override {
+  void do_oop(narrowOop* o) {
     _cl->do_oop(o);
   }
 };
 
 template<typename RememberedSet>
-inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure *cl) {
+inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure* cl) {
   ShenandoahOopIterateAdapter adapter(cl);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
     if (region->affiliation() == OLD_GENERATION) {
-      HeapWord *start_of_range = region->bottom();
-      HeapWord *end_of_range = region->top();
+      HeapWord* start_of_range = region->bottom();
+      HeapWord* end_of_range = region->top();
       size_t start_cluster_no = cluster_for_addr(start_of_range);
       size_t num_heapwords = end_of_range - start_of_range;
       unsigned int cluster_size = CardTable::card_size_in_words *

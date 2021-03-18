@@ -110,7 +110,7 @@ void ShenandoahRootVerifier::oops_do(OopClosure* oops) {
     ShenandoahStringDedup::oops_do_slow(oops);
   }
 
-  ShenandoahHeap *heap = ShenandoahHeap::heap();
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational() && heap->is_gc_generation_young() && verify(RememberedSetRoots)) {
     shenandoah_assert_safepoint();
     heap->card_scan()->oops_do(oops);
@@ -138,7 +138,7 @@ void ShenandoahRootVerifier::roots_do(OopClosure* oops) {
   JNIHandles::oops_do(oops);
   Universe::vm_global()->oops_do(oops);
 
-  ShenandoahHeap *heap = ShenandoahHeap::heap();
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
     heap->card_scan()->oops_do(oops);
   }
@@ -161,7 +161,7 @@ void ShenandoahRootVerifier::strong_roots_do(OopClosure* oops) {
   JNIHandles::oops_do(oops);
   Universe::vm_global()->oops_do(oops);
 
-  ShenandoahHeap *heap = ShenandoahHeap::heap();
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
     heap->card_scan()->oops_do(oops);
   }

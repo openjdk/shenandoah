@@ -78,7 +78,7 @@ void ShenandoahGlobalGeneration::parallel_heap_region_iterate(ShenandoahHeapRegi
   ShenandoahHeap::heap()->parallel_heap_region_iterate(cl);
 }
 
-void ShenandoahGlobalGeneration::heap_region_iterate(ShenandoahHeapRegionClosure *cl) {
+void ShenandoahGlobalGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
   ShenandoahHeap::heap()->heap_region_iterate(cl);
 }
 
