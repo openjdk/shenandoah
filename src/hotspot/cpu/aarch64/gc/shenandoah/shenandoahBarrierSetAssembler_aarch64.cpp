@@ -643,9 +643,6 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 
   __ load_byte_map_base(scratch);
   __ add(start, start, scratch);
-  // if (ct->scanned_concurrently()) {
-  //   __ membar(__ StoreStore);
-  // }
   __ bind(L_loop);
   __ strb(zr, Address(start, count));
   __ subs(count, count, 1);
