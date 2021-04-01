@@ -95,11 +95,12 @@ void ShenandoahScanRememberedTask::work(uint worker_id) {
   // This sets up a thread local reference to the worker_id which is necessary
   // the weak reference processor.
   ShenandoahParallelWorkerSession worker_session(worker_id);
+  ShenandoahWorkerTimingsTracker x(ShenandoahPhaseTimings::init_scan_rset, ShenandoahPhaseTimings::ScanClusters, worker_id);
 
   ShenandoahObjToScanQueue* q = _queue_set->queue(worker_id);
   ShenandoahObjToScanQueue* old = _old_queue_set == NULL ? NULL : _old_queue_set->queue(worker_id);
   ShenandoahMarkRefsClosure<YOUNG> cl(q, _rp, old);
-  RememberedScanner *rs = ShenandoahHeap::heap()->card_scan();
+  RememberedScanner *scanner = ShenandoahHeap::heap()->card_scan();
 
   // set up thread local closure for shen ref processor
   _rp->set_mark_closure(worker_id, &cl);
@@ -107,7 +108,7 @@ void ShenandoahScanRememberedTask::work(uint worker_id) {
   ShenandoahHeapRegion* region = _regions->next();
   while (region != NULL) {
     if (region->affiliation() == OLD_GENERATION) {
-      rs->process_region(region, &cl);
+      scanner->process_region(region, &cl);
     }
     region = _regions->next();
   }
