@@ -242,6 +242,7 @@ private:
 
   size_t _tlab_allocs;
   size_t _gclab_allocs;
+  size_t _plab_allocs;
 
   volatile size_t _live_data;
   volatile size_t _critical_pins;
@@ -388,6 +389,7 @@ public:
   size_t get_shared_allocs() const;
   size_t get_tlab_allocs() const;
   size_t get_gclab_allocs() const;
+  size_t get_plab_allocs() const;
 
   inline HeapWord* get_update_watermark() const;
   inline void set_update_watermark(HeapWord* w);

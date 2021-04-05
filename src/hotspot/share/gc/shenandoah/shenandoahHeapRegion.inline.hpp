@@ -63,6 +63,9 @@ inline void ShenandoahHeapRegion::adjust_alloc_metadata(ShenandoahAllocRequest::
     case ShenandoahAllocRequest::_alloc_gclab:
       _gclab_allocs += size;
       break;
+    case ShenandoahAllocRequest::_alloc_plab:
+      _plab_allocs += size;
+      break;
     default:
       ShouldNotReachHere();
   }
