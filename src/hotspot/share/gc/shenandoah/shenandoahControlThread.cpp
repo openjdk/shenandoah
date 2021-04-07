@@ -371,7 +371,7 @@ void ShenandoahControlThread::run_service() {
     {
       // The timed wait is necessary because this thread has a responsibility to send
       // 'alloc_words' to the pacer when it does not perform a GC.
-      MonitorLocker lock(&_control_lock, Mutex::SafepointCheckFlag::_no_safepoint_check_flag);
+      MonitorLocker lock(&_control_lock, Mutex::_no_safepoint_check_flag);
       lock.wait(ShenandoahControlIntervalMax);
     }
   }
@@ -741,7 +741,7 @@ bool ShenandoahControlThread::request_concurrent_gc(GenerationMode generation) {
 }
 
 void ShenandoahControlThread::notify_control_thread() {
-  MonitorLocker locker(&_control_lock, Mutex::SafepointCheckFlag::_no_safepoint_check_flag);
+  MonitorLocker locker(&_control_lock, Mutex::_no_safepoint_check_flag);
   _control_lock.notify();
 }
 
