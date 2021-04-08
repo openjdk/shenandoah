@@ -94,8 +94,7 @@ protected:
   // if (_generation->generation_mode() != YOUNG)
   //  _old_heuristics = NULL;
   // else
-  //  _old_heuristcs points to the ShenandoahHeuristics object that
-  //  represents old-gen.
+  //  _old_heuristics points to the ShenandoahHeuristics object that represents old-gen.
   ShenandoahHeuristics *_old_heuristics;
 
   // if (_generation->generation_mode() == GLOBAL) _region_data represents
@@ -239,8 +238,8 @@ public:
   // Fill in buffer with all of the old-collection regions that were identified at the end of the most recenet old-gen
   // mark to require their unamrked objects to be coalesced and filled.  The buffer array must have at least
   // old_coalesce_and_fill_candidates() entries, or memory may be corrupted when this function overwrites the
-  // end of the array.
-  uint get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
+  // end of the array. 
+  void get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
 
 };
 

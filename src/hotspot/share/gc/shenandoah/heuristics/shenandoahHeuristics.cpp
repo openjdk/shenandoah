@@ -464,38 +464,43 @@ void ShenandoahHeuristics::prepare_for_old_collections() {
   }
 
   // Give special treatment to humongous regions.  Assume humongous regions is entirely
-  // garbage or entirely non-garbage.  Assume that if a head humongous region and the associated
+  // garbage or entirely non-garbage.  Assume that a head humongous region and the associated
   // humongous continuous regions are uniformly entirely garbage or entirely non-garbage.
   //
   // Sift garbage humongous regions to front, non-garbage humongous regions to end of array.
   size_t first_non_humongous_empty = 0;
   size_t first_humongous_non_empty = cand_idx;
 
-  for (size_t i = 0; i < cand_idx; i++) {
+  // This loop is written as while rather than for because of
+  // suspected gcc error in translating/optimizing for-loop
+  size_t i = 0;
+  while (i < first_humongous_non_empty) {
     ShenandoahHeapRegion* region = candidates[i]._region;
     if (region->is_humongous()) {
       if (region->get_live_data_bytes() == 0) {
         // Humongous region is entirely garbage.  Reclaim it.
-        if (i == first_non_humongous_empty)
+        if (i == first_non_humongous_empty) {
           first_non_humongous_empty++;
-        else {
+        } else {
           RegionData swap_tmp = candidates[i];
           candidates[i] = candidates[first_non_humongous_empty];
           candidates[first_non_humongous_empty++] = swap_tmp;
         }
+        i++;
       } else {
         // Humongous region is non garbage.  Don't reclaim it.
-        if (i + 1 == first_humongous_non_empty)
+        if (i + 1 == first_humongous_non_empty) {
           first_humongous_non_empty--;
-        else {
+          i++;
+        } else {
           RegionData swap_tmp = candidates[i];
           candidates[i] = candidates[--first_humongous_non_empty];
           candidates[first_humongous_non_empty] = swap_tmp;
-
-          // Decrement i so I can look at this updated entry on next iteration
-          i--;
+          // Do not increment i so we can revisit swapped entry on next iteration
         }
       }
+    } else {
+      i++;
     }
   }
 
@@ -576,11 +581,10 @@ uint ShenandoahHeuristics::old_coalesce_and_fill_candidates() {
   return _old_coalesce_and_fill_candidates;
 }
 
-uint ShenandoahHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
+void ShenandoahHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   uint count = _old_coalesce_and_fill_candidates;
   int index = _first_coalesce_and_fill_candidate;
   while (count-- > 0)
     *buffer++ = _region_data[index++]._region;
-  return count;
 }

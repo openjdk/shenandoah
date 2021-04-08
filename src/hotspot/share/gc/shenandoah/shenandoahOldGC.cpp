@@ -77,10 +77,8 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
 
   // Complete marking under STW
   vmop_entry_final_mark();
+
   ShenandoahHeuristics* old_heuristics = heap->old_generation()->heuristics();
-  uint coalesce_and_fill_candidates = old_heuristics->old_coalesce_and_fill_candidates();
-  ShenandoahHeapRegion* regions_to_coalesce_and_fill[coalesce_and_fill_candidates];
-  old_heuristics->get_coalesce_and_fill_candidates(regions_to_coalesce_and_fill);
 
   entry_coalesce_and_fill();
 
@@ -148,7 +146,7 @@ void ShenandoahOldGC::op_coalesce_and_fill() {
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
 
 
-  // HEY!  We need to implement preemption of coalesce and fill.  If young-gen wants to run while we're working on this,
+  // TODO:  We need to implement preemption of coalesce and fill.  If young-gen wants to run while we're working on this,
   // we should preempt this code and then resume it after young-gen has finished.  This requires that we "remember" the state
   // of each worker thread so it can be resumed where it left off.  Note that some worker threads may have processed more regions
   // than others at the time of preemption.
