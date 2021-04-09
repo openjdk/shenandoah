@@ -74,7 +74,7 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _live_data(0),
   _critical_pins(0),
   _update_watermark(start),
-  _affiliation(ShenandoahRegionAffiliation::FREE),
+  _affiliation(FREE),
   _age(0) {
 
   assert(Universe::on_page_boundary(_bottom) && Universe::on_page_boundary(_end),
@@ -99,6 +99,7 @@ void ShenandoahHeapRegion::make_regular_allocation() {
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
+      set_affiliation(YOUNG_GENERATION);
       set_state(_regular);
     case _regular:
     case _pinned:
@@ -120,6 +121,7 @@ void ShenandoahHeapRegion::make_regular_bypass() {
     case _cset:
     case _humongous_start:
     case _humongous_cont:
+      set_affiliation(YOUNG_GENERATION);
       set_state(_regular);
       return;
     case _pinned_cset:
@@ -221,6 +223,7 @@ void ShenandoahHeapRegion::make_unpinned() {
 
   switch (_state) {
     case _pinned:
+      assert(affiliation() != FREE, "Pinned region should not be FREE");
       set_state(_regular);
       return;
     case _regular:
@@ -522,7 +525,6 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
-
   set_affiliation(FREE);
 
   if (ZapUnusedHeapArea) {
