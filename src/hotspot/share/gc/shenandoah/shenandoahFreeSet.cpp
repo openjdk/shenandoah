@@ -185,11 +185,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size = free;
     }
     if (size >= req.min_size()) {
-      result = r->allocate(size, req.type());
+      result = r->allocate(size, req);
       assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
     }
   } else {
-    result = r->allocate(size, req.type());
+    result = r->allocate(size, req);
   }
 
   if (result != NULL) {
