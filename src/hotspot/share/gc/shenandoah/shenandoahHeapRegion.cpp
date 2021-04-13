@@ -414,41 +414,24 @@ void ShenandoahHeapRegion::oop_fill_and_coalesce() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
 
-  // I expect this to be invoked only from within threads that are doing old-gen GC, and I expect
+  // Expect this to be invoked only from within threads perfoming old-gen GC, and expect
   // old-gen marking to be completed before these threads invoke this service.
   assert(heap->active_generation()->is_mark_complete(), "sanity");
 
-  HeapWord* fill_addr = NULL;
-  size_t fill_size = 0;
   while (obj_addr < t) {
     oop obj = oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      if (fill_addr != NULL) {
-        ShenandoahHeap::fill_with_object(fill_addr, fill_size);
-        heap->card_scan()->coalesce_objects(fill_addr, fill_size);
-        fill_addr = NULL;
-      }
       assert(obj->klass() != NULL, "klass should not be NULL");
       obj_addr += obj->size();
     } else {
-      // Object is not marked, accumulate it into span of unmarked objects to be coalesced and filled
-
-      // TODO: We can optimize this.  Don't visit each of possibly many consecutive unmarked objects.
-      // Instead, skip to the following marked object, as indicated by the first following mark bit in
-      // marking_context.
-      int size = obj->size();
-      if (fill_addr == NULL) {
-        fill_addr = obj_addr;
-        fill_size = size;
-      } else {
-        fill_size += size;
-      }
-      obj_addr += size;
+      // Object is not marked.  Coalesce and fill dead object with dead neighbors.
+      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
+      assert(next_marked_obj <= t, "next marked object cannot exceed top");
+      size_t fill_size = next_marked_obj - obj_addr;
+      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+      heap->card_scan()->coalesce_objects(obj_addr, fill_size);
+      obj_addr = next_marked_obj;
     }
-  }
-  if (fill_addr != NULL) {
-    ShenandoahHeap::fill_with_object(fill_addr, fill_size);
-    heap->card_scan()->coalesce_objects(fill_addr, fill_size);
   }
 }
 
@@ -483,46 +466,26 @@ void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill
     ShenandoahMarkingContext* marking_context = heap->marking_context();
     assert(heap->active_generation()->is_mark_complete(), "sanity");
 
-    HeapWord* fill_addr = NULL;
-    size_t fill_size = 0;
     while (obj_addr < t) {
       oop obj = oop(obj_addr);
       if (marking_context->is_marked(obj)) {
-        if (fill_addr != NULL) {
-           if (reregister_coalesced_objects) { // change existing crossing map information
-            heap->card_scan()->coalesce_objects(fill_addr, fill_size);
-          } else {              // establish new crossing map information
-             heap->card_scan()->register_object(fill_addr);
-          }
-          ShenandoahHeap::fill_with_object(fill_addr, fill_size);
-          fill_addr = NULL;
-        }
         assert(obj->klass() != NULL, "klass should not be NULL");
-        if (!reregister_coalesced_objects)
+        if (!reregister_coalesced_objects) {
           heap->card_scan()->register_object(obj_addr);
+        }
         obj_addr += obj->oop_iterate_size(blk);
       } else {
-        // Object is not marked, accumulate it into span of unmarked objects to be coalesced and filled
-
-        // TODO:  We can optimize this.  Don't visit each of possibly many consecutive unmarked objects.
-        // Instead, skip to the following marked object, as indicated by the first following mark bit in
-        // marking_context.
-        int size = obj->size();
-        if (fill_addr == NULL) {
-          fill_addr = obj_addr;
-          fill_size = size;
-        } else {
-          fill_size += size;
+        // Object is not marked.  Coalesce and fill dead object with dead neighbors.
+        HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
+        assert(next_marked_obj <= t, "next marked object cannot exceed top");
+        size_t fill_size = next_marked_obj - obj_addr;
+        ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+        if (reregister_coalesced_objects) {
+          heap->card_scan()->coalesce_objects(obj_addr, fill_size);
+        } else {              // establish new crossing map information
+          heap->card_scan()->register_object(obj_addr);
         }
-        obj_addr += size;
-      }
-    }
-    if (fill_addr != NULL) {
-      ShenandoahHeap::fill_with_object(fill_addr, fill_size);
-      if (reregister_coalesced_objects) { // change existing crossing map information
-        heap->card_scan()->coalesce_objects(fill_addr, fill_size);
-      } else {              // establish new crossing map information
-        heap->card_scan()->register_object(fill_addr);
+        obj_addr = next_marked_obj;
       }
     }
   }
