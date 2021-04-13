@@ -168,7 +168,7 @@ public:
   }
 
   // Allowed transitions from the outside code:
-  void make_regular_allocation();
+  void make_regular_allocation(ShenandoahRegionAffiliation affiliation);
   void make_regular_bypass();
   void make_humongous_start();
   void make_humongous_cont();
@@ -340,7 +340,7 @@ public:
   }
 
   // Allocation (return NULL if full)
-  inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest::Type type);
+  inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest req);
 
   inline void clear_live_data();
   void set_live_data(size_t s);

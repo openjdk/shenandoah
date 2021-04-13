@@ -92,14 +92,14 @@ void ShenandoahHeapRegion::report_illegal_transition(const char *method) {
   fatal("%s", ss.as_string());
 }
 
-void ShenandoahHeapRegion::make_regular_allocation() {
+void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      set_affiliation(YOUNG_GENERATION);
+      set_affiliation(affiliation);
       set_state(_regular);
     case _regular:
     case _pinned:
@@ -121,6 +121,11 @@ void ShenandoahHeapRegion::make_regular_bypass() {
     case _cset:
     case _humongous_start:
     case _humongous_cont:
+      // TODO: Changing this region to young during compaction may not be
+      // technically correct here because it completely disregards the ages
+      // and origins of the objects being moved. It is, however, certainly
+      // more correct than putting live objects into a region without a
+      // generational affiliation.
       set_affiliation(YOUNG_GENERATION);
       set_state(_regular);
       return;
