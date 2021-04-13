@@ -235,10 +235,10 @@ public:
   // unmarked objects to be coalesced and filled?
   uint old_coalesce_and_fill_candidates();
 
-  // Fill in buffer with all of the old-collection regions that were identified at the end of the most recenet old-gen
-  // mark to require their unamrked objects to be coalesced and filled.  The buffer array must have at least
+  // Fill in buffer with all of the old-collection regions that were identified at the end of the most recent old-gen
+  // mark to require their unmarked objects to be coalesced and filled.  The buffer array must have at least
   // old_coalesce_and_fill_candidates() entries, or memory may be corrupted when this function overwrites the
-  // end of the array. 
+  // end of the array.
   void get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
 
 };
