@@ -26,10 +26,13 @@
 
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGC.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
+#include "utilities/events.hpp"
 
 class ShenandoahConcurrentCoalesceAndFillTask : public AbstractGangTask {
 private:
@@ -161,13 +164,11 @@ void ShenandoahOldGC::entry_coalesce_and_fill() {
   entry_coalesce_and_fill_message(msg, sizeof(msg));
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
 
-  // Not sure if I want/need any of the following here:
-  //
-  // TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  // EventMark em("%s", msg);
-  // ShenandoahWorkerScope scope(heap->workers(),
-  // ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
-  // "concurrent coalesce and fill");
+  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+  EventMark em("%s", msg);
+  ShenandoahWorkerScope scope(heap->workers(),
+                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
+                              "concurrent coalesce and fill");
 
   op_coalesce_and_fill();
 }
