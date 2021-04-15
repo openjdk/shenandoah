@@ -225,10 +225,15 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size)
     return NULL;
   }
   HeapWord* obj = plab->allocate(size);
-  if (obj != NULL) {
-    return obj;
+  if (obj == NULL) {
+    obj = allocate_from_plab_slow(thread, size);
   }
-  return allocate_from_plab_slow(thread, size);
+
+  if (mode()->is_generational() && obj != NULL) {
+    ShenandoahHeap::heap()->card_scan()->register_object(obj);
+  }
+
+  return obj;
 }
 
 inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
