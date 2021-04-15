@@ -167,6 +167,14 @@ protected:
 
   bool in_generation(ShenandoahHeapRegion* region);
 
+  void prime_collection_set_with_old_candidates(ShenandoahCollectionSet* set);
+
+  // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
+  void prepare_for_old_collections();
+
+  // Prepare for global or young-gen collection
+  void prepare_for_other_collection(ShenandoahCollectionSet* set);
+
 public:
   ShenandoahHeuristics(ShenandoahGeneration* generation,
                        ShenandoahHeuristics* old_heuristics);
@@ -216,9 +224,6 @@ public:
   // Having coalesced and filled all old-gen heap regions that are not part of the old-gen collection set, begin
   // evacuating the collection set.
   void start_old_evacuations();
-
-  // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
-  void prepare_for_old_collections();
 
   // How many old-collection candidates have not yet been processed?
   uint unprocessed_old_collection_candidates();

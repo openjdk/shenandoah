@@ -81,6 +81,222 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
+void ShenandoahHeuristics::prime_collection_set_with_old_candidates(ShenandoahCollectionSet* collection_set) {
+  uint included_old_regions = 0;
+  size_t evacuated_old_bytes = 0;
+
+  // TODO: These macro definitions represent a first approximation to desired operating parameters.
+  // Eventually, these values should be determined by heuristics and should adjust dynamically based
+  // on most current execution behavior.  In the interrim, we may choose to offer command-line options
+  // to set the values of these configuration parameters.
+
+  // MAX_OLD_EVACUATION_BYTES represents an "arbitrary" bound on how much evacuation effort is dedicated to
+  // old-gen regions.
+#define MAX_OLD_EVACUATION_BYTES (ShenandoahHeapRegion::region_size_bytes() * 8)
+
+  // PROMOTION_BUDGET_BYTES represents an "arbitrary" bound on how many bytes can be consumed by young-gen
+  // objects promoted into old-gen memory.  We need to avoid a scenario under which promotion of objects
+  // depletes old-gen available memory to the point that there is insufficient memory to hold old-gen objects
+  // that need to be evacuated from within the old-gen collection set.
+  //
+  // TODO We should probably enforce this, but there is no enforcement currently.  Key idea: if there is not
+  // sufficient memory within old-gen to hold an object that wants to be promoted, defer promotion until a
+  // subsequent evacuation pass.  Since enforcement may be expensive, requiring frequent synchronization
+  // between mutator and GC threads, here's an alternative "greedy" mitigation strategy: Set the parameter's
+  // value so overflow is "very rare".  In the case that we experience overflow, evacuate what we can from
+  // within the old collection set, but don't evacuate everything.  At the end of evacuation, any collection
+  // set region that was not fully evacuated cannot be recycled.  It becomes a prime candidate for the next
+  // collection set selection.  Here, we'd rather fall back to this contingent behavior than force a full STW
+  // collection.
+#define PROMOTION_BUDGET_BYTES (ShenandoahHeapRegion::region_size_bytes() / 2)
+
+  // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
+  // "available" to hold the results of other evacuations.  This causes further decrease in the value of
+  // AVAILABLE_OLD_BYTES.
+  //
+  // We address this by reducing the evacuation budget by the amount of live memory in that region and by the
+  // amount of unallocated memory in that region if the evacuation budget is constrained by availability of
+  // free memory.
+
+  // Allow no more evacuation than exists free-space within old-gen memory
+  size_t old_evacuation_budget = (_old_heuristics->_generation->available() > PROMOTION_BUDGET_BYTES)? _old_heuristics->_generation->available() - PROMOTION_BUDGET_BYTES: 0;
+
+  // But if the amount of available free space in old-gen memory exceeds the pacing bound on how much old-gen memory can be
+  // evacuated during each evacuation pass, then cut the old-gen evacuation further.  The pacing bound is designed to assure
+  // that old-gen evacuations to not excessively slow the evacuation pass in order to assure that young-gen GC cadence is
+  // not disrupted.
+
+  // Represents availability of memory to hold evacuations beyond what is required to hold planned evacuations.  May go
+  // negative if we choose to collect regions with large amounts of free memory.
+  long long excess_free_capacity;
+  if (old_evacuation_budget > MAX_OLD_EVACUATION_BYTES) {
+    excess_free_capacity = old_evacuation_budget - MAX_OLD_EVACUATION_BYTES;
+    old_evacuation_budget = MAX_OLD_EVACUATION_BYTES;
+  } else
+    excess_free_capacity = 0;
+
+  size_t remaining_old_evacuation_budget = old_evacuation_budget;
+
+  // The number of old-gen regions that were selected as candidates for collection at the end of the most recent old-gen
+  // concurrent marking phase and have not yet been collected is represented by unprocessed_old_collection_candidates()
+  while (_old_heuristics->unprocessed_old_collection_candidates() > 0) {
+    // Old collection candidates are sorted in order of decreasing garbage contained therein.
+    ShenandoahHeapRegion* r = _old_heuristics->next_old_collection_candidate();
+
+    // Assuming region r is added to the collection set, what will be the remaining_old_evacuation_budget after accounting
+    // for the loss of region r's free() memory.
+    size_t adjusted_remaining_old_evacuation_budget;
+
+    // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by the size of r's free memory.
+    excess_free_capacity -= r->free();
+    // If subtracting r->free from excess_free_capacity() makes it go negative, that means we are going to have to decrease the
+    // evacuation budget.
+    if (excess_free_capacity < 0) {
+      if (remaining_old_evacuation_budget < (size_t) -excess_free_capacity) {
+        // By setting adjusted_remaining_old_evacuation_budget to 0, we prevent further additions to the old-gen collection set,
+        // unless the region has zero live data bytes.
+        adjusted_remaining_old_evacuation_budget = 0;
+      } else {
+        // Adding negative excess_free_capacity decreases the adjusted_remaining_old_evacuation_budget
+        adjusted_remaining_old_evacuation_budget = remaining_old_evacuation_budget + excess_free_capacity;
+      }
+    } else {
+      adjusted_remaining_old_evacuation_budget = remaining_old_evacuation_budget;
+    }
+
+    if (r->get_live_data_bytes() > adjusted_remaining_old_evacuation_budget) {
+      break;
+    }
+    collection_set->add_region(r);
+    included_old_regions++;
+    evacuated_old_bytes += r->get_live_data_bytes();
+    _old_heuristics->consume_old_collection_candidate();
+    remaining_old_evacuation_budget = adjusted_remaining_old_evacuation_budget - r->get_live_data_bytes();
+  }
+
+  if (included_old_regions > 0) {
+    log_info(gc)("Old-gen piggyback evac (%llu regions, %llu bytes)",
+                 (unsigned long long) included_old_regions,
+                 (unsigned long long) evacuated_old_bytes);
+  }
+}
+
+void ShenandoahHeuristics::prepare_for_other_collection(ShenandoahCollectionSet* collection_set) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+
+  // Check all pinned regions have updated status before choosing the collection set.
+  heap->assert_pinned_region_status();
+
+  // Step 1. Build up the region candidates we care about, rejecting losers and accepting winners right away.
+
+  size_t num_regions = heap->num_regions();
+
+  RegionData* candidates = _region_data;
+
+  size_t cand_idx = 0;
+
+  size_t total_garbage = 0;
+
+  size_t immediate_garbage = 0;
+  size_t immediate_regions = 0;
+
+  size_t free = 0;
+  size_t free_regions = 0;
+
+  ShenandoahMarkingContext* const ctx = _generation->complete_marking_context();
+
+  for (size_t i = 0; i < num_regions; i++) {
+    ShenandoahHeapRegion* region = heap->get_region(i);
+    if (!in_generation(region)) {
+      continue;
+    }
+
+    size_t garbage = region->garbage();
+    total_garbage += garbage;
+
+    if (region->is_empty()) {
+      free_regions++;
+      free += ShenandoahHeapRegion::region_size_bytes();
+    } else if (region->is_regular()) {
+      if (!region->has_live() && !heap->mode()->is_generational()) {
+        // We can recycle it right away and put it in the free set.
+        immediate_regions++;
+        immediate_garbage += garbage;
+        region->make_trash_immediate();
+      } else {
+        assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
+
+        // This is our candidate for later consideration.
+        candidates[cand_idx]._region = region;
+        candidates[cand_idx]._garbage = garbage;
+        cand_idx++;
+      }
+    } else if (region->is_humongous_start()) {
+
+      // Reclaim humongous regions here, and count them as the immediate garbage
+#ifdef ASSERT
+      bool reg_live = region->has_live();
+      bool bm_live = ctx->is_marked(oop(region->bottom()));
+      assert(reg_live == bm_live,
+             "Humongous liveness and marks should agree. Region live: %s; Bitmap live: %s; Region Live Words: " SIZE_FORMAT,
+             BOOL_TO_STR(reg_live), BOOL_TO_STR(bm_live), region->get_live_data_words());
+#endif
+      if (!region->has_live()) {
+        heap->trash_humongous_region_at(region);
+
+        // Count only the start. Continuations would be counted on "trash" path
+        immediate_regions++;
+        immediate_garbage += garbage;
+      }
+    } else if (region->is_trash()) {
+      // Count in just trashed collection set, during coalesced CM-with-UR
+      immediate_regions++;
+      immediate_garbage += garbage;
+    }
+  }
+
+  // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
+  // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
+
+  assert (immediate_garbage <= total_garbage,
+          "Cannot have more immediate garbage than total garbage: " SIZE_FORMAT "%s vs " SIZE_FORMAT "%s",
+          byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage),
+          byte_size_in_proper_unit(total_garbage),     proper_unit_for_byte_size(total_garbage));
+
+  size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
+
+  if (immediate_percent <= ShenandoahImmediateThreshold) {
+
+    if (_old_heuristics != NULL) {
+      prime_collection_set_with_old_candidates(collection_set);
+    }
+
+    // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
+    // of the heuristics subclasses.
+    choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
+  }
+
+  size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
+
+  size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
+  size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
+  log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
+                     "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
+                     "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%)",
+
+                     byte_size_in_proper_unit(collectable_garbage),
+                     proper_unit_for_byte_size(collectable_garbage),
+                     collectable_garbage_percent,
+
+                     byte_size_in_proper_unit(immediate_garbage),
+                     proper_unit_for_byte_size(immediate_garbage),
+                     immediate_percent,
+
+                     byte_size_in_proper_unit(collection_set->garbage()),
+                     proper_unit_for_byte_size(collection_set->garbage()),
+                     cset_percent);
+}
+
 void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
   assert(collection_set->count() == 0, "Must be empty");
 
@@ -89,215 +305,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     // Instead, it computes the set of regions to be evacuated by subsequent young-gen evacuation passes.
     prepare_for_old_collections();
   } else {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-
-    // Check all pinned regions have updated status before choosing the collection set.
-    heap->assert_pinned_region_status();
-
-    // Step 1. Build up the region candidates we care about, rejecting losers and accepting winners right away.
-
-    size_t num_regions = heap->num_regions();
-
-    RegionData* candidates = _region_data;
-
-    size_t cand_idx = 0;
-
-    size_t total_garbage = 0;
-
-    size_t immediate_garbage = 0;
-    size_t immediate_regions = 0;
-
-    size_t free = 0;
-    size_t free_regions = 0;
-
-    ShenandoahMarkingContext* const ctx = _generation->complete_marking_context();
-
-    for (size_t i = 0; i < num_regions; i++) {
-      ShenandoahHeapRegion* region = heap->get_region(i);
-      if (!in_generation(region)) {
-        continue;
-      }
-
-      size_t garbage = region->garbage();
-      total_garbage += garbage;
-
-      if (region->is_empty()) {
-        free_regions++;
-        free += ShenandoahHeapRegion::region_size_bytes();
-      } else if (region->is_regular()) {
-        if (!region->has_live() && !heap->mode()->is_generational()) {
-          // We can recycle it right away and put it in the free set.
-          immediate_regions++;
-          immediate_garbage += garbage;
-          region->make_trash_immediate();
-        } else {
-          assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
-
-          // This is our candidate for later consideration.
-          candidates[cand_idx]._region = region;
-          candidates[cand_idx]._garbage = garbage;
-          cand_idx++;
-        }
-      } else if (region->is_humongous_start()) {
-
-        // Reclaim humongous regions here, and count them as the immediate garbage
-#ifdef ASSERT
-        bool reg_live = region->has_live();
-        bool bm_live = ctx->is_marked(oop(region->bottom()));
-        assert(reg_live == bm_live,
-               "Humongous liveness and marks should agree. Region live: %s; Bitmap live: %s; Region Live Words: " SIZE_FORMAT,
-               BOOL_TO_STR(reg_live), BOOL_TO_STR(bm_live), region->get_live_data_words());
-#endif
-        if (!region->has_live()) {
-          heap->trash_humongous_region_at(region);
-
-          // Count only the start. Continuations would be counted on "trash" path
-          immediate_regions++;
-          immediate_garbage += garbage;
-        }
-      } else if (region->is_trash()) {
-        // Count in just trashed collection set, during coalesced CM-with-UR
-        immediate_regions++;
-        immediate_garbage += garbage;
-      }
-    }
-
-    // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
-    // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
-
-    assert (immediate_garbage <= total_garbage,
-            "Cannot have more immediate garbage than total garbage: " SIZE_FORMAT "%s vs " SIZE_FORMAT "%s",
-            byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage),
-            byte_size_in_proper_unit(total_garbage),     proper_unit_for_byte_size(total_garbage));
-
-    size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
-
-    if (immediate_percent <= ShenandoahImmediateThreshold) {
-
-      if (_old_heuristics != NULL) {
-        uint included_old_regions = 0;
-        size_t evacuated_old_bytes = 0;
-
-        // TODO: These macro definitions represent a first approximation to desired operating parameters.
-        // Eventually, these values should be determined by heuristics and should adjust dynamically based
-        // on most current execution behavior.  In the interrim, we may choose to offer command-line options
-        // to set the values of these configuration parameters.
-
-        // MAX_OLD_EVACUATION_BYTES represents an "arbitrary" bound on how much evacuation effort is dedicated to
-        // old-gen regions.
-#define MAX_OLD_EVACUATION_BYTES (ShenandoahHeapRegion::region_size_bytes() * 8)
-
-        // PROMOTION_BUDGET_BYTES represents an "arbitrary" bound on how many bytes can be consumed by young-gen
-        // objects promoted into old-gen memory.  We need to avoid a scenario under which promotion of objects
-        // depletes old-gen available memory to the point that there is insufficient memory to hold old-gen objects
-        // that need to be evacuated from within the old-gen collection set.
-        //
-        // TODO We should probably enforce this, but there is no enforcement currently.  Key idea: if there is not
-        // sufficient memory within old-gen to hold an object that wants to be promoted, defer promotion until a
-        // subsequent evacuation pass.  Since enforcement may be expensive, requiring frequent synchronization
-        // between mutator and GC threads, here's an alternative "greedy" mitigation strategy: Set the parameter's
-        // value so overflow is "very rare".  In the case that we experience overflow, evacuate what we can from
-        // within the old collection set, but don't evacuate everything.  At the end of evacuation, any collection
-        // set region that was not fully evacuated cannot be recycled.  It becomes a prime candidate for the next
-        // collection set selection.  Here, we'd rather fall back to this contingent behavior than force a full STW
-        // collection.
-#define PROMOTION_BUDGET_BYTES (ShenandoahHeapRegion::region_size_bytes() / 2)
-
-        // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
-        // "available" to hold the results of other evacuations.  This causes further decrease in the value of
-        // AVAILABLE_OLD_BYTES.
-        //
-        // We address this by reducing the evacuation budget by the amount of live memory in that region and by the
-        // amount of unallocated memory in that region if the evacuation budget is constrained by availability of
-        // free memory.
-
-        // Allow no more evacuation than exists free-space within old-gen memory
-        size_t old_evacuation_budget = (_old_heuristics->_generation->available() > PROMOTION_BUDGET_BYTES)? _old_heuristics->_generation->available() - PROMOTION_BUDGET_BYTES: 0;
-
-        // But if the amount of available free space in old-gen memory exceeds the pacing bound on how much old-gen memory can be
-        // evacuated during each evacuation pass, then cut the old-gen evacuation further.  The pacing bound is designed to assure
-        // that old-gen evacuations to not excessively slow the evacuation pass in order to assure that young-gen GC cadence is
-        // not disrupted.
-
-        // Represents availability of memory to hold evacuations beyond what is required to hold planned evacuations.  May go
-        // negative if we choose to collect regions with large amounts of free memory.
-        long long excess_free_capacity;
-        if (old_evacuation_budget > MAX_OLD_EVACUATION_BYTES) {
-          excess_free_capacity = old_evacuation_budget - MAX_OLD_EVACUATION_BYTES;
-          old_evacuation_budget = MAX_OLD_EVACUATION_BYTES;
-        } else
-          excess_free_capacity = 0;
-
-        size_t remaining_old_evacuation_budget = old_evacuation_budget;
-
-        // The number of old-gen regions that were selected as candidates for collection at the end of the most recent old-gen
-        // concurrent marking phase and have not yet been collected is represented by unprocessed_old_collection_candidates()
-        while (_old_heuristics->unprocessed_old_collection_candidates() > 0) {
-          // Old collection candidates are sorted in order of decreasing garbage contained therein.
-          ShenandoahHeapRegion* r = _old_heuristics->next_old_collection_candidate();
-
-          // Assuming region r is added to the collection set, what will be the remaining_old_evacuation_budget after accounting
-          // for the loss of region r's free() memory.
-          size_t adjusted_remaining_old_evacuation_budget;
-
-          // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by the size of r's free memory.
-          excess_free_capacity -= r->free();
-          // If subtracting r->free from excess_free_capacity() makes it go negative, that means we are going to have to decrease the
-          // evacuation budget.
-          if (excess_free_capacity < 0) {
-            if (remaining_old_evacuation_budget < (size_t) -excess_free_capacity) {
-              // By setting adjusted_remaining_old_evacuation_budget to 0, we prevent further additions to the old-gen collection set,
-              // unless the region has zero live data bytes.
-              adjusted_remaining_old_evacuation_budget = 0;
-            } else {
-              // Adding negative excess_free_capacity decreases the adjusted_remaining_old_evacuation_budget
-              adjusted_remaining_old_evacuation_budget = remaining_old_evacuation_budget + excess_free_capacity;
-            }
-          } else {
-            adjusted_remaining_old_evacuation_budget = remaining_old_evacuation_budget;
-          }
-
-          if (r->get_live_data_bytes() > adjusted_remaining_old_evacuation_budget) {
-            break;
-          }
-          collection_set->add_region(r);
-          included_old_regions++;
-          evacuated_old_bytes += r->get_live_data_bytes();
-          _old_heuristics->consume_old_collection_candidate();
-          remaining_old_evacuation_budget = adjusted_remaining_old_evacuation_budget - r->get_live_data_bytes();
-        }
-
-        if (included_old_regions > 0) {
-          log_info(gc)("Old-gen piggyback evac (%llu regions, %llu bytes)",
-                       (unsigned long long) included_old_regions,
-                       (unsigned long long) evacuated_old_bytes);
-        }
-      }
-
-      // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
-      // of the heuristics subclasses.
-      choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
-    }
-
-    size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
-
-    size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
-    size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
-    log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                       "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                       "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%)",
-
-                       byte_size_in_proper_unit(collectable_garbage),
-                       proper_unit_for_byte_size(collectable_garbage),
-                       collectable_garbage_percent,
-
-                       byte_size_in_proper_unit(immediate_garbage),
-                       proper_unit_for_byte_size(immediate_garbage),
-                       immediate_percent,
-
-                       byte_size_in_proper_unit(collection_set->garbage()),
-                       proper_unit_for_byte_size(collection_set->garbage()),
-                       cset_percent);
+    prepare_for_other_collection(collection_set);
   }
 }
 
