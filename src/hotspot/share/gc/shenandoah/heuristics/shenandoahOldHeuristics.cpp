@@ -157,9 +157,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   RegionData* candidates = _region_data;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!in_generation(region))
+    if (!in_generation(region)) {
       continue;
-    else {
+    } else {
       size_t garbage = region->garbage();
       total_garbage += garbage;
 
@@ -177,8 +177,6 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t first_non_humongous_empty = 0;
   size_t first_humongous_non_empty = cand_idx;
 
-  // This loop is written as while rather than for because of
-  // suspected gcc error in translating/optimizing for-loop
   size_t i = 0;
   while (i < first_humongous_non_empty) {
     ShenandoahHeapRegion* region = candidates[i]._region;
@@ -215,10 +213,11 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   QuickSort::sort<RegionData>(candidates + first_non_humongous_empty, (int)(first_humongous_non_empty - first_non_humongous_empty),
                               compare_by_garbage, false);
 
-  // Any old-gen region that contains 50% garbage or more is to be
-  // evacuated.  In the future, this threshold percentage may be specified on
-  // the command line or preferrably determined by dynamic heuristics.
-#define CollectionThresholdGarbagePercent 50
+  // Any old-gen region that contains (ShenandoahGarbageThreshold
+  // (default value 25))% garbage or more is to be evacuated.  In the
+  // future, this threshold percentage may be specified on the command
+  // line or preferrably determined by dynamic heuristics.
+#define CollectionThresholdGarbagePercent ShenandoahGarbageThreshold
 
   size_t region_size = ShenandoahHeapRegion::region_size_bytes();
   for (size_t i = first_non_humongous_empty; i < first_humongous_non_empty; i++) {
@@ -291,8 +290,9 @@ void ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapReg
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   uint count = _old_coalesce_and_fill_candidates;
   int index = _first_coalesce_and_fill_candidate;
-  while (count-- > 0)
+  while (count-- > 0) {
     *buffer++ = _region_data[index++]._region;
+  }
 }
 
 bool ShenandoahOldHeuristics::should_defer_gc() {

@@ -137,6 +137,7 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
 void ShenandoahGeneration::prepare_gc() {
   reset_mark_bitmap();
+
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_heap_region_iterate(&cl);
 }

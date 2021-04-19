@@ -515,7 +515,6 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   // marking. This flag here (passed by reference) is used to control
   // precisely where the regulator is allowed to cancel a GC.
   ShenandoahOldGC gc(generation, _allow_old_preemption);
-
   if (gc.collect(cause)) {
     // Cycle is complete
     generation->heuristics()->record_success_concurrent();

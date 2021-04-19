@@ -32,7 +32,7 @@ import java.util.HashMap;
  *  As of the date on which this test was added into the jtreg suite, heuristic
  *  of old-gen GC passes is very simplistic.  A further shortcoming of the
  *  Generational Shenandoah as of introduction of this test is that it does
- *  currently support full GC.  If garbage collection falls behind mutator
+ *  not currently support full GC.  If garbage collection falls behind mutator
  *  allocations, a full GC will be triggered and Generational Shenandoah will
  *  abort itself with an assertion error.  Both of these limitations will be
  *  addressed in future releases of Generational Shenandoah.
