@@ -24,23 +24,46 @@
 
 #include "precompiled.hpp"
 #include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahAggressiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAggressiveOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahCompactHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahCompactOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahStaticHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahStaticOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 
-ShenandoahHeuristics* ShenandoahMode::initialize_heuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* old_heuristics) const {
+ShenandoahHeuristics* ShenandoahMode::initialize_heuristics(ShenandoahGeneration* generation) const {
 
   if (ShenandoahGCHeuristics != NULL) {
     if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
-      return new ShenandoahAggressiveHeuristics(generation, old_heuristics);
+      return new ShenandoahAggressiveHeuristics(generation);
     } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
-      return new ShenandoahStaticHeuristics(generation, old_heuristics);
+      return new ShenandoahStaticHeuristics(generation);
     } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
-      return new ShenandoahAdaptiveHeuristics(generation, old_heuristics);
+      return new ShenandoahAdaptiveHeuristics(generation);
     } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
-      return new ShenandoahCompactHeuristics(generation, old_heuristics);
+      return new ShenandoahCompactHeuristics(generation);
+    } else {
+      vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
+    }
+  }
+  ShouldNotReachHere();
+  return NULL;
+}
+
+ShenandoahOldHeuristics* ShenandoahMode::initialize_old_heuristics(ShenandoahGeneration* generation) const {
+
+  if (ShenandoahGCHeuristics != NULL) {
+    if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
+      return new ShenandoahAggressiveOldHeuristics(generation);
+    } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
+      return new ShenandoahStaticOldHeuristics(generation);
+    } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
+      return new ShenandoahAdaptiveOldHeuristics(generation);
+    } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
+      return new ShenandoahCompactOldHeuristics(generation);
     } else {
       vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
     }

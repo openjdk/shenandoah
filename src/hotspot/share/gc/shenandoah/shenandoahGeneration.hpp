@@ -26,7 +26,7 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
 
 #include "memory/allocation.hpp"
-#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
@@ -60,7 +60,9 @@ public:
 
   virtual const char* name() const = 0;
 
-  ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode, ShenandoahHeuristics* old_heuristics);
+  ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode);
+
+  ShenandoahOldHeuristics* initialize_old_heuristics(ShenandoahMode* gc_mode);
 
   virtual size_t soft_max_capacity() const { return _soft_max_capacity; }
   virtual size_t max_capacity() const      { return _max_capacity; }
@@ -124,6 +126,9 @@ public:
  protected:
 
   virtual bool is_concurrent_mark_in_progress() = 0;
+
+ private:
+  void confirm_heuristics_mode();
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP

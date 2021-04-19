@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,19 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP
-#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP
+#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEOLDHEURISTICS_HPP
+#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEOLDHEURISTICS_HPP
 
-#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "utilities/numberSeq.hpp"
 
-class ShenandoahAllocationRate : public CHeapObj<mtGC> {
- public:
-  explicit ShenandoahAllocationRate();
-  void allocation_counter_reset();
-
-  double sample(size_t allocated);
-
-  double instantaneous_rate(size_t allocated) const;
-  double upper_bound(double sds) const;
-  bool is_spiking(double rate, double threshold) const;
-
- private:
-
-  double instantaneous_rate(double time, size_t allocated) const;
-
-  double _last_sample_time;
-  size_t _last_sample_value;
-  double _interval_sec;
-  TruncatedSeq _rate;
-  TruncatedSeq _rate_avg;
-};
-
-class ShenandoahAdaptiveHeuristics : public ShenandoahHeuristics {
+class ShenandoahAdaptiveOldHeuristics : public ShenandoahOldHeuristics {
 public:
-  ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation);
+  ShenandoahAdaptiveOldHeuristics(ShenandoahGeneration* generation);
 
-  virtual ~ShenandoahAdaptiveHeuristics();
+  virtual ~ShenandoahAdaptiveOldHeuristics();
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                      RegionData* data, size_t size,
@@ -68,7 +47,7 @@ public:
 
   virtual bool should_start_gc();
 
-  virtual const char* name()     { return "Adaptive"; }
+  virtual const char* name()     { return "AdaptiveOld"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
 
@@ -128,4 +107,4 @@ public:
   TruncatedSeq _available;
 };
 
-#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP
+#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEOLDHEURISTICS_HPP

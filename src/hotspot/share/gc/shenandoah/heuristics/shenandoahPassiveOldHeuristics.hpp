@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,29 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
-#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
+#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHPASSIVEOLDHEURISTICS_HPP
+#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHPASSIVEOLDHEURISTICS_HPP
 
-#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 
-class ShenandoahAggressiveHeuristics : public ShenandoahHeuristics {
+class ShenandoahPassiveOldHeuristics : public ShenandoahOldHeuristics {
 public:
-  ShenandoahAggressiveHeuristics(ShenandoahGeneration* generation);
-
-  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                     RegionData* data, size_t size,
-                                                     size_t free);
+  ShenandoahPassiveOldHeuristics(ShenandoahGeneration* generation)
+    : ShenandoahOldHeuristics(generation) {}
 
   virtual bool should_start_gc();
 
   virtual bool should_unload_classes();
 
-  virtual const char* name()     { return "Aggressive"; }
+  virtual bool should_degenerate_cycle();
+
+  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
+                                                     RegionData* data, size_t data_size,
+                                                     size_t free);
+
+  virtual const char* name()     { return "PassiveOld"; }
   virtual bool is_diagnostic()   { return true; }
   virtual bool is_experimental() { return false; }
 };
 
-#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
+#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHPASSIVEOLDHEURISTICS_HPP

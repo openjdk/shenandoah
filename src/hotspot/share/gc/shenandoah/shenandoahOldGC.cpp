@@ -81,7 +81,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // Complete marking under STW
   vmop_entry_final_mark();
 
-  ShenandoahHeuristics* old_heuristics = heap->old_generation()->heuristics();
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
 
   entry_coalesce_and_fill();
 
@@ -141,7 +141,7 @@ void ShenandoahOldGC::op_coalesce_and_fill() {
 
   assert(_generation->generation_mode() == OLD, "Only old-GC does coalesce and fill");
 
-  ShenandoahHeuristics* old_heuristics = heap->old_generation()->heuristics();
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
   uint coalesce_and_fill_regions_count = old_heuristics->old_coalesce_and_fill_candidates();
   ShenandoahHeapRegion* coalesce_and_fill_region_array[coalesce_and_fill_regions_count];
 

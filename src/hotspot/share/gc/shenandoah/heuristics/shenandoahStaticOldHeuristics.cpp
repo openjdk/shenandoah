@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@
 
 #include "precompiled.hpp"
 
-#include "gc/shenandoah/heuristics/shenandoahStaticHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahStaticOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
@@ -32,15 +32,15 @@
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 
-ShenandoahStaticHeuristics::ShenandoahStaticHeuristics(ShenandoahGeneration* generation) :
-  ShenandoahHeuristics(generation) {
+ShenandoahStaticOldHeuristics::ShenandoahStaticOldHeuristics(ShenandoahGeneration* generation) :
+  ShenandoahOldHeuristics(generation) {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
 }
 
-ShenandoahStaticHeuristics::~ShenandoahStaticHeuristics() {}
+ShenandoahStaticOldHeuristics::~ShenandoahStaticOldHeuristics() {}
 
-bool ShenandoahStaticHeuristics::should_start_gc() {
+bool ShenandoahStaticOldHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
@@ -53,16 +53,16 @@ bool ShenandoahStaticHeuristics::should_start_gc() {
 
   if (available < threshold_available) {
     log_info(gc)("Trigger: Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
-                 byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
+                 byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
                  byte_size_in_proper_unit(threshold_available), proper_unit_for_byte_size(threshold_available));
     return true;
   }
   return ShenandoahHeuristics::should_start_gc();
 }
 
-void ShenandoahStaticHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                       RegionData* data, size_t size,
-                                                                       size_t free) {
+void ShenandoahStaticOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
+                                                                          RegionData* data, size_t size,
+                                                                          size_t free) {
   size_t threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
 
   for (size_t idx = 0; idx < size; idx++) {

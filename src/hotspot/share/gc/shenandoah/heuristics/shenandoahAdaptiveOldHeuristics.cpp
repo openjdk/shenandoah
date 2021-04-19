@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@
 
 #include "precompiled.hpp"
 
-#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
@@ -36,13 +36,13 @@
 // These constants are used to adjust the margin of error for the moving
 // average of the allocation rate and cycle time. The units are standard
 // deviations.
-const double ShenandoahAdaptiveHeuristics::FULL_PENALTY_SD = 0.2;
-const double ShenandoahAdaptiveHeuristics::DEGENERATE_PENALTY_SD = 0.1;
+const double ShenandoahAdaptiveOldHeuristics::FULL_PENALTY_SD = 0.2;
+const double ShenandoahAdaptiveOldHeuristics::DEGENERATE_PENALTY_SD = 0.1;
 
 // These are used to decide if we want to make any adjustments at all
 // at the end of a successful concurrent cycle.
-const double ShenandoahAdaptiveHeuristics::LOWEST_EXPECTED_AVAILABLE_AT_END = -0.5;
-const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0.5;
+const double ShenandoahAdaptiveOldHeuristics::LOWEST_EXPECTED_AVAILABLE_AT_END = -0.5;
+const double ShenandoahAdaptiveOldHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0.5;
 
 // These values are the confidence interval expressed as standard deviations.
 // At the minimum confidence level, there is a 25% chance that the true value of
@@ -51,20 +51,20 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 // MAXIMUM_CONFIDENCE interval here means there is a one in a thousand chance
 // that the true value of our estimate is outside the interval. These are used
 // as bounds on the adjustments applied at the outcome of a GC cycle.
-const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
-const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
+const double ShenandoahAdaptiveOldHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
+const double ShenandoahAdaptiveOldHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation) :
-  ShenandoahHeuristics(generation),
+ShenandoahAdaptiveOldHeuristics::ShenandoahAdaptiveOldHeuristics(ShenandoahGeneration* generation) :
+  ShenandoahOldHeuristics(generation),
   _margin_of_error_sd(ShenandoahAdaptiveInitialConfidence),
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
   _last_trigger(OTHER) { }
 
-ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {}
+ShenandoahAdaptiveOldHeuristics::~ShenandoahAdaptiveOldHeuristics() {}
 
-void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                         RegionData* data, size_t size,
-                                                                         size_t actual_free) {
+void ShenandoahAdaptiveOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
+                                                                            RegionData* data, size_t size,
+                                                                            size_t actual_free) {
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
 
   // The logic for cset selection in adaptive is as follows:
@@ -121,12 +121,12 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   }
 }
 
-void ShenandoahAdaptiveHeuristics::record_cycle_start() {
+void ShenandoahAdaptiveOldHeuristics::record_cycle_start() {
   ShenandoahHeuristics::record_cycle_start();
   _allocation_rate.allocation_counter_reset();
 }
 
-void ShenandoahAdaptiveHeuristics::record_success_concurrent() {
+void ShenandoahAdaptiveOldHeuristics::record_success_concurrent() {
   ShenandoahHeuristics::record_success_concurrent();
 
   size_t available = ShenandoahHeap::heap()->free_set()->available();
@@ -176,7 +176,7 @@ void ShenandoahAdaptiveHeuristics::record_success_concurrent() {
   }
 }
 
-void ShenandoahAdaptiveHeuristics::record_success_degenerated() {
+void ShenandoahAdaptiveOldHeuristics::record_success_degenerated() {
   ShenandoahHeuristics::record_success_degenerated();
   // Adjust both trigger's parameters in the case of a degenerated GC because
   // either of them should have triggered earlier to avoid this case.
@@ -184,7 +184,7 @@ void ShenandoahAdaptiveHeuristics::record_success_degenerated() {
   adjust_spike_threshold(DEGENERATE_PENALTY_SD);
 }
 
-void ShenandoahAdaptiveHeuristics::record_success_full() {
+void ShenandoahAdaptiveOldHeuristics::record_success_full() {
   ShenandoahHeuristics::record_success_full();
   // Adjust both trigger's parameters in the case of a full GC because
   // either of them should have triggered earlier to avoid this case.
@@ -196,7 +196,7 @@ static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }
 
-bool ShenandoahAdaptiveHeuristics::should_start_gc() {
+bool ShenandoahAdaptiveOldHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
@@ -276,7 +276,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   return ShenandoahHeuristics::should_start_gc();
 }
 
-void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount) {
+void ShenandoahAdaptiveOldHeuristics::adjust_last_trigger_parameters(double amount) {
   switch (_last_trigger) {
     case RATE:
       adjust_margin_of_error(amount);
@@ -292,78 +292,13 @@ void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount)
   }
 }
 
-void ShenandoahAdaptiveHeuristics::adjust_margin_of_error(double amount) {
+void ShenandoahAdaptiveOldHeuristics::adjust_margin_of_error(double amount) {
   _margin_of_error_sd = saturate(_margin_of_error_sd + amount, MINIMUM_CONFIDENCE, MAXIMUM_CONFIDENCE);
   log_debug(gc, ergo)("Margin of error now %.2f", _margin_of_error_sd);
 }
 
-void ShenandoahAdaptiveHeuristics::adjust_spike_threshold(double amount) {
+void ShenandoahAdaptiveOldHeuristics::adjust_spike_threshold(double amount) {
   _spike_threshold_sd = saturate(_spike_threshold_sd - amount, MINIMUM_CONFIDENCE, MAXIMUM_CONFIDENCE);
   log_debug(gc, ergo)("Spike threshold now: %.2f", _spike_threshold_sd);
 }
 
-ShenandoahAllocationRate::ShenandoahAllocationRate() :
-  _last_sample_time(os::elapsedTime()),
-  _last_sample_value(0),
-  _interval_sec(1.0 / ShenandoahAdaptiveSampleFrequencyHz),
-  _rate(int(ShenandoahAdaptiveSampleSizeSeconds * ShenandoahAdaptiveSampleFrequencyHz), ShenandoahAdaptiveDecayFactor),
-  _rate_avg(int(ShenandoahAdaptiveSampleSizeSeconds * ShenandoahAdaptiveSampleFrequencyHz), ShenandoahAdaptiveDecayFactor) {
-}
-
-double ShenandoahAllocationRate::sample(size_t allocated) {
-  double now = os::elapsedTime();
-  double rate = 0.0;
-  if (now - _last_sample_time > _interval_sec) {
-    if (allocated >= _last_sample_value) {
-      rate = instantaneous_rate(now, allocated);
-      _rate.add(rate);
-      _rate_avg.add(_rate.avg());
-    }
-
-    _last_sample_time = now;
-    _last_sample_value = allocated;
-  }
-  return rate;
-}
-
-double ShenandoahAllocationRate::upper_bound(double sds) const {
-  // Here we are using the standard deviation of the computed running
-  // average, rather than the standard deviation of the samples that went
-  // into the moving average. This is a much more stable value and is tied
-  // to the actual statistic in use (moving average over samples of averages).
-  return _rate.davg() + (sds * _rate_avg.dsd());
-}
-
-void ShenandoahAllocationRate::allocation_counter_reset() {
-  _last_sample_time = os::elapsedTime();
-  _last_sample_value = 0;
-}
-
-bool ShenandoahAllocationRate::is_spiking(double rate, double threshold) const {
-  if (rate <= 0.0) {
-    return false;
-  }
-
-  double sd = _rate.sd();
-  if (sd > 0) {
-    // There is a small chance that that rate has already been sampled, but it
-    // seems not to matter in practice.
-    double z_score = (rate - _rate.avg()) / sd;
-    if (z_score > threshold) {
-      return true;
-    }
-  }
-  return false;
-}
-
-double ShenandoahAllocationRate::instantaneous_rate(size_t allocated) const {
-  return instantaneous_rate(os::elapsedTime(), allocated);
-}
-
-double ShenandoahAllocationRate::instantaneous_rate(double time, size_t allocated) const {
-  size_t last_value = _last_sample_value;
-  double last_time = _last_sample_time;
-  size_t allocation_delta = (allocated > last_value) ? (allocated - last_value) : 0;
-  double time_delta_sec = time - last_time;
-  return (time_delta_sec > 0)  ? (allocation_delta / time_delta_sec) : 0;
-}

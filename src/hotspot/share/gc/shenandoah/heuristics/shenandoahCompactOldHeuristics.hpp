@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,24 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
-#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
+#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHCOMPACTOLDHEURISTICS_HPP
+#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHCOMPACTOLDHEURISTICS_HPP
 
-#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 
-class ShenandoahAggressiveHeuristics : public ShenandoahHeuristics {
+class ShenandoahCompactOldHeuristics : public ShenandoahOldHeuristics {
 public:
-  ShenandoahAggressiveHeuristics(ShenandoahGeneration* generation);
-
-  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                     RegionData* data, size_t size,
-                                                     size_t free);
+  ShenandoahCompactOldHeuristics(ShenandoahGeneration* generation);
 
   virtual bool should_start_gc();
 
-  virtual bool should_unload_classes();
+  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
+                                                     RegionData* data, size_t size,
+                                                     size_t actual_free);
 
-  virtual const char* name()     { return "Aggressive"; }
-  virtual bool is_diagnostic()   { return true; }
+  virtual const char* name()     { return "CompactOld"; }
+  virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
 };
 
-#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
+#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHCOMPACTOLDHEURISTICS_HPP

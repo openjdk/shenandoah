@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019 Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,14 +24,14 @@
 
 #include "precompiled.hpp"
 
-#include "gc/shenandoah/heuristics/shenandoahAggressiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAggressiveOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/os.hpp"
 
-ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahGeneration* generation) : ShenandoahHeuristics(generation) {
+ShenandoahAggressiveOldHeuristics::ShenandoahAggressiveOldHeuristics(ShenandoahGeneration* generation) : ShenandoahOldHeuristics(generation) {
   // Do not shortcut evacuation
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahImmediateThreshold, 100);
 
@@ -45,9 +45,9 @@ ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahGenerat
   }
 }
 
-void ShenandoahAggressiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                           RegionData* data, size_t size,
-                                                                           size_t free) {
+void ShenandoahAggressiveOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
+                                                                             RegionData* data, size_t size,
+                                                                             size_t free) {
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;
     if (r->garbage() > 0) {
@@ -56,12 +56,12 @@ void ShenandoahAggressiveHeuristics::choose_collection_set_from_regiondata(Shena
   }
 }
 
-bool ShenandoahAggressiveHeuristics::should_start_gc() {
+bool ShenandoahAggressiveOldHeuristics::should_start_gc() {
   log_info(gc)("Trigger: Start next cycle immediately");
   return true;
 }
 
-bool ShenandoahAggressiveHeuristics::should_unload_classes() {
+bool ShenandoahAggressiveOldHeuristics::should_unload_classes() {
   if (!can_unload_classes_normal()) return false;
   if (has_metaspace_oom()) return true;
   // Randomly unload classes with 50% chance.

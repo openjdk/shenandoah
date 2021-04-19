@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,15 +25,15 @@
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
-#include "gc/shenandoah/heuristics/shenandoahCompactHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahCompactOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 
-ShenandoahCompactHeuristics::ShenandoahCompactHeuristics(ShenandoahGeneration* generation) :
-  ShenandoahHeuristics(generation) {
+ShenandoahCompactOldHeuristics::ShenandoahCompactOldHeuristics(ShenandoahGeneration* generation) :
+  ShenandoahOldHeuristics(generation) {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahUncommit);
@@ -45,7 +45,7 @@ ShenandoahCompactHeuristics::ShenandoahCompactHeuristics(ShenandoahGeneration* g
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGarbageThreshold,     10);
 }
 
-bool ShenandoahCompactHeuristics::should_start_gc() {
+bool ShenandoahCompactOldHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
@@ -75,9 +75,9 @@ bool ShenandoahCompactHeuristics::should_start_gc() {
   return ShenandoahHeuristics::should_start_gc();
 }
 
-void ShenandoahCompactHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                        RegionData* data, size_t size,
-                                                                        size_t actual_free) {
+void ShenandoahCompactOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
+                                                                           RegionData* data, size_t size,
+                                                                           size_t actual_free) {
   // Do not select too large CSet that would overflow the available free space
   size_t max_cset = actual_free * 3 / 4;
 
