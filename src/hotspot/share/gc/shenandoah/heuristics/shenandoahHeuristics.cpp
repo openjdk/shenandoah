@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -164,7 +164,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     if (old_heuristics != NULL) {
       old_heuristics->prime_collection_set(collection_set);
     }
-    // else, thisi s global collection and doesn't need to prime_collection_set()
+    // else, this is global collection and doesn't need to prime_collection_set
 
     // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
     // of the heuristics subclasses.
@@ -175,6 +175,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
+
   log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
                      "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
                      "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%)",
@@ -201,7 +202,6 @@ void ShenandoahHeuristics::record_cycle_end() {
 }
 
 bool ShenandoahHeuristics::should_start_gc() {
-
   // Perform GC to cleanup metaspace
   if (has_metaspace_oom()) {
     // Some of vmTestbase/metaspace tests depend on following line to count GC cycles

@@ -151,8 +151,6 @@ public:
   virtual void initialize();
 
   double time_since_last_gc() const;
-
-
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEURISTICS_HPP

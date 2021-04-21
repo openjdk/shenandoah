@@ -27,9 +27,6 @@
 
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 
-// TODO: Make this a subclass of ShenandoahHeuristics and create a "tailored" copy of this class to be subclass of
-// ShenandoahOldHeuristics.  Fix the constructor implementation to invoke ShenandoahHeuristics() superclass constructor.
-// Change ShenandoahMode::initialize_old_heuristics() to return the subclass of ShenandoahOldHeuristics.
 class ShenandoahStaticHeuristics : public ShenandoahHeuristics {
 public:
   ShenandoahStaticHeuristics(ShenandoahGeneration* generation);

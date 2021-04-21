@@ -96,7 +96,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                      byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                      byte_size_in_proper_unit(min_garbage), proper_unit_for_byte_size(min_garbage));
 
-
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
 

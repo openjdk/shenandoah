@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,9 +26,10 @@
 #define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEOLDHEURISTICS_HPP
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
-#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "utilities/numberSeq.hpp"
+
+class ShenandoahAllocationRate;
 
 class ShenandoahAdaptiveOldHeuristics : public ShenandoahOldHeuristics {
 public:
