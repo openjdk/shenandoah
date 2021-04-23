@@ -71,6 +71,7 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _tlab_allocs(0),
   _gclab_allocs(0),
   _plab_allocs(0),
+  _has_young_lab(false),
   _live_data(0),
   _critical_pins(0),
   _update_watermark(start),
@@ -852,7 +853,7 @@ size_t ShenandoahHeapRegion::promote() {
     size_t index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
     for (size_t i = index(); i < index_limit; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
-      log_debug(gc)("promoting region " SIZE_FORMAT ", clear cards from " SIZE_FORMAT " to " SIZE_FORMAT,
+      log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
         r->index(), (size_t) r->bottom(), (size_t) r->top());
       if (top() < end()) {
         ShenandoahHeap::fill_with_object(top(), (end() - top()) / HeapWordSize);
@@ -866,7 +867,7 @@ size_t ShenandoahHeapRegion::promote() {
     }
     return index_limit - index();
   } else {
-    log_debug(gc)("promoting region " SIZE_FORMAT ", clear cards from " SIZE_FORMAT " to " SIZE_FORMAT,
+    log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
       index(), (size_t) bottom(), (size_t) top());
     assert(!is_humongous_continuation(), "should not promote humongous object continuation in isolation");
 

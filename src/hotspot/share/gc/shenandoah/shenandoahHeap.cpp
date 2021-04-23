@@ -1260,6 +1260,37 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
   }
 }
 
+class ShenandoahTagGCLABClosure : public ThreadClosure {
+public:
+  void do_thread(Thread* thread) {
+    PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
+    assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
+    if (gclab->words_remaining() > 0) {
+      ShenandoahHeapRegion* r = ShenandoahHeap::heap()->heap_region_containing(gclab->allocate(0));
+      r->set_young_lab_flag();
+    }
+  }
+};
+
+void ShenandoahHeap::set_young_lab_region_flags() {
+  if (!UseTLAB) {
+    return;
+  }
+  for (size_t i = 0; i < _num_regions; i++) {
+    _regions[i]->clear_young_lab_flags();
+  }
+  ShenandoahTagGCLABClosure cl;
+  workers()->threads_do(&cl);
+  for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
+    cl.do_thread(t);
+    ThreadLocalAllocBuffer& tlab = t->tlab();
+    if (tlab.end() != NULL) {
+      ShenandoahHeapRegion* r = heap_region_containing(tlab.start());
+      r->set_young_lab_flag();
+    }
+  }
+}
+
 // Returns size in bytes
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
   if (ShenandoahElasticTLAB) {

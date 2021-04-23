@@ -68,7 +68,7 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahHeapRegion* r = _regions->next();
     while (r != NULL) {
-      if (r->is_young() && r->age() >= InitialTenuringThreshold && (r->is_regular() || r->is_humongous_start())) {
+      if (r->is_young() && r->age() >= InitialTenuringThreshold && ((r->is_regular() && !r->has_young_lab_flag()) || r->is_humongous_start())) {
         // The above condition filtered out humongous continuations, among other states.
         // Here we rely on promote() below promoting related continuation regions when encountering a homongous start.
         size_t promoted = r->promote();
@@ -80,6 +80,7 @@ public:
 };
 
 void ShenandoahYoungGeneration::promote_tenured_regions() {
+  ShenandoahHeap::heap()->set_young_lab_region_flags();
   ShenandoahRegionIterator regions;
   ShenandoahPromoteTenuredRegionsTask task(&regions);
   ShenandoahHeap::heap()->workers()->run_task(&task);
