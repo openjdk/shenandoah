@@ -69,6 +69,13 @@ public:
 ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption) :
   ShenandoahConcurrentGC(generation), _allow_preemption(allow_preemption) {}
 
+void ShenandoahOldGC::entry_old_evacuations() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
+  entry_coalesce_and_fill();
+  old_heuristics->start_old_evacuations();
+}
+
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
@@ -81,11 +88,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // Complete marking under STW
   vmop_entry_final_mark();
 
-  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
-
-  entry_coalesce_and_fill();
-
-  old_heuristics->start_old_evacuations();
+  entry_old_evacuations();
 
   // We aren't dealing with old generation evacuation yet. Our heuristic
   // should not have built a cset in final mark.

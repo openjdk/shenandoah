@@ -493,7 +493,7 @@ void ShenandoahHeap::initialize_heuristics() {
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(NULL),
-  _old_heuristics(NULL),
+  _old_heuristics(nullptr),
   _initial_size(0),
   _used(0),
   _committed(0),

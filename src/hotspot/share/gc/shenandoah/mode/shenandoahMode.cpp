@@ -55,19 +55,18 @@ ShenandoahHeuristics* ShenandoahMode::initialize_heuristics(ShenandoahGeneration
 
 ShenandoahOldHeuristics* ShenandoahMode::initialize_old_heuristics(ShenandoahGeneration* generation) const {
 
-  if (ShenandoahGCHeuristics != NULL) {
-    if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
-      return new ShenandoahAggressiveOldHeuristics(generation);
-    } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
-      return new ShenandoahStaticOldHeuristics(generation);
-    } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
-      return new ShenandoahAdaptiveOldHeuristics(generation);
-    } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
-      return new ShenandoahCompactOldHeuristics(generation);
-    } else {
-      vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
-    }
+  assert(ShenandoahGCHeuristics != NULL, "ShenandoahGCHeuristics should not equal NULL");
+  if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
+    return new ShenandoahAggressiveOldHeuristics(generation);
+  } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
+    return new ShenandoahStaticOldHeuristics(generation);
+  } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
+    return new ShenandoahAdaptiveOldHeuristics(generation);
+  } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
+    return new ShenandoahCompactOldHeuristics(generation);
+  } else {
+    vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
+    ShouldNotReachHere();
+    return NULL;
   }
-  ShouldNotReachHere();
-  return NULL;
 }

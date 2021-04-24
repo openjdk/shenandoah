@@ -123,11 +123,11 @@ public:
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);
 
- protected:
+protected:
 
   virtual bool is_concurrent_mark_in_progress() = 0;
 
- private:
+private:
   void confirm_heuristics_mode();
 };
 

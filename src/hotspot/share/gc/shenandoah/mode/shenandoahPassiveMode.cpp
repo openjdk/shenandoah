@@ -62,9 +62,6 @@ ShenandoahHeuristics* ShenandoahPassiveMode::initialize_heuristics(ShenandoahGen
 }
 
 ShenandoahOldHeuristics* ShenandoahPassiveMode::initialize_old_heuristics(ShenandoahGeneration* generation) const {
-  if (ShenandoahGCHeuristics != NULL) {
-    return new ShenandoahPassiveOldHeuristics(generation);
-  }
-  ShouldNotReachHere();
-  return NULL;
+  assert(ShenandoahGCHeuristics != NULL, "ShenandoahGCHeuristics should not equal NULL");
+  return new ShenandoahPassiveOldHeuristics(generation);
 }
