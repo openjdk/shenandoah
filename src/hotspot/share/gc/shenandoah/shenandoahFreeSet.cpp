@@ -423,11 +423,9 @@ void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
   }
   assert_bounds();
 
-  shenandoah_assert_heaplocked();
-  try_recycle_trashed(r);
-
-  assert(r->is_empty(), "Region must be empty after flipping from mutator to GC.");
-  r->set_affiliation(FREE);
+  // We do not ensure that the region is no longer trash,
+  // relying on try_allocate_in(), which always comes next,
+  // to recycle trash before attempting to allocate anything in the region.
 }
 
 void ShenandoahFreeSet::clear() {
