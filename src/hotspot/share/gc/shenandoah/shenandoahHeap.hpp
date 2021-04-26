@@ -44,6 +44,7 @@
 
 class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
+class PLAB;
 class ShenandoahCollectorPolicy;
 class ShenandoahControlThread;
 class ShenandoahRegulatorThread;
@@ -674,6 +675,7 @@ private:
 public:
   inline RememberedScanner* card_scan() { return _card_scan; }
   void clear_cards_for(ShenandoahHeapRegion* region);
+  void retire_plab(PLAB* plab);
 
 // ---------- Helper functions
 //
