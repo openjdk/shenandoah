@@ -377,7 +377,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       // we have to keep the fwdptr initialized and pointing to our (stale) copy.
       fill_with_object(copy, size);
       shenandoah_assert_correct(NULL, copy_val);
-      card_scan()->register_object(copy);
+      if (target_gen == OLD_GENERATION) {
+        card_scan()->register_object(copy);
+      }
     }
     shenandoah_assert_correct(NULL, result);
     return result;
