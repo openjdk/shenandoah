@@ -853,7 +853,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
 
   // Retire current PLAB, and allocate a new one.
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-  plab->retire();
+  retire_plab(plab);
 
   size_t actual_size = 0;
   HeapWord* plab_buf = allocate_new_plab(min_size, new_size, &actual_size);
@@ -878,6 +878,18 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
   }
   plab->set_buf(plab_buf, actual_size);
   return plab->allocate(size);
+}
+
+void ShenandoahHeap::retire_plab(PLAB* plab) {
+  size_t waste = plab->waste();
+  HeapWord* top = plab->top();
+  plab->retire();
+  if (top != NULL && plab->waste() > waste) {
+    // If retiring the plab created a filler object, then we
+    // need to register it with our card scanner so it can
+    // safely walk the region backing the plab.
+    card_scan()->register_object(top);
+  }
 }
 
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
@@ -1224,7 +1236,7 @@ public:
 
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
     assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
-    plab->retire();
+    ShenandoahHeap::heap()->retire_plab(plab);
     if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_plab_size(thread, 0);
     }
