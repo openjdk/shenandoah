@@ -406,13 +406,14 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 // oop_iterate without closure
 void ShenandoahHeapRegion::oop_fill_and_coalesce() {
   HeapWord* obj_addr = bottom();
-  HeapWord* t = top();
 
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
   if (!is_active()) return;
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
+  // All objects above TAMS are considered live, though their mark bit is not set.
+  HeapWord* t = marking_context->top_at_mark_start(this);
 
   // Expect this to be invoked only from within threads perfoming old-gen GC, and expect
   // old-gen marking to be completed before these threads invoke this service.
