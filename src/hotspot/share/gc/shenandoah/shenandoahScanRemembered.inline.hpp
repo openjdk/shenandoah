@@ -582,8 +582,8 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
             }
           } else if (obj->is_instance()) {
             obj->oop_iterate(cl);
-          } else {
-            // Case 3: Primitive array. Do nothing, no oops there. We use the same
+          } else { 
+            // Case 3: Primitive array. Do nothing -  no oops there. We use the same
             // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
             // We skip iterating over the klass pointer since we know that
             // Universe::TypeArrayKlass never moves.
