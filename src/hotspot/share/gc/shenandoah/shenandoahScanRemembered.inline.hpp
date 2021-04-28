@@ -33,6 +33,7 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 inline size_t
 ShenandoahDirectCardMarkRememberedSet::total_cards() {
@@ -417,26 +418,44 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
   _scc->clear_objects_in_range(addr, length_in_words);
 }
 
-// Scan references within array, starting at start_index and continuing up to, but not including
-// index_bound or memory_bound, whichever comes first.  Return the next index to be scanned within
+// Process references within array, starting at start_index and continuing up to, but not including
+// len or card_end, whichever comes first.  Return the next index to be scanned within
 // array, or len if all entries have been scanned.
 template <typename ClosureType>
 inline uint
-scan_obj_array_upto(ClosureType *cl, objArrayOop array, uint start_index, uint len, HeapWord* memory_bound) {
-  //array->oop_iterate_range(cl, start_index, len);
-  HeapWord *p = array;
-  return(0);
+process_obj_array_upto(ClosureType *cl, objArrayOop array, uint start_index,
+                       uint len, HeapWord* card_end, bool scan) {
+  HeapWord *p = (HeapWord*) array;
+  size_t size = array->size();
+  HeapWord *array_end = p + size;
+  if (array_end <= card_end) {
+    if (scan) {
+      array->oop_iterate_range(cl, start_index, len);
+    }
+    return(len);
+  } else {
+    uint header_size = array->header_size();
+    int count = MIN2((long) CardTable::card_size_in_words,
+                      card_end - p - header_size);
+    int end_index = start_index + count;
+    if (scan) {
+      array->oop_iterate_range(cl, start_index, end_index);
+    }
+    return(end_index);
+  }
 }
 
-// Skip over references within array, starting at start_index and continuing up to, but not including
-// index_bound or memory_bound, whichever comes first.  Return the next index to be scanned within
-// array, or len if all entries have been scanned.
 template <typename ClosureType>
 inline uint
-skip_obj_array_upto(ClosureType *cl, objArrayOop array, uint start_index, uint index_bound, HeapWord* memory_bound) {
-  return(0);
+scan_obj_array_upto(ClosureType *cl, objArrayOop array, uint start_index, uint len, HeapWord* card_end) {
+  return(process_obj_array_upto(cl, array, start_index, len, card_end, true));
 }
 
+template <typename ClosureType>
+inline uint
+skip_obj_array_upto(ClosureType *cl, objArrayOop array, uint start_index, uint len, HeapWord* card_end) {
+  return(process_obj_array_upto(cl, array, start_index, len, card_end, false));
+}
 
 template<typename RememberedSet>
 template <typename ClosureType>
@@ -490,9 +509,9 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
             if (obj->is_objArray()) {
               objArrayOop array = objArrayOop(obj);
               int len = array->length();
-              array->oop_iterate_range(cl, 0, len);
+              //array->oop_iterate_range(cl, 0, len);
                 
-/*              int next_array_index = scan_obj_array_upto(cl, array, 0, len, endp);
+              int next_array_index = scan_obj_array_upto(cl, array, 0, len, endp);
               for (int overreach_card_index = card_index + 1; next_array_index < len; overreach_card_index++) {
                 HeapWord* card_endp = _rs->addr_for_card_index(overreach_card_index) + CardTable::card_size_in_words;
                 if (_rs->is_card_dirty(overreach_card_index)) {
@@ -500,7 +519,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
                 } else {
                   next_array_index = skip_obj_array_upto(cl, array, next_array_index, len, card_endp);
                 }
-                } */
+              }
             } else if (obj->is_instance()) {
               obj->oop_iterate(cl);
             } else {
@@ -550,9 +569,9 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           if (obj->is_objArray()) {
             objArrayOop array = objArrayOop(obj);
             int len = array->length();
-            array->oop_iterate_range(cl, 0, len);
+            //array->oop_iterate_range(cl, 0, len);
             
-            /*            int next_array_index = scan_obj_array_upto(cl, array, 0, len, endp);
+            int next_array_index = skip_obj_array_upto(cl, array, 0, len, endp);
             for (uint overreach_card_index = card_index + 1; next_array_index < len; overreach_card_index++) {
               HeapWord* card_endp = _rs->addr_for_card_index(overreach_card_index) + CardTable::card_size_in_words;
               if (_rs->is_card_dirty(overreach_card_index)) {
@@ -560,7 +579,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
               } else {
                 next_array_index = skip_obj_array_upto(cl, array, next_array_index, len, card_endp);
               }
-              }*/
+            }
           } else if (obj->is_instance()) {
             obj->oop_iterate(cl);
           } else {
