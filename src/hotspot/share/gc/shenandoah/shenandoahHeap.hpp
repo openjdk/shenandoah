@@ -53,6 +53,7 @@ class ShenandoahGCStateResetter;
 class ShenandoahGeneration;
 class ShenandoahYoungGeneration;
 class ShenandoahHeuristics;
+class ShenandoahOldHeuristics;
 class ShenandoahMarkingContext;
 class ShenandoahPhaseTimings;
 class ShenandoahHeap;
@@ -147,6 +148,7 @@ class ShenandoahHeap : public CollectedHeap {
 private:
   ShenandoahHeapLock _lock;
   ShenandoahGeneration* _gc_generation;
+  ShenandoahOldHeuristics* _old_heuristics;
 
 public:
   ShenandoahHeapLock* lock() {
@@ -160,6 +162,10 @@ public:
 
   void set_gc_generation(ShenandoahGeneration* generation) {
     _gc_generation = generation;
+  }
+
+  ShenandoahOldHeuristics* old_heuristics() {
+    return _old_heuristics;
   }
 
   bool is_gc_generation_young() const;
@@ -675,6 +681,7 @@ private:
 public:
   inline RememberedScanner* card_scan() { return _card_scan; }
   void clear_cards_for(ShenandoahHeapRegion* region);
+  void mark_card_as_dirty(HeapWord* location);
   void retire_plab(PLAB* plab);
 
 // ---------- Helper functions
