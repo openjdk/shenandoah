@@ -428,6 +428,9 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
   //HeapWord *p = (HeapWord*) array;
   size_t size = array->size();
   HeapWord *array_end = p + size;
+  /*  if (len > 128) {
+    printf("big! %p\n", p);
+    }*/
   if (array_end <= card_end) {
     if (scan) {
       array->oop_iterate_range(cl, start_index, len);
@@ -435,13 +438,15 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
     return(len);
   } else {
     uint header_size = array->header_size();
-    int count = MIN2((long) CardTable::card_size_in_words,
-                      card_end - p - header_size);
-    int end_index = start_index + count;
-    if (scan) {
-      array->oop_iterate_range(cl, start_index, end_index);
+    if (p + header_size > card_end) {
+      return(0);  // Wait to pass over the header
+    } else {
+      int end_index = card_end - (p + header_size);  
+      if (scan) {
+        array->oop_iterate_range(cl, start_index, end_index);
+      }
+      return(end_index);
     }
-    return(end_index);
   }
 }
 
