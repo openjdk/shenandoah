@@ -626,9 +626,8 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
     return;
   }
 
-  BarrierSet* bs = BarrierSet::barrier_set();
-  ShenandoahBarrierSet* ctbs = barrier_set_cast<ShenandoahBarrierSet>(bs);
-  CardTable* ct = ctbs->card_table();
+  ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
+  CardTable* ct = bs->card_table();
 
   Label L_loop, L_done;
   const Register end = count;
