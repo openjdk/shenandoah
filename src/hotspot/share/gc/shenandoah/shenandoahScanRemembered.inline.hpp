@@ -425,12 +425,11 @@ template <typename ClosureType>
 inline uint
 process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint start_index,
                        uint len, HeapWord* card_end, bool scan) {
-  //HeapWord *p = (HeapWord*) array;
   size_t size = array->size();
   HeapWord *array_end = p + size;
-  /*  if (len > 128) {
-    printf("big! %p\n", p);
-    }*/
+  if (len > 150) {
+    //printf("big! %d %p\n", len, p);
+  }
   if (array_end <= card_end) {
     if (scan) {
       array->oop_iterate_range(cl, start_index, len);
