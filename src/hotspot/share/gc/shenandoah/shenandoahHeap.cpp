@@ -221,7 +221,8 @@ jint ShenandoahHeap::initialize() {
   //
   if (mode()->is_generational()) {
     ShenandoahDirectCardMarkRememberedSet *rs;
-    size_t card_count = ShenandoahBarrierSet::barrier_set()->card_table()->cards_required(heap_rs.size() / HeapWordSize) - 1;
+    ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
+    size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize) - 1;
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
   }
@@ -494,6 +495,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(NULL),
   _old_heuristics(nullptr),
+  _mixed_evac(false),
   _initial_size(0),
   _used(0),
   _committed(0),
@@ -938,39 +940,24 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
   ShenandoahHeapLocker locker(lock());
   HeapWord* result = _free_set->allocate(req, in_new_region);
-  // Register the newly allocated object while we're holding the global lock since there's no synchronization
-  // built in to the implementation of register_object().  There are potential races when multiple independent
-  // threads are allocating objects, some of which might span the same card region.  For example, consider
-  // a card table's memory region within which three objects are being allocated by three different threads:
-  //
-  // objects being "concurrently" allocated:
-  //    [-----a------][-----b-----][--------------c------------------]
-  //            [---- card table memory range --------------]
-  //
-  // Before any objects are allocated, this card's memory range holds no objects.  Note that:
-  //   allocation of object a wants to set the has-object, first-start, and last-start attributes of the preceding card region.
-  //   allocation of object b wants to set the has-object, first-start, and last-start attributes of this card region.
-  //   allocation of object c also wants to set the has-object, first-start, and last-start attributes of this card region.
-  //
-  // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as last-start
-  // representing object b while first-start represents object c.  This is why we need to require all register_object()
-  // invocations to be "mutually exclusive".  Later, when we use GCLABs to allocate memory for promotions and evacuations,
-  // the protocol may work something like the following:
-  //   1. The GCLAB is allocated by this (or similar) function, while holding the global lock.
-  //   2. The GCLAB is registered as a single object.
-  ///  3. The GCLAB is always aligned at the start of a card memory range and is always a multiple of the card-table memory range size
-  //   3. Individual allocations carved from the GCLAB are not immediately registered
-  //   4. When the GCLAB is eventually retired, all of the objects allocated within the GCLAB are registered in batch by a
-  //      single thread.  No further synchronization is required because no other allocations will pertain to the same
-  //      card-table memory ranges.
-  //
-  // The other case that needs special handling is promotion of regions en masse.  When the region is promoted, all objects contained
-  // within the region are registered.  Since the region is a multiple of card-table memory range sizes, there is no need for
-  // synchronization.  It might be nice to figure out how to allow multiple threads to work together to register all of the objects in
-  // a promoted region, or at least try to balance the efforts so that different gc threads work on registering the objects of
-  // different heap regions.  But that effort will come later.
-  //
   if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+    // Register the newly allocated object while we're holding the global lock since there's no synchronization
+    // built in to the implementation of register_object().  There are potential races when multiple independent
+    // threads are allocating objects, some of which might span the same card region.  For example, consider
+    // a card table's memory region within which three objects are being allocated by three different threads:
+    //
+    // objects being "concurrently" allocated:
+    //    [-----a------][-----b-----][--------------c------------------]
+    //            [---- card table memory range --------------]
+    //
+    // Before any objects are allocated, this card's memory range holds no objects.  Note that:
+    //   allocation of object a wants to set the has-object, first-start, and last-start attributes of the preceding card region.
+    //   allocation of object b wants to set the has-object, first-start, and last-start attributes of this card region.
+    //   allocation of object c also wants to set the has-object, first-start, and last-start attributes of this card region.
+    //
+    // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as last-start
+    // representing object b while first-start represents object c.  This is why we need to require all register_object()
+    // invocations to be "mutually exclusive".
     ShenandoahHeap::heap()->card_scan()->register_object(result);
   }
   return result;
@@ -1697,6 +1684,10 @@ void ShenandoahHeap::manage_satb_barrier(bool active) {
 
 void ShenandoahHeap::set_evacuation_in_progress(bool in_progress) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Only call this at safepoint");
+
+  printf("setting evacuation_in_progress to %d\n", in_progress);
+  fflush(stdout);
+
   set_gc_state_mask(EVACUATION, in_progress);
 }
 
@@ -2018,29 +2009,34 @@ class ShenandoahUpdateHeapRefsTask : public AbstractGangTask {
 private:
   ShenandoahHeap* _heap;
   ShenandoahRegionIterator* _regions;
+  bool _mixed_evac;             // true iff most recent evacuation includes old-gen HeapRegions
+
 public:
-  ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions) :
+  ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions, bool mixed_evac) :
     AbstractGangTask("Shenandoah Update References"),
     _heap(ShenandoahHeap::heap()),
-    _regions(regions) {
+    _regions(regions),
+    _mixed_evac(mixed_evac)
+  {
   }
 
   void work(uint worker_id) {
     if (CONCURRENT) {
       ShenandoahConcurrentWorkerSession worker_session(worker_id);
       ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
-      do_work<ShenandoahConcUpdateRefsClosure>();
+      do_work<ShenandoahConcUpdateRefsClosure>(worker_id);
     } else {
       ShenandoahParallelWorkerSession worker_session(worker_id);
-      do_work<ShenandoahSTWUpdateRefsClosure>();
+      do_work<ShenandoahSTWUpdateRefsClosure>(worker_id);
     }
   }
 
 private:
   template<class T>
-  void do_work() {
+  void do_work(uint worker_id) {
     T cl;
     ShenandoahHeapRegion* r = _regions->next();
+
     // We update references for global, old, and young collections.
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
@@ -2049,30 +2045,55 @@ private:
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
 
+      printf("SUHRT::do_work(%u), region [%llx, %llx]\n", worker_id,
+           (unsigned long long) r->bottom(), (unsigned long long) r->end());
+
       if (r->is_active() && !r->is_cset()) {
         if (!_heap->mode()->is_generational() || r->affiliation() == YOUNG_GENERATION) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
         } else {
           assert(r->affiliation() == OLD_GENERATION, "Should not be updating references on FREE regions");
-          if (!_heap->is_gc_generation_young()) {
-            // Old region in an old or global cycle.
-            // We need to make sure that the next cycle does not iterate over dead objects
-            // which haven't had their references updated.
-            r->oop_iterate(&cl, /*fill_dead_objects*/ true, /* reregister_coalesced_objects */ true);
+          if (_heap->active_generation()->generation_mode() == GLOBAL) {
+            // This code is only relevant to GLOBAL GC.  With OLD GC, all coalescing and filling is done before any relevant
+            // evacuations.
+
+            // This is an old region in a global cycle.  Make sure that the next cycle does not iterate over dead objects
+            // which haven't had their references updated.  This is not a promotion.
+            r->oop_iterate_and_fill_dead(&cl, /* is_promotion */false);
           } else {
-            // Old region in a young cycle.
-            if (!ShenandoahUseSimpleCardScanning) {
-              _heap->card_scan()->process_region(r, &cl);
-            } else if (ShenandoahBarrierSet::barrier_set()->card_table()->is_dirty(MemRegion(r->bottom(), r->top()))) {
+            // Old region in a young cycle or mixed cycle.
+            if (ShenandoahUseSimpleCardScanning) {
+              // TODO: deprecate the ShenandoahUseSimpleCardScanning command-line option.
+              assert(false, "ShenandoahUseSimpleCardScanning is no longer supported");
+            } else if (!_mixed_evac) {
+              printf("UpdateRefs is scanning remembered set for old-gen region [%llx, %llx]\n",
+                     (unsigned long long) r->bottom(), (unsigned long long) r->top());
+              fflush(stdout);
+              _heap->card_scan()->process_region(worker_id, r, &cl, true);
+            } else {
+              // This is a _mixed_evac.
+              //
+              // TODO: For _mixed_evac, consider building an old-gen remembered set that allows restricted updating
+              // within old-gen HeapRegions.  This remembered set can be constructed by old-gen concurrent marking
+              // and augmented by card marking.  For example, old-gen concurrent marking can remember for each old-gen
+              // card which other old-gen regions it refers to: none, one-other specifically, multiple-other non-specific.
+              // Update-references when _mixed_evac processess each old-gen memory range that has a traditional DIRTY
+              // card or if the "old-gen remembered set" indicates that this card holds pointers specifically to an
+              // old-gen region in the most recent collection set, or if this card holds pointers to other non-specific
+              // old-gen heap regions.
               if (r->is_humongous()) {
                 r->oop_iterate_humongous(&cl);
               } else {
-                // We don't have liveness information about this region.
-                // Therefore we process all objects, rather than just marked ones.
-                // Otherwise subsequent traversals will encounter stale pointers.
+                // Since this was a mixed evacuation, all old-gen dead objects within this region were already coalesced
+                // and filled.  Any non-filled object within the region was live (and is still considered live) at the end
+                // of old-gen concurrent mark.  Following mixed evacuation, both old-gen and young-gen objects may have been
+                // relocated.  Updating refs to old-gen objects requires entirety of each old-gen non-collected region to be
+                // scanned (i.e. we cannot restrict scanning to DIRTY cards).
                 HeapWord *p = r->bottom();
                 ShenandoahObjectToOopBoundedClosure<T> objs(&cl, p, update_watermark);
-                // Anything beyond update_watermark is not yet allocated or initialized.
+
+                // Anything beyond update_watermark was allocated during evacuation.  Thus, it is known to not hold
+                // references to collection set objects.
                 while (p < update_watermark) {
                   oop obj = oop(p);
                   objs.do_object(obj);
@@ -2098,10 +2119,10 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
 
   if (concurrent) {
-    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator);
+    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, _mixed_evac);
     workers()->run_task(&task);
   } else {
-    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator);
+    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, _mixed_evac);
     workers()->run_task(&task);
   }
 }

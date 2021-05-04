@@ -88,6 +88,14 @@ public:
     ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
     ShenandoahReferenceProcessor* rp = heap->ref_processor();
     assert(rp != NULL, "need reference processor");
+
+    // The first of potentially many concurrent marking worker threads takes responsibility for clearing the old
+    // remember set in preparation for the start of the next GC cycle.  The remembered set was scanned concurrently
+    // during initial concurrent marking and its content is no longer needed.
+    if ((GENERATION == YOUNG) && (worker_id == 0)) {
+      heap->card_scan()->clear_old_remset();
+    }
+
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
                    true, // cancellable
                    ShenandoahStringDedup::is_enabled()); // perform string dedup

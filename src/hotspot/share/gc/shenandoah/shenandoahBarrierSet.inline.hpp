@@ -58,11 +58,20 @@ inline oop ShenandoahBarrierSet::resolve_forwarded_not_null_mutator(oop p) {
 
 template <class T>
 inline oop ShenandoahBarrierSet::load_reference_barrier_mutator(oop obj, T* load_addr) {
+
   assert(ShenandoahLoadRefBarrier, "should be enabled");
   shenandoah_assert_in_cset(load_addr, obj);
 
   oop fwd = resolve_forwarded_not_null_mutator(obj);
   if (obj == fwd) {
+    // Barrier is still enabled during update-refs, but by the time we
+    // get to update-refs, we should not need to be evacuating.
+
+    if (!_heap->is_evacuation_in_progress()) {
+      printf("We have failed to evacuate object @%llx\n", (unsigned long long) (void *) obj);
+      fflush(stdout);
+    }
+
     assert(_heap->is_evacuation_in_progress(),
            "evac should be in progress");
     Thread* const t = Thread::current();

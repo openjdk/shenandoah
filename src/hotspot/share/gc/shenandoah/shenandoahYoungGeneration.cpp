@@ -73,7 +73,7 @@ public:
         // for promoting the continuation regions so we need this guard here to
         // keep other worker threads from trying to promote the continuations.
         if (r->age() >= InitialTenuringThreshold && !r->is_humongous_continuation()) {
-          size_t promoted = r->promote();
+          size_t promoted = r->promote(false);
           Atomic::add(&_promoted, promoted);
         }
       }
@@ -97,17 +97,11 @@ void ShenandoahYoungGeneration::promote_all_regions() {
   for (size_t index = 0; index < heap->num_regions(); index++) {
     ShenandoahHeapRegion* r = heap->get_region(index);
     if (r->is_young()) {
-      r->promote();
+      r->promote(true);
     }
   }
   assert(_affiliated_region_count == 0, "young generation must not have affiliated regions after reset");
   _used = 0;
-
-  // HEY! Better to use a service of ShenandoahScanRemembered for the following.
-
-  // We can clear the entire card table here because we've just promoted all
-  // young regions to old, so there can be no old->young pointers at this point.
-  ShenandoahBarrierSet::barrier_set()->card_table()->clear();
 }
 
 bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {

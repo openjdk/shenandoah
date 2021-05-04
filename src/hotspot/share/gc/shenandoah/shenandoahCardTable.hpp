@@ -33,8 +33,14 @@
 class ShenandoahCardTable: public CardTable {
   friend class VMStructs;
 
+protected:
+  CardValue* _read_byte_map;
+  CardValue* _write_byte_map;
+  CardValue* _read_byte_map_base;
+  CardValue* _write_byte_map_base;
+
 public:
-  ShenandoahCardTable(MemRegion whole_heap): CardTable(whole_heap) { }
+  ShenandoahCardTable(MemRegion whole_heap) : CardTable(whole_heap) { }
 
   virtual void initialize();
 
@@ -43,6 +49,36 @@ public:
   bool is_dirty(MemRegion mr);
 
   void clear();
+
+  // After remembered set scanning has completed, clear the read_card_table
+  // so that it can instantaneously become the write_card_table at the
+  // time of next swap_card_tables() invocation.
+  //
+  // Since this effort is memory bound, we do not expect the work to
+  // be divided between many concurrent GC worker threads.  Following
+  // remembered set scanning, one worker thread clears the read table
+  // while the other GC worker threads begin processing the content of
+  // the mark closures.
+  void clear_read_table();
+
+  // Exchange the roles of the read and write card tables.
+  void swap_card_tables();
+
+  CardValue* read_byte_map() {
+    return _read_byte_map;
+  }
+
+  CardValue* write_byte_map() {
+    return _write_byte_map;
+  }
+
+  CardValue* read_byte_map_base() {
+    return _read_byte_map_base;
+  }
+
+  CardValue* write_byte_map_base() {
+    return _write_byte_map_base;
+  }
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP

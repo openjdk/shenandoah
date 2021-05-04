@@ -266,13 +266,42 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
     shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
 
     if (in_generation<GENERATION>(obj)) {
+
+#define KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+      if (GCId::current() > 11) {
+        printf("mtr<%s> %llx->%llx\n", (GENERATION == OLD? "O": "Y"),
+               (unsigned long long) p, (unsigned long long) (void *) obj);
+        fflush(stdout);
+      }
+#endif
+      
       mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
+
+      if ((GENERATION == YOUNG) && ShenandoahHeap::heap()->is_in(p) && ShenandoahHeap::heap()->is_in_old(p)) {
+        // Mark card as dirty because remembered set scanning still finds interesting pointer.
+
+        printf("IM:mtr dirty @%llx: @%llx-> %llx\n",
+               0xfffffffffffffe00L & (unsigned long long) (p), (unsigned long long) p, (unsigned long long) (void *) obj);
+        fflush(stdout);
+
+        ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
+      }
     } else if (old != nullptr) {
+
+      if (GCId::current() > 11) {
+        printf("mtr bootstrap old: %llx->%llx\n", (unsigned long long) p, (unsigned long long) (void *) obj);
+        fflush(stdout);
+      }
+
       // Young mark, bootstrapping old.
       mark_ref<STRING_DEDUP>(old, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
     } else if (GENERATION == OLD) {
+      // TODO: not sure we actually need this.  This is probably redundant with marking of cards
+      // identified during young-gen remembered set scanning.
+
       // Old mark, found a young pointer.
       assert(ShenandoahHeap::heap()->is_in_young(obj), "Expected young object.");
       ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);

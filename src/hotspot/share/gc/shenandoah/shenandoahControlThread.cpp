@@ -244,6 +244,9 @@ void ShenandoahControlThread::run_service() {
         heap->free_set()->log_status();
       }
 
+      printf("GC was requested, ShenandoahLoadRefBarrier is 0x%llx\n", (unsigned long long) ShenandoahLoadRefBarrier);
+      fflush(stdout);
+
       {
         switch (_mode) {
           case concurrent_normal: {
@@ -575,6 +578,9 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   //
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) return;
+
+      printf("service_concurrent_cycle A, ShenandoahLoadRefBarrier is 0x%llx\n", (unsigned long long) ShenandoahLoadRefBarrier);
+      fflush(stdout);
 
   GCIdMark gc_id_mark;
   ShenandoahGCSession session(cause, generation);

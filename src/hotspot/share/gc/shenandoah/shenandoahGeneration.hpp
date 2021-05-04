@@ -83,7 +83,9 @@ public:
 
   // Used by concurrent and degenerated GC to reset regions.
   void prepare_gc();
-  void prepare_regions_and_collection_set(bool concurrent);
+
+  // Return true iff prepared collection set includes at least one old-gen HeapRegion.
+  bool prepare_regions_and_collection_set(bool concurrent);
 
   // Cancel marking (used by Full collect and when cancelling cycle).
   void cancel_marking();
@@ -115,6 +117,7 @@ public:
   virtual void reserve_task_queues(uint workers);
   virtual ShenandoahObjToScanQueueSet* old_gen_task_queues() const;
 
+  // Scan remembered set at start of concurrent young-gen marking. */
   void scan_remembered_set();
 
   void increment_affiliated_region_count();

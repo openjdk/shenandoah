@@ -36,8 +36,6 @@
 
 class ShenandoahConcurrentCoalesceAndFillTask : public AbstractGangTask {
 private:
-  // remember nworkers, coalesce_and_fill_region_array,coalesce_and_fill_regions_count
-
   uint _nworkers;
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   uint _coalesce_and_fill_region_count;

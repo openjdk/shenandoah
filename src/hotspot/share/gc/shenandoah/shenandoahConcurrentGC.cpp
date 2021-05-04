@@ -65,7 +65,12 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // Start initial mark under STW
   vmop_entry_init_mark();
 
-    // Concurrent mark roots
+  // Concurrent remembered set scanning
+  if (_generation->generation_mode() == YOUNG) {
+    _generation->scan_remembered_set();
+  }
+
+  // Concurrent mark roots
   entry_mark_roots();
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle)) return false;
 
@@ -190,7 +195,7 @@ void ShenandoahConcurrentGC::entry_init_mark() {
   ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
                               ShenandoahWorkerPolicy::calc_workers_for_init_marking(),
                               "init marking");
-
+  ShenandoahHeap::heap()->card_scan()->swap_remset();
   op_init_mark();
 }
 
@@ -214,6 +219,9 @@ void ShenandoahConcurrentGC::entry_init_updaterefs() {
 
   // No workers used in this phase, no setup required
   op_init_updaterefs();
+
+  printf("@ end of entry_init_updaterefs, ShenandoahLoadRefBarrier is %d\n", ShenandoahLoadRefBarrier);
+  fflush(stdout);
 }
 
 void ShenandoahConcurrentGC::entry_final_updaterefs() {
@@ -450,6 +458,12 @@ public:
       // Check if region needs updating its TAMS. We have updated it already during concurrent
       // reset, so it is very likely we don't need to do another write here.
       if (_ctx->top_at_mark_start(r) != r->top()) {
+        // Note that most regions are not "active", so I don't have to
+        // capture TAMS for very many heap regions.
+        printf("@ init_mark (I think), capturing TAMS (%llx) for region @%llx, which is %s\n",
+               (unsigned long long) r->top(), 
+               (unsigned long long) r->bottom(), (r->is_old()? "OLD": (r->is_young()? "YOUNG": "OTHER(GLOBAL)")));
+        fflush(stdout);
         _ctx->capture_top_at_mark_start(r);
       }
     } else {
@@ -494,10 +508,6 @@ void ShenandoahConcurrentGC::op_init_mark() {
   // Make above changes visible to worker threads
   OrderAccess::fence();
 
-  if (_generation->generation_mode() == YOUNG) {
-    _generation->scan_remembered_set();
-  }
-
   // Arm nmethods for concurrent marking. When a nmethod is about to be executed,
   // we need to make sure that all its metadata are marked. alternative is to remark
   // thread roots at final mark pause, but it can be potential latency killer.
@@ -535,7 +545,8 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Notify JVMTI that the tagmap table will need cleaning.
     JvmtiTagMap::set_needs_cleaning();
 
-    _generation->prepare_regions_and_collection_set(true /*concurrent*/);
+    bool mixed_evac = _generation->prepare_regions_and_collection_set(true /*concurrent*/);
+    heap->set_mixed_evac(mixed_evac);
 
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();

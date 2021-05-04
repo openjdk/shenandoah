@@ -46,6 +46,7 @@ class ShenandoahConcurrentGC : public ShenandoahGC {
 private:
   ShenandoahConcurrentMark    _mark;
   ShenandoahDegenPoint        _degen_point;
+  bool                        _mixed_evac; // true iff most recent evacuation includes old-gen HeapRegions
 
 protected:
   ShenandoahGeneration* const _generation;

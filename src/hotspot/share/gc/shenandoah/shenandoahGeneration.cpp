@@ -142,7 +142,10 @@ void ShenandoahGeneration::prepare_gc() {
   parallel_heap_region_iterate(&cl);
 }
 
-void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
+// Returns true iff the chosen collection set includes a mix of young-gen and old-gen regions.
+bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
+  bool result;
+
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   {
@@ -159,7 +162,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
     ShenandoahHeapLocker locker(heap->lock());
     heap->collection_set()->clear();
-    _heuristics->choose_collection_set(heap->collection_set(), heap->old_heuristics());
+    result = _heuristics->choose_collection_set(heap->collection_set(), heap->old_heuristics());
   }
 
   {
@@ -168,6 +171,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->rebuild();
   }
+  return result;
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {
@@ -244,16 +248,14 @@ ShenandoahObjToScanQueueSet* ShenandoahGeneration::old_gen_task_queues() const {
 }
 
 void ShenandoahGeneration::scan_remembered_set() {
-  shenandoah_assert_safepoint();
   assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  // TODO: Add a phase for rset scan.
-  // ShenandoahGCPhase phase(ShenandoahPhaseTimings::finish_mark);
+
   uint nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 
-  ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_scan_rset);
+  ShenandoahConcurrentPhase gc_phase("Concurrent remembered set scanning", ShenandoahPhaseTimings::init_scan_rset);
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
   ShenandoahRegionIterator regions;
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &regions);

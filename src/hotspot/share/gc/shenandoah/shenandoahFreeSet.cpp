@@ -112,14 +112,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           HeapWord* result = try_allocate_in(r, req, in_new_region);
           if (result != NULL) {
             if (r->is_old()) {
-              // HEY! This is a very coarse card marking. We hope to repair
-              // such cards during remembered set scanning.
-
-              // HEY! To support full generality with alternative remembered set implementations,
-              // is preferable to not make direct access to the current card_table implementation.
-              //  Try ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(result, req.actual_size());
-
-              ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(result, req.actual_size()));
+              // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
+              // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
+              // do this in batch, in a background GC thread than to try to carefully dirty only cards
+              // that hold interesting pointers right now.
+              ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(result, req.actual_size());
             }
             return result;
           }
@@ -145,14 +142,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
             HeapWord *result = try_allocate_in(r, req, in_new_region);
             if (result != NULL) {
               if (r->is_old()) {
-                // HEY! This is a very coarse card marking. We hope to repair
-                // such cards during remembered set scanning.
-
-                // HEY! To support full generality with alternative remembered set implementations,
-                // is preferable to not make direct access to the current card_table implementation.
-                //  Try ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(result, req.actual_size());
-
-                ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(result, req.actual_size()));
+                // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
+                // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
+                // do this in batch, in a background GC thread than to try to carefully dirty only cards
+                // that hold interesting pointers right now.
+                ShenandoahHeap::heap()->card_scan()->mark_range_as_dirty(result, req.actual_size());
               }
               return result;
             }

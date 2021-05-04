@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Amazon.com, Inc. and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,11 +23,38 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 
 void ShenandoahCardTable::initialize() {
   CardTable::initialize();
+  _write_byte_map = _byte_map;
+  _write_byte_map_base = _byte_map_base;
+  const size_t rs_align = _page_size == (size_t) os::vm_page_size() ? 0 :
+    MAX2(_page_size, (size_t) os::vm_allocation_granularity());
+
+  ReservedSpace heap_rs(_byte_map_size, rs_align, false);
+  if (!heap_rs.is_reserved()) {
+    vm_exit_during_initialization("Could not reserve enough space for second copy of card marking array");
+  }
+  os::commit_memory_or_exit(heap_rs.base(), _byte_map_size, rs_align, false, "Cannot commit memory for second copy of card table");
+
+  HeapWord* low_bound  = _whole_heap.start();
+  _read_byte_map = (CardValue*) heap_rs.base();
+  _read_byte_map_base = _read_byte_map - (uintptr_t(low_bound) >> card_shift);
+
+  log_trace(gc, barrier)("ShenandoahCardTable::ShenandoahCardTable: ");
+  log_trace(gc, barrier)("    &_read_byte_map[0]: " INTPTR_FORMAT "  &_read_byte_map[_last_valid_index]: " INTPTR_FORMAT,
+                  p2i(&_read_byte_map[0]), p2i(&_read_byte_map[_last_valid_index]));
+  log_trace(gc, barrier)("    _read_byte_map_base: " INTPTR_FORMAT, p2i(_read_byte_map_base));
+
+  // TODO: Understand the role of _guard_region.  It would appear we might need two versions of
+  // the _guard_region, and switch between them every time we swap roles of _read_byte_map and
+  // _write_byte_map, or leave both "guards" enabled at all times.  Is this about detecting
+  // expansion of the underlying heap and the need to expand the card table?  Seems there would
+  // be easier ways to deal with this.
+
   resize_covered_region(_whole_heap);
 }
 
@@ -47,4 +74,29 @@ bool ShenandoahCardTable::is_dirty(MemRegion mr) {
 
 void ShenandoahCardTable::clear() {
   CardTable::clear(_whole_heap);
+}
+
+void ShenandoahCardTable::clear_read_table() {
+
+  // Let the compiler figure out how to unroll this loop in order to
+  // overwrite more than a single byte per iteration.
+  for (uint i = 0; i < _byte_map_size; i++) {
+    _read_byte_map[i] = clean_card;
+  }
+}
+
+void ShenandoahCardTable::swap_card_tables() {
+  shenandoah_assert_safepoint();
+
+  CardValue* save_value = _read_byte_map;
+  _read_byte_map = _write_byte_map;
+  _write_byte_map = save_value;
+
+  save_value = _read_byte_map_base;
+  _read_byte_map_base = _write_byte_map_base;
+  _write_byte_map_base = save_value;
+
+  // update the superclass instance variables
+  _byte_map = _write_byte_map;
+  _byte_map_base = _write_byte_map_base;
 }

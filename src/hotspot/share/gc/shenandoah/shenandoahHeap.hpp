@@ -148,6 +148,7 @@ private:
   ShenandoahHeapLock _lock;
   ShenandoahGeneration* _gc_generation;
   ShenandoahOldHeuristics* _old_heuristics;
+  bool _mixed_evac;             // true iff most recent evac included at least one old-gen HeapRegion
 
 public:
   ShenandoahHeapLock* lock() {
@@ -161,6 +162,10 @@ public:
 
   void set_gc_generation(ShenandoahGeneration* generation) {
     _gc_generation = generation;
+  }
+
+  void set_mixed_evac(bool mixed_evac) {
+    _mixed_evac = mixed_evac;
   }
 
   ShenandoahOldHeuristics* old_heuristics() {

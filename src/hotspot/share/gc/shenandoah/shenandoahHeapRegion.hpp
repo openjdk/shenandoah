@@ -363,7 +363,14 @@ public:
   // coalesce contiguous spans of garbage objects by filling header and reregistering start locations with remembered set.
   void oop_fill_and_coalesce();
 
+#ifdef DEPRECATED
   void oop_iterate(OopIterateClosure* cl, bool fill_dead_objects = false, bool reregister_coalesced_objects = false);
+#else
+  // If this region is being promoted, we have to register marked objects while coalescing and filling the unmarked
+  // objects.  Otherwise, this is an old-region that was not part of the collection set.  We coalesce the dead objects,
+  // but do not need to register the live objects as they are already registered.
+  void oop_iterate_and_fill_dead(OopIterateClosure* cl, bool being_promoted);
+#endif
   void oop_iterate_humongous(OopIterateClosure* cl);
 
   HeapWord* block_start(const void* p) const;
@@ -406,16 +413,34 @@ public:
   void increment_age() { if (_age < markWord::max_age) { _age++; } }
   void reset_age()     { _age = 0; }
 
-  // If this is a humongous start, returns the number of regions in the object.
-  size_t promote();
+  // Adjusts remembered set information, by setting all cards to clean
+  // if promoting all, and setting all cards to dirty otherwise.
+  //
+  // Returns the number of regions promoted, which is generally one,
+  // but may be greater than 1 if this is humongous region with
+  // multiple continuations.
+  size_t promote(bool promoting_all);
 
 private:
   void do_commit();
   void do_uncommit();
 
+#ifdef DEPRECATE
   void oop_iterate_objects(OopIterateClosure* cl, bool fill_dead_objects, bool reregister_coalesced_objects);
   void oop_iterate_objects(bool fill_dead_objects, bool reregister_coalesced_objects);
+#else
+  // If this region is being promoted, we have to register marked objects while coalescing and filling the unmarked
+  // objects.  Otherwise, this is an old-region that was not part of the collection set.  We coalesce the dead objects,
+  // but do not need to register the live objects as they are already registered.
+  void oop_iterate_objects_and_fill_dead(OopIterateClosure* cl, bool being_promoted);
 
+  // Process the contents of a region when it is being promoted en masse by registering each marked object, also
+  // coalescing contiguous ranges of unmarked objects into registered dead objects.
+  void fill_dead_and_register();
+
+  // maybe this is not even needed: void fill_dead();
+  // ShenandoahOldGC::entry_coalesce_and_fill() does the same.
+#endif
   inline void internal_increase_live_data(size_t s);
 
   void set_state(RegionState to);

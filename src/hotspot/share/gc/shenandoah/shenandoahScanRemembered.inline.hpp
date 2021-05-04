@@ -50,33 +50,39 @@ ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) {
 }
 
 inline bool
+ShenandoahDirectCardMarkRememberedSet::is_write_card_dirty(size_t card_index) {
+  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+  return (bp[0] == CardTable::dirty_card_val());
+}
+
+inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(size_t card_index) {
-  uint8_t *bp = &_byte_map[card_index];
+  uint8_t *bp = &(_card_table->read_byte_map())[card_index];
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_dirty(size_t card_index) {
-  uint8_t *bp = &_byte_map[card_index];
+  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
   bp[0] = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(size_t card_index, size_t num_cards) {
-  uint8_t *bp = &_byte_map[card_index];
+  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
   while (num_cards-- > 0)
     *bp++ = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_clean(size_t card_index) {
-  uint8_t *bp = &_byte_map[card_index];
+  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
   bp[0] = CardTable::clean_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(size_t card_index, size_t num_cards) {
-  uint8_t *bp = &_byte_map[card_index];
+  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
   while (num_cards-- > 0)
     *bp++ = CardTable::clean_card_val();
 }
@@ -89,34 +95,40 @@ ShenandoahDirectCardMarkRememberedSet::mark_overreach_card_as_dirty(size_t card_
 
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) {
-  uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
+  uint8_t *bp = &(_card_table->read_byte_map_base())[uintptr_t(p) >> _card_shift];
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_dirty(HeapWord *p) {
-  uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
+  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
   bp[0] = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(HeapWord *p, size_t num_heap_words) {
-  uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
-  uint8_t *end_bp = &_byte_map_base[uintptr_t(p + num_heap_words) >> _card_shift];
+  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
+  uint8_t *end_bp = &(_card_table->write_byte_map_base())[uintptr_t(p + num_heap_words) >> _card_shift];
+  // If (p + num_heap_words) is not aligned on card boundary, we also need to dirty last card.
+  if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size - 1))
+    end_bp++;
   while (bp < end_bp)
     *bp++ = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_clean(HeapWord *p) {
-  uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
+  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
   bp[0] = CardTable::clean_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, size_t num_heap_words) {
-  uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
-  uint8_t *end_bp = &_byte_map_base[uintptr_t(p + num_heap_words) >> _card_shift];
+  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
+  uint8_t *end_bp = &(_card_table->write_byte_map_base())[uintptr_t(p + num_heap_words) >> _card_shift];
+  // If (p + num_heap_words) is not aligned on card boundary, we also need to clean last card.
+  if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size - 1))
+    end_bp++;
   while (bp < end_bp)
     *bp++ = CardTable::clean_card_val();
 }
@@ -132,9 +144,33 @@ ShenandoahDirectCardMarkRememberedSet::cluster_count() {
   return _cluster_count;
 }
 
+// No lock required because arguments align with card boundaries.
+template<typename RememberedSet>
+inline void
+ShenandoahCardCluster<RememberedSet>::reset_object_range(HeapWord* from, HeapWord* to) {
+  assert(((((unsigned long long) from) & (CardTable::card_size - 1)) == 0) &&
+         ((((unsigned long long) to) & (CardTable::card_size - 1)) == 0),
+         "reset_object_range bounds must align with card boundaries");
+  size_t card_at_start = _rs->card_index_for_addr(from);
+  size_t num_cards = (to - from) / CardTable::card_size_in_words;
+
+  for (size_t i = 0; i < num_cards; i++) {
+    object_starts[card_at_start + i] = 0;
+  }
+}
+
+// Assume only one thread at a time registers objects pertaining to
+// each card-table entry's range of memory.
 template<typename RememberedSet>
 inline void
 ShenandoahCardCluster<RememberedSet>::register_object(HeapWord* address) {
+  shenandoah_assert_heaplocked();
+  register_object_wo_lock(address);
+}
+
+template<typename RememberedSet>
+inline void
+ShenandoahCardCluster<RememberedSet>::register_object_wo_lock(HeapWord* address) {
   size_t card_at_start = _rs->card_index_for_addr(address);
   HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
   uint8_t offset_in_card = address - card_start_address;
@@ -397,11 +433,22 @@ template<typename RememberedSet>
 inline void
 ShenandoahScanRemembered<RememberedSet>::merge_overreach(size_t first_cluster, size_t count) { _rs->merge_overreach(first_cluster, count); }
 
+template<typename RememberedSet>
+inline void
+ShenandoahScanRemembered<RememberedSet>::reset_object_range(HeapWord *from, HeapWord *to) {
+  _scc->reset_object_range(from, to);
+}
 
 template<typename RememberedSet>
 inline void
 ShenandoahScanRemembered<RememberedSet>::register_object(HeapWord *addr) {
   _scc->register_object(addr);
+}
+
+template<typename RememberedSet>
+inline void
+ShenandoahScanRemembered<RememberedSet>::register_object_wo_lock(HeapWord *addr) {
+  _scc->register_object_wo_lock(addr);
 }
 
 template<typename RememberedSet>
@@ -420,8 +467,17 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void
-ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
+ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t first_cluster, size_t count, HeapWord *end_of_range,
                                                           ClosureType *cl) {
+  process_clusters(worker_id, first_cluster, count, end_of_range, cl, false);
+}
+
+// kelvin todo: remove worker_id
+template<typename RememberedSet>
+template <typename ClosureType>
+inline void
+ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t first_cluster, size_t count, HeapWord *end_of_range,
+                                                          ClosureType *cl, bool write_table) {
 
   // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
   // themselves marked.  Each such object will be scanned only once.  Any young-gen objects referenced from the remembered set will
@@ -431,12 +487,37 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
     size_t card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
 
+#define EXPERIMENT
+#ifdef EXPERIMENT
+    size_t previous_iter_card_index = card_index - 1;
+#endif
+
     first_cluster++;
     size_t next_card_index = 0;
     while (card_index < end_card_index) {
 
-      bool is_dirty = _rs->is_card_dirty(card_index);
+      bool is_dirty = (write_table)? _rs->is_write_card_dirty(card_index): _rs->is_card_dirty(card_index);
+#ifdef EXPERIMENT
+      HeapWord* card_base = _rs->addr_for_card_index(card_index);
+      if (!is_dirty) {
+        printf("[%u] NoInterest(%s) [%llx, %llx]\n", worker_id, write_table? "W": "R",
+               (unsigned long long) card_base, (unsigned long long) (card_base + CardTable::card_size_in_words));
+      } else {
+        printf("[%u] Interest(%s) [%llx, %llx]\n", worker_id, write_table? "W": "R",
+               (unsigned long long) card_base, (unsigned long long) (card_base + CardTable::card_size_in_words));
+      }
+      if (card_index == previous_iter_card_index) {
+        printf("[%u]  iterating with same card_index: %llu\n", worker_id, (unsigned long long) card_index);
+      }
+      previous_iter_card_index = card_index;
+      // Let's assume my card table is unreliable.  Does this fix the problem?
+      // Yes, it does.  But now I'm going to comment out this
+      // workaround so i can search for the root cause of the problem.
+      // is_dirty = true;
+#endif
       bool has_object = _scc->has_object(card_index);
+
+//      printf("  process_clusters, card @%llx is %sdirty\n", (unsigned long long) _rs->addr_for_card_index(card_index), is_dirty? "": "NOT ");
 
       if (is_dirty) {
         if (has_object) {
@@ -465,6 +546,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
             // For improved efficiency, we might want to give special handling of obj->is_objArray().  In
             // particular, in that case, we might want to divide the effort for scanning of a very long object array
             // between multiple threads.
+
             if (obj->is_objArray()) {
               objArrayOop array = objArrayOop(obj);
               int len = array->length();
@@ -489,7 +571,6 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           card_index++;
         }
       } else if (has_object) {
-
         // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
         // or if it reaches into the next cluster.
         size_t start_offset = _scc->get_last_start(card_index);
@@ -508,7 +589,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
         if (!reaches_next_cluster) {
           size_t span_card;
           for (span_card = card_index+1; span_card <= last_card; span_card++)
-            if (_rs->is_card_dirty(span_card)) {
+            if ((write_table)? _rs->is_write_card_dirty(span_card): _rs->is_card_dirty(span_card)) {
               spans_dirty_within_this_cluster = true;
               break;
             }
@@ -538,10 +619,18 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   }
 }
 
+// kelvin todo: remove worker_id
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void
-ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *region, ClosureType *cl) {
+ShenandoahScanRemembered<RememberedSet>::process_region(uint worker_id, ShenandoahHeapRegion *region, ClosureType *cl) {
+  process_region(worker_id, region, cl, false);
+}
+
+template<typename RememberedSet>
+template <typename ClosureType>
+inline void
+ShenandoahScanRemembered<RememberedSet>::process_region(uint worker_id, ShenandoahHeapRegion *region, ClosureType *cl, bool use_write_table) {
   HeapWord *start_of_range = region->bottom();
   size_t start_cluster_no = cluster_for_addr(start_of_range);
 
@@ -550,19 +639,40 @@ ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *re
   //
   // region->top() represents the end of allocated memory within this region.  Any addresses
   //   beyond region->top() should not be scanned as that memory does not hold valid objects.
-  HeapWord *end_of_range = region->top();
 
-  // end_of_range may point to the middle of a cluster because region->top() may be different than region->end.
+  // 
+
+  HeapWord *end_of_range;
+  if (use_write_table) {
+    // This is update-refs servicing.
+    end_of_range = region->get_update_watermark();
+
+//    printf(" SSR:process_region() is scanning to update_watermark: 0x%llx\n", (unsigned long long) end_of_range);
+    if (end_of_range != region->top())
+      printf("[%u]   Halelujah!  update_watermark() != top() in SSR:process_region()\n", worker_id);
+    fflush(stdout);
+  } else {
+    // This is concurrent mark servicing.  Note that TAMS for this region is TAMS at start of old-gen
+    // collection.  Here, we need to scan up to TAMS for most recently initiated young-gen collection.
+    // Since all LABs are retired at init mark, and since replacement LABs are allocated lazily, and since no
+    // promotions occur until evacuation phase, TAMS for most recent young-gen is same as top().
+
+    end_of_range = region->top();
+
+//    printf(" SSR:process_region() is scanning to top() (aka youngTAMS): 0x%llx\n", (unsigned long long) end_of_range);
+//    fflush(stdout);
+  }
+
+  // end_of_range may point to the middle of a cluster because region->top() may be different than region->end().
   // We want to assure that our process_clusters() request spans all relevant clusters.  Note that each cluster
   // processed will avoid processing beyond end_of_range.
 
   size_t num_heapwords = end_of_range - start_of_range;
-  unsigned int cluster_size = CardTable::card_size_in_words *
-    ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+  unsigned int cluster_size = CardTable::card_size_in_words * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   size_t num_clusters = (size_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
 
   // Remembered set scanner
-  process_clusters(start_cluster_no, num_clusters, end_of_range, cl);
+  process_clusters(worker_id, start_cluster_no, num_clusters, end_of_range, cl, use_write_table);
 }
 
 template<typename RememberedSet>
@@ -589,11 +699,16 @@ class ShenandoahOopIterateAdapter : public BasicOopIterateClosure {
 };
 
 template<typename RememberedSet>
-inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure* cl) {
+inline void ShenandoahScanRemembered<RememberedSet>::oops_do(uint worker_id, OopClosure* cl) {
   ShenandoahOopIterateAdapter adapter(cl);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
+
+    printf("SSR::oops_do(%u), region [%llx, %llx]\n", worker_id, 
+           (unsigned long long) region->bottom(), (unsigned long long) region->top());
+
     if (region->affiliation() == OLD_GENERATION) {
       HeapWord* start_of_range = region->bottom();
       HeapWord* end_of_range = region->top();
@@ -604,7 +719,7 @@ inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure* cl) {
       size_t num_clusters = (size_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
 
       // Remembered set scanner
-      process_clusters(start_cluster_no, num_clusters, end_of_range, &adapter);
+      process_clusters(worker_id, start_cluster_no, num_clusters, end_of_range, &adapter);
     }
   }
 }

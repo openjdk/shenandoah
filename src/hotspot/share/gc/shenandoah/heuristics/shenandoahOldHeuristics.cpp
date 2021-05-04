@@ -38,7 +38,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generatio
 {
 }
 
-void ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
+bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   uint included_old_regions = 0;
   size_t evacuated_old_bytes = 0;
 
@@ -141,15 +141,17 @@ void ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
                  (unsigned long long) included_old_regions,
                  (unsigned long long) evacuated_old_bytes);
   }
+  return (included_old_regions > 0);
 }
 
 
-void ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
+bool ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
   assert(collection_set->count() == 0, "Must be empty");
 
   // Old-gen doesn't actually choose a collection set to be evacuated by its own gang of worker tasks.
   // Instead, it computes the set of regions to be evacuated by subsequent young-gen evacuation passes.
   prepare_for_old_collections();
+  return false;
 }
 
 void ShenandoahOldHeuristics::prepare_for_old_collections() {
