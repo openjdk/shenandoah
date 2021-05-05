@@ -428,7 +428,7 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
   size_t size = array->size();
   HeapWord *array_end = p + size;
   if (len > 150) {
-    //printf("big! %d %p\n", len, p);
+    printf("big! %d %p\n", len, p);
   }
   if (array_end <= card_end) {
     if (scan) {
@@ -437,10 +437,13 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
     return(len);
   } else {
     uint header_size = array->header_size();
+    uint object_size = array->object_size();
+    const uint OopsPerHeapWord = HeapWordSize/heapOopSize;
     if (p + header_size > card_end) {
       return(0);  // Wait to pass over the header
     } else {
-      int end_index = card_end - (p + header_size);  
+      int end_index = card_end - (p + header_size);
+      end_index = MAX2(len, end_index * OopsPerHeapWord);
       if (scan) {
         array->oop_iterate_range(cl, start_index, end_index);
       }
