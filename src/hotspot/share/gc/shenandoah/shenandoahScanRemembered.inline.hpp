@@ -443,7 +443,7 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
       return(0);  // Wait to pass over the header
     } else {
       int end_index = card_end - (p + header_size);
-      end_index = MAX2(len, end_index * OopsPerHeapWord);
+      end_index = MIN2(len, end_index * OopsPerHeapWord);
       if (scan) {
         array->oop_iterate_range(cl, start_index, end_index);
       }
