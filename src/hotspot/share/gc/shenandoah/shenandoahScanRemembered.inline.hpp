@@ -437,7 +437,7 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
     return(len);
   } else {
     uint header_size = array->header_size();
-    uint object_size = array->object_size();
+    // uint object_size = array->object_size();
     const uint OopsPerHeapWord = HeapWordSize/heapOopSize;
     if (p + header_size > card_end) {
       return(0);  // Wait to pass over the header
