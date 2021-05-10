@@ -258,7 +258,6 @@ public:
 
 template<class T, GenerationMode GENERATION, StringDedupMode STRING_DEDUP>
 inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak) {
-
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
     oop obj = CompressedOops::decode_not_null(o);
@@ -267,59 +266,21 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
     shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
 
     if (in_generation<GENERATION>(obj)) {
-
-#define KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      if (GCId::current() > 11) {
-        printf("mtr<%s> %llx->%llx\n", (GENERATION == OLD? "O": "Y"),
-               (unsigned long long) p, (unsigned long long) (void *) obj);
-        fflush(stdout);
-      }
-#endif
-      
       mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
-
       if ((GENERATION == YOUNG) && ShenandoahHeap::heap()->is_in(p) && ShenandoahHeap::heap()->is_in_old(p)) {
         RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
         // Mark card as dirty because remembered set scanning still finds interesting pointer.
-
-#ifdef KELVIN_VERBOSE
-        size_t card_index = scanner->card_index_for_addr((HeapWord*) p);
-        printf("IM::mtr dirty @%llx index[%lld]: @%llx-> %llx\n",
-               0xfffffffffffffe00L & (unsigned long long) (p), (unsigned long long) card_index,
-               (unsigned long long) p, (unsigned long long) (void *) obj);
-
-        printf("  before update @%llx: read_card_table holds %s, write_card_table holds: %s\n",
-               0xfffffffffffffe00L & (unsigned long long) (p),
-               scanner->is_card_dirty(card_index)? "DIRTY": "CLEAN",
-               scanner->is_write_card_dirty(card_index)? "DIRTY": "CLEAN");
-#endif
         ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
-
-#ifdef KELVIN_VERBOSE
-        printf("  after update @%llx: read_card_table holds %s, write_card_table holds: %s\n",
-               0xfffffffffffffe00L & (unsigned long long) (p),
-               scanner->is_card_dirty(card_index)? "DIRTY": "CLEAN",
-               scanner->is_write_card_dirty(card_index)? "DIRTY": "CLEAN");
-        fflush(stdout);
-#endif
       }
     } else if (old != nullptr) {
-
-      if (GCId::current() > 11) {
-        printf("mtr bootstrap old: %llx->%llx\n", (unsigned long long) p, (unsigned long long) (void *) obj);
-        fflush(stdout);
-      }
-
       // Young mark, bootstrapping old.
       mark_ref<STRING_DEDUP>(old, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
     } else if (GENERATION == OLD) {
-      // TODO: not sure we actually need this.  This is probably redundant with marking of cards
-      // identified during young-gen remembered set scanning.
-
       // Old mark, found a young pointer.
+      // TODO:  Rethink this: may be redundant with dirtying of cards identified during young-gen remembered set scanning
+      // and by mutator write barriers.  Assert
       assert(ShenandoahHeap::heap()->is_in_young(obj), "Expected young object.");
       ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
     }

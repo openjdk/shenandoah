@@ -89,7 +89,6 @@ class ShenandoahSquirrelAwayCardTable: public ShenandoahHeapRegionClosure {
   bool is_thread_safe() { return true; }
 };
 
-
 void ShenandoahGeneration::confirm_heuristics_mode() {
   if (_heuristics->is_diagnostic() && !UnlockDiagnosticVMOptions) {
     vm_exit_during_initialization(
@@ -154,19 +153,16 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   parallel_heap_region_iterate(&task);
 }
 
-// The ideal is to swap the remembered set so the safepoint effort is
-// no more than a few pointer manipulations.  However, limitations in
-// the implementation of the mutator write-barrier make it difficult
-// to simply change the location of the card table.  So the interim
-// implementation of swap_remembered_set will copy the write-table
+// The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
+// However, limitations in the implementation of the mutator write-barrier make it difficult to simply change the
+// location of the card table.  So the interim implementation of swap_remembered_set will copy the write-table
 // onto the read-table and will then clear the write-table.
 void ShenandoahGeneration::swap_remembered_set() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();
 
-  // Good enough for now, especially because this represents an interim solution.  Eventually, we want
-  // replace this with a constant-time exchange of pointers.
+  // TODO: Eventually, we want replace this with a constant-time exchange of pointers.
   ShenandoahSquirrelAwayCardTable task;
   heap->old_generation()->parallel_heap_region_iterate(&task);
 }
@@ -181,7 +177,6 @@ void ShenandoahGeneration::prepare_gc() {
 // Returns true iff the chosen collection set includes a mix of young-gen and old-gen regions.
 bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   bool result;
-
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   {

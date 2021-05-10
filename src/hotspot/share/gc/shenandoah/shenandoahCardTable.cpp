@@ -43,21 +43,23 @@ void ShenandoahCardTable::initialize() {
   HeapWord* low_bound  = _whole_heap.start();
   _read_byte_map = (CardValue*) heap_rs.base();
   _read_byte_map_base = _read_byte_map - (uintptr_t(low_bound) >> card_shift);
-
-  printf("SCT:initialize(), read_byte_map @%llx, _write_byte_map @%llx\n", (unsigned long long) _read_byte_map,
-         (unsigned long long) _write_byte_map);
-  printf("  dirty code: %d, clean code: %d\n", dirty_card, clean_card);
   
   log_trace(gc, barrier)("ShenandoahCardTable::ShenandoahCardTable: ");
   log_trace(gc, barrier)("    &_read_byte_map[0]: " INTPTR_FORMAT "  &_read_byte_map[_last_valid_index]: " INTPTR_FORMAT,
                   p2i(&_read_byte_map[0]), p2i(&_read_byte_map[_last_valid_index]));
   log_trace(gc, barrier)("    _read_byte_map_base: " INTPTR_FORMAT, p2i(_read_byte_map_base));
 
-  // TODO: Understand the role of _guard_region.  It would appear we might need two versions of
-  // the _guard_region, and switch between them every time we swap roles of _read_byte_map and
-  // _write_byte_map, or leave both "guards" enabled at all times.  Is this about detecting
-  // expansion of the underlying heap and the need to expand the card table?  Seems there would
-  // be easier ways to deal with this.
+  // TODO: As currently implemented, we do not swap pointers between _read_byte_map and _write_byte_map
+  // because the mutator write barrier hard codes the address of the _write_byte_map_base.  Instead,
+  // the current implementation simply copies contents of _write_byte_map onto _read_byte_map and cleans
+  // the entirety of _write_byte_map at the init_mark safepoint.
+  //
+  // If we choose to modify the mutator write barrier so that we can swap _read_byte_map_base and
+  // _write_byte_map_base pointers, we may also have to figure out certain details about how the
+  // _guard_region is implemented so that we can replicate the read and write versions of this region.
+  //
+  // Alternatively, we may switch to a SATB-based write barrier and replace the direct card-marking
+  // remembered set with something entirely different.
 
   resize_covered_region(_whole_heap);
 }
@@ -82,53 +84,22 @@ void ShenandoahCardTable::clear() {
 
 static bool already_initialized = false;
 
+// TODO: This service is not currently used because we are not able to swap _read_byte_map_base and
+// _write_byte_map_base pointers.  If we were able to do so, we would invoke clear_read_table "immediately"
+// following the end of concurrent remembered set scanning so that this read card table would be ready
+// to serve as the new write card table at the time these pointer values were next swapped.
+//
+// In the current implementation, the write-table is cleared immediately after its contents is copied to
+// the read table, obviating the need for this service.
 void ShenandoahCardTable::clear_read_table() {
-
-  printf("SCT::clear_read_table, setting _read_byte_map[0..%lld] to %d\n", (unsigned long long) _byte_map_size, clean_card);
-
-  // TODO: This is redundant since I am clearing all dirty cards after scanning them.  In theory, only cards that are
-  // outside old-gen will be dirty at invocation.  I can dispense with call to clear_read_table() if i assure that any regions
-  // newly converted to old-gen will have their cards initialized to clean.
-
-#define DEPT_OF_REDUNDANCY_DEPT
-#ifdef DEPT_OF_REDUNDANCY_DEPT
-  // kelvin to remove all of this code.
-
-  // As currently implemented, I want to check card table to confirm my belief that service is no longer
-  // required.  By the way, I would expect to see DIRTY cards only within regions that are not OLD.
-
-
-  printf("SCT: whole_heap is [%llx, %llx]\n", (unsigned long long) _whole_heap.start(), (unsigned long long) _whole_heap.end());
-  printf(" _byte_map_size: %lld\n", (unsigned long long) _byte_map_size);
-
-  // Note that interesting_card_count is less than _byte_map_size, because the latter includes memory for a "guard page"
-  // and also includes some alignment padding.
-  size_t interesting_card_count = _whole_heap.word_size() / CardTable::card_size_in_words;
-
-  if (already_initialized) {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    RememberedScanner* scanner = heap->card_scan();
-    for (size_t i = 0; i < interesting_card_count; i++) {
-      if (_read_byte_map[i] != clean_card) {
-        // This might be a problem, but not necessarily.
-        HeapWord* addr = scanner->addr_for_card_index(i);
-        ShenandoahHeapRegion* r = heap->heap_region_containing(addr);
-        if (r->is_old()) {
-          printf("VIOLATION: not expecting dirty old read cards @ index %lld (addr: %llx)\n",
-                 (unsigned long long) i, (unsigned long long) addr);
-        }
-      }
-    }
-  } else {
-    already_initialized = true;
-  }
-#endif
-
   for (size_t i = 0; i < _byte_map_size; i++) {
     _read_byte_map[i] = clean_card;
   }
 }
 
+// TODO: This service is not currently used because the mutator write barrier implementation hard codes the
+// location of the _write_byte_may_base.  If we change the mutator's write barrier implementation, then we
+// may use this service to exchange the roles of the read-card-table and write-card-table.
 void ShenandoahCardTable::swap_card_tables() {
   shenandoah_assert_safepoint();
 

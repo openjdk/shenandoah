@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Amazon.com, Inc. and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,6 +34,22 @@ class ShenandoahCardTable: public CardTable {
   friend class VMStructs;
 
 protected:
+  // We maintain two copies of the card table to facilitate concurrent remembered set scanning
+  // and concurrent clearing of stale remembered set information.  During the init_mark safepoint,
+  // we copy the contents of _write_byte_map to _read_byte_map and clear _write_byte_map.
+  //
+  // Concurrent remembered set scanning reads from _read_byte_map while concurrent mutator write
+  // barriers are overwriting cards of the _write_byte_map with DIRTY codes.  Concurrent remembered
+  // set scanning also overwrites cards of the _write_byte_map with DIRTY codes whenever it discovers
+  // interesting pointers.
+  //
+  // During a concurrent update-references phase, we scan the _write_byte_map concurrently to find
+  // all old-gen references that may need to be updated.
+  //
+  // In a future implementation, we may swap the values of _read_byte_map and _write_byte_map during
+  // the init-mark safepoint to avoid the need for bulk STW copying and initialization.  Doing so
+  // requires a change to the implementation of mutator write barriers as the address of the card
+  // table is currently in-lined and hard-coded.
   CardValue* _read_byte_map;
   CardValue* _write_byte_map;
   CardValue* _read_byte_map_base;
@@ -50,15 +66,6 @@ public:
 
   void clear();
 
-  // After remembered set scanning has completed, clear the read_card_table
-  // so that it can instantaneously become the write_card_table at the
-  // time of next swap_card_tables() invocation.
-  //
-  // Since this effort is memory bound, we do not expect the work to
-  // be divided between many concurrent GC worker threads.  Following
-  // remembered set scanning, one worker thread clears the read table
-  // while the other GC worker threads begin processing the content of
-  // the mark closures.
   void clear_read_table();
 
   // Exchange the roles of the read and write card tables.

@@ -110,10 +110,6 @@ inline void ShenandoahHeap::update_with_forwarded(T* p) {
 
       // Unconditionally store the update: no concurrent updates expected.
       RawAccess<IS_NOT_NULL>::oop_store(p, fwd);
-
-      printf("SH::uwf @ %llx, %llx becomes %llx\n",
-             (unsigned long long) p, (unsigned long long) (void *) obj, (unsigned long long) (void *) fwd);
-
     }
   }
 }
@@ -250,25 +246,6 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
         // do this in batch, in a background GC thread than to try to carefully dirty only cards
         // that hold interesting pointers right now.
         card_scan()->mark_range_as_dirty((HeapWord*) (void *) result, result->size());
-
-#ifdef DEPRECATED
-        // remove what follows.
-
-        // TODO: Just marking the cards covering this object dirty
-        // may overall be less efficient than scanning it now for references to young gen
-        // or other alternatives like deferred card marking or scanning.
-        // We should revisit this.
-        // Furthermore, the object start should be registered for remset scanning.
-        MemRegion mr(cast_from_oop<HeapWord*>(result), result->size());
-
-        kelvin deliberate syntax error;
-        // this shoud use shenandoahCardTable() and should mark the
-        // cards as dirty...
-        // also, double check that we have registered the promoted object.
-
-        ShenandoahBarrierSet::barrier_set()->card_table()->invalidate(mr);
-#endif
-
         return result;
       }
     }
@@ -603,7 +580,6 @@ inline void ShenandoahHeap::clear_cards_for(ShenandoahHeapRegion* region) {
 
 inline void ShenandoahHeap::mark_card_as_dirty(HeapWord* location) {
   if (mode()->is_generational()) {
-    printf("   SH:mark_card_as_dirty(%llx) forwarding to card_scan\n", (unsigned long long) location);
     _card_scan->mark_card_as_dirty(location);
   }
 }

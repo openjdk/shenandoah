@@ -83,17 +83,6 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
   assert(Thread::current()->is_VM_thread(), "Must be VMThread");
   assert(!is_in(r), "Already in collection set");
-
-#define KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahMarkingContext* context = heap->marking_context();
-  printf("Adding region [%llx, %llx] (%s) to collection set, TAMS is %llx\n",
-         (unsigned long long) r->bottom(), (unsigned long long) r->top(), r->is_old()? "OLD": "YOUNG", 
-         (unsigned long long) context->top_at_mark_start(r));
-  fflush(stdout);
-#endif
-
   _cset_map[r->index()] = 1;
   _region_count++;
   _garbage += r->garbage();
