@@ -603,6 +603,7 @@ inline void ShenandoahHeap::clear_cards_for(ShenandoahHeapRegion* region) {
 
 inline void ShenandoahHeap::mark_card_as_dirty(HeapWord* location) {
   if (mode()->is_generational()) {
+    printf("   SH:mark_card_as_dirty(%llx) forwarding to card_scan\n", (unsigned long long) location);
     _card_scan->mark_card_as_dirty(location);
   }
 }

@@ -59,32 +59,58 @@ ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
+  printf("SCGC::collect() A\n"); fflush(stdout);
+
   // Reset for upcoming marking
   entry_reset();
+
+  printf("SCGC::collect() B\n"); fflush(stdout);
 
   // Start initial mark under STW
   vmop_entry_init_mark();
 
+  // kelvin proposes: Upon return from vmop_entry_init_mark(), we are no longer in STW?
+  // kelvin trying to figure this out?
+
+  printf("SCGC::collect() C\n"); fflush(stdout);
+
   // Concurrent remembered set scanning
   if (_generation->generation_mode() == YOUNG) {
+    printf("SCGC::collect() D.1\n"); fflush(stdout);
+
     _generation->scan_remembered_set();
+    printf("SCGC::collect() D.2\n"); fflush(stdout);
+
   }
+
+  printf("SCGC::collect() E\n"); fflush(stdout);
 
   // Concurrent mark roots
   entry_mark_roots();
+
+  printf("SCGC::collect() F\n"); fflush(stdout);
+
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle)) return false;
+
+  printf("SCGC::collect() G\n"); fflush(stdout);
 
   // Continue concurrent mark
   entry_mark();
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
 
+  printf("SCGC::collect() H\n"); fflush(stdout);
+
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
+
+  printf("SCGC::collect() I\n"); fflush(stdout);
 
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
     entry_thread_roots();
   }
+
+  printf("SCGC::collect() J\n"); fflush(stdout);
 
   // Process weak roots that might still point to regions that would be broken by cleanup
   if (heap->is_concurrent_weak_root_in_progress()) {
@@ -92,14 +118,20 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_weak_roots();
   }
 
+  printf("SCGC::collect() K\n"); fflush(stdout);
+
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.
   entry_cleanup_early();
+
+  printf("SCGC::collect() L\n"); fflush(stdout);
 
   {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
+
+  printf("SCGC::collect() M\n"); fflush(stdout);
 
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
@@ -107,12 +139,16 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_class_unloading();
   }
 
+  printf("SCGC::collect() N\n"); fflush(stdout);
+
   // Processing strong roots
   // This may be skipped if there is nothing to update/evacuate.
   // If so, strong_root_in_progress would be unset.
   if (heap->is_concurrent_strong_root_in_progress()) {
     entry_strong_roots();
   }
+
+  printf("SCGC::collect() O\n"); fflush(stdout);
 
   // Continue the cycle with evacuation and optional update-refs.
   // This may be skipped if there is nothing to evacuate.
@@ -154,6 +190,8 @@ void ShenandoahConcurrentGC::vmop_entry_init_mark() {
   heap->try_inject_alloc_failure();
   VM_ShenandoahInitMark op(this);
   VMThread::execute(&op); // jump to entry_init_mark() under safepoint
+
+  
 }
 
 void ShenandoahConcurrentGC::vmop_entry_final_mark() {
@@ -195,7 +233,34 @@ void ShenandoahConcurrentGC::entry_init_mark() {
   ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
                               ShenandoahWorkerPolicy::calc_workers_for_init_marking(),
                               "init marking");
-  ShenandoahHeap::heap()->card_scan()->swap_remset();
+
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    // In the current implementation, we do not swap_remset.  Instead we reset_remset.
+    // Was: ShenandoahHeap::heap()->card_scan()->swap_remset();
+    _generation->swap_remembered_set();
+
+    // kelvin to remove the following block of code.
+    // kelvin has reason to suspect that swap_remembered_set is not
+    // clearing write_card_table.
+    // We're happy now as of 5/9 evening.  But leave in until I'm
+    // totally done with testing.
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    RememberedScanner* scanner = heap->card_scan();
+    size_t num_cards = scanner->total_cards();
+    for (size_t i = 0; i < num_cards; i++) {
+      // every entry should be clean
+      if (scanner->is_write_card_dirty(i)) {
+        // if this region is !old, the value of card is a "don't care"
+        HeapWord* addr = scanner->addr_for_card_index(i);
+        ShenandoahHeapRegion* r = heap->heap_region_containing(addr);
+        if (r->is_old()) {
+          printf("After swap_remembered_set, old region card %lld (addr: %llx) should be clean!\n",
+                 (unsigned long long) i, (unsigned long long) addr);
+        }
+      }
+    }
+  }
+
   op_init_mark();
 }
 
@@ -484,6 +549,11 @@ void ShenandoahConcurrentGC::op_init_mark() {
   assert(!_generation->is_mark_complete(), "should not be complete");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
 
+#define SCRUTINY
+#ifdef SCRUTINY
+  // kelvin to move this code into verifier()->verify_before_concmark().
+  heap->verify_rem_set_at_mark();
+#endif
   if (ShenandoahVerify) {
     heap->verifier()->verify_before_concmark();
   }
@@ -909,6 +979,14 @@ void ShenandoahConcurrentGC::op_init_updaterefs() {
   heap->set_evacuation_in_progress(false);
   heap->prepare_update_heap_references(true /*concurrent*/);
   heap->set_update_refs_in_progress(true);
+
+#define SCRUTINY
+#ifdef SCRUTINY
+  // after further testing, kelvin to insert a new service and call it:
+  //   heap->verifier()->verify_before_updaterefs()
+  // move this code into that code.
+  heap->verify_rem_set_at_update_ref();
+#endif
 
   if (ShenandoahPacing) {
     heap->pacer()->setup_for_updaterefs();

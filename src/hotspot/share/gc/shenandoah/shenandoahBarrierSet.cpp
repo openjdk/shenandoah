@@ -143,6 +143,8 @@ void ShenandoahBarrierSet::write_ref_array(HeapWord* start, size_t count) {
     return;
   }
 
+  printf("array_copy %lld elements to address %llx\n", (unsigned long long) count, (unsigned long long) start);
+
   HeapWord* end = (HeapWord*)((char*) start + (count * heapOopSize));
   // In the case of compressed oops, start and end may potentially be misaligned;
   // so we need to conservatively align the first downward (this is not
@@ -155,6 +157,7 @@ void ShenandoahBarrierSet::write_ref_array(HeapWord* start, size_t count) {
   // If compressed oops were not being used, these should already be aligned
   assert(UseCompressedOops || (aligned_start == start && aligned_end == end),
          "Expected heap word alignment of start and end");
-  card_table()->dirty_MemRegion(MemRegion(aligned_start, aligned_end));
+  _heap->card_scan()->mark_range_as_dirty(aligned_start, (aligned_end - aligned_start));
+  // card_table()->dirty_MemRegion(MemRegion(aligned_start, aligned_end));
 }
 

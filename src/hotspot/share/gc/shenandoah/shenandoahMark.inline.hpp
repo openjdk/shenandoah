@@ -258,6 +258,7 @@ public:
 
 template<class T, GenerationMode GENERATION, StringDedupMode STRING_DEDUP>
 inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak) {
+
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
     oop obj = CompressedOops::decode_not_null(o);
@@ -280,13 +281,29 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
       shenandoah_assert_marked(p, obj);
 
       if ((GENERATION == YOUNG) && ShenandoahHeap::heap()->is_in(p) && ShenandoahHeap::heap()->is_in_old(p)) {
+        RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
         // Mark card as dirty because remembered set scanning still finds interesting pointer.
 
-        printf("IM:mtr dirty @%llx: @%llx-> %llx\n",
-               0xfffffffffffffe00L & (unsigned long long) (p), (unsigned long long) p, (unsigned long long) (void *) obj);
-        fflush(stdout);
+#ifdef KELVIN_VERBOSE
+        size_t card_index = scanner->card_index_for_addr((HeapWord*) p);
+        printf("IM::mtr dirty @%llx index[%lld]: @%llx-> %llx\n",
+               0xfffffffffffffe00L & (unsigned long long) (p), (unsigned long long) card_index,
+               (unsigned long long) p, (unsigned long long) (void *) obj);
 
+        printf("  before update @%llx: read_card_table holds %s, write_card_table holds: %s\n",
+               0xfffffffffffffe00L & (unsigned long long) (p),
+               scanner->is_card_dirty(card_index)? "DIRTY": "CLEAN",
+               scanner->is_write_card_dirty(card_index)? "DIRTY": "CLEAN");
+#endif
         ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
+
+#ifdef KELVIN_VERBOSE
+        printf("  after update @%llx: read_card_table holds %s, write_card_table holds: %s\n",
+               0xfffffffffffffe00L & (unsigned long long) (p),
+               scanner->is_card_dirty(card_index)? "DIRTY": "CLEAN",
+               scanner->is_write_card_dirty(card_index)? "DIRTY": "CLEAN");
+        fflush(stdout);
+#endif
       }
     } else if (old != nullptr) {
 

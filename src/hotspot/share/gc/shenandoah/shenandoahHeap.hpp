@@ -199,6 +199,8 @@ public:
 
   void prepare_for_verify();
   void verify(VerifyOption vo);
+  void verify_rem_set_at_mark();
+  void verify_rem_set_at_update_ref();
 
 // ---------- Heap counters and metrics
 //
@@ -375,6 +377,11 @@ private:
 
   double _cancel_requested_time;
   ShenandoahSharedEnumFlag<CancelState> _cancelled_gc;
+
+  // Returns true if cancel request was successfully communicated.
+  // Returns false if some other thread already communicated cancel
+  // request.  A true return value does not mean GC has been
+  // cancelled, only that the process of cancelling GC has begun.
   bool try_cancel_gc();
 
 public:

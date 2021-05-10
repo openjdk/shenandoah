@@ -902,12 +902,18 @@ size_t ShenandoahHeapRegion::pin_count() const {
 }
 
 void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation) {
-
-  printf("Changing affiliation of region [%llx, %llx] from %s to %s\n",
-         (unsigned long long) bottom(), (unsigned long long) end(), affiliation_name(_affiliation), affiliation_name(new_affiliation));
-  fflush(stdout);
-
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+
+#define KELVIN_VERBOSITY
+#ifdef KELVIN_VERBOSITY
+  ShenandoahMarkingContext* mark_ctx = heap->marking_context();
+
+  printf("Changing affiliation of region [%llx, %llx], top: %llx, TAMS: %llx, update_watermark: %llx, from %s to %s\n",
+         (unsigned long long) bottom(), (unsigned long long) end(), (unsigned long long) top(),
+         (unsigned long long) mark_ctx->top_at_mark_start(this), (unsigned long long) get_update_watermark(), 
+         affiliation_name(_affiliation), affiliation_name(new_affiliation));
+  fflush(stdout);
+#endif
   if (_affiliation == new_affiliation) {
     return;
   }
@@ -1004,7 +1010,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     // interesting pointers right now.
 
     if (promoting_all || obj->is_typeArray()) {
-      // Pyrimitive arrays don't need to be scanned.
+      // Primitive arrays don't need to be scanned.
       heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
     } else {
       heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());

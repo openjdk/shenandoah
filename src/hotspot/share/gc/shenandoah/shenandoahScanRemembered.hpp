@@ -247,6 +247,8 @@ private:
   uint8_t *_overreach_map;      // Points to first entry within the overreach card table
   uint8_t *_overreach_map_base; // Points to overreach_map minus the bias computed from address of heap memory
 
+  uint64_t _wide_clean_value;
+
 public:
   // count is the number of cards represented by the card table.
   ShenandoahDirectCardMarkRememberedSet(ShenandoahCardTable *card_table, size_t total_card_count);
@@ -261,6 +263,7 @@ public:
   void mark_card_as_dirty(size_t card_index);
   void mark_range_as_dirty(size_t card_index, size_t num_cards);
   void mark_card_as_clean(size_t card_index);
+  void mark_read_card_as_clean(size_t card_index);
   void mark_range_as_clean(size_t card_index, size_t num_cards);
   void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
@@ -280,8 +283,23 @@ public:
   void merge_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
+  // Not currently supported because mutator write barrier does not honor changes to the location of card table.
   void swap_remset() {  _card_table->swap_card_tables(); }
 
+  // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
+  // in parallel threads, each invocation processing one entire HeapRegion at a time.  Processing of a region
+  // consists of copying the write table to the read table and cleaning the write table.
+  void reset_remset(HeapWord* start, size_t word_count) {
+    size_t card_index = card_index_for_addr(start);
+    size_t num_cards = word_count / CardTable::card_size_in_words;
+    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardTable::CardValue));
+    intptr_t* read_table_ptr = (intptr_t*) &(_card_table->read_byte_map())[card_index];
+    intptr_t* write_table_ptr = (intptr_t*) &(_card_table->write_byte_map())[card_index];
+    for (size_t i = 0; i < iterations; i++) {
+      *read_table_ptr++ = *write_table_ptr;
+      *write_table_ptr++ = CardTable::clean_card_row_val();
+    }
+  }
 
   // Called by GC thread after scanning old remembered set in order to prepare for next GC pass
   void clear_old_remset() {  _card_table->clear_read_table(); }
@@ -901,9 +919,11 @@ public:
   size_t card_index_for_addr(HeapWord *p);
   HeapWord *addr_for_card_index(size_t card_index);
   bool is_card_dirty(size_t card_index);
+  bool is_write_card_dirty(size_t card_index) { return _rs->is_write_card_dirty(card_index); }
   void mark_card_as_dirty(size_t card_index);
   void mark_range_as_dirty(size_t card_index, size_t num_cards);
   void mark_card_as_clean(size_t card_index);
+  void mark_read_card_as_clean(size_t card_index) { _rs->mark_read_card_clean(card_index); }
   void mark_range_as_clean(size_t card_index, size_t num_cards);
   void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
@@ -918,6 +938,8 @@ public:
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   void swap_remset() { _rs->swap_remset(); }
+
+  void reset_remset(HeapWord* start, size_t word_count) { _rs->reset_remset(start, word_count); }
 
   // Called by GC thread after scanning old remembered set in order to prepare for next GC pass
   void clear_old_remset() { _rs->clear_old_remset(); }

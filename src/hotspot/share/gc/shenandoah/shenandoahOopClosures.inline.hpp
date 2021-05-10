@@ -52,4 +52,26 @@ inline void ShenandoahConcUpdateRefsClosure::work(T* p) {
   _heap->conc_update_with_forwarded(p);
 }
 
+template<class T>
+inline void ShenandoahVerifyRemSetClosure::work(T* p) {
+  T o = RawAccess<>::oop_load(p);
+  if (!CompressedOops::is_null(o)) {
+    oop obj = CompressedOops::decode_not_null(o);
+    if (_heap->is_in_young(obj)) {
+      size_t card_index = scanner->card_index_for_addr((HeapWord*) p);
+      if (_init_mark && !scanner->is_card_dirty(card_index)) {
+        printf("MARKING REM SET VIOLATION: clean card %lld holds pointer @ %llx to %llx\n",
+               (unsigned long long) card_index, (unsigned long long) (void *) p, (unsigned long long) (void *) o);
+        printf("  BTW, write-card-table[%lld] holds %s\n", (unsigned long long) card_index, 
+               scanner->is_write_card_dirty(card_index)? "DIRTY": "CLEAN");
+      } else if (!_init_mark && !scanner->is_write_card_dirty(card_index)) {
+        printf("UPDATE-REFS REM SET VIOLATION: clean card %lld holds pointer @ %llx to %llx\n",
+               (unsigned long long) card_index, (unsigned long long) (void *) p, (unsigned long long) (void *) o);
+        printf("  BTW, read-card-table[%lld] holds %s\n", (unsigned long long) card_index, 
+               scanner->is_card_dirty(card_index)? "DIRTY": "CLEAN");
+      }
+    }
+  }
+}
+
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHOOPCLOSURES_INLINE_HPP

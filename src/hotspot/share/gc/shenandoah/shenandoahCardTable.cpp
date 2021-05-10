@@ -44,6 +44,10 @@ void ShenandoahCardTable::initialize() {
   _read_byte_map = (CardValue*) heap_rs.base();
   _read_byte_map_base = _read_byte_map - (uintptr_t(low_bound) >> card_shift);
 
+  printf("SCT:initialize(), read_byte_map @%llx, _write_byte_map @%llx\n", (unsigned long long) _read_byte_map,
+         (unsigned long long) _write_byte_map);
+  printf("  dirty code: %d, clean code: %d\n", dirty_card, clean_card);
+  
   log_trace(gc, barrier)("ShenandoahCardTable::ShenandoahCardTable: ");
   log_trace(gc, barrier)("    &_read_byte_map[0]: " INTPTR_FORMAT "  &_read_byte_map[_last_valid_index]: " INTPTR_FORMAT,
                   p2i(&_read_byte_map[0]), p2i(&_read_byte_map[_last_valid_index]));
@@ -76,11 +80,51 @@ void ShenandoahCardTable::clear() {
   CardTable::clear(_whole_heap);
 }
 
+static bool already_initialized = false;
+
 void ShenandoahCardTable::clear_read_table() {
 
-  // Let the compiler figure out how to unroll this loop in order to
-  // overwrite more than a single byte per iteration.
-  for (uint i = 0; i < _byte_map_size; i++) {
+  printf("SCT::clear_read_table, setting _read_byte_map[0..%lld] to %d\n", (unsigned long long) _byte_map_size, clean_card);
+
+  // TODO: This is redundant since I am clearing all dirty cards after scanning them.  In theory, only cards that are
+  // outside old-gen will be dirty at invocation.  I can dispense with call to clear_read_table() if i assure that any regions
+  // newly converted to old-gen will have their cards initialized to clean.
+
+#define DEPT_OF_REDUNDANCY_DEPT
+#ifdef DEPT_OF_REDUNDANCY_DEPT
+  // kelvin to remove all of this code.
+
+  // As currently implemented, I want to check card table to confirm my belief that service is no longer
+  // required.  By the way, I would expect to see DIRTY cards only within regions that are not OLD.
+
+
+  printf("SCT: whole_heap is [%llx, %llx]\n", (unsigned long long) _whole_heap.start(), (unsigned long long) _whole_heap.end());
+  printf(" _byte_map_size: %lld\n", (unsigned long long) _byte_map_size);
+
+  // Note that interesting_card_count is less than _byte_map_size, because the latter includes memory for a "guard page"
+  // and also includes some alignment padding.
+  size_t interesting_card_count = _whole_heap.word_size() / CardTable::card_size_in_words;
+
+  if (already_initialized) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    RememberedScanner* scanner = heap->card_scan();
+    for (size_t i = 0; i < interesting_card_count; i++) {
+      if (_read_byte_map[i] != clean_card) {
+        // This might be a problem, but not necessarily.
+        HeapWord* addr = scanner->addr_for_card_index(i);
+        ShenandoahHeapRegion* r = heap->heap_region_containing(addr);
+        if (r->is_old()) {
+          printf("VIOLATION: not expecting dirty old read cards @ index %lld (addr: %llx)\n",
+                 (unsigned long long) i, (unsigned long long) addr);
+        }
+      }
+    }
+  } else {
+    already_initialized = true;
+  }
+#endif
+
+  for (size_t i = 0; i < _byte_map_size; i++) {
     _read_byte_map[i] = clean_card;
   }
 }

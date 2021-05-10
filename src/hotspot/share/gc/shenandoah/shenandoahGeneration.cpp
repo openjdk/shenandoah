@@ -71,6 +71,25 @@ class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
   bool is_thread_safe() { return true; }
 };
 
+class ShenandoahSquirrelAwayCardTable: public ShenandoahHeapRegionClosure {
+ private:
+  ShenandoahHeap* _heap;
+  RememberedScanner* _scanner;
+ public:
+  ShenandoahSquirrelAwayCardTable() :
+    _heap(ShenandoahHeap::heap()),
+    _scanner(_heap->card_scan()) {}
+
+  void heap_region_do(ShenandoahHeapRegion* region) {
+    if (region->is_old()) {
+      _scanner->reset_remset(region->bottom(), ShenandoahHeapRegion::region_size_words());
+    }
+  }
+
+  bool is_thread_safe() { return true; }
+};
+
+
 void ShenandoahGeneration::confirm_heuristics_mode() {
   if (_heuristics->is_diagnostic() && !UnlockDiagnosticVMOptions) {
     vm_exit_during_initialization(
@@ -133,6 +152,23 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
   ShenandoahResetBitmapTask task;
   parallel_heap_region_iterate(&task);
+}
+
+// The ideal is to swap the remembered set so the safepoint effort is
+// no more than a few pointer manipulations.  However, limitations in
+// the implementation of the mutator write-barrier make it difficult
+// to simply change the location of the card table.  So the interim
+// implementation of swap_remembered_set will copy the write-table
+// onto the read-table and will then clear the write-table.
+void ShenandoahGeneration::swap_remembered_set() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  heap->assert_gc_workers(heap->workers()->active_workers());
+  shenandoah_assert_safepoint();
+
+  // Good enough for now, especially because this represents an interim solution.  Eventually, we want
+  // replace this with a constant-time exchange of pointers.
+  ShenandoahSquirrelAwayCardTable task;
+  heap->old_generation()->parallel_heap_region_iterate(&task);
 }
 
 void ShenandoahGeneration::prepare_gc() {

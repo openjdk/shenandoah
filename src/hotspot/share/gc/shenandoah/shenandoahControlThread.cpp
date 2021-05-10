@@ -579,20 +579,31 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) return;
 
-      printf("service_concurrent_cycle A, ShenandoahLoadRefBarrier is 0x%llx\n", (unsigned long long) ShenandoahLoadRefBarrier);
-      fflush(stdout);
+  printf("service_concurrent_cycle A, ShenandoahLoadRefBarrier is 0x%llx\n", (unsigned long long) ShenandoahLoadRefBarrier);
+  fflush(stdout);
 
   GCIdMark gc_id_mark;
   ShenandoahGCSession session(cause, generation);
 
+  printf("service_concurrent_cycle B\n"); fflush(stdout);
+
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
+  printf("service_concurrent_cycle C\n"); fflush(stdout);
+
   ShenandoahConcurrentGC gc(generation);
+
+  printf("service_concurrent_cycle D\n"); fflush(stdout);
+
   if (gc.collect(cause)) {
+    printf("service_concurrent_cycle E\n"); fflush(stdout);
+
     // Cycle is complete
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
   } else {
+    printf("service_concurrent_cycle F\n"); fflush(stdout);
+
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
     _degen_generation = generation;

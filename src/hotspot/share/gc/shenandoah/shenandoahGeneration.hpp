@@ -81,6 +81,9 @@ public:
   // Used directly by FullGC
   void reset_mark_bitmap();
 
+  // Used by concurrent and degenerated GC to reset remembered set.
+  void swap_remembered_set();
+
   // Used by concurrent and degenerated GC to reset regions.
   void prepare_gc();
 

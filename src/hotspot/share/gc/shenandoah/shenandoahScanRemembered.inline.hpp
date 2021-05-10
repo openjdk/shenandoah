@@ -52,24 +52,40 @@ ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) {
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_write_card_dirty(size_t card_index) {
   uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+
+//  printf("  is_write_card_dirty() @ index %lld, bp: %llx holds value: %d\n", (unsigned long long) card_index,
+//         (unsigned long long) bp, bp[0]);
+
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(size_t card_index) {
   uint8_t *bp = &(_card_table->read_byte_map())[card_index];
+
+//  printf("  is_card_dirty() @ index %lld, bp: %llx holds value: %d\n", (unsigned long long) card_index,
+//         (unsigned long long) bp, bp[0]);
+
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_dirty(size_t card_index) {
   uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+
+//  printf("  mark_card_as_dirty() @ index %lld, bp: %llx\n", (unsigned long long) card_index,
+//         (unsigned long long) bp);
+
   bp[0] = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(size_t card_index, size_t num_cards) {
   uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+
+//  printf("  mark_range_as_dirty() starting @ index %lld, num_cards: %lld, bp: %llx\n", (unsigned long long) card_index,
+//         (unsigned long long) num_cards, (unsigned long long) bp);
+
   while (num_cards-- > 0)
     *bp++ = CardTable::dirty_card_val();
 }
@@ -77,13 +93,21 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(size_t card_index, si
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_clean(size_t card_index) {
   uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+
+//  printf("  mark_card_as_clean() @ index %lld, bp: %llx\n", (unsigned long long) card_index,
+//         (unsigned long long) bp);
+
   bp[0] = CardTable::clean_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(size_t card_index, size_t num_cards) {
   uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+
+//  printf("  mark_range_as_clean() starting @ index %lld, num_cards: %lld, bp: %llx\n", (unsigned long long) card_index,
+//         (unsigned long long) num_cards, (unsigned long long) bp);
   while (num_cards-- > 0)
+
     *bp++ = CardTable::clean_card_val();
 }
 
@@ -95,13 +119,23 @@ ShenandoahDirectCardMarkRememberedSet::mark_overreach_card_as_dirty(size_t card_
 
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) {
-  uint8_t *bp = &(_card_table->read_byte_map_base())[uintptr_t(p) >> _card_shift];
+  size_t index = card_index_for_addr(p);
+  uint8_t *bp = &(_card_table->read_byte_map())[index];
+
+//  printf("  is_card_dirty(%llx), which is index %lld, bp: %llx holds value: %d\n", (unsigned long long) p, (unsigned long long) index,
+//         (unsigned long long) bp, bp[0]);
+
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_dirty(HeapWord *p) {
-  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
+  size_t index = card_index_for_addr(p);
+  uint8_t *bp = &(_card_table->write_byte_map())[index];
+
+//  printf("  mark_card_as_dirty(%llx), which is index %lld, bp: %llx\n", (unsigned long long) p, (unsigned long long) index,
+//         (unsigned long long) bp);
+
   bp[0] = CardTable::dirty_card_val();
 }
 
@@ -112,13 +146,33 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(HeapWord *p, size_t n
   // If (p + num_heap_words) is not aligned on card boundary, we also need to dirty last card.
   if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size - 1))
     end_bp++;
+
+//  size_t index = card_index_for_addr(p);
+//  printf("  mark_range_as_dirty(%llx) starting @ index %lld, num_cards: %lld, bp: %llx\n",
+//         (unsigned long long) p, (unsigned long long) (end_bp - bp),
+//         (unsigned long long) (end_bp - bp), (unsigned long long) bp);
+
   while (bp < end_bp)
     *bp++ = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_clean(HeapWord *p) {
-  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
+  size_t index = card_index_for_addr(p);
+  uint8_t *bp = &(_card_table->write_byte_map())[index];
+
+//  printf("  mark_card_as_clean(%llx), which is index %lld, bp: %llx\n", (unsigned long long) p, (unsigned long long) index,
+//         (unsigned long long) bp);
+
+  bp[0] = CardTable::clean_card_val();
+}
+
+inline void
+ShenandoahDirectCardMarkRememberedSet::mark_read_card_as_clean(size_t index) {
+  uint8_t *bp = &(_card_table->read_byte_map())[index];
+
+//  printf("  mark_read_card_as_clean() @ index %lld, bp: %llx\n", (unsigned long long) index, (unsigned long long) bp);
+
   bp[0] = CardTable::clean_card_val();
 }
 
@@ -129,6 +183,12 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, size_t n
   // If (p + num_heap_words) is not aligned on card boundary, we also need to clean last card.
   if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size - 1))
     end_bp++;
+
+//  size_t index = card_index_for_addr(p);
+//  printf("  mark_range_as_clean(%llx) starting @ index %lld, num_cards: %lld, bp: %llx\n",
+//         (unsigned long long) p, (unsigned long long) (end_bp - bp),
+//         (unsigned long long) (end_bp - bp), (unsigned long long) bp);
+
   while (bp < end_bp)
     *bp++ = CardTable::clean_card_val();
 }
@@ -489,6 +549,8 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t
 
 #define EXPERIMENT
 #ifdef EXPERIMENT
+    // watch for repeated iterations over the same index, as I think I
+    // might have seen this in practice and I do not understant it.
     size_t previous_iter_card_index = card_index - 1;
 #endif
 
@@ -496,18 +558,17 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t
     size_t next_card_index = 0;
     while (card_index < end_card_index) {
 
-      bool is_dirty = (write_table)? _rs->is_write_card_dirty(card_index): _rs->is_card_dirty(card_index);
+      bool is_dirty = (write_table)? is_write_card_dirty(card_index): is_card_dirty(card_index);
 #ifdef EXPERIMENT
       HeapWord* card_base = _rs->addr_for_card_index(card_index);
       if (!is_dirty) {
-        printf("[%u] NoInterest(%s) [%llx, %llx]\n", worker_id, write_table? "W": "R",
-               (unsigned long long) card_base, (unsigned long long) (card_base + CardTable::card_size_in_words));
+        printf("[%u] NoInterest(%s) [%llx, %llx], index: %lld\n", worker_id, write_table? "W": "R",
+               (unsigned long long) card_base, (unsigned long long) (card_base + CardTable::card_size_in_words),
+               (unsigned long long) card_index);
       } else {
-        printf("[%u] Interest(%s) [%llx, %llx]\n", worker_id, write_table? "W": "R",
-               (unsigned long long) card_base, (unsigned long long) (card_base + CardTable::card_size_in_words));
-      }
-      if (card_index == previous_iter_card_index) {
-        printf("[%u]  iterating with same card_index: %llu\n", worker_id, (unsigned long long) card_index);
+        printf("[%u] Interest(%s) [%llx, %llx], index: %lld\n", worker_id, write_table? "W": "R",
+               (unsigned long long) card_base, (unsigned long long) (card_base + CardTable::card_size_in_words),
+               (unsigned long long) card_index);
       }
       previous_iter_card_index = card_index;
       // Let's assume my card table is unreliable.  Does this fix the problem?
@@ -520,6 +581,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t
 //      printf("  process_clusters, card @%llx is %sdirty\n", (unsigned long long) _rs->addr_for_card_index(card_index), is_dirty? "": "NOT ");
 
       if (is_dirty) {
+        size_t prev_card_index = card_index;
         if (has_object) {
           // Scan all objects that start within this card region.
           size_t start_offset = _scc->get_first_start(card_index);
@@ -562,15 +624,35 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t
             }
             p += obj->size();
           }
-          if (p > endp)
+          if (p > endp) {
             card_index = card_index + (p - card_start) / CardTable::card_size_in_words;
-          else                  // p == endp
+          } else {                  // p == endp
             card_index = next_card_index;
+          }
         } else {
-          // otherwise, this card will have been scanned during scan of a previous cluster.
+          // Card is dirty but has no object.  Card will have been scanned during scan of a previous cluster.
           card_index++;
         }
+        if (!write_table) {
+          while (prev_card_index < card_index) {
+
+
+// having scanned the read_card table, it should now be ok to clear
+// the read card table.  but in the current implementation, i don't
+// have to do this here because I'm going to zero the write-table.
+// 
+// OTOH, clearing the cards here helps me detect if I have errant
+// dirtying of read-card-table entries.
+
+            // Clear the cards now, while they're in cache, so we don't have to do it later.
+
+            printf("IM: cleaning card [%lld]\n", (unsigned long long) prev_card_index);
+            _rs->mark_read_card_as_clean(prev_card_index++);
+          }
+        }
       } else if (has_object) {
+        // Card is clean but has object.
+
         // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
         // or if it reaches into the next cluster.
         size_t start_offset = _scc->get_last_start(card_index);
@@ -611,8 +693,24 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(uint worker_id, size_t
           }
         }
         // Increment card_index to account for the spanning object, even if we didn't scan it.
-        card_index = (last_card > card_index)? last_card: card_index + 1;
+        size_t new_card_index = (last_card > card_index)? last_card: card_index + 1;
+        if (!write_table) {
+          while (card_index < new_card_index) {
+            // Clear the cards now, while their in cache, so we don't have to do it later.
+
+// kelvin to do: remove this code.  it is not necessary because we
+// clean cards at init_mark safepoint.
+
+            printf("IM: cleaning card [%lld]\n", (unsigned long long) card_index);
+
+            _rs->mark_read_card_as_clean(card_index++);
+
+          }
+        } else {
+          card_index = new_card_index;
+        }
       } else {
+        // Card is clean and has no object.  No need to clean this card.
         card_index++;
       }
     }
@@ -648,9 +746,9 @@ ShenandoahScanRemembered<RememberedSet>::process_region(uint worker_id, Shenando
     end_of_range = region->get_update_watermark();
 
 //    printf(" SSR:process_region() is scanning to update_watermark: 0x%llx\n", (unsigned long long) end_of_range);
-    if (end_of_range != region->top())
-      printf("[%u]   Halelujah!  update_watermark() != top() in SSR:process_region()\n", worker_id);
-    fflush(stdout);
+//    if (end_of_range != region->top())
+//      printf("[%u]   Halelujah!  update_watermark() != top() in SSR:process_region()\n", worker_id);
+//    fflush(stdout);
   } else {
     // This is concurrent mark servicing.  Note that TAMS for this region is TAMS at start of old-gen
     // collection.  Here, we need to scan up to TAMS for most recently initiated young-gen collection.

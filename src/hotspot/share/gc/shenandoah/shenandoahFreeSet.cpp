@@ -178,8 +178,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   try_recycle_trashed(r);
 
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
-    // This free region might have garbage in its remembered set representation.
-    _heap->clear_cards_for(r);
+    if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      // This free region might have garbage in its remembered set representation.
+      _heap->clear_cards_for(r);
+    }
     r->set_affiliation(req.affiliation());
   } else if (r->affiliation() != req.affiliation()) {
     return NULL;
