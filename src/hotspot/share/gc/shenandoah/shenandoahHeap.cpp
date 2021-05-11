@@ -835,6 +835,67 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   return gclab->allocate(size);
 }
 
+HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
+  // New object should fit the PLAB size
+  size_t min_size = MAX2(size, PLAB::min_size());
+
+  // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
+  size_t new_size = ShenandoahThreadLocalData::plab_size(thread) * 2;
+  new_size = MIN2(new_size, PLAB::max_size());
+  new_size = MAX2(new_size, PLAB::min_size());
+
+  // Record new heuristic value even if we take any shortcut. This captures
+  // the case when moderately-sized objects always take a shortcut. At some point,
+  // heuristics should catch up with them.
+  ShenandoahThreadLocalData::set_plab_size(thread, new_size);
+
+  if (new_size < size) {
+    // New size still does not fit the object. Fall back to shared allocation.
+    // This avoids retiring perfectly good PLABs, when we encounter a large object.
+    return NULL;
+  }
+
+  // Retire current PLAB, and allocate a new one.
+  PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+  retire_plab(plab);
+
+  size_t actual_size = 0;
+  HeapWord* plab_buf = allocate_new_plab(min_size, new_size, &actual_size);
+  if (plab_buf == NULL) {
+    return NULL;
+  }
+
+  assert (size <= actual_size, "allocation should fit");
+
+  if (ZeroTLAB) {
+    // ..and clear it.
+    Copy::zero_to_words(plab_buf, actual_size);
+  } else {
+    // ...and zap just allocated object.
+#ifdef ASSERT
+    // Skip mangling the space corresponding to the object header to
+    // ensure that the returned space is not considered parsable by
+    // any concurrent GC thread.
+    size_t hdr_size = oopDesc::header_size();
+    Copy::fill_to_words(plab_buf + hdr_size, actual_size - hdr_size, badHeapWordVal);
+#endif // ASSERT
+  }
+  plab->set_buf(plab_buf, actual_size);
+  return plab->allocate(size);
+}
+
+void ShenandoahHeap::retire_plab(PLAB* plab) {
+  size_t waste = plab->waste();
+  HeapWord* top = plab->top();
+  plab->retire();
+  if (top != NULL && plab->waste() > waste) {
+    // If retiring the plab created a filler object, then we
+    // need to register it with our card scanner so it can
+    // safely walk the region backing the plab.
+    card_scan()->register_object(top);
+  }
+}
+
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
                                             size_t* actual_size) {
@@ -852,6 +913,19 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
                                              size_t word_size,
                                              size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_gclab(min_size, word_size);
+  HeapWord* res = allocate_memory(req);
+  if (res != NULL) {
+    *actual_size = req.actual_size();
+  } else {
+    *actual_size = 0;
+  }
+  return res;
+}
+
+HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
+                                            size_t word_size,
+                                            size_t* actual_size) {
+  ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
   HeapWord* res = allocate_memory(req);
   if (res != NULL) {
     *actual_size = req.actual_size();
@@ -1127,6 +1201,10 @@ public:
     PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
     assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
     assert(gclab->words_remaining() == 0, "GCLAB should not need retirement");
+
+    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+    assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
+    assert(plab->words_remaining() == 0, "PLAB should not need retirement");
   }
 };
 
@@ -1141,6 +1219,13 @@ public:
     gclab->retire();
     if (_resize && ShenandoahThreadLocalData::gclab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_gclab_size(thread, 0);
+    }
+
+    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+    assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
+    ShenandoahHeap::heap()->retire_plab(plab);
+    if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
+      ShenandoahThreadLocalData::set_plab_size(thread, 0);
     }
   }
 };
@@ -1196,6 +1281,37 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
 
   if (safepoint_workers() != NULL) {
     safepoint_workers()->threads_do(&cl);
+  }
+}
+
+class ShenandoahTagGCLABClosure : public ThreadClosure {
+public:
+  void do_thread(Thread* thread) {
+    PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
+    assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
+    if (gclab->words_remaining() > 0) {
+      ShenandoahHeapRegion* r = ShenandoahHeap::heap()->heap_region_containing(gclab->allocate(0));
+      r->set_young_lab_flag();
+    }
+  }
+};
+
+void ShenandoahHeap::set_young_lab_region_flags() {
+  if (!UseTLAB) {
+    return;
+  }
+  for (size_t i = 0; i < _num_regions; i++) {
+    _regions[i]->clear_young_lab_flags();
+  }
+  ShenandoahTagGCLABClosure cl;
+  workers()->threads_do(&cl);
+  for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
+    cl.do_thread(t);
+    ThreadLocalAllocBuffer& tlab = t->tlab();
+    if (tlab.end() != NULL) {
+      ShenandoahHeapRegion* r = heap_region_containing(tlab.start());
+      r->set_young_lab_flag();
+    }
   }
 }
 

@@ -30,14 +30,14 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
-HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest::Type type) {
+HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest req) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
 
   HeapWord* obj = top();
   if (pointer_delta(end(), obj) >= size) {
-    make_regular_allocation();
-    adjust_alloc_metadata(type, size);
+    make_regular_allocation(req.affiliation());
+    adjust_alloc_metadata(req.type(), size);
 
     HeapWord* new_top = obj + size;
     set_top(new_top);
@@ -62,6 +62,9 @@ inline void ShenandoahHeapRegion::adjust_alloc_metadata(ShenandoahAllocRequest::
       break;
     case ShenandoahAllocRequest::_alloc_gclab:
       _gclab_allocs += size;
+      break;
+    case ShenandoahAllocRequest::_alloc_plab:
+      _plab_allocs += size;
       break;
     default:
       ShouldNotReachHere();
@@ -130,6 +133,18 @@ inline void ShenandoahHeapRegion::set_update_watermark_at_safepoint(HeapWord* w)
   assert(bottom() <= w && w <= top(), "within bounds");
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at Shenandoah safepoint");
   _update_watermark = w;
+}
+
+inline void ShenandoahHeapRegion::clear_young_lab_flags() {
+  _has_young_lab = false;
+}
+
+inline void ShenandoahHeapRegion::set_young_lab_flag() {
+  _has_young_lab = true;
+}
+
+inline bool ShenandoahHeapRegion::has_young_lab_flag() {
+  return _has_young_lab;
 }
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP

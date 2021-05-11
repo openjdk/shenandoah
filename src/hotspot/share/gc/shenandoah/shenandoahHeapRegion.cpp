@@ -70,10 +70,12 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _top(start),
   _tlab_allocs(0),
   _gclab_allocs(0),
+  _plab_allocs(0),
+  _has_young_lab(false),
   _live_data(0),
   _critical_pins(0),
   _update_watermark(start),
-  _affiliation(ShenandoahRegionAffiliation::FREE),
+  _affiliation(FREE),
   _age(0) {
 
   assert(Universe::on_page_boundary(_bottom) && Universe::on_page_boundary(_end),
@@ -91,13 +93,14 @@ void ShenandoahHeapRegion::report_illegal_transition(const char *method) {
   fatal("%s", ss.as_string());
 }
 
-void ShenandoahHeapRegion::make_regular_allocation() {
+void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
+      set_affiliation(affiliation);
       set_state(_regular);
     case _regular:
     case _pinned:
@@ -119,6 +122,12 @@ void ShenandoahHeapRegion::make_regular_bypass() {
     case _cset:
     case _humongous_start:
     case _humongous_cont:
+      // TODO: Changing this region to young during compaction may not be
+      // technically correct here because it completely disregards the ages
+      // and origins of the objects being moved. It is, however, certainly
+      // more correct than putting live objects into a region without a
+      // generational affiliation.
+      set_affiliation(YOUNG_GENERATION);
       set_state(_regular);
       return;
     case _pinned_cset:
@@ -220,6 +229,7 @@ void ShenandoahHeapRegion::make_unpinned() {
 
   switch (_state) {
     case _pinned:
+      assert(affiliation() != FREE, "Pinned region should not be FREE");
       set_state(_regular);
       return;
     case _regular:
@@ -318,10 +328,11 @@ void ShenandoahHeapRegion::make_committed_bypass() {
 void ShenandoahHeapRegion::reset_alloc_metadata() {
   _tlab_allocs = 0;
   _gclab_allocs = 0;
+  _plab_allocs = 0;
 }
 
 size_t ShenandoahHeapRegion::get_shared_allocs() const {
-  return used() - (_tlab_allocs + _gclab_allocs) * HeapWordSize;
+  return used() - (_tlab_allocs + _gclab_allocs + _plab_allocs) * HeapWordSize;
 }
 
 size_t ShenandoahHeapRegion::get_tlab_allocs() const {
@@ -330,6 +341,10 @@ size_t ShenandoahHeapRegion::get_tlab_allocs() const {
 
 size_t ShenandoahHeapRegion::get_gclab_allocs() const {
   return _gclab_allocs * HeapWordSize;
+}
+
+size_t ShenandoahHeapRegion::get_plab_allocs() const {
+  return _plab_allocs * HeapWordSize;
 }
 
 void ShenandoahHeapRegion::set_live_data(size_t s) {
@@ -397,6 +412,9 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
   st->print("|U " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(used()),                proper_unit_for_byte_size(used()));
   st->print("|T " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_byte_size(get_tlab_allocs()));
   st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_byte_size(get_gclab_allocs()));
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
+  }
   st->print("|S " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_shared_allocs()),   proper_unit_for_byte_size(get_shared_allocs()));
   st->print("|L " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_live_data_bytes()), proper_unit_for_byte_size(get_live_data_bytes()));
   st->print("|CP " SIZE_FORMAT_W(3), pin_count());
@@ -660,7 +678,6 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
-
   set_affiliation(FREE);
 
   if (ZapUnusedHeapArea) {
@@ -951,17 +968,28 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     oop obj = oop(bottom());
     assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
+    // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
+    heap->card_scan()->register_object_wo_lock(bottom());
     size_t index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
 
-    // Since the humongous region holds only one object, no lock is
-    // necessary for this register_object() invocation.
-    heap->card_scan()->register_object_wo_lock(bottom());
-
-    // Unless promoting_all, mark the entire range of the evacuated object as dirty.  At next remembered
-    // set scan, we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
-    // do this in batch, in a background GC thread than to try to carefully dirty only cards that hold
-    // interesting pointers right now.
-
+    // For this region and each humongous continuation region spanned by this humongous object, change
+    // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
+    // in the last humongous region that is not spanned by obj is currently not used.
+    for (size_t i = index(); i < index_limit; i++) {
+      ShenandoahHeapRegion* r = heap->get_region(i);
+      log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
+        r->index(), (size_t) r->bottom(), (size_t) r->top());
+      if (top() < end()) {
+        ShenandoahHeap::fill_with_object(top(), (end() - top()) / HeapWordSize);
+        heap->card_scan()->register_object_wo_lock(top());
+        heap->card_scan()->mark_range_as_clean(top(), end() - top());
+      }
+      r->set_affiliation(OLD_GENERATION);
+      log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
+                    i, (size_t) r->bottom(), (size_t) r->top());
+      old_generation->increase_used(r->used());
+      young_generation->decrease_used(r->used());
+    }
     if (promoting_all || obj->is_typeArray()) {
       // Primitive arrays don't need to be scanned.
       heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
@@ -969,17 +997,6 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
       heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
     }
 
-    // For this region and each humongous continuation region spanned by this humongous object, change
-    // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
-    // in the last humongous region that is not spanned by obj is currently not used.
-    for (size_t i = index(); i < index_limit; i++) {
-      ShenandoahHeapRegion* r = heap->get_region(i);
-      r->set_affiliation(OLD_GENERATION);
-      log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
-                    i, (size_t) r->bottom(), (size_t) r->top());
-      old_generation->increase_used(r->used());
-      young_generation->decrease_used(r->used());
-    }
     return index_limit - index();
   } else {
     log_debug(gc)("promoting region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
@@ -1002,14 +1019,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     old_generation->increase_used(used());
     young_generation->decrease_used(used());
 
-    // Not sure when this happens.  We just want to coalesce and fill dead and register marked.
-    // There's no closure to be serviced.
-
-#ifdef DEPRECATED
-    oop_iterate_objects_and_fill_dead(&update_card_values, true);
-#else
     fill_dead_and_register();
-#endif
     return 1;
   }
 }

@@ -168,7 +168,7 @@ public:
   }
 
   // Allowed transitions from the outside code:
-  void make_regular_allocation();
+  void make_regular_allocation(ShenandoahRegionAffiliation affiliation);
   void make_regular_bypass();
   void make_humongous_start();
   void make_humongous_cont();
@@ -212,6 +212,10 @@ public:
   void record_unpin();
   size_t pin_count() const;
 
+  void clear_young_lab_flags();
+  void set_young_lab_flag();
+  bool has_young_lab_flag();
+
 private:
   static size_t RegionCount;
   static size_t RegionSizeBytes;
@@ -242,6 +246,9 @@ private:
 
   size_t _tlab_allocs;
   size_t _gclab_allocs;
+  size_t _plab_allocs;
+
+  bool _has_young_lab;
 
   volatile size_t _live_data;
   volatile size_t _critical_pins;
@@ -339,7 +346,7 @@ public:
   }
 
   // Allocation (return NULL if full)
-  inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest::Type type);
+  inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest req);
 
   inline void clear_live_data();
   void set_live_data(size_t s);
@@ -394,6 +401,7 @@ public:
   size_t get_shared_allocs() const;
   size_t get_tlab_allocs() const;
   size_t get_gclab_allocs() const;
+  size_t get_plab_allocs() const;
 
   inline HeapWord* get_update_watermark() const;
   inline void set_update_watermark(HeapWord* w);
