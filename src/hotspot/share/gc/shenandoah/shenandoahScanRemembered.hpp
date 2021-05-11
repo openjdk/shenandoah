@@ -750,7 +750,7 @@ public:
 
 
   // Notes on synchronization of register_object():
-  // 
+  //
   //  1. For efficiency, there is no locking in the implementation of register_object()
   //  2. Thus, it is required that users of this service assure that concurrent/parallel invocations of
   //     register_object() do pertain to the same card's memory range.  See discussion below to undestand
@@ -758,7 +758,7 @@ public:
   //  3. When allocating from a TLAB or GCLAB, the mutual exclusion can be guaranteed by assuring that each
   //     LAB's start and end are aligned on card memory boundaries.
   //  4. Use the same lock that guarantees exclusivity when performing free-list allocation within heap regions.
-  // 
+  //
   // Register the newly allocated object while we're holding the global lock since there's no synchronization
   // built in to the implementation of register_object().  There are potential races when multiple independent
   // threads are allocating objects, some of which might span the same card region.  For example, consider
