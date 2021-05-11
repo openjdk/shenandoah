@@ -1684,10 +1684,6 @@ void ShenandoahHeap::manage_satb_barrier(bool active) {
 
 void ShenandoahHeap::set_evacuation_in_progress(bool in_progress) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Only call this at safepoint");
-
-  printf("setting evacuation_in_progress to %d\n", in_progress);
-  fflush(stdout);
-
   set_gc_state_mask(EVACUATION, in_progress);
 }
 
@@ -1716,12 +1712,6 @@ size_t ShenandoahHeap::tlab_used(Thread* thread) const {
 }
 
 bool ShenandoahHeap::try_cancel_gc() {
-
-  if (lock()->owned_by_self()) {
-    printf("try_cancel_gc() while owning heap lock is NOT A GOOD THING!\n");
-    fflush(stdout);
-  }
-
   while (true) {
     jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
     if (prev == CANCELLABLE) return true;
@@ -2050,10 +2040,6 @@ private:
     while (r != NULL) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
-
-      printf("SUHRT::do_work(%u), region [%llx, %llx]\n", worker_id,
-           (unsigned long long) r->bottom(), (unsigned long long) r->end());
-
       if (r->is_active() && !r->is_cset()) {
         if (!_heap->mode()->is_generational() || r->affiliation() == YOUNG_GENERATION) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
@@ -2072,10 +2058,7 @@ private:
               // TODO: deprecate the ShenandoahUseSimpleCardScanning command-line option.
               assert(false, "ShenandoahUseSimpleCardScanning is no longer supported");
             } else if (!_mixed_evac) {
-              printf("UpdateRefs is scanning remembered set for old-gen region [%llx, %llx]\n",
-                     (unsigned long long) r->bottom(), (unsigned long long) r->top());
-              fflush(stdout);
-              _heap->card_scan()->process_region(worker_id, r, &cl, true);
+              _heap->card_scan()->process_region(r, &cl, true);
             } else {
               // This is a _mixed_evac.
               //

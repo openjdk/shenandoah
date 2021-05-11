@@ -283,7 +283,7 @@ public:
   void merge_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
-  // Not currently supported because mutator write barrier does not honor changes to the location of card table.
+  // Not currently used because mutator write barrier does not honor changes to the location of card table.
   void swap_remset() {  _card_table->swap_card_tables(); }
 
   // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
@@ -986,16 +986,16 @@ public:
   // the template expansions were making it difficult for the link/loader to resolve references to the template-
   // parameterized implementations of this service.
   template <typename ClosureType>
-  inline void process_clusters(uint worker_id, size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops);
+  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops);
 
   template <typename ClosureType>
-  inline void process_clusters(uint worker_id, size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool use_write_table);
+  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool use_write_table);
 
   template <typename ClosureType>
-  inline void process_region(uint worker_id, ShenandoahHeapRegion* region, ClosureType *cl);
+  inline void process_region(ShenandoahHeapRegion* region, ClosureType *cl);
 
   template <typename ClosureType>
-  inline void process_region(uint worker_id, ShenandoahHeapRegion* region, ClosureType *cl, bool use_write_table);
+  inline void process_region(ShenandoahHeapRegion* region, ClosureType *cl, bool use_write_table);
 
   // To Do:
   //  Create subclasses of ShenandoahInitMarkRootsClosure and
@@ -1021,7 +1021,7 @@ public:
 
   // This is used by ShenandoahRootVerifier to identify all young-gen
   // roots originating in remembered set.
-  void oops_do(uint worker_id, OopClosure* cl);
+  void oops_do(OopClosure* cl);
 };
 
 typedef ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet> RememberedScanner;

@@ -105,17 +105,9 @@ void ShenandoahScanRememberedTask::work(uint worker_id) {
   // set up thread local closure for shen ref processor
   _rp->set_mark_closure(worker_id, &cl);
   ShenandoahHeapRegion* region = _regions->next();
-
-
   while (region != NULL) {
-
     if (region->affiliation() == OLD_GENERATION) {
-      
-      printf("SSRT::work(%u), old region [%llx, %llx]\n", worker_id, 
-             (unsigned long long) region->bottom(), (unsigned long long) region->top());
-      fflush(stdout);
-
-      scanner->process_region(worker_id, region, &cl);
+      scanner->process_region(region, &cl);
     }
     region = _regions->next();
   }

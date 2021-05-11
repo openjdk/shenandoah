@@ -597,11 +597,6 @@ void ShenandoahHeapRegion::fill_dead_and_register() {
 
   // end() might be overkill as end of range, but top() may not align with card boundary.
   rem_set_scanner->reset_object_range(bottom(), end());
-
-  printf("fill_dead_and_register() about to iterate through objects from %llx to %llx\n",
-         (unsigned long long) obj_addr, (unsigned long long) t);
-  fflush(stdout);
-
   while (obj_addr < t) {
     oop obj = oop(obj_addr);
     if (marking_context->is_marked(obj)) {
@@ -904,16 +899,6 @@ size_t ShenandoahHeapRegion::pin_count() const {
 void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-#define KELVIN_VERBOSITY
-#ifdef KELVIN_VERBOSITY
-  ShenandoahMarkingContext* mark_ctx = heap->marking_context();
-
-  printf("Changing affiliation of region [%llx, %llx], top: %llx, TAMS: %llx, update_watermark: %llx, from %s to %s\n",
-         (unsigned long long) bottom(), (unsigned long long) end(), (unsigned long long) top(),
-         (unsigned long long) mark_ctx->top_at_mark_start(this), (unsigned long long) get_update_watermark(), 
-         affiliation_name(_affiliation), affiliation_name(new_affiliation));
-  fflush(stdout);
-#endif
   if (_affiliation == new_affiliation) {
     return;
   }
@@ -949,38 +934,6 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   }
   _affiliation = new_affiliation;
 }
-
-// TODO: Remove this?
-//  Should not be used because we have chosen to not scan promoted objects at promotion time.  Allowing
-//  promoted objects to be scanned at a later time by a background GC thread is more efficient (due to
-//  locality and specialization enabled by batch processing) and provides better mutator latency.
-
-class UpdateCardValuesClosure : public BasicOopIterateClosure {
-private:
-  void update_card_value(void* address, oop obj) {
-    if (ShenandoahHeap::heap()->is_in_young(obj)) {
-      volatile CardTable::CardValue* card_value = ShenandoahBarrierSet::barrier_set()->card_table()->byte_for(address);
-      *card_value = CardTable::dirty_card_val();
-    }
-  }
-
-public:
-  void do_oop(oop* p) {
-    oop obj = *p;
-    if (obj != NULL) {
-      update_card_value(p, obj);
-    }
-  }
-
-  void do_oop(narrowOop* p) {
-    narrowOop o = RawAccess<>::oop_load(p);
-    if (!CompressedOops::is_null(o)) {
-      oop obj = CompressedOops::decode_not_null(o);
-      assert(oopDesc::is_oop(obj), "must be a valid oop");
-      update_card_value(p, obj);
-    }
-  }
-};
 
 size_t ShenandoahHeapRegion::promote(bool promoting_all) {
   // TODO: Not sure why region promotion must be performed at safepoint.  Reconsider this requirement.
