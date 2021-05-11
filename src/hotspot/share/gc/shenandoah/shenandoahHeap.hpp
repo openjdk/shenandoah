@@ -685,6 +685,7 @@ public:
   void clear_cards_for(ShenandoahHeapRegion* region);
   void mark_card_as_dirty(HeapWord* location);
   void retire_plab(PLAB* plab);
+  void cancel_mixed_collections();
 
 // ---------- Helper functions
 //
