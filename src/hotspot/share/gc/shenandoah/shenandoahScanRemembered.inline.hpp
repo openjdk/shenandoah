@@ -428,7 +428,7 @@ process_obj_array_upto(HeapWord *p, ClosureType *cl, objArrayOop array, uint sta
   size_t size = array->size();
   HeapWord *array_end = p + size;
   if (len > 150) {
-    printf("big! %d %p\n", len, p);
+    //printf("big! %d %p\n", len, p);
   }
   if (array_end <= card_end) {
     if (scan) {
