@@ -483,6 +483,7 @@ void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahMarkingContext* marking_context = heap->marking_context();
     assert(heap->active_generation()->is_mark_complete(), "sanity");
+    HeapWord* tams = marking_context->top_at_mark_start(this);
 
     while (obj_addr < t) {
       oop obj = oop(obj_addr);
@@ -494,8 +495,8 @@ void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill
         obj_addr += obj->oop_iterate_size(blk);
       } else {
         // Object is not marked.  Coalesce and fill dead object with dead neighbors.
-        HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
-        assert(next_marked_obj <= t, "next marked object cannot exceed top");
+        HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
+        assert(next_marked_obj <= tams, "next marked object cannot exceed top at mark start");
         size_t fill_size = next_marked_obj - obj_addr;
         ShenandoahHeap::fill_with_object(obj_addr, fill_size);
         if (reregister_coalesced_objects) {
