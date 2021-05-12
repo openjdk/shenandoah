@@ -880,7 +880,8 @@ size_t ShenandoahHeapRegion::promote() {
         heap->card_scan()->register_object(r->top());
         ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(r->top(), r->end()));
       }
-      ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(bottom(), top()));
+
+      ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(r->bottom(), r->end()));
       r->set_affiliation(OLD_GENERATION);
       old_generation->increase_used(r->used());
       young_generation->decrease_used(r->used());
@@ -895,7 +896,7 @@ size_t ShenandoahHeapRegion::promote() {
     old_generation->increase_used(used());
     young_generation->decrease_used(used());
 
-    ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(top(), end()));
+    ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(bottom(), end()));
     // In terms of card marking, We could just set the whole occupied range in this region to dirty instead of iterating here.
     // Card scanning could correct false positives later and that would be more efficient.
     // But oop_iterate_objects() has other, indispensable effects: filling dead objects and registering object starts.
