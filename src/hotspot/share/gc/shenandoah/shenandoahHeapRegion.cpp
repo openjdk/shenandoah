@@ -875,10 +875,10 @@ size_t ShenandoahHeapRegion::promote() {
       ShenandoahHeapRegion* r = heap->get_region(i);
       log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
         r->index(), (size_t) r->bottom(), (size_t) r->top());
-      if (top() < end()) {
-        ShenandoahHeap::fill_with_object(top(), (end() - top()) / HeapWordSize);
-        heap->card_scan()->register_object(top());
-        ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(top(), end()));
+      if (r->top() < r->end()) {
+        ShenandoahHeap::fill_with_object(r->top(), (r->end() - r->top()) / HeapWordSize);
+        heap->card_scan()->register_object(r->top());
+        ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(r->top(), r->end()));
       }
       ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(bottom(), top()));
       r->set_affiliation(OLD_GENERATION);
