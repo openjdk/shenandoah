@@ -880,8 +880,7 @@ size_t ShenandoahHeapRegion::promote() {
         heap->card_scan()->register_object(r->top());
         ShenandoahBarrierSet::barrier_set()->card_table()->clear_MemRegion(MemRegion(r->top(), r->end()));
       }
-
-      ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(r->bottom(), r->end()));
+      ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(r->bottom(), r->top()));
       r->set_affiliation(OLD_GENERATION);
       old_generation->increase_used(r->used());
       young_generation->decrease_used(r->used());
