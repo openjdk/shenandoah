@@ -231,7 +231,7 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size)
   }
 
   if (mode()->is_generational() && obj != NULL) {
-    ShenandoahHeap::heap()->card_scan()->register_object(obj);
+    ShenandoahHeap::heap()->card_scan()->register_object_wo_lock(obj);
   }
 
   return obj;
@@ -344,7 +344,11 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     if (target_gen == OLD_GENERATION) {
-      card_scan()->register_object(copy);
+      if (alloc_from_lab) {
+        card_scan()->register_object_wo_lock(copy);
+      } 
+      // else, allocate_memory_under_lock() has already registered the object
+
       // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
       // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
       // do this in batch, in a background GC thread than to try to carefully dirty only cards
@@ -384,9 +388,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       // we have to keep the fwdptr initialized and pointing to our (stale) copy.
       fill_with_object(copy, size);
       shenandoah_assert_correct(NULL, copy_val);
-      if (target_gen == OLD_GENERATION) {
-        card_scan()->register_object(copy);
-      }
+      // For non-LAB allocations, the object has already been registered
     }
     shenandoah_assert_correct(NULL, result);
     return result;

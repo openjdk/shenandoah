@@ -458,102 +458,6 @@ void ShenandoahHeapRegion::oop_fill_and_coalesce() {
   }
 }
 
-
-#ifdef DEPRECATE
-void ShenandoahHeapRegion::oop_iterate(OopIterateClosure* blk, bool fill_dead_objects, bool reregister_coalesced_objects) {
-  if (!is_active()) return;
-  if (is_humongous()) {
-    // TODO: This doesn't look right.  This registers objects if !reregister, and it isn't filling if fill_dead_objects.
-    // Furthermore, register and fill should be done after iterating.
-    if (fill_dead_objects && !reregister_coalesced_objects) {
-      ShenandoahHeap::heap()->card_scan()->register_object_wo_lock(bottom());
-    }
-    oop_iterate_humongous(blk);
-  } else {
-    oop_iterate_objects(blk, fill_dead_objects, reregister_coalesced_objects);
-  }
-}
-
-// kelvin is here.  what do you mean reregister vs not reregister?
-//   coalesce_objects() has the side effect of reregistering objects
-//   why would we not want to coalesce?
-//
-// Needs much better commentary.
-//   oop_iterate_objects() came first, then we added the two arguments
-//   oop_iterate_objects() iterates over all objects in the region and
-//     invokes the object's oop_iterate_size() method, passing the
-//     Closure blk as an argument.  This allows us to process every
-//     pointer contained within each object of the region.
-//
-//   trying to figure out why would I ever fill_dead_objects without
-//   reregistering coalesced objects.
-//     old_region with a global cycle: fills_dead_objects and reregisters_coalescewd_objects at start of update heap refs
-//          (confirm that this is not also relevant to old cycle as shown in shenandhoahHeap.orig.cpp)
-//     this is the only invocation, and always has true arguments
-//      so invent a new service: oop_iterate_objects_fill_dead() and deprecate the old one.
-
-//     promote a heap region: we filled dead objects but did not reregister coalesced objects.  I think that was
-//     wrong.  coalesced objects needed to be registered.
-
-
-//
-
-
-void ShenandoahHeapRegion::oop_iterate_objects(OopIterateClosure* blk, bool fill_dead_objects, bool reregister_coalesced_objects) {
-  assert(!is_humongous(), "no humongous region here");
-  HeapWord* obj_addr = bottom();
-  HeapWord* t = top();
-
-  if (!fill_dead_objects) {
-    while (obj_addr < t) {
-      oop obj = oop(obj_addr);
-      assert(obj->klass() != NULL, "klass should not be NULL");
-      obj_addr += obj->oop_iterate_size(blk);
-    }
-  } else {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    ShenandoahMarkingContext* marking_context = heap->marking_context();
-    assert(heap->active_generation()->is_mark_complete(), "sanity");
-
-    while (obj_addr < t) {
-      oop obj = oop(obj_addr);
-      if (marking_context->is_marked(obj)) {
-        assert(obj->klass() != NULL, "klass should not be NULL");
-        if (!reregister_coalesced_objects) {
-          // Since the same thread is registering all objects residing
-          // within a particular ShenandoahHeapRegion, and since
-          // ShenandoahHeapRegion is aligned on card memory range
-          // boundaries, no lock is necessary.
-
-          // this is re-registering a non-coalesced object.  shouldn't have to do that.
-
-
-          heap->card_scan()->register_object_wo_lock(obj_addr);
-        }
-        obj_addr += obj->oop_iterate_size(blk);
-      } else {
-        // Object is not marked.  Coalesce and fill dead object with dead neighbors.
-        HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
-        assert(next_marked_obj <= t, "next marked object cannot exceed top");
-        size_t fill_size = next_marked_obj - obj_addr;
-        ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-
-        if (reregister_coalesced_objects) {
-          heap->card_scan()->coalesce_objects(obj_addr, fill_size);
-        } else {              // establish new crossing map information
-
-          // Since the same thread is registering all objects residing
-          // within a particular ShenandoahHeapRegion, and since
-          // ShenandoahHeapRegion is aligned on card memory range
-          // boundaries, no lock is necessary.
-          heap->card_scan()->register_object_wo_lock(obj_addr);
-        }
-        obj_addr = next_marked_obj;
-      }
-    }
-  }
-}
-#else
 void ShenandoahHeapRegion::oop_iterate_and_fill_dead(OopIterateClosure* blk, bool is_promoting) {
   if (!is_active()) return;
   if (is_humongous()) {
@@ -563,7 +467,7 @@ void ShenandoahHeapRegion::oop_iterate_and_fill_dead(OopIterateClosure* blk, boo
     if (is_promoting) {
       ShenandoahHeap* heap = ShenandoahHeap::heap();
       RememberedScanner* rem_set_scanner = heap->card_scan();
-      rem_set_scanner->register_object(bottom());
+      rem_set_scanner->register_object_wo_lock(bottom());
     }
   } else {
     oop_iterate_objects_and_fill_dead(blk, is_promoting);
@@ -587,7 +491,7 @@ void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* 
       assert(obj->klass() != NULL, "klass should not be NULL");
       // when promoting an entire region, we have to register the marked objects as well
       if (is_promoting) {
-        rem_set_scanner->register_object(obj_addr);
+        rem_set_scanner->register_object_wo_lock(obj_addr);
       }
       obj_addr += obj->oop_iterate_size(blk);
     } else {
@@ -634,8 +538,6 @@ void ShenandoahHeapRegion::fill_dead_and_register() {
   }
 }
 
-#endif
-
 void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
   assert(is_humongous(), "only humongous region here");
   // Find head.
@@ -645,8 +547,8 @@ void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
   obj->oop_iterate(blk, MemRegion(bottom(), top()));
 }
 
-ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const { 
+ ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(is_humongous(), "Must be a part of the humongous region");
   size_t i = index();
   ShenandoahHeapRegion* r = const_cast<ShenandoahHeapRegion*>(this);

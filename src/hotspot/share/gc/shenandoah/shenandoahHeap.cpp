@@ -892,7 +892,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     // If retiring the plab created a filler object, then we
     // need to register it with our card scanner so it can
     // safely walk the region backing the plab.
-    card_scan()->register_object(top);
+    card_scan()->register_object_wo_lock(top);
   }
 }
 
