@@ -2174,6 +2174,7 @@ private:
               // TODO: deprecate the ShenandoahUseSimpleCardScanning command-line option.
               assert(false, "ShenandoahUseSimpleCardScanning is no longer supported");
             } else if (!_mixed_evac) {
+              // This is a young evac..
               _heap->card_scan()->process_region(r, &cl, true);
             } else {
               // This is a _mixed_evac.
@@ -2510,3 +2511,107 @@ template<>
 void ShenandoahGenerationRegionClosure<GLOBAL>::heap_region_do(ShenandoahHeapRegion* region) {
   _cl->heap_region_do(region);
 }
+
+// Assure that the remember set has a dirty card everywhere there is an interesting pointer.
+// This examines the read_card_table between bottom() and top() since all TLABS are retired
+// immediately before the safepoint for init_mark.
+void ShenandoahHeap::verify_rem_set_at_mark() {
+  shenandoah_assert_safepoint();
+  assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
+
+  ShenandoahRegionIterator iterator;
+  ShenandoahMarkingContext* mark_context = marking_context();
+  RememberedScanner* scanner = card_scan();
+  ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
+
+  printf("Verifying remembered set at mark\n"); fflush(stdout);
+  fflush(stdout);
+  while (iterator.has_next()) {
+    ShenandoahHeapRegion* r = iterator.next();
+    if (r == nullptr)
+      break;
+    if (r->is_old()) {
+#define KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+      ShenandoahHeap *heap = ShenandoahHeap::heap();
+      ShenandoahMarkingContext* mark_ctx = heap->marking_context();
+
+      printf(" Verifying old region [%llx, %llx], top: %llx, TAMS: %llx, update_watermark: %llx\n",
+             (unsigned long long) r->bottom(), (unsigned long long) r->end(), (unsigned long long) r->top(),
+             (unsigned long long) mark_ctx->top_at_mark_start(r), (unsigned long long) r->get_update_watermark());
+      fflush(stdout);
+#endif
+      HeapWord* obj_addr = r->bottom();
+      if (r->is_humongous_start()) {
+        oop obj = oop(obj_addr);
+        obj->oop_iterate(&check_interesting_pointers);
+        if (!scanner->verify_registration(obj_addr, obj->size())) {
+          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+                                          "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);         
+        }
+      } else if (!r->is_humongous()) {
+        HeapWord* t = r->top();
+        while (obj_addr < t) {
+          oop obj = oop(obj_addr);
+          obj->oop_iterate(&check_interesting_pointers);
+          if (!scanner->verify_registration(obj_addr, obj->size())) {
+            ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+                                            "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
+          }
+          obj_addr += obj->size();
+        }
+      }
+    } // else, we don't care about this region
+  }
+}
+
+// Assure that the remember set has a dirty card everywhere there is an interesting pointer.
+// This examines the write_card_table between bottom() and update_watermark.
+void ShenandoahHeap::verify_rem_set_at_update_ref() {
+  shenandoah_assert_safepoint();
+  assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
+
+  ShenandoahRegionIterator iterator;
+  ShenandoahMarkingContext* mark_context = marking_context();
+  RememberedScanner* scanner = card_scan();
+  ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
+
+  printf("Verifying remembered set at update ref\n"); fflush(stdout);
+  fflush(stdout);
+  while (iterator.has_next()) {
+    ShenandoahHeapRegion* r = iterator.next();
+    if (r == nullptr)
+      break;
+    if (r->is_old()) {
+#ifdef KELVIN_VERBOSE
+      ShenandoahHeap *heap = ShenandoahHeap::heap();
+      ShenandoahMarkingContext* mark_ctx = heap->marking_context();
+
+      printf(" Verifying old region [%llx, %llx], top: %llx, TAMS: %llx, update_watermark: %llx\n",
+             (unsigned long long) r->bottom(), (unsigned long long) r->end(), (unsigned long long) r->top(),
+             (unsigned long long) mark_ctx->top_at_mark_start(r), (unsigned long long) r->get_update_watermark());
+      fflush(stdout);
+#endif
+      HeapWord* obj_addr = r->bottom();
+      if (r->is_humongous_start()) {
+        oop obj = oop(obj_addr);
+        obj->oop_iterate(&check_interesting_pointers);
+        if (!scanner->verify_registration(obj_addr, obj->size())) {
+          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+                                          "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
+        }
+      } else if (!r->is_humongous()) {
+        HeapWord* t = r->get_update_watermark();
+        while (obj_addr < t) {
+          oop obj = oop(obj_addr);
+          obj->oop_iterate(&check_interesting_pointers);
+          if (!scanner->verify_registration(obj_addr, obj->size())) {
+            ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+                                            "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
+          }
+          obj_addr += obj->size();
+        }
+      }
+    } // else, we don't care about this region
+  }
+} 

@@ -951,6 +951,9 @@ public:
   void register_object_wo_lock(HeapWord *addr);
   void coalesce_objects(HeapWord *addr, size_t length_in_words);
 
+  // Return true iff this object is "properly" registered.
+  bool verify_registration(HeapWord* address, size_t size_in_words);
+
   // clear the cards to clean, and clear the object_starts info to no objects
   void mark_range_as_empty(HeapWord *addr, size_t length_in_words);
 

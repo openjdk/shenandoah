@@ -263,11 +263,6 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
     } else if (mark.age() >= InitialTenuringThreshold) {
       oop result = try_evacuate_object(p, thread, r, OLD_GENERATION);
       if (result != NULL) {
-        // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
-        // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
-        // do this in batch, in a background GC thread than to try to carefully dirty only cards
-        // that hold interesting pointers right now.
-        card_scan()->mark_range_as_dirty((HeapWord*) (void *) result, result->size());
         return result;
       }
     }
@@ -275,6 +270,8 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   return try_evacuate_object(p, thread, r, target_gen);
 }
 
+// try_evacuate_object registers the object and dirties the associated remembered set information when evacuating
+// to OLD_GENERATION.
 inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahRegionAffiliation target_gen) {
   bool alloc_from_lab = true;
   HeapWord* copy = NULL;
@@ -347,8 +344,12 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     if (target_gen == OLD_GENERATION) {
-      ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(copy, size));
       card_scan()->register_object(copy);
+      // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
+      // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
+      // do this in batch, in a background GC thread than to try to carefully dirty only cards
+      // that hold interesting pointers right now.
+      card_scan()->mark_range_as_dirty(copy, size);
     }
     // Successfully evacuated. Our copy is now the public one!
     shenandoah_assert_correct(NULL, copy_val);

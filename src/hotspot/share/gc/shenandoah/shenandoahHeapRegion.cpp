@@ -979,10 +979,10 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
         r->index(), (size_t) r->bottom(), (size_t) r->top());
-      if (top() < end()) {
-        ShenandoahHeap::fill_with_object(top(), (end() - top()) / HeapWordSize);
-        heap->card_scan()->register_object_wo_lock(top());
-        heap->card_scan()->mark_range_as_clean(top(), end() - top());
+      if (r->top() < r->end()) {
+        ShenandoahHeap::fill_with_object(r->top(), (r->end() - r->top()) / HeapWordSize);
+        heap->card_scan()->register_object_wo_lock(r->top());
+        heap->card_scan()->mark_range_as_clean(top(), r->end() - r->top());
       }
       r->set_affiliation(OLD_GENERATION);
       log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
@@ -991,7 +991,8 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
       young_generation->decrease_used(r->used());
     }
     if (promoting_all || obj->is_typeArray()) {
-      // Primitive arrays don't need to be scanned.
+      // Primitive arrays don't need to be scanned.  Likewise, if we are promoting_all, there's nothing
+      // left in young-gen, so there can exist no "interesting" pointers.
       heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
     } else {
       heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
@@ -1003,6 +1004,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
       index(), (size_t) bottom(), (size_t) top());
     assert(!is_humongous_continuation(), "should not promote humongous object continuation in isolation");
 
+    fill_dead_and_register();
     // Rather than scanning entire contents of the promoted region right now to determine which
     // cards to mark as dirty, we just mark them all as dirty (unless promoting_all).  Later, when we
     // scan the remembered set, we will clear cards that are found to not contain live references to
@@ -1018,8 +1020,6 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     set_affiliation(OLD_GENERATION);
     old_generation->increase_used(used());
     young_generation->decrease_used(used());
-
-    fill_dead_and_register();
     return 1;
   }
 }

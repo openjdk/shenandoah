@@ -466,6 +466,48 @@ ShenandoahScanRemembered<RememberedSet>::register_object_wo_lock(HeapWord *addr)
   _scc->register_object_wo_lock(addr);
 }
 
+template <typename RememberedSet>
+inline bool
+ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, size_t size_in_words) {
+
+  size_t index = card_index_for_addr(address);
+  if (!_scc->has_object(index)) {
+    return false;
+  }
+  HeapWord* base_addr = addr_for_card_index(index);
+  size_t offset = _scc->get_first_start(index);
+  while (base_addr + offset < address) {
+    oop obj = oop(base_addr + offset);
+    offset += obj->size();
+  }
+  if (base_addr + offset != address){
+    return false;
+  }
+  size_t prev_offset = offset;
+  do {
+    HeapWord* obj_addr = base_addr + offset;
+    oop obj = oop(base_addr + offset);
+    prev_offset = offset;
+    offset += obj->size();
+  } while (offset < CardTable::card_size_in_words);
+  if (_scc->get_last_start(index) != prev_offset) {
+    return false;
+  }
+  size_t end_card_index = card_index_for_addr(base_addr + offset);
+
+  // There may be no following object registered.
+  if (_scc->has_object(end_card_index) &&
+      ((addr_for_card_index(end_card_index) + _scc->get_first_start(end_card_index)) != (base_addr + offset))) {
+    return false;
+  }
+  for (index++; index < end_card_index; index++) {
+    if (_scc->has_object(index)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 template<typename RememberedSet>
 inline void
 ShenandoahScanRemembered<RememberedSet>::coalesce_objects(HeapWord *addr, size_t length_in_words) {
