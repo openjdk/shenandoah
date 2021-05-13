@@ -493,13 +493,20 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
   if (_scc->get_last_start(index) != prev_offset) {
     return false;
   }
-  size_t end_card_index = card_index_for_addr(base_addr + offset);
+  // base + offset represents address of first object that starts on following card, if there is one.
 
-  // There may be no following object registered.
-  if (_scc->has_object(end_card_index) &&
+  // Notes: base_addr is addr_for_card_index(index)
+  //        base_addr + offset is end of the object we are verifying
+  //        cannot use card_index_for_addr(base_addr + offset) because it asserts arg < end of whole heap
+  size_t end_card_index = index + offset / CardTable::card_size_in_words;
+
+  // If there is a following object registered, it should begin where this object ends.
+  if ((base_addr + offset < _rs->whole_heap_end()) && _scc->has_object(end_card_index) &&
       ((addr_for_card_index(end_card_index) + _scc->get_first_start(end_card_index)) != (base_addr + offset))) {
     return false;
   }
+
+  // Assure that no other objects are registered "inside" of this one.
   for (index++; index < end_card_index; index++) {
     if (_scc->has_object(index)) {
       return false;

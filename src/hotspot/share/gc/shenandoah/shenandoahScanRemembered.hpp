@@ -286,6 +286,9 @@ public:
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
   void swap_remset() {  _card_table->swap_card_tables(); }
 
+  HeapWord* whole_heap_base() { return _whole_heap_base; }
+  HeapWord* whole_heap_end() { return _whole_heap_end; }
+
   // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
   // in parallel threads, each invocation processing one entire HeapRegion at a time.  Processing of a region
   // consists of copying the write table to the read table and cleaning the write table.
