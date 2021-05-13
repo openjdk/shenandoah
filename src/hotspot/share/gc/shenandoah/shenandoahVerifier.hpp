@@ -67,7 +67,7 @@ public:
     _verify_remembered_for_marking,
 
     // Assure remembered set cards are dirty for every interesting pointer within
-    // each ShenandoahHeapRegion between bottom() and get_update_watermark() 
+    // each ShenandoahHeapRegion between bottom() and get_update_watermark()
     _verify_remembered_for_updating_references
   } VerifyRememberedSet;
 

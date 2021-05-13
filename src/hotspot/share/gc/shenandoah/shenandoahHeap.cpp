@@ -2547,7 +2547,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
         obj->oop_iterate(&check_interesting_pointers);
         if (!scanner->verify_registration(obj_addr, obj->size())) {
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
-                                          "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);         
+                                          "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
         }
       } else if (!r->is_humongous()) {
         HeapWord* t = r->top();
@@ -2614,4 +2614,4 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
       }
     } // else, we don't care about this region
   }
-} 
+}
