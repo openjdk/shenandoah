@@ -508,14 +508,15 @@ void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* 
 }
 
 void ShenandoahHeapRegion::fill_dead_and_register() {
-  HeapWord* obj_addr = bottom();
-  HeapWord* t = top();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
+  HeapWord* obj_addr = bottom();
+  HeapWord* t = top();
   RememberedScanner* rem_set_scanner = heap->card_scan();
 
   assert(!is_humongous(), "no humongous region here");
   assert(heap->active_generation()->is_mark_complete(), "sanity");
+  assert(marking_context->top_at_mark_start(this) == top(), "cannot promote region that is actively allocating");
 
   // end() might be overkill as end of range, but top() may not align with card boundary.
   rem_set_scanner->reset_object_range(bottom(), end());
@@ -886,6 +887,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
         heap->card_scan()->register_object_wo_lock(r->top());
         heap->card_scan()->mark_range_as_clean(top(), r->end() - r->top());
       }
+      heap->card_scan->mark_range_as_dirty(r->bottom(), r->top() - r->bottom());
       r->set_affiliation(OLD_GENERATION);
       log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
                     i, (size_t) r->bottom(), (size_t) r->top());

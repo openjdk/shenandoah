@@ -85,7 +85,7 @@ public:
   void swap_remembered_set();
 
   // Used by concurrent and degenerated GC to reset regions.
-  void prepare_gc();
+  virtual void prepare_gc();
 
   // Return true iff prepared collection set includes at least one old-gen HeapRegion.
   bool prepare_regions_and_collection_set(bool concurrent);
