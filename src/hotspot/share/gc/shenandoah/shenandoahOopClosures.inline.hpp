@@ -64,7 +64,7 @@ inline void ShenandoahVerifyRemSetClosure::work(T* p) {
                                         "Verify init-mark remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
       } else if (!_init_mark && !_scanner->is_write_card_dirty(card_index)) {
         ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, NULL,
-                                        "Verify init-mark remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
+                                        "Verify init-update-refs remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
       }
     }
   }
