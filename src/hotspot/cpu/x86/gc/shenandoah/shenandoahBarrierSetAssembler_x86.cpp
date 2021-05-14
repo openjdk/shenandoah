@@ -665,12 +665,17 @@ void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register o
   }
 }
 
+void kelvin_breakpoint() {
+  printf("Kelvin is at his breaking point!\n");
+}
+
 void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                              Address dst, Register val, Register tmp1, Register tmp2) {
 
   bool on_oop = is_reference_type(type);
   bool in_heap = (decorators & IN_HEAP) != 0;
   bool as_normal = (decorators & AS_NORMAL) != 0;
+  kelvin_breakpoint();
   if (on_oop && in_heap) {
     bool needs_pre_barrier = as_normal;
 

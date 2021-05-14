@@ -325,9 +325,12 @@ void ShenandoahBarrierSetC1::post_barrier(LIRAccess& access, LIR_OprDesc* addr, 
     // ptr cannot be an object because we use this barrier for array card marks
     // and addr can point in the middle of an array.
     LIR_Opr ptr = gen->new_pointer_register();
+#ifdef DISCARD_THIS_CODE
     if (!address->index()->is_valid() && address->disp() == 0) {
       __ move(address->base(), ptr);
-    } else {
+    } else
+#endif
+    {
       assert(address->disp() != max_jint, "lea doesn't support patched addresses!");
       __ leal(addr, ptr);
     }

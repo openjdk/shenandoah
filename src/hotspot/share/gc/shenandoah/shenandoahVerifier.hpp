@@ -147,7 +147,10 @@ public:
     _verify_gcstate_forwarded,
 
     // Evacuation is in progress, some objects are forwarded
-    _verify_gcstate_evacuation
+    _verify_gcstate_evacuation,
+
+    // Evacuation is done, objects are forwarded, updating is in progress
+    _verify_gcstate_updating
   } VerifyGCState;
 
   typedef enum {

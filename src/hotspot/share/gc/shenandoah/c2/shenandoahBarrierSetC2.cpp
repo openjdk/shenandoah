@@ -499,11 +499,13 @@ void ShenandoahBarrierSetC2::post_barrier(GraphKit* kit,
     return;
   }
 
+#ifdef DISCARD_THIS_CODE
   if (!use_precise) {
     // All card marks for a (non-array) instance are in one place:
     adr = obj;
   }
   // (Else it's an array (or unknown), and we want more precise card marks.)
+#endif
   assert(adr != NULL, "");
 
   IdealKit ideal(kit, true);

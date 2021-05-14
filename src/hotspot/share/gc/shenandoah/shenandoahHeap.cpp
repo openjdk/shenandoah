@@ -2523,24 +2523,11 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
   ShenandoahMarkingContext* mark_context = marking_context();
   RememberedScanner* scanner = card_scan();
   ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
-
-  printf("Verifying remembered set at mark\n"); fflush(stdout);
-  fflush(stdout);
   while (iterator.has_next()) {
     ShenandoahHeapRegion* r = iterator.next();
     if (r == nullptr)
       break;
     if (r->is_old()) {
-#define KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      ShenandoahHeap *heap = ShenandoahHeap::heap();
-      ShenandoahMarkingContext* mark_ctx = heap->marking_context();
-
-      printf(" Verifying old region [%llx, %llx], top: %llx, TAMS: %llx, update_watermark: %llx\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->end(), (unsigned long long) r->top(),
-             (unsigned long long) mark_ctx->top_at_mark_start(r), (unsigned long long) r->get_update_watermark());
-      fflush(stdout);
-#endif
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
@@ -2575,23 +2562,11 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
   ShenandoahMarkingContext* mark_context = marking_context();
   RememberedScanner* scanner = card_scan();
   ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
-
-  printf("Verifying remembered set at update ref\n"); fflush(stdout);
-  fflush(stdout);
   while (iterator.has_next()) {
     ShenandoahHeapRegion* r = iterator.next();
     if (r == nullptr)
       break;
     if (r->is_old()) {
-#ifdef KELVIN_VERBOSE
-      ShenandoahHeap *heap = ShenandoahHeap::heap();
-      ShenandoahMarkingContext* mark_ctx = heap->marking_context();
-
-      printf(" Verifying old region [%llx, %llx], top: %llx, TAMS: %llx, update_watermark: %llx\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->end(), (unsigned long long) r->top(),
-             (unsigned long long) mark_ctx->top_at_mark_start(r), (unsigned long long) r->get_update_watermark());
-      fflush(stdout);
-#endif
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);

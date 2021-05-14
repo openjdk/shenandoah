@@ -482,8 +482,6 @@ void ShenandoahConcurrentGC::op_init_mark() {
   assert(!_generation->is_mark_complete(), "should not be complete");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
 
-  // move this inside verify_before_concmark(): heap->verify_rem_set_at_mark();
-
   if (ShenandoahVerify) {
     heap->verifier()->verify_before_concmark();
   }
@@ -909,7 +907,9 @@ void ShenandoahConcurrentGC::op_init_updaterefs() {
   heap->set_evacuation_in_progress(false);
   heap->prepare_update_heap_references(true /*concurrent*/);
   heap->set_update_refs_in_progress(true);
-  // move this inside verify_before_updaterefs(): heap->verify_rem_set_at_update_ref();
+  if (ShenandoahVerify) {
+    heap->verifier()->verify_before_updaterefs();
+  }
   if (ShenandoahPacing) {
     heap->pacer()->setup_for_updaterefs();
   }
