@@ -548,7 +548,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
   obj->oop_iterate(blk, MemRegion(bottom(), top()));
 }
 
-ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const { 
+ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
  ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(is_humongous(), "Must be a part of the humongous region");
   size_t i = index();

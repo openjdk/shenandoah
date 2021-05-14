@@ -346,7 +346,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     if (target_gen == OLD_GENERATION) {
       if (alloc_from_lab) {
         card_scan()->register_object_wo_lock(copy);
-      } 
+      }
       // else, allocate_memory_under_lock() has already registered the object
 
       // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
