@@ -23,7 +23,7 @@
  */
 
 /*
- * @test TestRefprocSanity
+ * @test TestRefprocSanity1
  * @summary Test that null references/referents work fine
  * @requires vm.gc.Shenandoah
  *
@@ -42,7 +42,7 @@
  */
 
 /*
- * @test TestRefprocSanity
+ * @test TestRefprocSanity2
  * @summary Test that null references/referents work fine
  * @requires vm.gc.Shenandoah
  *
@@ -57,6 +57,20 @@
  *
  * @run main/othervm -Xmx1g -Xms1g -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGCHeuristics=aggressive
+ *      TestRefprocSanity
+ *
+ * @run main/othervm -Xmx1g -Xms1g -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
+ *      TestRefprocSanity
+ */
+
+/*
+ * @test TestRefprocSanity-Young 
+ * @summary Test that null references/referents work fine
+ * @requires vm.gc.Shenandoah
+ *
+ * @run main/othervm -Xmx1g -Xms1g -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
  *      TestRefprocSanity
  */
 
