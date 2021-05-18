@@ -477,11 +477,12 @@ void ShenandoahHeapRegion::oop_iterate_and_fill_dead(OopIterateClosure* blk, boo
 void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* blk, bool is_promoting) {
   assert(!is_humongous(), "no humongous region here");
   HeapWord* obj_addr = bottom();
-  HeapWord* t = top();
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   RememberedScanner* rem_set_scanner = heap->card_scan();
+  // Objects allocated above TAMS are not marked, but are considered live for purposes of current GC efforts.
+  HeapWord* t = marking_context->top_at_mark_start(this);
 
   assert(heap->active_generation()->is_mark_complete(), "sanity");
 
@@ -505,14 +506,25 @@ void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* 
       obj_addr = next_marked_obj;
     }
   }
+
+  // Any object above TAMS and below top() is considered live.
+  t = top();
+  while (obj_addr < t) {
+    oop obj = oop(obj_addr);
+    if (is_promoting) {
+      rem_set_scanner->register_object_wo_lock(obj_addr);
+    }
+    obj_addr += obj->oop_iterate_size(blk);
+  }
 }
 
 void ShenandoahHeapRegion::fill_dead_and_register() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   HeapWord* obj_addr = bottom();
-  HeapWord* t = top();
   RememberedScanner* rem_set_scanner = heap->card_scan();
+ // Objects allocated above TAMS are not marked, but are considered live for purposes of current GC efforts.
+  HeapWord* t = marking_context->top_at_mark_start(this);
 
   assert(!is_humongous(), "no humongous region here");
   assert(heap->active_generation()->is_mark_complete(), "sanity");
@@ -536,6 +548,16 @@ void ShenandoahHeapRegion::fill_dead_and_register() {
       rem_set_scanner->register_object_wo_lock(obj_addr);
       obj_addr = next_marked_obj;
     }
+  }
+
+  // Any object above TAMS and below top() is considered live.
+  t = top();
+  while (obj_addr < t) {
+    oop obj = oop(obj_addr);
+    assert(obj->klass() != NULL, "klass should not be NULL");
+    // when promoting an entire region, we have to register the marked objects as well
+    rem_set_scanner->register_object_wo_lock(obj_addr);
+    obj_addr += obj->size();
   }
 }
 
@@ -887,7 +909,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
         heap->card_scan()->register_object_wo_lock(r->top());
         heap->card_scan()->mark_range_as_clean(top(), r->end() - r->top());
       }
-      heap->card_scan->mark_range_as_dirty(r->bottom(), r->top() - r->bottom());
+      // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
       r->set_affiliation(OLD_GENERATION);
       log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
                     i, (size_t) r->bottom(), (size_t) r->top());
@@ -901,7 +923,6 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     } else {
       heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
     }
-
     return index_limit - index();
   } else {
     log_debug(gc)("promoting region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,

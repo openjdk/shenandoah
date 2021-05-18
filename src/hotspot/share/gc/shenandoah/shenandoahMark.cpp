@@ -212,17 +212,3 @@ void ShenandoahMark::mark_loop(GenerationMode generation, uint worker_id, TaskTe
   }
 }
 
-template<>
-bool ShenandoahMark::in_generation<YOUNG>(oop obj) {
-  return ShenandoahHeap::heap()->is_in_young(obj);
-}
-
-template<>
-bool ShenandoahMark::in_generation<OLD>(oop obj) {
-  return ShenandoahHeap::heap()->is_in_old(obj);
-}
-
-template<>
-bool ShenandoahMark::in_generation<GLOBAL>(oop obj) {
-  return true;
-}

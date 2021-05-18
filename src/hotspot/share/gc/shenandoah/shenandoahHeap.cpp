@@ -2536,7 +2536,13 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
-        obj->oop_iterate(&check_interesting_pointers);
+        // For humongous objects, the typical object is an array, so the following checks may be overkill
+        // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+        // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+        if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+          obj->oop_iterate(&check_interesting_pointers);
+        }
+        // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
         if (!scanner->verify_registration(obj_addr, obj->size())) {
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                           "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2545,7 +2551,12 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
         HeapWord* t = r->top();
         while (obj_addr < t) {
           oop obj = oop(obj_addr);
-          obj->oop_iterate(&check_interesting_pointers);
+          // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+          // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+          if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+            obj->oop_iterate(&check_interesting_pointers);
+          }
+          // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
           if (!scanner->verify_registration(obj_addr, obj->size())) {
             ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                             "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2575,7 +2586,13 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
-        obj->oop_iterate(&check_interesting_pointers);
+        // For humongous objects, the typical object is an array, so the following checks may be overkill
+        // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+        // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+        if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+          obj->oop_iterate(&check_interesting_pointers);
+        }
+        // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
         if (!scanner->verify_registration(obj_addr, obj->size())) {
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                           "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2584,7 +2601,12 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
         HeapWord* t = r->get_update_watermark();
         while (obj_addr < t) {
           oop obj = oop(obj_addr);
-          obj->oop_iterate(&check_interesting_pointers);
+          // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+          // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+          if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+            obj->oop_iterate(&check_interesting_pointers);
+          }
+          // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
           if (!scanner->verify_registration(obj_addr, obj->size())) {
             ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                             "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);

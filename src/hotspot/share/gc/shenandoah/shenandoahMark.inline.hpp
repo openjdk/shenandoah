@@ -256,6 +256,19 @@ public:
   }
 };
 
+template<GenerationMode GENERATION>
+bool ShenandoahMark::in_generation(oop obj) {
+  // Each in-line expansion of in_generation() resolves GENERATION at compile time.
+  if (GENERATION == YOUNG)
+    return ShenandoahHeap::heap()->is_in_young(obj);
+  else if (GENERATION == OLD)
+    return ShenandoahHeap::heap()->is_in_old(obj);
+  else if (GENERATION == GLOBAL)
+    return true;
+  else
+    return false;
+}
+
 template<class T, GenerationMode GENERATION, StringDedupMode STRING_DEDUP>
 inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak) {
   T o = RawAccess<>::oop_load(p);
@@ -268,10 +281,23 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
     if (in_generation<GENERATION>(obj)) {
       mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
-      if ((GENERATION == YOUNG) && ShenandoahHeap::heap()->is_in(p) && ShenandoahHeap::heap()->is_in_old(p)) {
-        RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
-        // Mark card as dirty because remembered set scanning still finds interesting pointer.
-        ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
+      if (ShenandoahHeap::heap()->mode()->is_generational()) {
+        // TODO: As implemented herein, GLOBAL collections reconstruct the card table during GLOBAL concurrent
+        // marking. Note that the card table is cleaned at init_mark time so it needs to be reconstructed to support
+        // future young-gen collections.  It might be better to reconstruct card table in
+        // ShenandoahHeapRegion::oop_iterate_and_fill_dead.  We could either mark all live memory as dirty, or could
+        // use the GLOBAL update-refs scanning of pointers to determine precisely which cards to flag as dirty.
+        //
+        if ((GENERATION == YOUNG) && ShenandoahHeap::heap()->is_in(p) && ShenandoahHeap::heap()->is_in_old(p)) {
+          RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
+          // Mark card as dirty because remembered set scanning still finds interesting pointer.
+          ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
+        } else if ((GENERATION == GLOBAL) && in_generation<YOUNG>(obj) &&
+                   ShenandoahHeap::heap()->is_in(p) && ShenandoahHeap::heap()->is_in_old(p)) {
+          RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
+          // Mark card as dirty because GLOBAL marking finds interesting pointer.
+          ShenandoahHeap::heap()->mark_card_as_dirty((HeapWord*)p);
+        }
       }
     } else if (old != nullptr) {
       // Young mark, bootstrapping old.
