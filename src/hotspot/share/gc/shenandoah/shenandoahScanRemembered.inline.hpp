@@ -589,13 +589,13 @@ class ShenandoahOopIterateAdapter : public BasicOopIterateClosure {
 };
 
 template<typename RememberedSet>
-inline void ShenandoahScanRemembered<RememberedSet>::oops_do_simple(OopClosure* cl) {
+inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure* cl) {
   ShenandoahOopIterateAdapter adapter(cl);
-  oops_do(&adapter);
+  roots_do(&adapter);
 }
 
 template<typename RememberedSet>
-inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopIterateClosure* cl) {
+inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);

@@ -954,8 +954,8 @@ public:
   //  from dirty to clean and clean to dirty.  The do_oops
   //  implementations will want to update this value each time they
   //  cross one of these boundaries.
-  void oops_do(OopIterateClosure* cl);
-  void oops_do_simple(OopClosure* cl);
+  void roots_do(OopIterateClosure* cl);
+  void oops_do(OopClosure* cl);
 };
 
 typedef ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet> RememberedScanner;
