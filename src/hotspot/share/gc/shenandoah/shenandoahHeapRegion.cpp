@@ -458,23 +458,18 @@ void ShenandoahHeapRegion::oop_fill_and_coalesce() {
   }
 }
 
-void ShenandoahHeapRegion::oop_iterate_and_fill_dead(OopIterateClosure* blk, bool is_promoting) {
+void ShenandoahHeapRegion::global_oop_iterate_and_fill_dead(OopIterateClosure* blk) {
   if (!is_active()) return;
   if (is_humongous()) {
     // No need to fill dead within humongous regions.  Either the entire region is dead, or the entire region is
     // unchanged.  A humongous region holds no more than one humongous object.
     oop_iterate_humongous(blk);
-    if (is_promoting) {
-      ShenandoahHeap* heap = ShenandoahHeap::heap();
-      RememberedScanner* rem_set_scanner = heap->card_scan();
-      rem_set_scanner->register_object_wo_lock(bottom());
-    }
   } else {
-    oop_iterate_objects_and_fill_dead(blk, is_promoting);
+    global_oop_iterate_objects_and_fill_dead(blk);
   }
 }
 
-void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* blk, bool is_promoting) {
+void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateClosure* blk) {
   assert(!is_humongous(), "no humongous region here");
   HeapWord* obj_addr = bottom();
 
@@ -491,9 +486,6 @@ void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* 
     if (marking_context->is_marked(obj)) {
       assert(obj->klass() != NULL, "klass should not be NULL");
       // when promoting an entire region, we have to register the marked objects as well
-      if (is_promoting) {
-        rem_set_scanner->register_object_wo_lock(obj_addr);
-      }
       obj_addr += obj->oop_iterate_size(blk);
     } else {
       // Object is not marked.  Coalesce and fill dead object with dead neighbors.
@@ -502,6 +494,7 @@ void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* 
       size_t fill_size = next_marked_obj - obj_addr;
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
 
+      // coalesce_objects() unregisters all but first object subsumed within coalesced range.
       rem_set_scanner->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }
@@ -511,24 +504,22 @@ void ShenandoahHeapRegion::oop_iterate_objects_and_fill_dead(OopIterateClosure* 
   t = top();
   while (obj_addr < t) {
     oop obj = oop(obj_addr);
-    if (is_promoting) {
-      rem_set_scanner->register_object_wo_lock(obj_addr);
-    }
     obj_addr += obj->oop_iterate_size(blk);
   }
 }
 
-void ShenandoahHeapRegion::fill_dead_and_register() {
+// This function does not set card dirty bits.  The decision of which cards to dirty is best
+// made in the caller's context.
+void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   HeapWord* obj_addr = bottom();
   RememberedScanner* rem_set_scanner = heap->card_scan();
- // Objects allocated above TAMS are not marked, but are considered live for purposes of current GC efforts.
+  // Objects allocated above TAMS are not marked, but are considered live for purposes of current GC efforts.
   HeapWord* t = marking_context->top_at_mark_start(this);
 
   assert(!is_humongous(), "no humongous region here");
   assert(heap->active_generation()->is_mark_complete(), "sanity");
-  assert(marking_context->top_at_mark_start(this) == top(), "cannot promote region that is actively allocating");
 
   // end() might be overkill as end of range, but top() may not align with card boundary.
   rem_set_scanner->reset_object_range(bottom(), end());
@@ -918,7 +909,10 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     }
     if (promoting_all || obj->is_typeArray()) {
       // Primitive arrays don't need to be scanned.  Likewise, if we are promoting_all, there's nothing
-      // left in young-gen, so there can exist no "interesting" pointers.
+      // left in young-gen, so there can exist no "interesting" pointers.  See above TODO question about requiring
+      // region promotion at safepoint.  If we're not at a safepoint, then we can't really "promote all" without
+      // directing new allocations to old-gen.  That's probably not what we want.  The whole "promote-all strategy"
+      // probably needs to be revisited at some future point.
       heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
     } else {
       heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
@@ -929,7 +923,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
       index(), (size_t) bottom(), (size_t) top());
     assert(!is_humongous_continuation(), "should not promote humongous object continuation in isolation");
 
-    fill_dead_and_register();
+    fill_dead_and_register_for_promotion();
     // Rather than scanning entire contents of the promoted region right now to determine which
     // cards to mark as dirty, we just mark them all as dirty (unless promoting_all).  Later, when we
     // scan the remembered set, we will clear cards that are found to not contain live references to

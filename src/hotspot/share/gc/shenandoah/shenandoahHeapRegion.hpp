@@ -370,10 +370,10 @@ public:
   // coalesce contiguous spans of garbage objects by filling header and reregistering start locations with remembered set.
   void oop_fill_and_coalesce();
 
-  // If this region is being promoted, we have to register marked objects while coalescing and filling the unmarked
-  // objects.  Otherwise, this is an old-region that was not part of the collection set.  We coalesce the dead objects,
-  // but do not need to register the live objects as they are already registered.
-  void oop_iterate_and_fill_dead(OopIterateClosure* cl, bool being_promoted);
+  // During global collections, this service iterates through an old-gen heap region that is not part of collection
+  // set to fill and register ranges of dead memory.  Note that live objects were previously registered.  Some dead objects
+  // that are subsumed into coalesced ranges of dead memory need to be "unregistered".
+  void global_oop_iterate_and_fill_dead(OopIterateClosure* cl);
   void oop_iterate_humongous(OopIterateClosure* cl);
 
   HeapWord* block_start(const void* p) const;
@@ -428,14 +428,13 @@ private:
   void do_commit();
   void do_uncommit();
 
-  // If this region is being promoted, we have to register marked objects while coalescing and filling the unmarked
-  // objects.  Otherwise, this is an old-region that was not part of the collection set.  We coalesce the dead objects,
-  // but do not need to register the live objects as they are already registered.
-  void oop_iterate_objects_and_fill_dead(OopIterateClosure* cl, bool being_promoted);
+  // This is an old-region that was not part of the collection set during a GLOBAL collection.  We coalesce the dead
+  // objects, but do not need to register the live objects as they are already registered.
+  void global_oop_iterate_objects_and_fill_dead(OopIterateClosure* cl);
 
   // Process the contents of a region when it is being promoted en masse by registering each marked object, coalescing
-  // contiguous ranges of unmarked objects into registered dead objects.
-  void fill_dead_and_register();
+  // contiguous ranges of unmarked objects into registered dead objects.  Do not touch card marks.
+  void fill_dead_and_register_for_promotion();
 
   inline void internal_increase_live_data(size_t s);
 

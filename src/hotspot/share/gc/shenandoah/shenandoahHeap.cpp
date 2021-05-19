@@ -2172,7 +2172,7 @@ private:
 
             // This is an old region in a global cycle.  Make sure that the next cycle does not iterate over dead objects
             // which haven't had their references updated.  This is not a promotion.
-            r->oop_iterate_and_fill_dead(&cl, /* is_promotion */false);
+            r->global_oop_iterate_and_fill_dead(&cl);
           } else {
             // Old region in a young cycle or mixed cycle.
             if (ShenandoahUseSimpleCardScanning) {
