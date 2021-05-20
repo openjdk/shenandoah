@@ -2141,7 +2141,7 @@ private:
         } else {
           assert(r->affiliation() == OLD_GENERATION, "Should not be updating references on FREE regions");
           if (!_heap->is_gc_generation_young() || is_mixed) {
-            // Old region global or mixed cycle.
+            // Old region in global or mixed cycle (in which case, old regions should be marked).
             // We need to make sure that the next remembered set scan does not iterate over dead objects
             // which haven't had their references updated.
             r->oop_iterate(&cl, /*fill_dead_objects*/ true, /* reregister_coalesced_objects */ true);
