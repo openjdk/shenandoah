@@ -2582,7 +2582,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
     ShenandoahHeapRegion* r = iterator.next();
     if (r == nullptr)
       break;
-    if (r->is_old()) {
+    if (r->is_old() && !r->is_cset()) {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
