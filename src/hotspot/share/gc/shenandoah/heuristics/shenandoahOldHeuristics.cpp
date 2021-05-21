@@ -180,7 +180,8 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         // immediately to the freeset - no evacuations are necessary here. The continuations
         // will be made into trash by this method, so they'll be skipped by the 'is_regular'
         // check above.
-        heap->trash_humongous_region_at(region);
+        size_t region_count = heap->trash_humongous_region_at(region);
+        log_debug(gc)("Trashed " SIZE_FORMAT " regions for humongous object.", region_count);
       }
     }
   }
