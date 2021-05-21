@@ -79,7 +79,8 @@ public:
 
   bool has_old_regions() const { return _has_old_regions; }
   size_t used()          const { return _used; }
-  size_t garbage()       const { return _garbage;   }
+
+  size_t garbage()       const { return _garbage; }
   void clear();
 
 private:

@@ -2173,7 +2173,7 @@ private:
       // We don't have liveness information about this region.
       // Therefore we process all objects, rather than just marked ones.
       // Otherwise subsequent traversals will encounter stale pointers.
-      HeapWord *p = r->bottom();
+      HeapWord* p = r->bottom();
       ShenandoahObjectToOopBoundedClosure<T> objs(cl, p, update_watermark);
       // Anything beyond update_watermark is not yet allocated or initialized.
       while (p < update_watermark) {
