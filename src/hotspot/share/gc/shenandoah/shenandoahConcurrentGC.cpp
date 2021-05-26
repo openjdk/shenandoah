@@ -196,7 +196,7 @@ void ShenandoahConcurrentGC::entry_init_mark() {
                               ShenandoahWorkerPolicy::calc_workers_for_init_marking(),
                               "init marking");
 
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+  if (ShenandoahHeap::heap()->mode()->is_generational() && (_generation->generation_mode() == YOUNG)) {
     // The current implementation of swap_remembered_set() copies the write-card-table
     // to the read-card-table.
     _generation->swap_remembered_set();

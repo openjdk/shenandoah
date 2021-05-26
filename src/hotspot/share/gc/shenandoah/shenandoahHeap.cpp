@@ -2586,7 +2586,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
-	size_t card_index = scanner->card_index_for_addr(obj_addr);
+        size_t card_index = scanner->card_index_for_addr(obj_addr);
         // For humongous objects, the typical object is an array, so the following checks may be overkill
         // For regular objects (not object arrays), if the card holding the start of the object is dirty,
         // we do not need to verify that cards spanning interesting pointers within this object are dirty.
@@ -2602,7 +2602,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
         HeapWord* t = r->get_update_watermark();
         while (obj_addr < t) {
           oop obj = oop(obj_addr);
-	  size_t card_index = scanner->card_index_for_addr(obj_addr);
+          size_t card_index = scanner->card_index_for_addr(obj_addr);
           // For regular objects (not object arrays), if the card holding the start of the object is dirty,
           // we do not need to verify that cards spanning interesting pointers within this object are dirty.
           if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
