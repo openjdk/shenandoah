@@ -62,7 +62,7 @@
  */
 
 /*
- * @test TestRefprocSanity-Young 
+ * @test TestRefprocSanity-Young
  * @summary Test that null references/referents work fine
  * @requires vm.gc.Shenandoah
  *
