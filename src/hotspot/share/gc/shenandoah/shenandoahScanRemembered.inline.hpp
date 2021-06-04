@@ -730,10 +730,15 @@ class ShenandoahOopIterateAdapter : public BasicOopIterateClosure {
 template<typename RememberedSet>
 inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure* cl) {
   ShenandoahOopIterateAdapter adapter(cl);
+  roots_do(&adapter);
+}
+
+template<typename RememberedSet>
+inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (region->affiliation() == OLD_GENERATION && region->is_active() && !region->is_cset()) {
+    if (region->is_old() && region->is_active() && !region->is_cset()) {
       HeapWord* start_of_range = region->bottom();
       HeapWord* end_of_range = region->top();
       size_t start_cluster_no = cluster_for_addr(start_of_range);
@@ -743,7 +748,7 @@ inline void ShenandoahScanRemembered<RememberedSet>::oops_do(OopClosure* cl) {
       size_t num_clusters = (size_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
 
       // Remembered set scanner
-      process_clusters(start_cluster_no, num_clusters, end_of_range, &adapter);
+      process_clusters(start_cluster_no, num_clusters, end_of_range, cl);
     }
   }
 }

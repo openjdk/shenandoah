@@ -233,7 +233,6 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size)
   if (mode()->is_generational() && obj != NULL) {
     ShenandoahHeap::heap()->card_scan()->register_object_wo_lock(obj);
   }
-
   return obj;
 }
 

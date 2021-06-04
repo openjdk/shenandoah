@@ -1177,7 +1177,7 @@ void ShenandoahHeap::print_heap_regions_on(outputStream* st) const {
   }
 }
 
-void ShenandoahHeap::trash_humongous_region_at(ShenandoahHeapRegion* start) {
+size_t ShenandoahHeap::trash_humongous_region_at(ShenandoahHeapRegion* start) {
   assert(start->is_humongous_start(), "reclaim regions starting with the first one");
 
   oop humongous_obj = oop(start->bottom());
@@ -1197,6 +1197,7 @@ void ShenandoahHeap::trash_humongous_region_at(ShenandoahHeapRegion* start) {
 
     region->make_trash_immediate();
   }
+  return required_regions;
 }
 
 class ShenandoahCheckCleanGCLABClosure : public ThreadClosure {
@@ -2157,7 +2158,7 @@ private:
     // We update references for global, old, and young collections.
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
-
+    bool is_mixed = _heap->collection_set()->has_old_regions();
     while (r != NULL) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
@@ -2176,8 +2177,9 @@ private:
           } else {
             // Old region in a young cycle or mixed cycle.
             if (ShenandoahUseSimpleCardScanning) {
-              // TODO: deprecate the ShenandoahUseSimpleCardScanning command-line option.
-              assert(false, "ShenandoahUseSimpleCardScanning is no longer supported");
+              if (ShenandoahBarrierSet::barrier_set()->card_table()->is_dirty(MemRegion(r->bottom(), r->top()))) {
+                update_all_references(&cl, r, update_watermark);
+              }
             } else if (!_mixed_evac) {
               // This is a young evac..
               _heap->card_scan()->process_region(r, &cl, true);
@@ -2222,6 +2224,25 @@ private:
         return;
       }
       r = _regions->next();
+    }
+  }
+
+  template<class T>
+  void update_all_references(T* cl, ShenandoahHeapRegion* r, HeapWord* update_watermark) {
+    if (r->is_humongous()) {
+      r->oop_iterate_humongous(cl);
+    } else {
+      // We don't have liveness information about this region.
+      // Therefore we process all objects, rather than just marked ones.
+      // Otherwise subsequent traversals will encounter stale pointers.
+      HeapWord* p = r->bottom();
+      ShenandoahObjectToOopBoundedClosure<T> objs(cl, p, update_watermark);
+      // Anything beyond update_watermark is not yet allocated or initialized.
+      while (p < update_watermark) {
+        oop obj = oop(p);
+        objs.do_object(obj);
+        p += obj->size();
+      }
     }
   }
 };
