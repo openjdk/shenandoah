@@ -399,6 +399,7 @@ oop ShenandoahReferenceProcessor::drop(oop reference, ReferenceType type) {
   // that if the reference is not dropped, then its pointer to the referent will be nulled before
   // evacuation begins so card does not need to be dirtied.
   if (heap->mode()->is_generational() && heap->is_old(reference) && heap->is_in_young(referent)) {
+    // Note: would be sufficient to mark only the card that holds the start of this Reference object.
     heap->card_scan()->mark_range_as_dirty(cast_from_oop<HeapWord*>(reference), reference->size());
   }
   return next;
