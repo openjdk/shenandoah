@@ -84,6 +84,12 @@ void ShenandoahDirectCardMarkRememberedSet::merge_overreach(size_t first_cluster
     *bmp++ &= *omp++;
 }
 
+bool ShenandoahDirectCardMarkRememberedSet::is_live(HeapWord* p, HeapWord* endp, size_t* size) {
+  // TODO: We don't need to choose the marking context every time we call this method.
+  ShenandoahMarkingContext* ctx = _heap->stable_marking_context();
+  return ctx->is_marked_with_size(oop(p), endp, size);
+}
+
 ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
                                                            ShenandoahObjToScanQueueSet* old_queue_set,
                                                            ShenandoahReferenceProcessor* rp,

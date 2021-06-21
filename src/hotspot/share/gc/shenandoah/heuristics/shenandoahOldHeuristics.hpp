@@ -53,16 +53,6 @@ protected:
   uint _hidden_old_collection_candidates;
   uint _hidden_next_old_collection_candidate;
 
-  // if (_generation->generation_mode() == OLD)
-  //  _old_coalesce_and_fill_candidates represents the number of regions
-  //  that were chosen for the garbage contained therein to be coalesced
-  //  and filled and _first_coalesce_and_fill_candidate represents the
-  //  the index of the first such region within the _region_data array.
-  // if (_generation->generation_mode() != OLD) these two variables are
-  //  not used.
-  uint _old_coalesce_and_fill_candidates;
-  uint _first_coalesce_and_fill_candidate;
-
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
 
@@ -87,16 +77,6 @@ public:
 
   // Adjust internal state to reflect that one fewer old-collection candidate remains to be processed.
   void consume_old_collection_candidate();
-
-  // How many old-collection regions were identified at the end of the most recent old-gen mark to require their
-  // unmarked objects to be coalesced and filled?
-  uint old_coalesce_and_fill_candidates();
-
-  // Fill in buffer with all of the old-collection regions that were identified at the end of the most recent old-gen
-  // mark to require their unmarked objects to be coalesced and filled.  The buffer array must have at least
-  // old_coalesce_and_fill_candidates() entries, or memory may be corrupted when this function overwrites the
-  // end of the array.
-  void get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
 
   bool should_defer_gc();
 

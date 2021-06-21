@@ -170,6 +170,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // This free region might have garbage in its remembered set representation.
     _heap->clear_cards_for(r);
     r->set_affiliation(req.affiliation());
+    if (req.affiliation() == OLD_GENERATION) {
+      _heap->previous_marking_context()->clear_bitmap(r);
+    }
   } else if (r->affiliation() != req.affiliation()) {
     return NULL;
   }

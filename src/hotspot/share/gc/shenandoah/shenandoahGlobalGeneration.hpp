@@ -30,7 +30,7 @@
 // A "generation" that represents the whole heap.
 class ShenandoahGlobalGeneration : public ShenandoahGeneration {
 public:
-  ShenandoahGlobalGeneration(uint max_queues)
+  explicit ShenandoahGlobalGeneration(uint max_queues)
   : ShenandoahGeneration(GLOBAL, max_queues, 0, 0) { }
 
 public:

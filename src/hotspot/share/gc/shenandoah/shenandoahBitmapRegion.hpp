@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,39 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHOLDGC_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHOLDGC_HPP
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHBITMAPREGION_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHBITMAPREGION_HPP
 
-#include "gc/shared/gcCause.hpp"
-#include "gc/shenandoah/shenandoahConcurrentGC.hpp"
+#include "memory/memRegion.hpp"
 
-class ShenandoahGeneration;
+class ShenandoahHeapRegion;
 
-class ShenandoahOldGC : public ShenandoahConcurrentGC {
+class ShenandoahBitmapRegion {
  public:
-  ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption);
-  bool collect(GCCause::Cause cause);
+
+  ShenandoahBitmapRegion();
+
+  void initialize(size_t bitmap_size,
+                  size_t bitmap_bytes_per_region,
+                  size_t num_committed_regions);
+
+  bool commit_bitmap_slice(ShenandoahHeapRegion *r);
+  bool uncommit_bitmap_slice(ShenandoahHeapRegion *r);
+  bool is_bitmap_slice_committed(ShenandoahHeapRegion *r, bool skip_self = false);
+
+  void pretouch(size_t pretouch_bitmap_page_size);
+
+  MemRegion bitmap_region() { return _bitmap_region; }
+
  private:
-  void entry_old_evacuations();
-  ShenandoahSharedFlag& _allow_preemption;
+  MemRegion _bitmap_region;
+  bool _bitmap_region_special;
+
+  size_t _bitmap_size;
+  size_t _bitmap_regions_per_slice;
+  size_t _bitmap_bytes_per_slice;
+  size_t _pretouch_bitmap_page_size;
 };
 
 
-#endif //SHARE_GC_SHENANDOAH_SHENANDOAHOLDGC_HPP
+#endif //SHENANDOAHBITMAPREGION_HPP

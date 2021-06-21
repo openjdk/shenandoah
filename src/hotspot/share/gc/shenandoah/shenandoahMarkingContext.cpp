@@ -27,12 +27,13 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
-ShenandoahMarkingContext::ShenandoahMarkingContext(MemRegion heap_region, MemRegion bitmap_region, size_t num_regions) :
-  _mark_bit_map(heap_region, bitmap_region),
+ShenandoahMarkingContext::ShenandoahMarkingContext(MemRegion heap_region, ShenandoahBitmapRegion* bitmap_region, size_t num_regions) :
+  _mark_bit_map(heap_region, bitmap_region->bitmap_region()),
   _top_bitmaps(NEW_C_HEAP_ARRAY(HeapWord*, num_regions, mtGC)),
   _top_at_mark_starts_base(NEW_C_HEAP_ARRAY(HeapWord*, num_regions, mtGC)),
   _top_at_mark_starts(_top_at_mark_starts_base -
-                      ((uintx) heap_region.start() >> ShenandoahHeapRegion::region_size_bytes_shift())) {
+                      ((uintx) heap_region.start() >> ShenandoahHeapRegion::region_size_bytes_shift())),
+  _bitmap_region(bitmap_region) {
 }
 
 bool ShenandoahMarkingContext::is_bitmap_clear() const {
@@ -40,7 +41,7 @@ bool ShenandoahMarkingContext::is_bitmap_clear() const {
   size_t num_regions = heap->num_regions();
   for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* r = heap->get_region(idx);
-    if (heap->is_bitmap_slice_committed(r) && !is_bitmap_clear_range(r->bottom(), r->end())) {
+    if (_bitmap_region->is_bitmap_slice_committed(r) && !is_bitmap_clear_range(r->bottom(), r->end())) {
       return false;
     }
   }
@@ -59,14 +60,30 @@ void ShenandoahMarkingContext::initialize_top_at_mark_start(ShenandoahHeapRegion
 }
 
 void ShenandoahMarkingContext::clear_bitmap(ShenandoahHeapRegion* r) {
+  if (!ShenandoahHeap::heap()->is_bitmap_slice_committed(r)) {
+    return;
+  }
+
   HeapWord* bottom = r->bottom();
-  HeapWord* top_bitmap = _top_bitmaps[r->index()];
+  HeapWord* top_bitmap = r->end(); //_top_bitmaps[r->index()];
   if (top_bitmap > bottom) {
     _mark_bit_map.clear_range_large(MemRegion(bottom, top_bitmap));
     _top_bitmaps[r->index()] = bottom;
   }
   assert(is_bitmap_clear_range(bottom, r->end()),
          "Region " SIZE_FORMAT " should have no marks in bitmap", r->index());
+}
+
+bool ShenandoahMarkingContext::is_marked_with_size(oop obj, HeapWord* end, size_t* size) const {
+  bool marked = is_marked(obj);
+  if (marked) {
+    *size = obj->size();
+  } else {
+    HeapWord* addr = cast_from_oop<HeapWord*>(obj);
+    HeapWord* next = _mark_bit_map.get_next_marked_addr(addr, end);
+    *size = pointer_delta(next, addr);
+  }
+  return marked;
 }
 
 bool ShenandoahMarkingContext::is_complete() {

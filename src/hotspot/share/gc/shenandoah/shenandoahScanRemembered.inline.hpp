@@ -103,6 +103,12 @@ inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(HeapWord *p, size_t num_heap_words) {
   uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
   uint8_t *end_bp = &_byte_map_base[uintptr_t(p + num_heap_words) >> _card_shift];
+
+  // If (p + num_heap_words) is not aligned on card boundary, we also need to dirty last card.
+  if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size - 1)) {
+    end_bp++;
+  }
+
   while (bp < end_bp)
     *bp++ = CardTable::dirty_card_val();
 }
@@ -117,6 +123,12 @@ inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, size_t num_heap_words) {
   uint8_t *bp = &_byte_map_base[uintptr_t(p) >> _card_shift];
   uint8_t *end_bp = &_byte_map_base[uintptr_t(p + num_heap_words) >> _card_shift];
+
+  // If (p + num_heap_words) is not aligned on card boundary, we also need to dirty last card.
+  if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size - 1)) {
+    end_bp++;
+  }
+
   while (bp < end_bp)
     *bp++ = CardTable::clean_card_val();
 }
@@ -150,56 +162,6 @@ ShenandoahCardCluster<RememberedSet>::register_object(HeapWord* address) {
       set_last_start(card_at_start, offset_in_card);
   }
 }
-
-template<typename RememberedSet>
-inline void
-ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t length_in_words) {
-#ifdef FAST_REMEMBERED_SET_SCANNING
-  size_t card_at_start = _rs->card_index_for_addr(address);
-  HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
-  size_t card_at_end = card_at_start + ((address + length_in_words) - card_start_address) / CardTable::card_size_in_words;
-
-  if (card_at_start == card_at_end) {
-    // No changes to object_starts array.  Either:
-    //  get_first_start(card_at_start) returns this coalesced object,
-    //    or it returns an object that precedes the coalesced object.
-    //  get_last_start(card_at_start) returns the object that immediately follows the coalesced object,
-    //    or it returns an object that comes after the object immediately following the coalesced object.
-  } else {
-    uint8_t coalesced_offset = static_cast<uint8_t>(address - card_start_address);
-    if (get_last_start(card_at_start) > coalesced_offset) {
-      // Existing last start is being coalesced, create new last start
-      set_last_start(card_at_start, coalesced_offset);
-    }
-    // otherwise, get_last_start(card_at_start) must equal coalesced_offset
-
-    // All the cards between first and last get cleared.
-    for (size_t i = card_at_start + 1; i < card_at_end; i++) {
-      clear_has_object_bit(i);
-    }
-
-    uint8_t follow_offset = static_cast<uint8_t>((address + length_in_words) - _rs->addr_for_card_index(card_at_end));
-    if (has_object(card_at_end) && (get_first_start(card_at_end) < follow_offset)) {
-      // It may be that after coalescing within this last card's memory range, the last card
-      // no longer holds an object.
-      if (get_last_start(card_at_end) >= follow_offset) {
-        set_first_start(card_at_end, follow_offset);
-      } else {
-        // last_start is being coalesced so this card no longer has any objects.
-        clear_has_object_bit(card_at_end);
-      }
-    }
-    // else
-    //  card_at_end did not have an object, so it still does not have an object, or
-    //  card_at_end had an object that starts after the coalesced object, so no changes required for card_at_end
-
-  }
-#else  // FAST_REMEMBERED_SET_SCANNING
-  // Do nothing for now as we have a brute-force implementation
-  // of findSpanningObject().
-#endif // FAST_REMEMBERED_SET_SCANNING
-}
-
 
 template<typename RememberedSet>
 inline bool
@@ -406,12 +368,6 @@ ShenandoahScanRemembered<RememberedSet>::register_object(HeapWord *addr) {
 
 template<typename RememberedSet>
 inline void
-ShenandoahScanRemembered<RememberedSet>::coalesce_objects(HeapWord *addr, size_t length_in_words) {
-  _scc->coalesce_objects(addr, length_in_words);
-}
-
-template<typename RememberedSet>
-inline void
 ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, size_t length_in_words) {
   _rs->mark_range_as_clean(addr, length_in_words);
   _scc->clear_objects_in_range(addr, length_in_words);
@@ -460,25 +416,31 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           p += start_offset;
           while (p < endp) {
             oop obj = oop(p);
-
+            size_t size(0);
+            bool is_live = _rs->is_live(p, endp, &size);
+            size_t to_end = pointer_delta(endp, p + size);
+            p += size;
             // Future TODO:
             // For improved efficiency, we might want to give special handling of obj->is_objArray().  In
             // particular, in that case, we might want to divide the effort for scanning of a very long object array
             // between multiple threads.
-            if (obj->is_objArray()) {
-              objArrayOop array = objArrayOop(obj);
-              int len = array->length();
-              array->oop_iterate_range(cl, 0, len);
-            } else if (obj->is_instance()) {
-              obj->oop_iterate(cl);
-            } else {
-              // Case 3: Primitive array. Do nothing, no oops there. We use the same
-              // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-              // We skip iterating over the klass pointer since we know that
-              // Universe::TypeArrayKlass never moves.
-              assert (obj->is_typeArray(), "should be type array");
+            // TODO: The mark loop will do this for us if we can trick it into working on the young
+            // pointers of these old objects.
+            if (is_live) {
+              if (obj->is_objArray()) {
+                objArrayOop array = objArrayOop(obj);
+                int len = array->length();
+                array->oop_iterate_range(cl, 0, len);
+              } else if (obj->is_instance()) {
+                obj->oop_iterate(cl);
+              } else {
+                // Case 3: Primitive array. Do nothing, no oops there. We use the same
+                // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
+                // We skip iterating over the klass pointer since we know that
+                // Universe::TypeArrayKlass never moves.
+                assert (obj->is_typeArray(), "should be type array");
+              }
             }
-            p += obj->size();
           }
           if (p > endp)
             card_index = card_index + (p - card_start) / CardTable::card_size_in_words;
@@ -496,7 +458,9 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
         HeapWord *card_start = _rs->addr_for_card_index(card_index);
         HeapWord *p = card_start + start_offset;
         oop obj = oop(p);
-        HeapWord *nextp = p + obj->size();
+        size_t size(0);
+        bool is_live = _rs->is_live(p, p + CardTable::card_size_in_words, &size);
+        HeapWord *nextp = p + size;
 
         // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
         // failure if nextp points to end of heap.
@@ -507,26 +471,29 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
 
         if (!reaches_next_cluster) {
           size_t span_card;
-          for (span_card = card_index+1; span_card <= last_card; span_card++)
+          for (span_card = card_index+1; span_card <= last_card; span_card++) {
             if (_rs->is_card_dirty(span_card)) {
               spans_dirty_within_this_cluster = true;
               break;
             }
+          }
         }
 
-        if (reaches_next_cluster || spans_dirty_within_this_cluster) {
-          if (obj->is_objArray()) {
-            objArrayOop array = objArrayOop(obj);
-            int len = array->length();
-            array->oop_iterate_range(cl, 0, len);
-          } else if (obj->is_instance()) {
-            obj->oop_iterate(cl);
-          } else {
-            // Case 3: Primitive array. Do nothing, no oops there. We use the same
-            // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-            // We skip iterating over the klass pointer since we know that
-            // Universe::TypeArrayKlass never moves.
-            assert (obj->is_typeArray(), "should be type array");
+        if (is_live) {
+          if (reaches_next_cluster || spans_dirty_within_this_cluster) {
+            if (obj->is_objArray()) {
+              objArrayOop array = objArrayOop(obj);
+              int len = array->length();
+              array->oop_iterate_range(cl, 0, len);
+            } else if (obj->is_instance()) {
+              obj->oop_iterate(cl);
+            } else {
+              // Case 3: Primitive array. Do nothing, no oops there. We use the same
+              // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
+              // We skip iterating over the klass pointer since we know that
+              // Universe::TypeArrayKlass never moves.
+              assert (obj->is_typeArray(), "should be type array");
+            }
           }
         }
         // Increment card_index to account for the spanning object, even if we didn't scan it.
@@ -542,6 +509,7 @@ template<typename RememberedSet>
 template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *region, ClosureType *cl) {
+  assert(region->is_old() && region->is_active(), "sanity");
   HeapWord *start_of_range = region->bottom();
   size_t start_cluster_no = cluster_for_addr(start_of_range);
 

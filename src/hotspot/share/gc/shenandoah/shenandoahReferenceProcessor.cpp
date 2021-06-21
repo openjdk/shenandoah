@@ -69,8 +69,8 @@ void set_oop_field<narrowOop>(narrowOop* field, oop value) {
   *field = CompressedOops::encode(value);
 }
 
-static oop lrb(oop obj) {
-  if (obj != NULL && ShenandoahHeap::heap()->marking_context()->is_marked(obj)) {
+oop ShenandoahReferenceProcessor::lrb(oop obj) const {
+  if (obj != NULL && _is_alive_closure->is_marked(obj)) {
     return ShenandoahBarrierSet::barrier_set()->load_reference_barrier(obj);
   } else {
     return obj;
@@ -98,7 +98,7 @@ static T* reference_discovered_addr(oop reference) {
 }
 
 template <typename T>
-static oop reference_discovered(oop reference) {
+oop ShenandoahReferenceProcessor::reference_discovered(oop reference) const {
   T heap_oop = *reference_discovered_addr<T>(reference);
   return lrb(CompressedOops::decode(heap_oop));
 }
@@ -139,7 +139,7 @@ static T* reference_next_addr(oop reference) {
 }
 
 template <typename T>
-static oop reference_next(oop reference) {
+oop ShenandoahReferenceProcessor::reference_next(oop reference) const {
   T heap_oop = RawAccess<>::oop_load(reference_next_addr<T>(reference));
   return lrb(CompressedOops::decode(heap_oop));
 }
@@ -160,8 +160,15 @@ ShenandoahRefProcThreadLocal::ShenandoahRefProcThreadLocal() :
   _enqueued_count() {
 }
 
-void ShenandoahRefProcThreadLocal::reset() {
-  _discovered_list = NULL;
+void ShenandoahRefProcThreadLocal::reset(bool reset_discovered) {
+  // Old marking will discover old references. We expect them to be processed during
+  // young collects so we do not want to lose our reference to them when the young
+  // cycle starts. When processing is complete it will null out the head of the (now
+  // empty) discovered list.
+  log_trace(gc,ref)("Reset ref proc thread locals, discovered: " PTR_FORMAT, p2i(_discovered_list));
+  if (reset_discovered) {
+    _discovered_list = NULL;
+  }
   _mark_closure = NULL;
   for (uint i = 0; i < reference_type_count; i++) {
     _encountered_count[i] = 0;
@@ -203,19 +210,23 @@ ShenandoahReferenceProcessor::ShenandoahReferenceProcessor(uint max_workers) :
   _iterate_discovered_list_id(0U),
   _stats() {
   for (size_t i = 0; i < max_workers; i++) {
-    _ref_proc_thread_locals[i].reset();
+    _ref_proc_thread_locals[i].reset(true /* reset_discovered */);
   }
 }
 
 void ShenandoahReferenceProcessor::reset_thread_locals() {
   uint max_workers = ShenandoahHeap::heap()->max_workers();
   for (uint i = 0; i < max_workers; i++) {
-    _ref_proc_thread_locals[i].reset();
+    _ref_proc_thread_locals[i].reset(false /* reset_discovered */);
   }
 }
 
 void ShenandoahReferenceProcessor::set_mark_closure(uint worker_id, ShenandoahMarkRefsSuperClosure* mark_closure) {
   _ref_proc_thread_locals[worker_id].set_mark_closure(mark_closure);
+}
+
+void ShenandoahReferenceProcessor::set_alive_closure(ShenandoahIsMarkedClosure* is_marked_closure) {
+  _is_alive_closure = is_marked_closure;
 }
 
 void ShenandoahReferenceProcessor::set_soft_reference_policy(bool clear) {
@@ -246,7 +257,8 @@ bool ShenandoahReferenceProcessor::is_inactive(oop reference, oop referent, Refe
 }
 
 bool ShenandoahReferenceProcessor::is_strongly_live(oop referent) const {
-  return ShenandoahHeap::heap()->marking_context()->is_marked_strong(referent);
+  // return ShenandoahHeap::heap()->marking_context()->is_marked_strong(referent);
+  return _is_alive_closure->is_marked_strong(referent);
 }
 
 bool ShenandoahReferenceProcessor::is_softly_live(oop reference, ReferenceType type) const {
@@ -299,9 +311,9 @@ bool ShenandoahReferenceProcessor::should_drop(oop reference, ReferenceType type
   // Check if the referent is still alive, in which case we should
   // drop the reference.
   if (type == REF_PHANTOM) {
-    return ShenandoahHeap::heap()->complete_marking_context()->is_marked(referent);
+    return _is_alive_closure->is_marked(referent);
   } else {
-    return ShenandoahHeap::heap()->complete_marking_context()->is_marked_strong(referent);
+    return _is_alive_closure->is_marked_strong(referent);
   }
 }
 
@@ -313,7 +325,7 @@ void ShenandoahReferenceProcessor::make_inactive(oop reference, ReferenceType ty
     // next field. An application can't call FinalReference.enqueue(), so there is
     // no race to worry about when setting the next field.
     assert(reference_next<T>(reference) == NULL, "Already inactive");
-    assert(ShenandoahHeap::heap()->marking_context()->is_marked(reference_referent<T>(reference)), "only make inactive final refs with alive referents");
+    assert(_is_alive_closure->is_marked(reference_referent<T>(reference)), "only make inactive final refs with alive referents");
     reference_set_next(reference, reference);
   } else {
     // Clear referent
@@ -387,7 +399,7 @@ oop ShenandoahReferenceProcessor::drop(oop reference, ReferenceType type) {
   log_trace(gc, ref)("Dropped Reference: " PTR_FORMAT " (%s)", p2i(reference), reference_type_name(type));
 
   assert(reference_referent<T>(reference) == NULL ||
-         ShenandoahHeap::heap()->marking_context()->is_marked(reference_referent<T>(reference)), "only drop references with alive referents");
+         _is_alive_closure->is_marked(reference_referent<T>(reference)), "only drop references with alive referents");
 
   // Unlink and return next in list
   oop next = reference_discovered<T>(reference);

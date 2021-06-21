@@ -32,9 +32,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generatio
     _old_collection_candidates(0),
     _next_old_collection_candidate(0),
     _hidden_old_collection_candidates(0),
-    _hidden_next_old_collection_candidate(0),
-    _old_coalesce_and_fill_candidates(0),
-    _first_coalesce_and_fill_candidate(0)
+    _hidden_next_old_collection_candidate(0)
 {
 }
 
@@ -207,14 +205,11 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     if (percent_garbage < collection_threshold_garbage_percent) {
       _hidden_next_old_collection_candidate = 0;
       _hidden_old_collection_candidates = (uint)i;
-      _first_coalesce_and_fill_candidate = (uint)i;
-      _old_coalesce_and_fill_candidates = (uint)(cand_idx - i);
 
       // Note that we do not coalesce and fill occupied humongous regions
       // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
-      log_info(gc)("Old-gen mark evac (%llu RR), %llu CF)",
-                   (unsigned long long) (_hidden_old_collection_candidates),
-                   (unsigned long long) _old_coalesce_and_fill_candidates);
+      log_info(gc)("Old-gen mark evac (%llu RR)",
+                   (unsigned long long) (_hidden_old_collection_candidates));
       return;
     }
   }
@@ -222,14 +217,11 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // If we reach here, all of non-humogous old-gen regions are candidates for collection set.
   _hidden_next_old_collection_candidate = 0;
   _hidden_old_collection_candidates = (uint)cand_idx;
-  _first_coalesce_and_fill_candidate = 0;
-  _old_coalesce_and_fill_candidates = 0;
 
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
-  log_info(gc)("Old-gen mark evac (%llu RR), %llu CF)",
-               (unsigned long long) (_hidden_old_collection_candidates),
-               (unsigned long long) _old_coalesce_and_fill_candidates);
+  log_info(gc)("Old-gen mark evac (%llu RR)",
+               (unsigned long long) (_hidden_old_collection_candidates));
 }
 
 void ShenandoahOldHeuristics::start_old_evacuations() {
@@ -238,7 +230,8 @@ void ShenandoahOldHeuristics::start_old_evacuations() {
   _old_collection_candidates = _hidden_old_collection_candidates;
   _next_old_collection_candidate = _hidden_next_old_collection_candidate;
 
-  _hidden_old_collection_candidates = 0;}
+  _hidden_old_collection_candidates = 0;
+}
 
 
 uint ShenandoahOldHeuristics::unprocessed_old_collection_candidates() {
@@ -255,20 +248,6 @@ void ShenandoahOldHeuristics::consume_old_collection_candidate() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   _next_old_collection_candidate++;
   _old_collection_candidates--;
-}
-
-uint ShenandoahOldHeuristics::old_coalesce_and_fill_candidates() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  return _old_coalesce_and_fill_candidates;
-}
-
-void ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  uint count = _old_coalesce_and_fill_candidates;
-  int index = _first_coalesce_and_fill_candidate;
-  while (count-- > 0) {
-    *buffer++ = _region_data[index++]._region;
-  }
 }
 
 bool ShenandoahOldHeuristics::should_defer_gc() {
@@ -288,7 +267,5 @@ void ShenandoahOldHeuristics::abandon_collection_candidates() {
   _next_old_collection_candidate = 0;
   _hidden_old_collection_candidates = 0;
   _hidden_next_old_collection_candidate = 0;
-  _old_coalesce_and_fill_candidates = 0;
-  _first_coalesce_and_fill_candidate = 0;
 }
 

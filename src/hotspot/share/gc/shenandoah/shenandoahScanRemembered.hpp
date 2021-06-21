@@ -270,6 +270,8 @@ public:
   void mark_overreach_card_as_dirty(void *p);
   size_t cluster_count();
 
+  bool is_live(HeapWord *p, HeapWord *endp, size_t* size);
+
   // Called by multiple GC threads at start of concurrent mark and evacuation phases.  Each parallel GC thread typically
   // initializes a different subranges of all overreach entries.
   void initialize_overreach(size_t first_cluster, size_t count);
@@ -755,23 +757,6 @@ public:
   // In its current implementation, unregister_object() serves the needs of coalescing objects.
   //
 
-  // Suppose we want to combine several dead objects into a single coalesced object.  How does this
-  // impact our representation of crossing map information?
-  //  1. If the newly coalesced region is contained entirely within a single region, that region's last
-  //     start entry either remains the same or it is changed to the start of the coalesced region.
-  //  2. For the region that holds the start of the coalesced object, it will not impact the first start
-  //     but it may impact the last start.
-  //  3. For following regions spanned entirely by the newly coalesced object, it will change has_object
-  //     to false (and make first-start and last-start "undefined").
-  //  4. For a following region that is spanned patially by the newly coalesced object, it may change
-  //     first-start value, but it will not change the last-start value.
-  //
-  // The range of addresses represented by the arguments to coalesce_objects() must represent a range
-  // of memory that was previously occupied exactly by one or more previously registered objects.  For
-  // convenience, it is legal to invoke coalesce_objects() with arguments that span a single previously
-  // registered object.
-  void coalesce_objects(HeapWord* address, size_t length_in_words);
-
   // The typical use case is going to look something like this:
   //   for each heapregion that comprises old-gen memory
   //     for each card number that corresponds to this heap region
@@ -891,7 +876,6 @@ public:
 
   size_t cluster_for_addr(HeapWord *addr);
   void register_object(HeapWord *addr);
-  void coalesce_objects(HeapWord *addr, size_t length_in_words);
 
   // clear the cards to clean, and clear the object_starts info to no objects
   void mark_range_as_empty(HeapWord *addr, size_t length_in_words);

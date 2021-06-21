@@ -71,6 +71,7 @@ void ShenandoahSTWMark::mark() {
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
   rp->reset_thread_locals();
   rp->set_soft_reference_policy(heap->soft_ref_policy()->should_clear_all_soft_refs());
+  rp->set_alive_closure(_generation->is_alive_closure());
 
   // Init mark, do not expect forwarded pointers in roots
   if (ShenandoahVerify) {

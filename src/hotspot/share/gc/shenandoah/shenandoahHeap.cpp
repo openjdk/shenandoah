@@ -115,35 +115,6 @@ public:
   }
 };
 
-class ShenandoahPretouchBitmapTask : public AbstractGangTask {
-private:
-  ShenandoahRegionIterator _regions;
-  char* _bitmap_base;
-  const size_t _bitmap_size;
-  const size_t _page_size;
-public:
-  ShenandoahPretouchBitmapTask(char* bitmap_base, size_t bitmap_size, size_t page_size) :
-    AbstractGangTask("Shenandoah Pretouch Bitmap"),
-    _bitmap_base(bitmap_base),
-    _bitmap_size(bitmap_size),
-    _page_size(page_size) {}
-
-  virtual void work(uint worker_id) {
-    ShenandoahHeapRegion* r = _regions.next();
-    while (r != NULL) {
-      size_t start = r->index()       * ShenandoahHeapRegion::region_size_bytes() / MarkBitMap::heap_map_factor();
-      size_t end   = (r->index() + 1) * ShenandoahHeapRegion::region_size_bytes() / MarkBitMap::heap_map_factor();
-      assert (end <= _bitmap_size, "end is sane: " SIZE_FORMAT " < " SIZE_FORMAT, end, _bitmap_size);
-
-      if (r->is_committed()) {
-        os::pretouch_memory(_bitmap_base + start, _bitmap_base + end, _page_size);
-      }
-
-      r = _regions.next();
-    }
-  }
-};
-
 jint ShenandoahHeap::initialize() {
   //
   // Figure out heap sizing
@@ -247,49 +218,19 @@ jint ShenandoahHeap::initialize() {
   // Reserve and commit memory for bitmap(s)
   //
 
-  _bitmap_size = ShenandoahMarkBitMap::compute_size(heap_rs.size());
-  _bitmap_size = align_up(_bitmap_size, bitmap_page_size);
+  size_t mark_bitmap_size = ShenandoahMarkBitMap::compute_size(heap_rs.size());
+  mark_bitmap_size = align_up(mark_bitmap_size, bitmap_page_size);
 
   size_t bitmap_bytes_per_region = reg_size_bytes / ShenandoahMarkBitMap::heap_map_factor();
 
-  guarantee(bitmap_bytes_per_region != 0,
-            "Bitmap bytes per region should not be zero");
-  guarantee(is_power_of_2(bitmap_bytes_per_region),
-            "Bitmap bytes per region should be power of two: " SIZE_FORMAT, bitmap_bytes_per_region);
+  _bitmap_region_1.initialize(mark_bitmap_size, bitmap_bytes_per_region, num_committed_regions);
+  _bitmap_region_2.initialize(mark_bitmap_size, bitmap_bytes_per_region, num_committed_regions);
 
-  if (bitmap_page_size > bitmap_bytes_per_region) {
-    _bitmap_regions_per_slice = bitmap_page_size / bitmap_bytes_per_region;
-    _bitmap_bytes_per_slice = bitmap_page_size;
-  } else {
-    _bitmap_regions_per_slice = 1;
-    _bitmap_bytes_per_slice = bitmap_bytes_per_region;
-  }
-
-  guarantee(_bitmap_regions_per_slice >= 1,
-            "Should have at least one region per slice: " SIZE_FORMAT,
-            _bitmap_regions_per_slice);
-
-  guarantee(((_bitmap_bytes_per_slice) % bitmap_page_size) == 0,
-            "Bitmap slices should be page-granular: bps = " SIZE_FORMAT ", page size = " SIZE_FORMAT,
-            _bitmap_bytes_per_slice, bitmap_page_size);
-
-  ReservedSpace bitmap(_bitmap_size, bitmap_page_size);
-  MemTracker::record_virtual_memory_type(bitmap.base(), mtGC);
-  _bitmap_region = MemRegion((HeapWord*) bitmap.base(), bitmap.size() / HeapWordSize);
-  _bitmap_region_special = bitmap.special();
-
-  size_t bitmap_init_commit = _bitmap_bytes_per_slice *
-                              align_up(num_committed_regions, _bitmap_regions_per_slice) / _bitmap_regions_per_slice;
-  bitmap_init_commit = MIN2(_bitmap_size, bitmap_init_commit);
-  if (!_bitmap_region_special) {
-    os::commit_memory_or_exit((char *) _bitmap_region.start(), bitmap_init_commit, bitmap_page_size, false,
-                              "Cannot commit bitmap memory");
-  }
-
-  _marking_context = new ShenandoahMarkingContext(_heap_region, _bitmap_region, _num_regions);
+  _active_marking_context = new ShenandoahMarkingContext(_heap_region, &_bitmap_region_1, _num_regions);
+  _previous_marking_context = new ShenandoahMarkingContext(_heap_region, &_bitmap_region_2, _num_regions);
 
   if (ShenandoahVerify) {
-    ReservedSpace verify_bitmap(_bitmap_size, bitmap_page_size);
+    ReservedSpace verify_bitmap(mark_bitmap_size, bitmap_page_size);
     if (!verify_bitmap.special()) {
       os::commit_memory_or_exit(verify_bitmap.base(), verify_bitmap.size(), bitmap_page_size, false,
                                 "Cannot commit verification bitmap memory");
@@ -301,7 +242,7 @@ jint ShenandoahHeap::initialize() {
   }
 
   // Reserve aux bitmap for use in object_iterate(). We don't commit it here.
-  ReservedSpace aux_bitmap(_bitmap_size, bitmap_page_size);
+  ReservedSpace aux_bitmap(mark_bitmap_size, bitmap_page_size);
   MemTracker::record_virtual_memory_type(aux_bitmap.base(), mtGC);
   _aux_bitmap_region = MemRegion((HeapWord*) aux_bitmap.base(), aux_bitmap.size() / HeapWordSize);
   _aux_bitmap_region_special = aux_bitmap.special();
@@ -362,13 +303,15 @@ jint ShenandoahHeap::initialize() {
       ShenandoahHeapRegion* r = new (loc) ShenandoahHeapRegion(start, i, is_committed);
       assert(is_aligned(r, SHENANDOAH_CACHE_LINE_SIZE), "Sanity");
 
-      _marking_context->initialize_top_at_mark_start(r);
+      _active_marking_context->initialize_top_at_mark_start(r);
+      _previous_marking_context->initialize_top_at_mark_start(r);
       _regions[i] = r;
       assert(!collection_set()->is_in(i), "New region should not be in collection set");
     }
 
     // Initialize to complete
-    _marking_context->mark_complete();
+    _active_marking_context->mark_complete();
+    _previous_marking_context->mark_complete();
 
     _free_set->rebuild();
   }
@@ -380,7 +323,7 @@ jint ShenandoahHeap::initialize() {
     ShenandoahPushWorkerScope scope(workers(), _max_workers, false);
 
     _pretouch_heap_page_size = heap_page_size;
-    _pretouch_bitmap_page_size = bitmap_page_size;
+    size_t pretouch_bitmap_page_size = bitmap_page_size;
 
 #ifdef LINUX
     // UseTransparentHugePages would madvise that backing memory can be coalesced into huge
@@ -388,15 +331,15 @@ jint ShenandoahHeap::initialize() {
     // them into huge one. Therefore, we need to pretouch with smaller pages.
     if (UseTransparentHugePages) {
       _pretouch_heap_page_size = (size_t)os::vm_page_size();
-      _pretouch_bitmap_page_size = (size_t)os::vm_page_size();
+      pretouch_bitmap_page_size = (size_t)os::vm_page_size();
     }
 #endif
 
     // OS memory managers may want to coalesce back-to-back pages. Make their jobs
     // simpler by pre-touching continuous spaces (heap and bitmap) separately.
 
-    ShenandoahPretouchBitmapTask bcl(bitmap.base(), _bitmap_size, _pretouch_bitmap_page_size);
-    _workers->run_task(&bcl);
+    _bitmap_region_1.pretouch(pretouch_bitmap_page_size);
+    _bitmap_region_2.pretouch(pretouch_bitmap_page_size);
 
     ShenandoahPretouchHeapTask hcl(_pretouch_heap_page_size);
     _workers->run_task(&hcl);
@@ -524,11 +467,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _soft_ref_policy(),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
   _ref_processor(new ShenandoahReferenceProcessor(MAX2(_max_workers, 1U))),
-  _marking_context(NULL),
-  _bitmap_size(0),
-  _bitmap_regions_per_slice(0),
-  _bitmap_bytes_per_slice(0),
-  _bitmap_region_special(false),
+  _active_marking_context(NULL),
+  _previous_marking_context(NULL),
   _aux_bitmap_region_special(false),
   _liveness_cache(NULL),
   _collection_set(NULL),
@@ -1111,8 +1051,7 @@ private:
     ShenandoahConcurrentEvacuateRegionObjectClosure cl(_sh);
     ShenandoahHeapRegion* r;
     while ((r =_cs->claim_next()) != NULL) {
-      // Generational mode doesn't support immediate collection
-      assert(_sh->mode()->is_generational() || r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
+      assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
       _sh->marked_object_iterate(r, &cl);
 
       if (ShenandoahPacing) {
@@ -2058,7 +1997,7 @@ void ShenandoahHeap::prepare_concurrent_roots() {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
   assert(!is_stw_gc_in_progress(), "Only concurrent GC");
   set_concurrent_strong_root_in_progress(!collection_set()->is_empty());
-  set_concurrent_weak_root_in_progress(true);
+  set_concurrent_weak_root_in_progress(active_generation()->generation_mode() != OLD);
   if (unload_classes()) {
     _unloader.prepare();
   }
@@ -2130,7 +2069,7 @@ private:
     ShenandoahHeapRegion* r = _regions->next();
     // We update references for global, old, and young collections.
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
-    ShenandoahMarkingContext* const ctx = _heap->marking_context();
+
     bool is_mixed = _heap->collection_set()->has_old_regions();
     while (r != NULL) {
       HeapWord* update_watermark = r->get_update_watermark();
@@ -2144,12 +2083,13 @@ private:
             // Old region in global or mixed cycle (in which case, old regions should be marked).
             // We need to make sure that the next remembered set scan does not iterate over dead objects
             // which haven't had their references updated.
-            r->oop_iterate(&cl, /*fill_dead_objects*/ true, /* reregister_coalesced_objects */ true);
+            r->oop_iterate(&cl);
           } else {
             // Old region in a young cycle with no old regions.
             if (!ShenandoahUseSimpleCardScanning) {
               _heap->card_scan()->process_region(r, &cl);
             } else if (ShenandoahBarrierSet::barrier_set()->card_table()->is_dirty(MemRegion(r->bottom(), r->top()))) {
+              // TODO: 'Simple' card scanning is deprecated.
               update_all_references(&cl, r, update_watermark);
             }
           }
@@ -2167,19 +2107,22 @@ private:
 
   template<class T>
   void update_all_references(T* cl, ShenandoahHeapRegion* r, HeapWord* update_watermark) {
+    assert(r->is_old(), "This is only for old regions.");
     if (r->is_humongous()) {
       r->oop_iterate_humongous(cl);
     } else {
-      // We don't have liveness information about this region.
-      // Therefore we process all objects, rather than just marked ones.
-      // Otherwise subsequent traversals will encounter stale pointers.
+      ShenandoahMarkingContext* const ctx = _heap->stable_marking_context();
       HeapWord* p = r->bottom();
       ShenandoahObjectToOopBoundedClosure<T> objs(cl, p, update_watermark);
       // Anything beyond update_watermark is not yet allocated or initialized.
+      size_t size(0);
       while (p < update_watermark) {
         oop obj = oop(p);
-        objs.do_object(obj);
-        p += obj->size();
+        bool is_marked = ctx->is_marked_with_size(obj, update_watermark, &size);
+        if (is_marked) {
+          objs.do_object(obj);
+        }
+        p += size;
       }
     }
   }
@@ -2272,73 +2215,20 @@ void ShenandoahHeap::print_extended_on(outputStream *st) const {
 }
 
 bool ShenandoahHeap::is_bitmap_slice_committed(ShenandoahHeapRegion* r, bool skip_self) {
-  size_t slice = r->index() / _bitmap_regions_per_slice;
-
-  size_t regions_from = _bitmap_regions_per_slice * slice;
-  size_t regions_to   = MIN2(num_regions(), _bitmap_regions_per_slice * (slice + 1));
-  for (size_t g = regions_from; g < regions_to; g++) {
-    assert (g / _bitmap_regions_per_slice == slice, "same slice");
-    if (skip_self && g == r->index()) continue;
-    if (get_region(g)->is_committed()) {
-      return true;
-    }
-  }
-  return false;
+  return _bitmap_region_1.is_bitmap_slice_committed(r, skip_self)
+      || _bitmap_region_2.is_bitmap_slice_committed(r, skip_self);
 }
 
 bool ShenandoahHeap::commit_bitmap_slice(ShenandoahHeapRegion* r) {
-  shenandoah_assert_heaplocked();
-
-  // Bitmaps in special regions do not need commits
-  if (_bitmap_region_special) {
-    return true;
-  }
-
-  if (is_bitmap_slice_committed(r, true)) {
-    // Some other region from the group is already committed, meaning the bitmap
-    // slice is already committed, we exit right away.
-    return true;
-  }
-
-  // Commit the bitmap slice:
-  size_t slice = r->index() / _bitmap_regions_per_slice;
-  size_t off = _bitmap_bytes_per_slice * slice;
-  size_t len = _bitmap_bytes_per_slice;
-  char* start = (char*) _bitmap_region.start() + off;
-
-  if (!os::commit_memory(start, len, false)) {
-    return false;
-  }
-
-  if (AlwaysPreTouch) {
-    os::pretouch_memory(start, start + len, _pretouch_bitmap_page_size);
-  }
-
-  return true;
+  bool committed = _bitmap_region_1.commit_bitmap_slice(r);
+  committed |= _bitmap_region_2.commit_bitmap_slice(r);
+  return committed;
 }
 
 bool ShenandoahHeap::uncommit_bitmap_slice(ShenandoahHeapRegion *r) {
-  shenandoah_assert_heaplocked();
-
-  // Bitmaps in special regions do not need uncommits
-  if (_bitmap_region_special) {
-    return true;
-  }
-
-  if (is_bitmap_slice_committed(r, true)) {
-    // Some other region from the group is still committed, meaning the bitmap
-    // slice is should stay committed, exit right away.
-    return true;
-  }
-
-  // Uncommit the bitmap slice:
-  size_t slice = r->index() / _bitmap_regions_per_slice;
-  size_t off = _bitmap_bytes_per_slice * slice;
-  size_t len = _bitmap_bytes_per_slice;
-  if (!os::uncommit_memory((char*)_bitmap_region.start() + off, len)) {
-    return false;
-  }
-  return true;
+  bool uncommitted = _bitmap_region_1.uncommit_bitmap_slice(r);
+  uncommitted |= _bitmap_region_2.uncommit_bitmap_slice(r);
+  return uncommitted;
 }
 
 void ShenandoahHeap::safepoint_synchronize_begin() {

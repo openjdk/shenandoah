@@ -74,6 +74,11 @@ typedef size_t Counters[reference_type_count];
  * In order to prevent resurrection by Java threads calling Reference.get() concurrently while we are clearing
  * referents, we employ a special barrier, the native LRB, which returns NULL when the referent is unreachable.
  */
+class ShenandoahIsMarkedClosure {
+public:
+  virtual bool is_marked(oop obj) = 0;
+  virtual bool is_marked_strong(oop obj) = 0;
+};
 
 class ShenandoahRefProcThreadLocal : public CHeapObj<mtGC> {
 private:
@@ -89,7 +94,7 @@ public:
   ShenandoahRefProcThreadLocal(const ShenandoahRefProcThreadLocal&) = delete; // non construction-copyable
   ShenandoahRefProcThreadLocal& operator=(const ShenandoahRefProcThreadLocal&) = delete; // non copyable
 
-  void reset();
+  void reset(bool reset_discovered = false);
 
   ShenandoahMarkRefsSuperClosure* mark_closure() const {
     return _mark_closure;
@@ -139,6 +144,7 @@ private:
   volatile uint _iterate_discovered_list_id;
 
   ReferenceProcessorStats _stats;
+  ShenandoahIsMarkedClosure* _is_alive_closure;
 
   template <typename T>
   bool is_inactive(oop reference, oop referent, ReferenceType type) const;
@@ -171,11 +177,17 @@ private:
   template<typename T>
   void clean_discovered_list(T* list);
 
+  template<typename T>
+  oop reference_next(oop reference) const;
+  template <typename T>
+  oop reference_discovered(oop reference) const;
+  oop lrb(oop obj) const;
 public:
   ShenandoahReferenceProcessor(uint max_workers);
 
   void reset_thread_locals();
   void set_mark_closure(uint worker_id, ShenandoahMarkRefsSuperClosure* mark_closure);
+  void set_alive_closure(ShenandoahIsMarkedClosure* is_marked_closure);
 
   void set_soft_reference_policy(bool clear);
 

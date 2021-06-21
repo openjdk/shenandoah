@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -162,12 +163,11 @@ public:
   void print_on(outputStream* st) const;
   void print() const;
 
-  void service_concurrent_normal_cycle(const ShenandoahHeap* heap,
+  void service_concurrent_normal_cycle(ShenandoahHeap* heap,
                                        const GenerationMode generation,
                                        GCCause::Cause cause);
 
-  void service_concurrent_old_cycle(const ShenandoahHeap* heap,
-                                    GCCause::Cause &cause);
+  void service_concurrent_old_cycle(ShenandoahHeap* heap, GCCause::Cause &cause);
 
   void set_gc_mode(GCMode new_mode);
   GCMode gc_mode() {
