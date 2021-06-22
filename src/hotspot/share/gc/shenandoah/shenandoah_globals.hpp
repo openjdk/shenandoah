@@ -431,7 +431,13 @@
                                                                             \
   product(uintx, ShenandoahAgingCyclePeriod, 1, EXPERIMENTAL,               \
           "With generational mode, increment the age of objects and"        \
-          "regions each time this many young-gen GC cycles are completed.")
+          "regions each time this many young-gen GC cycles are completed.") \
+                                                                            \
+  product(ccstr, logSnapshotsFile, NULL, DIAGNOSTIC,                        \
+          "If UnlockExperimentalVMOptions,UseShenandoahGC,UsePerfData,and"  \
+          "ShenandoahRegionSampling are on, save GC snapshot stream to  "   \
+          "this log file [default: ./shenandoahSnapshot_pid%p.log] "        \
+          "(%p replaced with pid)")                                         \
 
 // end of GC_SHENANDOAH_FLAGS
 
