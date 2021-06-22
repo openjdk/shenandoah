@@ -381,7 +381,15 @@
                                                                             \
   product(bool, ShenandoahAllowOldMarkingPreemption, true, DIAGNOSTIC,      \
           "Allow young generation collections to suspend concurrent"        \
-          " marking in the old generation.")
+          " marking in the old generation.")                                \
+                                                                            \
+                                                                            \
+  /* Unsure if this should be product or develop */                         \
+  develop(ccstr, logSnapshotsFile, NULL, DIAGNOSTIC,                        \
+          "If UnlockExperimentalVMOptions,UseShenandoahGC,UsePerfData,and"  \
+          "ShenandoahRegionSampling are on, save GC snapshot stream to  "   \
+          "this log file [default: ./shenandoahSnapshot_pid%p.log] "        \
+          "(%p replaced with pid)")                                         \
 // end of GC_SHENANDOAH_FLAGS
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP
