@@ -37,7 +37,10 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   const char* name() const;
 
   bool contains(ShenandoahHeapRegion* region) const;
-  void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl);
+
+    bool contains(oop obj) const override;
+
+    void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl);
 
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl);
 

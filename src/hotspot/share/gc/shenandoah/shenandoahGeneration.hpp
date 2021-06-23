@@ -91,6 +91,9 @@ public:
   // Return true if this region is affiliated with this generation.
   virtual bool contains(ShenandoahHeapRegion* region) const = 0;
 
+  // Return true if this object is affiliated with this generation.
+  virtual bool contains(oop obj) const = 0;
+
   // Apply closure to all regions affiliated with this generation.
   virtual void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;
 

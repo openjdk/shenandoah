@@ -155,7 +155,7 @@ public:
     return &_lock;
   }
 
-  ShenandoahGeneration* active_generation() {
+  ShenandoahGeneration* active_generation() const {
     // last or latest generation might be a better name here.
     return _gc_generation;
   }
@@ -510,6 +510,7 @@ public:
 
   bool is_in(const void* p) const;
 
+  bool in_collected_generation(oop obj) const;
   bool is_in_young(const void* p) const;
   bool is_in_old(const void* p) const;
   inline bool is_old(oop pobj) const;

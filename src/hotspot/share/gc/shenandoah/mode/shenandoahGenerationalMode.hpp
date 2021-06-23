@@ -39,7 +39,8 @@ enum ShenandoahRegionAffiliation {
   OLD_GENERATION
 };
 
-const char *affiliation_name(ShenandoahRegionAffiliation type);
+const char* affiliation_name(const void* ptr);
+const char* affiliation_name(ShenandoahRegionAffiliation type);
 
 class ShenandoahGenerationalMode : public ShenandoahMode {
 public:

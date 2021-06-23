@@ -753,6 +753,21 @@ bool ShenandoahHeap::is_in_old(const void* p) const {
   return heap_region_containing(p)->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION;
 }
 
+bool ShenandoahHeap::in_collected_generation(oop obj) const {
+  if (!mode()->is_generational()) {
+    // everything is the same single generation
+    return true;
+  }
+
+  if (active_generation() == NULL) {
+    // no collection is happening, only expect this to be called
+    // when concurrent processing is active, but that could change
+    return false;
+  }
+
+  return active_generation()->contains(obj);
+}
+
 void ShenandoahHeap::op_uncommit(double shrink_before, size_t shrink_until) {
   assert (ShenandoahUncommit, "should be enabled");
 

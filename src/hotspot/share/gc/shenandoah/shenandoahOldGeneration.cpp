@@ -171,3 +171,7 @@ void ShenandoahOldGeneration::purge_satb_buffers(bool abandon) {
     heap->workers()->run_task(&purge_satb_task);
   }
 }
+
+bool ShenandoahOldGeneration::contains(oop obj) const {
+  return ShenandoahHeap::heap()->is_in_old(obj);
+}
