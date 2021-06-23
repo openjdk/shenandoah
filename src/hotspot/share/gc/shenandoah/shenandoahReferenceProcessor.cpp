@@ -25,6 +25,7 @@
 
 #include "precompiled.hpp"
 #include "classfile/javaClasses.hpp"
+#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
@@ -267,6 +268,16 @@ bool ShenandoahReferenceProcessor::should_discover(oop reference, ReferenceType 
   T* referent_addr = (T*) java_lang_ref_Reference::referent_addr_raw(reference);
   T heap_oop = RawAccess<>::oop_load(referent_addr);
   oop referent = CompressedOops::decode(heap_oop);
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+
+  if (heap->is_gc_generation_young() && heap->is_in_young(reference) && heap->is_in_old(referent)) {
+      // Young collect should not discover old reference.
+      // TODO: Should we not discover? or discover but not process later? Doesn't make sense for young collect
+      // TODO: mark through and old referent. This has the effect of making old weak references into old-gen
+      //  strong roots
+      log_trace(gc,ref)("Young reference: " PTR_FORMAT " with old referent: " PTR_FORMAT, p2i(reference), p2i(reference));
+      return false;
+  }
 
   if (is_inactive<T>(reference, referent, type)) {
     log_trace(gc,ref)("Reference inactive: " PTR_FORMAT, p2i(reference));
@@ -371,7 +382,8 @@ bool ShenandoahReferenceProcessor::discover_reference(oop reference, ReferenceTy
     return false;
   }
 
-  log_trace(gc, ref)("Encountered Reference: " PTR_FORMAT " (%s)", p2i(reference), reference_type_name(type));
+  log_trace(gc, ref)("Encountered Reference: " PTR_FORMAT " (%s, %s)",
+          p2i(reference), reference_type_name(type), affiliation_name(reference));
   uint worker_id = ShenandoahThreadLocalData::worker_id(Thread::current());
   _ref_proc_thread_locals->inc_encountered(type);
 
