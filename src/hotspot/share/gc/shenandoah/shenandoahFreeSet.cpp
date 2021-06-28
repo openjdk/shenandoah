@@ -35,6 +35,9 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
+#undef KELVIN_VERBOSE
+#define KELVIN_PARANOID
+
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
   _mutator_free_bitmap(max_regions, mtGC),
@@ -158,6 +161,14 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
+#ifdef KELVIN_VERBOSE
+  if (r->is_old() || (req.affiliation() == OLD_GENERATION)) {
+    printf("SFS::try_allocate_in region [%llx, %llx], TLAB? %s, size: %llx, ElasticTLAB? %s\n",
+           (unsigned long long) r->bottom(), (unsigned long long) r->top(), req.is_lab_alloc()? "yes": "no",
+           (unsigned long long) req.size(), ShenandoahElasticTLAB? "yes": "no");
+    fflush(stdout);
+  }
+#endif
 
   if (_heap->is_concurrent_weak_root_in_progress() &&
       r->is_trash()) {
@@ -167,11 +178,18 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   try_recycle_trashed(r);
 
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
+    ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
       // This free region might have garbage in its remembered set representation.
       _heap->clear_cards_for(r);
     }
     r->set_affiliation(req.affiliation());
+#ifdef KELVIN_VERBOSE
+    printf("clearing bitmap for region [%llx, %llx] at transition from FREE to %s\n",
+           (unsigned long long) r->bottom(), (unsigned long long) r->end(), affiliation_name(req.affiliation()));
+    fflush(stdout);
+#endif
+    ctx->clear_bitmap(r);
   } else if (r->affiliation() != req.affiliation()) {
     return NULL;
   }
@@ -186,6 +204,13 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (size > free) {
       size = free;
     }
+#ifdef KELVIN_VERBOSE
+    if (r->is_old()) {
+      printf("SFS::try_allocate_in [%llx, %llx] adjusted elastic tlab size to %llx, req.min_size(): %llx\n",
+             (unsigned long long) r->bottom(), (unsigned long long) r->top(),
+             (unsigned long long) size, (unsigned long long) req.min_size());
+    }
+#endif
     if (size >= req.min_size()) {
       result = r->allocate(size, req);
       assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
@@ -205,6 +230,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
     if (req.is_gc_alloc()) {
       r->set_update_watermark(r->top());
+#ifdef KELVIN_PARANOID
+      printf("SFS::try_allocate_in [%llx, %llx] set update_watermark to %llx\n",
+             (unsigned long long) r->bottom(), (unsigned long long) r->end(),
+             (unsigned long long) r->top());
+#endif
     }
 
     if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
@@ -240,6 +270,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert_bounds();
   }
+#ifdef KELVIN_VERBOSE
+  if (r->is_old()) {
+    printf("SFS:try_allocate_in() returning %llx\n", (unsigned long long) result);
+  }
+#endif
   return result;
 }
 
@@ -388,6 +423,13 @@ bool ShenandoahFreeSet::has_no_alloc_capacity(ShenandoahHeapRegion *r) {
 
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
   if (r->is_trash()) {
+#ifdef KELVIN_DEBUG
+    if (r->is_old()) {
+      printf("SFS::try_recycle_trashed for region [%llx, %llx], reclaiming used: %llx\n",
+             (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->used);
+      fflush(stdout);
+    }
+#endif
     _heap->decrease_used(r->used());
     r->recycle();
   }

@@ -46,9 +46,13 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
+#define KELVIN_PARANOID
+
 ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
   _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
+  _mixed_evac (false),
+  _do_old_gc_bootstrap (false),
   _generation(generation) {
 }
 
@@ -56,14 +60,28 @@ ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
   return _degen_point;
 }
 
+void ShenandoahConcurrentGC::do_old_gc_bootstrap() {
+  _do_old_gc_bootstrap = true;
+}
+
+void ShenandoahConcurrentGC::dont_do_old_gc_bootstrap() {
+  _do_old_gc_bootstrap = false;
+}
+
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
+#ifdef KELVIN_PARANOID
+  printf("SCGC::collect(), generation_mode is: %s\n",
+         _generation->generation_mode() == YOUNG? "YOUNG": _generation->generation_mode() == OLD? "OLD": "GLOBAL");
+  fflush(stdout);
+#endif
+
   // Reset for upcoming marking
-  entry_reset();
+  entry_reset(_do_old_gc_bootstrap);
 
   // Start initial mark under STW
-  vmop_entry_init_mark();
+  vmop_entry_init_mark(_do_old_gc_bootstrap);
 
   // Concurrent remembered set scanning
   if (_generation->generation_mode() == YOUNG) {
@@ -77,6 +95,12 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // Continue concurrent mark
   entry_mark();
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
+
+#ifdef KELVIN_PARANOID
+  printf("SCGC::collect() before final_mark, generation_mode is: %s\n",
+         _generation->generation_mode() == YOUNG? "YOUNG": _generation->generation_mode() == OLD? "OLD": "GLOBAL");
+  fflush(stdout);
+#endif
 
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
@@ -146,13 +170,13 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   return true;
 }
 
-void ShenandoahConcurrentGC::vmop_entry_init_mark() {
+void ShenandoahConcurrentGC::vmop_entry_init_mark(bool do_old_gc_bootstrap) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->stw_collection_counters());
   ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::init_mark_gross);
 
   heap->try_inject_alloc_failure();
-  VM_ShenandoahInitMark op(this);
+  VM_ShenandoahInitMark op(this, do_old_gc_bootstrap);
   VMThread::execute(&op); // jump to entry_init_mark() under safepoint
 }
 
@@ -186,7 +210,7 @@ void ShenandoahConcurrentGC::vmop_entry_final_updaterefs() {
   VMThread::execute(&op);
 }
 
-void ShenandoahConcurrentGC::entry_init_mark() {
+void ShenandoahConcurrentGC::entry_init_mark(bool do_old_gc_bootstrap) {
   char msg[1024];
   init_mark_event_message(msg, sizeof(msg));
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::init_mark);
@@ -202,7 +226,7 @@ void ShenandoahConcurrentGC::entry_init_mark() {
     _generation->swap_remembered_set();
   }
 
-  op_init_mark();
+  op_init_mark(do_old_gc_bootstrap);
 }
 
 void ShenandoahConcurrentGC::entry_final_mark() {
@@ -239,7 +263,7 @@ void ShenandoahConcurrentGC::entry_final_updaterefs() {
   op_final_updaterefs();
 }
 
-void ShenandoahConcurrentGC::entry_reset() {
+void ShenandoahConcurrentGC::entry_reset(bool do_old_gc_bootstrap) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
   static const char* msg = "Concurrent reset";
@@ -251,7 +275,7 @@ void ShenandoahConcurrentGC::entry_reset() {
                               "concurrent reset");
 
   heap->try_inject_alloc_failure();
-  op_reset();
+  op_reset(do_old_gc_bootstrap);
 }
 
 void ShenandoahConcurrentGC::entry_mark_roots() {
@@ -440,13 +464,12 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   op_cleanup_complete();
 }
 
-void ShenandoahConcurrentGC::op_reset() {
+void ShenandoahConcurrentGC::op_reset(bool do_old_gc_bootstrap) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   if (ShenandoahPacing) {
     heap->pacer()->setup_for_reset();
   }
-
-  _generation->prepare_gc();
+  _generation->prepare_gc(do_old_gc_bootstrap);
 }
 
 class ShenandoahInitMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -473,7 +496,7 @@ public:
   bool is_thread_safe() { return true; }
 };
 
-void ShenandoahConcurrentGC::op_init_mark() {
+void ShenandoahConcurrentGC::op_init_mark(bool do_old_gc_bootstrap) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(Thread::current()->is_VM_thread(), "can only do this in VMThread");
@@ -492,11 +515,23 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
   _generation->set_concurrent_mark_in_progress(true);
 
-  {
+  if (do_old_gc_bootstrap) {
+    // Update region state for both young and old regions
+    ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
+    ShenandoahInitMarkUpdateRegionStateClosure cl;
+
+    assert(_generation->is_bitmap_clear(), "need clear marking bitmap");
+    assert(!_generation->is_mark_complete(), "should not be complete");
+
+    _generation->parallel_heap_region_iterate(&cl);
+    heap->old_generation()->parallel_heap_region_iterate(&cl);
+  } else {
+    // Update region state for only young regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
     _generation->parallel_heap_region_iterate(&cl);
   }
+
 
   // Weak reference processing
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
@@ -531,6 +566,11 @@ void ShenandoahConcurrentGC::op_final_mark() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
+
+#ifdef KELVIN_PARANOID
+  printf("ShenandoahConcurrentGC::op_final_mark() no surprise override did not work!\n");
+  fflush(stdout);
+#endif
 
   if (ShenandoahVerify) {
     heap->verifier()->verify_roots_no_forwarded();

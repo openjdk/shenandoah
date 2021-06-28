@@ -39,6 +39,8 @@
 #include "runtime/prefetch.inline.hpp"
 #include "utilities/powerOfTwo.hpp"
 
+#undef KELVIN_VERBOSE
+
 template<GenerationMode GENERATION>
 ShenandoahInitMarkRootsClosure<GENERATION>::ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q) :
   _queue(q),
@@ -277,7 +279,18 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
 
     shenandoah_assert_not_forwarded(p, obj);
     shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
-
+#ifdef KELVIN_VERBOSE
+    static size_t previous_gc_id = 999;
+    static ShenandoahObjToScanQueue* previous_old_value = NULL;
+    if ((GENERATION == YOUNG) && (GCId::current() != previous_gc_id) ||
+        ((previous_old_value != nullptr) && (old == nullptr)) ||
+        (previous_old_value == nullptr) && (old != nullptr)) {
+      previous_gc_id = GCId::current();
+      previous_old_value = old;
+      printf("marking through ref for GC pass %llu, old is %llx\n",
+             (unsigned long long) previous_gc_id, (unsigned long long) previous_old_value);
+    }
+#endif
     if (in_generation<GENERATION>(obj)) {
       mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
@@ -300,7 +313,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
         }
       }
     } else if (old != nullptr) {
-      // Young mark, bootstrapping old.
+      // Young mark, bootstrapping old or concurrent with old marking.
       mark_ref<STRING_DEDUP>(old, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
     } else if (GENERATION == OLD) {

@@ -196,6 +196,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   }
 
   if (UseTLAB) {
+    // TODO: Do we need to explicitly retire PLABs?
     heap->gclabs_retire(ResizeTLAB);
     heap->tlabs_retire(ResizeTLAB);
   }

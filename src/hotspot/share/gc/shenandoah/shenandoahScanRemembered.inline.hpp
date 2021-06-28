@@ -29,6 +29,7 @@
 #include "memory/iterator.hpp"
 #include "oops/oop.hpp"
 #include "oops/objArrayOop.hpp"
+#include "gc/shared/collectorCounters.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
@@ -476,42 +477,73 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
   }
   HeapWord* base_addr = addr_for_card_index(index);
   size_t offset = _scc->get_first_start(index);
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahMarkingContext* ctx;
+
+  if (heap->doing_mixed_evacuations()) {
+    ctx = heap->marking_context();
+  } else {
+    ctx = nullptr;
+  }
+
+  // Verify that I can find this object within its enclosing card by scanning forward from first_start.
   while (base_addr + offset < address) {
     oop obj = oop(base_addr + offset);
-    offset += obj->size();
+    if (!ctx || ctx->is_marked(obj)) {
+      offset += obj->size();
+    } else {
+      // This object is not live so don't trust its size()
+      ShenandoahHeapRegion* r = heap->heap_region_containing(base_addr + offset);
+      HeapWord* tams = ctx->top_at_mark_start(r);
+      if (base_addr + offset >= tams) {
+        offset += obj->size();
+      } else {
+        offset = ctx->get_next_marked_addr(base_addr + offset, tams) - base_addr;
+      }
+    }
   }
   if (base_addr + offset != address){
     return false;
   }
-  size_t prev_offset = offset;
-  do {
-    HeapWord* obj_addr = base_addr + offset;
-    oop obj = oop(base_addr + offset);
-    prev_offset = offset;
-    offset += obj->size();
-  } while (offset < CardTable::card_size_in_words);
-  if (_scc->get_last_start(index) != prev_offset) {
-    return false;
-  }
-  // base + offset represents address of first object that starts on following card, if there is one.
 
-  // Notes: base_addr is addr_for_card_index(index)
-  //        base_addr + offset is end of the object we are verifying
-  //        cannot use card_index_for_addr(base_addr + offset) because it asserts arg < end of whole heap
-  size_t end_card_index = index + offset / CardTable::card_size_in_words;
-
-  // If there is a following object registered, it should begin where this object ends.
-  if ((base_addr + offset < _rs->whole_heap_end()) && _scc->has_object(end_card_index) &&
-      ((addr_for_card_index(end_card_index) + _scc->get_first_start(end_card_index)) != (base_addr + offset))) {
-    return false;
-  }
-
-  // Assure that no other objects are registered "inside" of this one.
-  for (index++; index < end_card_index; index++) {
-    if (_scc->has_object(index)) {
+  if (!ctx) {
+    // Make sure that last_offset is properly set for the enclosing card, but we can't verify this for
+    // candidate collection-set regions during mixed evacuations, so disable this check in general
+    // during mixed evacuations.
+    //
+    // TODO: could do some additional checking during mixed evacuations if we wanted to work harder.
+    size_t prev_offset = offset;
+    do {
+      HeapWord* obj_addr = base_addr + offset;
+      oop obj = oop(base_addr + offset);
+      prev_offset = offset;
+      offset += obj->size();
+    } while (offset < CardTable::card_size_in_words);
+    if (_scc->get_last_start(index) != prev_offset) {
       return false;
     }
+
+    // base + offset represents address of first object that starts on following card, if there is one.
+
+    // Notes: base_addr is addr_for_card_index(index)
+    //        base_addr + offset is end of the object we are verifying
+    //        cannot use card_index_for_addr(base_addr + offset) because it asserts arg < end of whole heap
+    size_t end_card_index = index + offset / CardTable::card_size_in_words;
+
+    // If there is a following object registered, it should begin where this object ends.
+    if ((base_addr + offset < _rs->whole_heap_end()) && _scc->has_object(end_card_index) &&
+        ((addr_for_card_index(end_card_index) + _scc->get_first_start(end_card_index)) != (base_addr + offset))) {
+      return false;
+    }
+
+    // Assure that no other objects are registered "inside" of this one.
+    for (index++; index < end_card_index; index++) {
+      if (_scc->has_object(index)) {
+        return false;
+      }
+    }
   }
+
   return true;
 }
 
@@ -546,13 +578,31 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   // themselves marked.  Each such object will be scanned only once.  Any young-gen objects referenced from the remembered set will
   // be marked and then subsequently scanned.
 
+  // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
+  // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
+  // regions which are in the candidate collection set have not been coalesced and filled.  Thus, these heap regions
+  // may contain zombie objects.  Zombie objects are known to be dead, but have not yet been "collected".  Scanning
+  // zombie objects is unsafe because the Klass pointer is not reliable, objects referenced from a zombie may have been
+  // collected and their memory repurposed, and because zombie objects might refer to objects that are themselves dead.
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
+  ShenandoahMarkingContext* ctx;
+
+  if (heap->doing_mixed_evacuations()) {
+    ctx = heap->marking_context();
+  } else {
+    ctx = nullptr;
+  }
+
+  HeapWord* end_of_clusters = _rs->addr_for_card_index(first_cluster)
+    + count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster * CardTable::card_size_in_words;
   while (count-- > 0) {
     size_t card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     first_cluster++;
     size_t next_card_index = 0;
     while (card_index < end_card_index) {
-
       bool is_dirty = (write_table)? is_write_card_dirty(card_index): is_card_dirty(card_index);
       bool has_object = _scc->has_object(card_index);
       if (is_dirty) {
@@ -579,25 +629,36 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           while (p < endp) {
             oop obj = oop(p);
 
-            // Future TODO:
-            // For improved efficiency, we might want to give special handling of obj->is_objArray().  In
-            // particular, in that case, we might want to divide the effort for scanning of a very long object array
-            // between multiple threads.
-
-            if (obj->is_objArray()) {
-              objArrayOop array = objArrayOop(obj);
-              int len = array->length();
-              array->oop_iterate_range(cl, 0, len);
-            } else if (obj->is_instance()) {
-              obj->oop_iterate(cl);
+            // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
+            if (!ctx || ctx->is_marked(obj)) {
+              // Future TODO:
+              // For improved efficiency, we might want to give special handling of obj->is_objArray().  In
+              // particular, in that case, we might want to divide the effort for scanning of a very long object array
+              // between multiple threads.
+              if (obj->is_objArray()) {
+                objArrayOop array = objArrayOop(obj);
+                int len = array->length();
+                array->oop_iterate_range(cl, 0, len);
+              } else if (obj->is_instance()) {
+                obj->oop_iterate(cl);
+              } else {
+                // Case 3: Primitive array. Do nothing, no oops there. We use the same
+                // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
+                // We skip iterating over the klass pointer since we know that
+                // Universe::TypeArrayKlass never moves.
+                assert (obj->is_typeArray(), "should be type array");
+              }
+              p += obj->size();
             } else {
-              // Case 3: Primitive array. Do nothing, no oops there. We use the same
-              // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-              // We skip iterating over the klass pointer since we know that
-              // Universe::TypeArrayKlass never moves.
-              assert (obj->is_typeArray(), "should be type array");
+              // This object is not marked so we don't scan it.
+              ShenandoahHeapRegion* r = heap->heap_region_containing(p);
+              HeapWord* tams = ctx->top_at_mark_start(r);
+              if (p >= tams) {
+                p += obj->size();
+              } else {
+                p = ctx->get_next_marked_addr(p, tams);
+              }
             }
-            p += obj->size();
           }
           if (p > endp) {
             card_index = card_index + (p - card_start) / CardTable::card_size_in_words;
@@ -617,38 +678,54 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
         HeapWord *card_start = _rs->addr_for_card_index(card_index);
         HeapWord *p = card_start + start_offset;
         oop obj = oop(p);
-        HeapWord *nextp = p + obj->size();
 
-        // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
-        // failure if nextp points to end of heap.
-        size_t last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words;
+        size_t last_card;
+        if (!ctx || ctx->is_marked(obj)) {
+          HeapWord *nextp = p + obj->size();
 
-        bool reaches_next_cluster = (last_card > end_card_index);
-        bool spans_dirty_within_this_cluster = false;
+          // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
+          // failure if nextp points to end of heap.
+          last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words;
 
-        if (!reaches_next_cluster) {
-          size_t span_card;
-          for (span_card = card_index+1; span_card <= last_card; span_card++)
-            if ((write_table)? _rs->is_write_card_dirty(span_card): _rs->is_card_dirty(span_card)) {
-              spans_dirty_within_this_cluster = true;
-              break;
-            }
-        }
+          bool reaches_next_cluster = (last_card > end_card_index);
+          bool spans_dirty_within_this_cluster = false;
 
-        if (reaches_next_cluster || spans_dirty_within_this_cluster) {
-          if (obj->is_objArray()) {
-            objArrayOop array = objArrayOop(obj);
-            int len = array->length();
-            array->oop_iterate_range(cl, 0, len);
-          } else if (obj->is_instance()) {
-            obj->oop_iterate(cl);
-          } else {
-            // Case 3: Primitive array. Do nothing, no oops there. We use the same
-            // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-            // We skip iterating over the klass pointer since we know that
-            // Universe::TypeArrayKlass never moves.
-            assert (obj->is_typeArray(), "should be type array");
+          if (!reaches_next_cluster) {
+            size_t span_card;
+            for (span_card = card_index+1; span_card <= last_card; span_card++)
+              if ((write_table)? _rs->is_write_card_dirty(span_card): _rs->is_card_dirty(span_card)) {
+                spans_dirty_within_this_cluster = true;
+                break;
+              }
           }
+
+          if (reaches_next_cluster || spans_dirty_within_this_cluster) {
+            if (obj->is_objArray()) {
+              objArrayOop array = objArrayOop(obj);
+              int len = array->length();
+              array->oop_iterate_range(cl, 0, len);
+            } else if (obj->is_instance()) {
+              obj->oop_iterate(cl);
+            } else {
+              // Case 3: Primitive array. Do nothing, no oops there. We use the same
+              // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
+              // We skip iterating over the klass pointer since we know that
+              // Universe::TypeArrayKlass never moves.
+              assert (obj->is_typeArray(), "should be type array");
+            }
+          }
+        } else {
+          // The object that spans end of this clean card is not marked, so no need to scan it or its
+          // unmarked neighbors.
+          ShenandoahHeapRegion* r = heap->heap_region_containing(p);
+          HeapWord* tams = ctx->top_at_mark_start(r);
+          HeapWord* nextp;
+          if (p >= tams) {
+            nextp = p + obj->size();
+          } else {
+            nextp = ctx->get_next_marked_addr(p, tams);
+          }
+          last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words;
         }
         // Increment card_index to account for the spanning object, even if we didn't scan it.
         card_index = (last_card > card_index)? last_card: card_index + 1;

@@ -48,6 +48,8 @@
 #include "runtime/atomic.hpp"
 #include "shenandoahOldGC.hpp"
 
+#undef KELVIN_VERBOSE
+
 ShenandoahControlThread::ShenandoahControlThread() :
   ConcurrentGCThread(),
   _alloc_failure_waiters_lock(Mutex::leaf, "ShenandoahAllocFailureGC_lock", true, Monitor::_safepoint_check_always),
@@ -414,18 +416,24 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
   switch (generation) {
     case YOUNG: {
       // Run a young cycle. This might or might not, have interrupted an ongoing
-      // concurrent mark in the old generation. We need to think about promotions
-      // in this case. Promoted objects should be above the TAMS in the old regions
-      // they end up in, but we have to be sure we don't promote into any regions
-      // that are in the cset (more of an issue for Milestone-8 to worry about).
+      // concurrent mark in the old generation.
       log_info(gc, ergo)("Start GC cycle (YOUNG)");
-      service_concurrent_cycle(heap->young_generation(), cause);
+
+#ifdef KELVIN_VERBOSE
+      printf("service_concurrent_cycle() with no old-gen scanning\n");
+      printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
+#endif
+      service_concurrent_cycle(heap->young_generation(), cause, false);
+#ifdef KELVIN_VERBOSE
+      printf("done with service_concurrent_cycle() with no old-gen scanning\n");
+      printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
+#endif
       heap->young_generation()->log_status();
       break;
     }
     case GLOBAL: {
       log_info(gc, ergo)("Start GC cycle (GLOBAL)");
-      service_concurrent_cycle(heap->global_generation(), cause);
+      service_concurrent_cycle(heap->global_generation(), cause, false);
       heap->global_generation()->log_status();
       break;
     }
@@ -452,16 +460,13 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   assert(!heap->is_concurrent_old_mark_in_progress(), "Old already in progress.");
   assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");
 
+#ifdef KELVIN_VERBOSE
+  printf("set_old_gen_task_queues() for concurrent_old_cycle\n");
+  printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
+#endif
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
-
   old_generation->set_mark_incomplete();
-
-  service_concurrent_cycle(young_generation, cause);
-
-  // Young generation no longer needs this reference to the old concurrent
-  // mark so clean it up.
-  young_generation->set_old_gen_task_queues(NULL);
-
+  service_concurrent_cycle(young_generation, cause, true);
   if (!heap->cancelled_gc()) {
     // Reset the degenerated point. Normally this would happen at the top
     // of the control loop, but here we have just completed a young cycle
@@ -519,6 +524,12 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   ShenandoahOldGC gc(generation, _allow_old_preemption);
   if (gc.collect(cause)) {
     // Cycle is complete
+#ifdef KELVIN_VERBOSE
+    printf("clear old_gen_task_queues() after concurrent_old_cycle\n");
+    printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
+#endif
+    // Young generation no longer needs this reference to the old concurrent mark so clean it up.
+    heap->young_generation()->set_old_gen_task_queues(NULL);
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
   }
@@ -537,7 +548,8 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   }
 }
 
-void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* generation, GCCause::Cause cause) {
+void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* generation, GCCause::Cause cause,
+                                                       bool do_old_gc_bootstrap) {
   // Normal cycle goes via all concurrent phases. If allocation failure (af) happens during
   // any of the concurrent phases, it first degrades to Degenerated GC and completes GC there.
   // If second allocation failure happens during Degenerated GC cycle (for example, when GC
@@ -574,6 +586,11 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   //                                      Full GC  --------------------------/
   //
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+#ifdef KELVIN_VERBOSE
+  printf("SCT::service_concurrent_cycle(generation: %s, do_old_gc_bootstrap: %s)\n",
+         generation->name(), do_old_gc_bootstrap? "true": "false");
+  fflush(stdout);
+#endif
   if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) return;
 
   GCIdMark gc_id_mark;
@@ -582,7 +599,12 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
   ShenandoahConcurrentGC gc(generation);
-  if (gc.collect(cause)) {
+  if (do_old_gc_bootstrap) {
+    gc.do_old_gc_bootstrap();
+  }
+  bool status = gc.collect(cause);
+  gc.dont_do_old_gc_bootstrap();
+  if (status) {
     // Cycle is complete
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
@@ -654,6 +676,10 @@ void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
   ShenandoahGCSession session(cause, _degen_generation);
 
   ShenandoahDegenGC gc(point, _degen_generation);
+
+  // Just in case degenerated cycle preempted old-gen marking, clear the old-gen task queues.
+  heap->young_generation()->set_old_gen_task_queues(NULL);
+
   gc.collect(cause);
 
   assert(heap->young_generation()->task_queues()->is_empty(), "Unexpected young generation marking tasks");

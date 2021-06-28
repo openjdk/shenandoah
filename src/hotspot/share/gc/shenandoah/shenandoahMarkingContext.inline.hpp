@@ -28,6 +28,9 @@
 #include "gc/shenandoah/shenandoahMarkBitMap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
+#undef KELVIN_VERBOSE
+#define KELVIN_PARANOID
+
 inline bool ShenandoahMarkingContext::mark_strong(oop obj, bool& was_upgraded) {
   return !allocated_after_mark_start(obj) && _mark_bit_map.mark_strong(cast_from_oop<HeapWord*>(obj), was_upgraded);
 }
@@ -73,22 +76,41 @@ inline bool ShenandoahMarkingContext::allocated_after_mark_start(HeapWord* addr)
 }
 
 inline void ShenandoahMarkingContext::capture_top_at_mark_start(ShenandoahHeapRegion *r) {
-  size_t idx = r->index();
-  HeapWord* old_tams = _top_at_mark_starts_base[idx];
-  HeapWord* new_tams = r->top();
+  if (r->affiliation() != FREE) {
+    size_t idx = r->index();
+    HeapWord* old_tams = _top_at_mark_starts_base[idx];
+    HeapWord* new_tams = r->top();
 
-  assert(new_tams >= old_tams,
-         "Region " SIZE_FORMAT", TAMS updates should be monotonic: " PTR_FORMAT " -> " PTR_FORMAT,
-         idx, p2i(old_tams), p2i(new_tams));
-  assert(is_bitmap_clear_range(old_tams, new_tams),
-         "Region " SIZE_FORMAT ", bitmap should be clear while adjusting TAMS: " PTR_FORMAT " -> " PTR_FORMAT,
-         idx, p2i(old_tams), p2i(new_tams));
-
-  _top_at_mark_starts_base[idx] = new_tams;
-  _top_bitmaps[idx] = new_tams;
+    assert(new_tams >= old_tams,
+           "Region " SIZE_FORMAT", TAMS updates should be monotonic: " PTR_FORMAT " -> " PTR_FORMAT,
+           idx, p2i(old_tams), p2i(new_tams));
+    assert(is_bitmap_clear_range(old_tams, new_tams),
+           "Region " SIZE_FORMAT ", bitmap should be clear while adjusting TAMS: " PTR_FORMAT " -> " PTR_FORMAT,
+           idx, p2i(old_tams), p2i(new_tams));
+    
+#ifdef KELVIN_PARANOID
+    printf("SMC::capture_top_at_mark_start for %s region [%llx, %llx], was: %llx, now: %llx\n",
+           affiliation_name(r->affiliation()), (unsigned long long) r->bottom(), (unsigned long long) r->top(),
+           (unsigned long long) old_tams, (unsigned long long) new_tams);
+      fflush(stdout);
+#endif
+    _top_at_mark_starts_base[idx] = new_tams;
+    _top_bitmaps[idx] = new_tams;
+  }
+  // else, FREE regions do not need their TAMS updated
 }
 
 inline void ShenandoahMarkingContext::reset_top_at_mark_start(ShenandoahHeapRegion* r) {
+#ifdef KELVIN_VERBOSE
+  if (r->is_old()) {
+    printf("SMC::reset_top_at_mark_start for region [%llx, %llx], was: %llx, now: %llx\n",
+           (unsigned long long) r->bottom(), (unsigned long long) r->top(),
+           (unsigned long long) _top_at_mark_starts_base[r->index()],
+           (unsigned long long) r->top());
+    fflush(stdout);
+  }
+#endif
+
   _top_at_mark_starts_base[r->index()] = r->bottom();
 }
 

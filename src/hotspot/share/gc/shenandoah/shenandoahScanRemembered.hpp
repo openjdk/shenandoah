@@ -805,9 +805,6 @@ public:
   // At some future time, we may implement a further optimization: satisfy future allocation requests
   // by carving new objects out of the range of memory that represents the coalesced dead objects.
   //
-  // In its current implementation, unregister_object() serves the needs of coalescing objects.
-  //
-
   // Suppose we want to combine several dead objects into a single coalesced object.  How does this
   // impact our representation of crossing map information?
   //  1. If the newly coalesced range is contained entirely within a card range, that card's last

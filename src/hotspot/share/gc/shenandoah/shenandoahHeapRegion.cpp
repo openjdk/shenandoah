@@ -47,6 +47,7 @@
 #include "runtime/safepoint.hpp"
 #include "utilities/powerOfTwo.hpp"
 
+#undef KELVIN_VERBOSE
 
 size_t ShenandoahHeapRegion::RegionCount = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytes = 0;
@@ -550,6 +551,12 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
     rem_set_scanner->register_object_wo_lock(obj_addr);
     obj_addr += obj->size();
   }
+  
+  // In case top() does not align with a card boundary, it's necessary to fill remainder of memory beyond top().
+  if (top() < end()) {
+    ShenandoahHeap::fill_with_object(top(), end() - top());;
+    rem_set_scanner->register_object_wo_lock(obj_addr);
+  }
 }
 
 void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
@@ -832,6 +839,17 @@ size_t ShenandoahHeapRegion::pin_count() const {
 void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
+#ifdef KELVIN_VERBOSE
+  if ((new_affiliation == OLD_GENERATION) || (_affiliation == OLD_GENERATION)) {
+    ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
+    printf(" setting affiliation of region [%llx, %llx] from %s to %s, TAMS: %llx, watermark: %llx\n",
+           (unsigned long long) bottom(), (unsigned long long) top(),
+           affiliation_name(_affiliation), affiliation_name(new_affiliation),
+           (unsigned long long) ctx->top_at_mark_start(this), (unsigned long long) this->get_update_watermark());
+    fflush(stdout);
+  }
+#endif
+
   if (_affiliation == new_affiliation) {
     return;
   }
@@ -871,6 +889,24 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
 size_t ShenandoahHeapRegion::promote(bool promoting_all) {
   // TODO: Not sure why region promotion must be performed at safepoint.  Reconsider this requirement.
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
+
+  // Note that region promotion occurs at a safepoint following all evacuation.  When a region is promoted, we leave
+  // its TAMS and update_watermark information as is.
+  //
+  // Note that update_watermark represents the state of this region as of the moment at which the most recent evacuation
+  // began.  The value of update_watermark is the same for old regions and young regions, as both participate equally in
+  // the processes of a mixed evacuation.
+  //
+  // The meaning of TAMS is different for young-gen and old-gen regions.  For a young-gen region, TAMS represents
+  // top() at start of most recent young-gen concurrent mark.  For an old-gen region, TAMS represents top() at start
+  // of most recent old-gen concurrent mark().  In the case that a young-gen heap region is promoted into old-gen,
+  // we can preserve its TAMS information with the following understandings:
+  //   1. The most recent young-GC concurrent mark phase began at the same time or after the most recent old-GC
+  //      concurrent mark phase.
+  //   2. After the region is promoted, it is still the case that any object within the region that is beneath TAMS
+  //      and is considered alive for the current old GC pass will be "marked" withint he current marking context, and
+  //      any object within the region that is above TAMS will be considered alive for the current old GC pass.  Objects
+  //      that were dead at promotion time will all reside below TAMS and will be unmarked.
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();

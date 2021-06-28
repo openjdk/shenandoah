@@ -173,6 +173,8 @@ public:
     return _old_heuristics;
   }
 
+  bool doing_mixed_evacuations();
+
   bool is_gc_generation_young() const;
 
 // ---------- Initialization, termination, identification, printing routines

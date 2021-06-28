@@ -27,6 +27,8 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
+#define KELVIN_VERBOSE
+
 ShenandoahMarkingContext::ShenandoahMarkingContext(MemRegion heap_region, MemRegion bitmap_region, size_t num_regions) :
   _mark_bit_map(heap_region, bitmap_region),
   _top_bitmaps(NEW_C_HEAP_ARRAY(HeapWord*, num_regions, mtGC)),
@@ -54,6 +56,12 @@ bool ShenandoahMarkingContext::is_bitmap_clear_range(HeapWord* start, HeapWord* 
 void ShenandoahMarkingContext::initialize_top_at_mark_start(ShenandoahHeapRegion* r) {
   size_t idx = r->index();
   HeapWord *bottom = r->bottom();
+#ifdef KELVIN_VERBOSE
+  if (r->is_old()) {
+    printf("SMC:initialize_top_at_mark_start for region [%llx, %llx]\n", (unsigned long long) r->bottom(), (unsigned long long) r->top());
+    fflush(stdout);
+  }
+#endif
   _top_at_mark_starts_base[idx] = bottom;
   _top_bitmaps[idx] = bottom;
 }
@@ -61,12 +69,21 @@ void ShenandoahMarkingContext::initialize_top_at_mark_start(ShenandoahHeapRegion
 void ShenandoahMarkingContext::clear_bitmap(ShenandoahHeapRegion* r) {
   HeapWord* bottom = r->bottom();
   HeapWord* top_bitmap = _top_bitmaps[r->index()];
-  if (top_bitmap > bottom) {
-    _mark_bit_map.clear_range_large(MemRegion(bottom, top_bitmap));
-    _top_bitmaps[r->index()] = bottom;
+  if (r->affiliation() != FREE) {
+#ifdef KELVIN_VERBOSE
+    printf("SMC:clear_bitmap for %s region [%llx, %llx], top_bitmap: %llx\n", affiliation_name(r->affiliation()),
+           (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) top_bitmap);
+    fflush(stdout);
+#endif
+    if (top_bitmap > bottom) {
+      _mark_bit_map.clear_range_large(MemRegion(bottom, top_bitmap));
+      _top_bitmaps[r->index()] = bottom;
+    }
+    assert(is_bitmap_clear_range(bottom, r->end()),
+           "Region " SIZE_FORMAT " should have no marks in bitmap", r->index());
   }
-  assert(is_bitmap_clear_range(bottom, r->end()),
-         "Region " SIZE_FORMAT " should have no marks in bitmap", r->index());
+  // heap iterators include FREE regions, which don't need to be cleared.  
+  // TODO: would be better for certain iterators to not include FREE regions.
 }
 
 bool ShenandoahMarkingContext::is_complete() {

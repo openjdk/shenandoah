@@ -30,6 +30,9 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
+#define KELVIN_VERBOSE
+#define KELVIN_PARANOID
+
 HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest req) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
@@ -126,6 +129,12 @@ inline HeapWord* ShenandoahHeapRegion::get_update_watermark() const {
 inline void ShenandoahHeapRegion::set_update_watermark(HeapWord* w) {
   assert(bottom() <= w && w <= top(), "within bounds");
   Atomic::release_store(&_update_watermark, w);
+#ifdef KELVIN_PARANOID
+  printf("SHR::set_update_watermark for %s region [%llx, %llx] to %llx\n",
+         affiliation_name(affiliation()),
+         (unsigned long long) bottom(), (unsigned long long) top(), (unsigned long long) w);
+  fflush(stdout);
+#endif
 }
 
 // Fast version that avoids synchronization, only to be used at safepoints.
@@ -133,6 +142,12 @@ inline void ShenandoahHeapRegion::set_update_watermark_at_safepoint(HeapWord* w)
   assert(bottom() <= w && w <= top(), "within bounds");
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at Shenandoah safepoint");
   _update_watermark = w;
+#ifdef KELVIN_PARANOID
+  printf("SHR::set_update_watermark_at_safepoint for %s region [%llx, %llx] to %llx\n",
+         affiliation_name(affiliation()),
+         (unsigned long long) bottom(), (unsigned long long) top(), (unsigned long long) w);
+  fflush(stdout);
+#endif
 }
 
 inline void ShenandoahHeapRegion::clear_young_lab_flags() {

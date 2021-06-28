@@ -32,6 +32,8 @@
 #include "memory/universe.hpp"
 #include "oops/oop.inline.hpp"
 
+#undef KELVIN_VERBOSE
+
 size_t PLAB::min_size() {
   // Make sure that we return something that is larger than AlignmentReserve
   return align_object_size(MAX2(MinTLABSize / HeapWordSize, (size_t)oopDesc::header_size())) + AlignmentReserve;
@@ -82,6 +84,15 @@ void PLAB::retire() {
 
 size_t PLAB::retire_internal() {
   size_t result = 0;
+#ifdef KELVIN_VERBOSE
+  if (_bottom != 0) {
+    printf("PLAB::retiring [%llx, %llx], filling @%llx (size: %llx)\n",
+           (unsigned long long) _bottom, (unsigned long long) _hard_end, (unsigned long long) _top, 
+           (unsigned long long) 8 * (_hard_end - _top));
+           fflush(stdout);
+  }
+  // else, this thread's PLAB is not currently active.  no need to retire memory.
+#endif
   if (_top < _hard_end) {
     Universe::heap()->fill_with_dummy_object(_top, _hard_end, true);
     result += invalidate();

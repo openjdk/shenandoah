@@ -144,10 +144,8 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   return (included_old_regions > 0);
 }
 
-
+// Both arguments are don't cares for old-gen collections
 bool ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
-  assert(collection_set->count() == 0, "Must be empty");
-
   // Old-gen doesn't actually choose a collection set to be evacuated by its own gang of worker tasks.
   // Instead, it computes the set of regions to be evacuated by subsequent young-gen evacuation passes.
   prepare_for_old_collections();
@@ -214,7 +212,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
       // Note that we do not coalesce and fill occupied humongous regions
       // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
-      log_info(gc)("Old-gen mark evac (%llu RR), %llu CF)",
+      log_info(gc)("Old-gen mark evac (%llu RR, %llu CF)",
                    (unsigned long long) (_hidden_old_collection_candidates),
                    (unsigned long long) _old_coalesce_and_fill_candidates);
       return;
@@ -229,7 +227,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
-  log_info(gc)("Old-gen mark evac (%llu RR), %llu CF)",
+  log_info(gc)("Old-gen mark evac (%llu RR, %llu CF)",
                (unsigned long long) (_hidden_old_collection_candidates),
                (unsigned long long) _old_coalesce_and_fill_candidates);
 }

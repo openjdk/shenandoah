@@ -367,7 +367,8 @@ public:
 
   void recycle();
 
-  // coalesce contiguous spans of garbage objects by filling header and reregistering start locations with remembered set.
+  // Coalesce contiguous spans of garbage objects by filling header and reregistering start locations with remembered set.
+  // This is used by old-gen GC following concurrent marking to make old-gen HeapRegions parseable.
   void oop_fill_and_coalesce();
 
   // During global collections, this service iterates through an old-gen heap region that is not part of collection
