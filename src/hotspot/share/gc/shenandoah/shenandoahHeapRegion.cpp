@@ -551,7 +551,7 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
     rem_set_scanner->register_object_wo_lock(obj_addr);
     obj_addr += obj->size();
   }
-  
+
   // In case top() does not align with a card boundary, it's necessary to fill remainder of memory beyond top().
   if (top() < end()) {
     ShenandoahHeap::fill_with_object(top(), end() - top());;

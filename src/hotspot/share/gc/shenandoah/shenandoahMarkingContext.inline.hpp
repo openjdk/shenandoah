@@ -87,7 +87,7 @@ inline void ShenandoahMarkingContext::capture_top_at_mark_start(ShenandoahHeapRe
     assert(is_bitmap_clear_range(old_tams, new_tams),
            "Region " SIZE_FORMAT ", bitmap should be clear while adjusting TAMS: " PTR_FORMAT " -> " PTR_FORMAT,
            idx, p2i(old_tams), p2i(new_tams));
-    
+
 #ifdef KELVIN_PARANOID
     printf("SMC::capture_top_at_mark_start for %s region [%llx, %llx], was: %llx, now: %llx\n",
            affiliation_name(r->affiliation()), (unsigned long long) r->bottom(), (unsigned long long) r->top(),

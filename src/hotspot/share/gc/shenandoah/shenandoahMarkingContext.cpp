@@ -82,7 +82,7 @@ void ShenandoahMarkingContext::clear_bitmap(ShenandoahHeapRegion* r) {
     assert(is_bitmap_clear_range(bottom, r->end()),
            "Region " SIZE_FORMAT " should have no marks in bitmap", r->index());
   }
-  // heap iterators include FREE regions, which don't need to be cleared.  
+  // heap iterators include FREE regions, which don't need to be cleared.
   // TODO: would be better for certain iterators to not include FREE regions.
 }
 

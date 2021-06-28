@@ -87,7 +87,7 @@ size_t PLAB::retire_internal() {
 #ifdef KELVIN_VERBOSE
   if (_bottom != 0) {
     printf("PLAB::retiring [%llx, %llx], filling @%llx (size: %llx)\n",
-           (unsigned long long) _bottom, (unsigned long long) _hard_end, (unsigned long long) _top, 
+           (unsigned long long) _bottom, (unsigned long long) _hard_end, (unsigned long long) _top,
            (unsigned long long) 8 * (_hard_end - _top));
            fflush(stdout);
   }
