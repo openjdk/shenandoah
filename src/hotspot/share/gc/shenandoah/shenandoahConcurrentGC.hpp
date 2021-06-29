@@ -46,6 +46,7 @@ class ShenandoahConcurrentGC : public ShenandoahGC {
 private:
   ShenandoahConcurrentMark    _mark;
   ShenandoahDegenPoint        _degen_point;
+  bool                        _do_old_gc_bootstrap;
 
 protected:
   ShenandoahGeneration* const _generation;
@@ -54,6 +55,8 @@ public:
   ShenandoahConcurrentGC(ShenandoahGeneration* generation);
   bool collect(GCCause::Cause cause);
   ShenandoahDegenPoint degen_point() const;
+  void do_old_gc_bootstrap();
+  void dont_do_old_gc_bootstrap();
 
 private:
   // Entry points to STW GC operations, these cause a related safepoint, that then

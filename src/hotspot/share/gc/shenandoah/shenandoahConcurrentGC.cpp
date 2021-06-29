@@ -49,11 +49,20 @@
 ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
   _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
+  _do_old_gc_bootstrap(false),
   _generation(generation) {
 }
 
 ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
   return _degen_point;
+}
+
+void ShenandoahConcurrentGC::do_old_gc_bootstrap() {
+  _do_old_gc_bootstrap = true;
+}
+
+void ShenandoahConcurrentGC::dont_do_old_gc_bootstrap() {
+  _do_old_gc_bootstrap = false;
 }
 
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
@@ -435,7 +444,7 @@ void ShenandoahConcurrentGC::op_reset() {
     heap->pacer()->setup_for_reset();
   }
 
-  _generation->prepare_gc();
+  _generation->prepare_gc(_do_old_gc_bootstrap);
 }
 
 class ShenandoahInitMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -480,7 +489,18 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
   _generation->set_concurrent_mark_in_progress(true);
 
-  {
+  if (_do_old_gc_bootstrap) {
+    // Update region state for both young and old regions
+    ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
+    ShenandoahInitMarkUpdateRegionStateClosure cl;
+
+    assert(_generation->is_bitmap_clear(), "need clear marking bitmap");
+    assert(!_generation->is_mark_complete(), "should not be complete");
+
+    _generation->parallel_heap_region_iterate(&cl);
+    heap->old_generation()->parallel_heap_region_iterate(&cl);
+  } else {
+    // Update region state for only young regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
     _generation->parallel_heap_region_iterate(&cl);
