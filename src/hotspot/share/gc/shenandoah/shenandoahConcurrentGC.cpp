@@ -46,23 +46,15 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
-ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
+ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap) :
   _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
-  _do_old_gc_bootstrap(false),
+  _do_old_gc_bootstrap(do_old_gc_bootstrap),
   _generation(generation) {
 }
 
 ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
   return _degen_point;
-}
-
-void ShenandoahConcurrentGC::do_old_gc_bootstrap() {
-  _do_old_gc_bootstrap = true;
-}
-
-void ShenandoahConcurrentGC::dont_do_old_gc_bootstrap() {
-  _do_old_gc_bootstrap = false;
 }
 
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
