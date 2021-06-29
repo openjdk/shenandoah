@@ -34,7 +34,7 @@
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "utilities/events.hpp"
 
-#define KELVIN_PARANOID
+#undef KELVIN_PARANOID
 
 class ShenandoahConcurrentCoalesceAndFillTask : public AbstractGangTask {
 private:

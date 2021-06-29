@@ -30,8 +30,8 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
-#define KELVIN_VERBOSE
-#define KELVIN_PARANOID
+#undef KELVIN_VERBOSE
+#undef KELVIN_PARANOID
 
 HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest req) {
   shenandoah_assert_heaplocked_or_safepoint();

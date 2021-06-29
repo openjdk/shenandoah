@@ -46,7 +46,7 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
-#define KELVIN_PARANOID
+#undef KELVIN_PARANOID
 
 ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
   _mark(generation),

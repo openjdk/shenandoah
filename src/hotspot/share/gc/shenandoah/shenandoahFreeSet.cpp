@@ -36,7 +36,7 @@
 #include "runtime/orderAccess.hpp"
 
 #undef KELVIN_VERBOSE
-#define KELVIN_PARANOID
+#undef KELVIN_PARANOID
 
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),

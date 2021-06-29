@@ -27,7 +27,7 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 
 ShenandoahMarkingContext::ShenandoahMarkingContext(MemRegion heap_region, MemRegion bitmap_region, size_t num_regions) :
   _mark_bit_map(heap_region, bitmap_region),

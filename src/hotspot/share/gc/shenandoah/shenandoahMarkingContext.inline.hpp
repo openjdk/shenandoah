@@ -29,7 +29,7 @@
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
 #undef KELVIN_VERBOSE
-#define KELVIN_PARANOID
+#undef KELVIN_PARANOID
 
 inline bool ShenandoahMarkingContext::mark_strong(oop obj, bool& was_upgraded) {
   return !allocated_after_mark_start(obj) && _mark_bit_map.mark_strong(cast_from_oop<HeapWord*>(obj), was_upgraded);
