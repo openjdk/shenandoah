@@ -580,13 +580,7 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
   ShenandoahConcurrentGC gc(generation, do_old_gc_bootstrap);
-  if (do_old_gc_bootstrap) {
-    gc.do_old_gc_bootstrap();
-  }
-  bool status = gc.collect(cause);
-
-  gc.dont_do_old_gc_bootstrap();
-  if (status) {
+  if (gc.collect(cause)) {
     // Cycle is complete
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
