@@ -57,6 +57,14 @@ ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
   return _degen_point;
 }
 
+void ShenandoahConcurrentGC::do_old_gc_bootstrap() {
+  _do_old_gc_bootstrap = true;
+}
+
+void ShenandoahConcurrentGC::dont_do_old_gc_bootstrap() {
+  _do_old_gc_bootstrap = false;
+}
+
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
