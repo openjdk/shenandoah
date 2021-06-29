@@ -485,12 +485,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
     // Update region state for both young and old regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
-
-    assert(_generation->is_bitmap_clear(), "need clear marking bitmap");
-    assert(!_generation->is_mark_complete(), "should not be complete");
-
-    _generation->parallel_heap_region_iterate(&cl);
-    heap->old_generation()->parallel_heap_region_iterate(&cl);
+    heap->parallel_heap_region_iterate(&cl);
   } else {
     // Update region state for only young regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
