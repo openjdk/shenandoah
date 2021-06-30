@@ -82,7 +82,7 @@ public:
   void reset_mark_bitmap();
 
   // Used by concurrent and degenerated GC to reset regions.
-  virtual void prepare_gc(bool do_old_gc_bootstrap);
+  virtual void prepare_gc();
   void prepare_regions_and_collection_set(bool concurrent);
 
   // Cancel marking (used by Full collect and when cancelling cycle).

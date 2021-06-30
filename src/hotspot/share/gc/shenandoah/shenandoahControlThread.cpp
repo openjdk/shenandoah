@@ -453,7 +453,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");
 
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
-
+  young_generation->set_mark_incomplete();
   old_generation->set_mark_incomplete();
 
   service_concurrent_cycle(young_generation, cause, true);
