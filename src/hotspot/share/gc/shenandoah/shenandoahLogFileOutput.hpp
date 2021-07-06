@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021, Amazon.com, Inc. All rights reserved.
  * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -74,4 +75,3 @@ public:
     static void set_file_name_parameters(jlong start_time);
 };
 #endif //SHARE_GC_SHENANDOAH_SHENANDOAHLOGFILEOUTPUT_HPP
-
