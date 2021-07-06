@@ -433,13 +433,14 @@
           "With generational mode, increment the age of objects and"        \
           "regions each time this many young-gen GC cycles are completed.") \
                                                                             \
-  product(ccstr, logSnapshotsFile, NULL, DIAGNOSTIC,                        \
-          "If UnlockExperimentalVMOptions,UseShenandoahGC,UsePerfData,and"  \
-          "ShenandoahRegionSampling are on, save GC snapshot stream to  "   \
-          "this log file [default: ./shenandoahSnapshot_pid%p.log] "        \
-          "(%p replaced with pid)")                                         \
-
-// end of GC_SHENANDOAH_FLAGS
+  product(bool, ShenandoahLogRegionSampling, false,                         \
+          "Save GC Snapshots stream to ShenandoahRegionSamplingFile")       \
+                                                                            \
+  product(ccstr, ShenandoahRegionSamplingFile, NULL,                        \
+          "If ShenandoahLogRegionSampling is on, save GC Snapshots stream " \
+          "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
+          "(%p replaced with pid)")
+ // end of GC_SHENANDOAH_FLAGS
 
 // 2^ShenandoahTenuredRegionUsageBiasLogBase2 is 128
 #define ShenandoahTenuredRegionUsageBiasLogBase2 7

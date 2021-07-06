@@ -29,9 +29,11 @@
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionCounters.hpp"
+#include "gc/shenandoah/shenandoahLogFileOutput.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/perfData.inline.hpp"
+#include "utilities/defaultStream.hpp"
 
 ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
   _last_sample_millis(0)
@@ -43,7 +45,7 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
     size_t num_regions = heap->num_regions();
     const char* cns = PerfDataManager::name_space("shenandoah", "regions");
     _name_space = NEW_C_HEAP_ARRAY(char, strlen(cns)+1, mtGC);
-    strcpy(_name_space, cns);
+    strcpy(_name_space, cns); // copy cns into _name_space
 
     const char* cname = PerfDataManager::counter_name(_name_space, "timestamp");
     _timestamp = PerfDataManager::create_long_variable(SUN_GC, cname, PerfData::U_None, CHECK);
@@ -59,6 +61,7 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
                                                     PerfData::U_None, CHECK);
 
     _regions_data = NEW_C_HEAP_ARRAY(PerfVariable*, num_regions, mtGC);
+    // Initializing performance data resources for each region
     for (uint i = 0; i < num_regions; i++) {
       const char* reg_name = PerfDataManager::name_space(_name_space, "region", i);
       const char* data_name = PerfDataManager::counter_name(reg_name, "data");
@@ -67,6 +70,13 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
       assert(!PerfDataManager::exists(fullname), "must not exist");
       _regions_data[i] = PerfDataManager::create_long_variable(SUN_GC, data_name,
                                                                PerfData::U_None, CHECK);
+    }
+
+    if (ShenandoahLogRegionSampling) {
+      const char* name = ShenandoahRegionSamplingFile ? ShenandoahRegionSamplingFile : "./shenandoahSnapshots_pid%p.log";
+      _logFile->set_file_name_parameters(_timestamp->get_value());
+      _logFile = new ShenandoahLogFileOutput(name);
+      _logFile->initialize();
     }
   }
 }
@@ -107,6 +117,11 @@ void ShenandoahHeapRegionCounters::update() {
           data |= (r->affiliation() & AFFILIATION_MASK) << AFFILIATION_SHIFT;
           data |= (r->state_ordinal() & STATUS_MASK) << STATUS_SHIFT;
           _regions_data[i]->set_value(data);
+        }
+
+        // If logging enabled, dump current region snapshot to log file
+        if (ShenandoahLogRegionSampling) {
+          _logFile->write_snapshot(_regions_data, _timestamp, _status, num_regions, rs);
         }
       }
     }
