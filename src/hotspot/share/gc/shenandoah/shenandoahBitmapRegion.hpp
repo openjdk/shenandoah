@@ -30,10 +30,9 @@
 class ShenandoahHeapRegion;
 
 /*
- * The purpose of this class to encapsulate operations on
- * the memory backing instances of Shenandoah's mark bitmap.
- * The encapsulation allows Shenandoah to use a secondary
- * mark bitmap to support remembered set scans during
+ * The purpose of this class to encapsulate operations on the memory backing
+ * instances of Shenandoah's mark bitmap. The encapsulation allows Shenandoah
+ * to use a secondary mark bitmap to support remembered set scans during
  * concurrent marking of the old generation.
  */
 class ShenandoahBitmapRegion {
