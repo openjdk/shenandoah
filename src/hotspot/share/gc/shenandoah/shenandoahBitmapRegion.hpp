@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,13 @@
 
 class ShenandoahHeapRegion;
 
+/*
+ * The purpose of this class to encapsulate operations on
+ * the memory backing instances of Shenandoah's mark bitmap.
+ * The encapsulation allows Shenandoah to use a secondary
+ * mark bitmap to support remembered set scans during
+ * concurrent marking of the old generation.
+ */
 class ShenandoahBitmapRegion {
  public:
 
