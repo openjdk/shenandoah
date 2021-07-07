@@ -367,10 +367,7 @@ public:
 
   void recycle();
 
-  // coalesce contiguous spans of garbage objects by filling header and reregistering start locations with remembered set.
-  void oop_fill_and_coalesce();
-
-  void oop_iterate(OopIterateClosure* cl, bool fill_dead_objects = false, bool reregister_coalesced_objects = false);
+  void oop_iterate(OopIterateClosure* cl);
   void oop_iterate_humongous(OopIterateClosure* cl);
 
   HeapWord* block_start(const void* p) const;
@@ -421,8 +418,7 @@ private:
   void do_commit();
   void do_uncommit();
 
-  void oop_iterate_objects(OopIterateClosure* cl, bool fill_dead_objects, bool reregister_coalesced_objects);
-  void oop_iterate_objects(bool fill_dead_objects, bool reregister_coalesced_objects);
+  void oop_iterate_objects(OopIterateClosure* cl);
 
   inline void internal_increase_live_data(size_t s);
 

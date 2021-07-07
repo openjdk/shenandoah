@@ -340,6 +340,15 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     if (target_gen == OLD_GENERATION) {
       ShenandoahBarrierSet::barrier_set()->card_table()->dirty_MemRegion(MemRegion(copy, size));
       card_scan()->register_object(copy);
+
+      bool upgraded(false);
+      marking_context()->mark_strong(result, upgraded);
+
+      // Marking the previous context (i.e.., last old mark map) is necessary to maintain
+      // the information used when scanning the remembered set during concurrent old mark.
+      if (is_concurrent_old_mark_in_progress()) {
+        previous_marking_context()->mark_strong(result, upgraded);
+      }
     }
     // Successfully evacuated. Our copy is now the public one!
     shenandoah_assert_correct(NULL, copy_val);
@@ -400,7 +409,7 @@ inline bool ShenandoahHeap::is_old(oop obj) const {
 
 inline bool ShenandoahHeap::requires_marking(const void* entry) const {
   oop obj = oop(entry);
-  return !_marking_context->is_marked_strong(obj);
+  return !_active_marking_context->is_marked_strong(obj);
 }
 
 inline bool ShenandoahHeap::in_collection_set(oop p) const {
@@ -612,12 +621,26 @@ inline ShenandoahHeapRegion* const ShenandoahHeap::get_region(size_t region_idx)
 }
 
 inline ShenandoahMarkingContext* ShenandoahHeap::complete_marking_context() const {
-  assert (_marking_context->is_complete()," sanity");
-  return _marking_context;
+  assert (_active_marking_context->is_complete(), " sanity");
+  return _active_marking_context;
 }
 
 inline ShenandoahMarkingContext* ShenandoahHeap::marking_context() const {
-  return _marking_context;
+  return _active_marking_context;
+}
+
+inline ShenandoahMarkingContext* ShenandoahHeap::previous_marking_context() const {
+  return _previous_marking_context;
+}
+
+inline ShenandoahMarkingContext* ShenandoahHeap::stable_marking_context() const {
+  return is_concurrent_old_mark_in_progress() ? _previous_marking_context : _active_marking_context;
+}
+
+inline void ShenandoahHeap::swap_marking_contexts() {
+  ShenandoahMarkingContext* tmp = _active_marking_context;
+  _active_marking_context = _previous_marking_context;
+  _previous_marking_context = tmp;
 }
 
 inline void ShenandoahHeap::clear_cards_for(ShenandoahHeapRegion* region) {

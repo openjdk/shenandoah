@@ -30,6 +30,18 @@
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
+#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
+
+class ShenandoahGlobalIsAliveClosure: public ShenandoahIsMarkedClosure {
+ public:
+  virtual bool is_marked(oop obj) override {
+    return ShenandoahHeap::heap()->marking_context()->is_marked(obj);
+  }
+
+  virtual bool is_marked_strong(oop obj) override {
+    return ShenandoahHeap::heap()->marking_context()->is_marked_strong(obj);
+  }
+};
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
@@ -108,6 +120,10 @@ public:
   void set_mark_complete();
   void set_mark_incomplete();
 
+  virtual ShenandoahIsMarkedClosure* is_alive_closure() {
+    return &_is_alive_closure;
+  }
+
   ShenandoahMarkingContext* complete_marking_context();
 
   // Task queues
@@ -129,6 +145,8 @@ protected:
 
 private:
   void confirm_heuristics_mode();
+
+  ShenandoahGlobalIsAliveClosure _is_alive_closure;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP

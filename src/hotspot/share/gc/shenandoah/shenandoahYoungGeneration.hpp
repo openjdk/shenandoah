@@ -26,6 +26,23 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP
 
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
+
+class ShenandoahYoungIsAliveClosure : public ShenandoahIsMarkedClosure {
+  bool is_marked(oop obj) override {
+    return context(obj)->is_marked(obj);
+  }
+
+  bool is_marked_strong(oop obj) override {
+    return context(obj)->is_marked_strong(obj);
+  }
+
+ private:
+  static ShenandoahMarkingContext* context(oop obj) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    return heap->is_concurrent_old_mark_in_progress() && heap->is_old(obj) ? heap->previous_marking_context() : heap->marking_context();
+  }
+};
 
 class ShenandoahYoungGeneration : public ShenandoahGeneration {
 private:
@@ -56,8 +73,15 @@ public:
 
   virtual void reserve_task_queues(uint workers);
 
+  virtual ShenandoahIsMarkedClosure* is_alive_closure() {
+    return &_is_alive_closure;
+  }
+
  protected:
   bool is_concurrent_mark_in_progress();
+
+ private:
+  ShenandoahYoungIsAliveClosure _is_alive_closure;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP

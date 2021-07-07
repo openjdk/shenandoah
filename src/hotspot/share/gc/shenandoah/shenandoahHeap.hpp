@@ -31,6 +31,7 @@
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
+#include "gc/shenandoah/shenandoahBitmapRegion.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
@@ -603,20 +604,17 @@ public:
 // ---------- Marking support
 //
 private:
-  ShenandoahMarkingContext* _marking_context;
-  MemRegion  _bitmap_region;
+  ShenandoahMarkingContext* _active_marking_context;
+  ShenandoahMarkingContext* _previous_marking_context;
+  ShenandoahBitmapRegion _bitmap_region_1;
+  ShenandoahBitmapRegion _bitmap_region_2;
+
   MemRegion  _aux_bitmap_region;
   MarkBitMap _verification_bit_map;
   MarkBitMap _aux_bit_map;
 
-  size_t _bitmap_size;
-  size_t _bitmap_regions_per_slice;
-  size_t _bitmap_bytes_per_slice;
-
   size_t _pretouch_heap_page_size;
-  size_t _pretouch_bitmap_page_size;
 
-  bool _bitmap_region_special;
   bool _aux_bitmap_region_special;
 
   ShenandoahLiveData** _liveness_cache;
@@ -624,6 +622,9 @@ private:
 public:
   inline ShenandoahMarkingContext* complete_marking_context() const;
   inline ShenandoahMarkingContext* marking_context() const;
+  inline ShenandoahMarkingContext* previous_marking_context() const;
+  inline ShenandoahMarkingContext* stable_marking_context() const;
+  inline void swap_marking_contexts();
 
   template<class T>
   inline void marked_object_iterate(ShenandoahHeapRegion* region, T* cl);

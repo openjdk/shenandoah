@@ -490,6 +490,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
   rp->reset_thread_locals();
   rp->set_soft_reference_policy(heap->soft_ref_policy()->should_clear_all_soft_refs());
+  rp->set_alive_closure(_generation->is_alive_closure());
 
   // Make above changes visible to worker threads
   OrderAccess::fence();
@@ -636,24 +637,27 @@ private:
   ShenandoahMarkingContext* const _mark_context;
   bool  _evac_in_progress;
   Thread* const _thread;
+  ShenandoahGeneration* const _generation;
+  bool is_marked(oop obj);
 
 public:
-  ShenandoahEvacUpdateCleanupOopStorageRootsClosure();
+  ShenandoahEvacUpdateCleanupOopStorageRootsClosure(ShenandoahGeneration* generation);
   void do_oop(oop* p);
   void do_oop(narrowOop* p);
 };
 
-ShenandoahEvacUpdateCleanupOopStorageRootsClosure::ShenandoahEvacUpdateCleanupOopStorageRootsClosure() :
+ShenandoahEvacUpdateCleanupOopStorageRootsClosure::ShenandoahEvacUpdateCleanupOopStorageRootsClosure(ShenandoahGeneration* generation) :
   _heap(ShenandoahHeap::heap()),
   _mark_context(ShenandoahHeap::heap()->marking_context()),
   _evac_in_progress(ShenandoahHeap::heap()->is_evacuation_in_progress()),
-  _thread(Thread::current()) {
+  _thread(Thread::current()),
+  _generation(generation) {
 }
 
 void ShenandoahEvacUpdateCleanupOopStorageRootsClosure::do_oop(oop* p) {
   const oop obj = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(obj)) {
-    if (!_mark_context->is_marked(obj)) {
+    if (!is_marked(obj)) {
       shenandoah_assert_correct(p, obj);
       Atomic::cmpxchg(p, obj, oop(NULL));
     } else if (_evac_in_progress && _heap->in_collection_set(obj)) {
@@ -667,6 +671,16 @@ void ShenandoahEvacUpdateCleanupOopStorageRootsClosure::do_oop(oop* p) {
              "Sanity");
     }
   }
+}
+
+bool ShenandoahEvacUpdateCleanupOopStorageRootsClosure::is_marked(oop obj) {
+  // Old weak handles will be cleaned up in mixed evacuations.
+  assert(_generation->generation_mode() != OLD, "Should not be here for old marking cycle.");
+  if (_heap->is_concurrent_old_mark_in_progress() && _heap->is_old(obj)) {
+    return _heap->previous_marking_context()->is_marked(obj);
+  }
+
+  return _heap->marking_context()->is_marked(obj);
 }
 
 void ShenandoahEvacUpdateCleanupOopStorageRootsClosure::do_oop(narrowOop* p) {
@@ -700,14 +714,17 @@ private:
   ShenandoahConcurrentStringDedupRoots       _dedup_roots;
   ShenandoahPhaseTimings::Phase              _phase;
 
+  ShenandoahGeneration*                      _generation;
+
 public:
-  ShenandoahConcurrentWeakRootsEvacUpdateTask(ShenandoahPhaseTimings::Phase phase) :
+  ShenandoahConcurrentWeakRootsEvacUpdateTask(ShenandoahPhaseTimings::Phase phase, ShenandoahGeneration* generation) :
     AbstractGangTask("Shenandoah Evacuate/Update Concurrent Weak Roots"),
     _vm_roots(phase),
     _cld_roots(phase, ShenandoahHeap::heap()->workers()->active_workers()),
     _nmethod_itr(ShenandoahCodeRoots::table()),
     _dedup_roots(phase),
-    _phase(phase) {
+    _phase(phase),
+    _generation(generation) {
     if (ShenandoahHeap::heap()->unload_classes()) {
       MutexLocker mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
       _nmethod_itr.nmethods_do_begin();
@@ -733,7 +750,7 @@ public:
       ShenandoahEvacOOMScope oom;
       // jni_roots and weak_roots are OopStorage backed roots, concurrent iteration
       // may race against OopStorage::release() calls.
-      ShenandoahEvacUpdateCleanupOopStorageRootsClosure cl;
+      ShenandoahEvacUpdateCleanupOopStorageRootsClosure cl(_generation);
       _vm_roots.oops_do(&cl, worker_id);
 
       // String dedup weak roots
@@ -773,7 +790,7 @@ void ShenandoahConcurrentGC::op_weak_roots() {
   {
     ShenandoahTimingsTracker t(ShenandoahPhaseTimings::conc_weak_roots_work);
     ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::conc_weak_roots_work);
-    ShenandoahConcurrentWeakRootsEvacUpdateTask task(ShenandoahPhaseTimings::conc_weak_roots_work);
+    ShenandoahConcurrentWeakRootsEvacUpdateTask task(ShenandoahPhaseTimings::conc_weak_roots_work, _generation);
     heap->workers()->run_task(&task);
   }
 

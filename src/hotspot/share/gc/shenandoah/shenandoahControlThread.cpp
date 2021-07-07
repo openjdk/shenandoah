@@ -409,7 +409,7 @@ void ShenandoahControlThread::run_service() {
 //      +--------------------->  Global Degen
 //
 void ShenandoahControlThread::service_concurrent_normal_cycle(
-  const ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
+  ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
 
   switch (generation) {
     case YOUNG: {
@@ -440,7 +440,7 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
   }
 }
 
-void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap* heap, GCCause::Cause &cause) {
+void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap, GCCause::Cause &cause) {
   // Configure the young generation's concurrent mark to put objects in
   // old regions into the concurrent mark queues associated with the old
   // generation. The young cycle will run as normal except that rather than
@@ -455,6 +455,14 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
 
   old_generation->set_mark_incomplete();
+
+  // The remembered set scan uses the markbits for old regions when resolving
+  // objects within dirty cards. When this old cycle begins it will reset all
+  // the bitmaps. A young collect cycle which interrupts the old marking is at
+  // risk from using an incomplete old mark bitmap, so we squirrel away the
+  // last known state of the old generation so the rset scan can operate safely
+  // during the concurrent marking of old.
+  heap->swap_marking_contexts();
 
   service_concurrent_cycle(young_generation, cause);
 

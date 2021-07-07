@@ -35,13 +35,8 @@ class ShenandoahOldGC : public ShenandoahConcurrentGC {
   ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption);
   bool collect(GCCause::Cause cause);
  private:
-  ShenandoahHeapRegion** _coalesce_and_fill_region_array;
-
   void entry_old_evacuations();
-  void entry_coalesce_and_fill();
   ShenandoahSharedFlag& _allow_preemption;
-  void op_coalesce_and_fill();
-  void entry_coalesce_and_fill_message(char *buf, size_t len) const;
 };
 
 

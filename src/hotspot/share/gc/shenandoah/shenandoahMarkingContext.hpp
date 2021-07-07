@@ -32,6 +32,7 @@
 #include "oops/oopsHierarchy.hpp"
 
 class ShenandoahObjToScanQueueSet;
+class ShenandoahBitmapRegion;
 
 /**
  * Encapsulate a marking bitmap with the top-at-mark-start and top-bitmaps array.
@@ -46,9 +47,10 @@ private:
   HeapWord** const _top_at_mark_starts;
 
   ShenandoahSharedFlag _is_complete;
+  ShenandoahBitmapRegion* _bitmap_region;
 
 public:
-  ShenandoahMarkingContext(MemRegion heap_region, MemRegion bitmap_region, size_t num_regions);
+  ShenandoahMarkingContext(MemRegion heap_region, ShenandoahBitmapRegion* bitmap_region, size_t num_regions);
 
   /*
    * Marks the object. Returns true if the object has not been marked before and has
@@ -73,10 +75,12 @@ public:
   inline HeapWord* top_at_mark_start(ShenandoahHeapRegion* r) const;
   inline void capture_top_at_mark_start(ShenandoahHeapRegion* r);
   inline void reset_top_at_mark_start(ShenandoahHeapRegion* r);
+  inline void set_top_at_mark_start(ShenandoahHeapRegion* r, HeapWord* tams);
   void initialize_top_at_mark_start(ShenandoahHeapRegion* r);
 
-  inline void reset_top_bitmap(ShenandoahHeapRegion *r);
-  void clear_bitmap(ShenandoahHeapRegion *r);
+  inline void set_top_bitmap(ShenandoahHeapRegion* r, HeapWord* top);
+  inline void reset_top_bitmap(ShenandoahHeapRegion* r);
+  void clear_bitmap(ShenandoahHeapRegion* r);
 
   bool is_bitmap_clear() const;
   bool is_bitmap_clear_range(HeapWord* start, HeapWord* end) const;
@@ -84,6 +88,8 @@ public:
   bool is_complete();
   void mark_complete();
   void mark_incomplete();
+
+  bool is_marked_with_size(oop obj, HeapWord* end, size_t* size) const;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHMARKINGCONTEXT_HPP

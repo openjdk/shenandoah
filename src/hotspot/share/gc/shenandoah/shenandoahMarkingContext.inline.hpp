@@ -92,8 +92,16 @@ inline void ShenandoahMarkingContext::reset_top_at_mark_start(ShenandoahHeapRegi
   _top_at_mark_starts_base[r->index()] = r->bottom();
 }
 
+inline void ShenandoahMarkingContext::set_top_at_mark_start(ShenandoahHeapRegion* r, HeapWord* tams) {
+  _top_at_mark_starts_base[r->index()] = tams;
+}
+
 inline HeapWord* ShenandoahMarkingContext::top_at_mark_start(ShenandoahHeapRegion* r) const {
   return _top_at_mark_starts_base[r->index()];
+}
+
+inline void ShenandoahMarkingContext::set_top_bitmap(ShenandoahHeapRegion* r, HeapWord* top) {
+  _top_bitmaps[r->index()] = top;
 }
 
 inline void ShenandoahMarkingContext::reset_top_bitmap(ShenandoahHeapRegion* r) {
