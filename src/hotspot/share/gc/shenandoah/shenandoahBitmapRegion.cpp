@@ -22,6 +22,8 @@
  *
  */
 
+#include "precompiled.hpp"
+
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahBitmapRegion.hpp"
