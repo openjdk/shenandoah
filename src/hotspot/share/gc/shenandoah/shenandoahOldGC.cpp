@@ -74,7 +74,6 @@ ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSha
 void ShenandoahOldGC::entry_old_evacuations() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
-  entry_coalesce_and_fill();
   old_heuristics->start_old_evacuations();
 }
 
@@ -90,22 +89,22 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // Complete marking under STW
   vmop_entry_final_mark();
 
-  entry_old_evacuations();
-
   // We aren't dealing with old generation evacuation yet. Our heuristic
   // should not have built a cset in final mark.
   assert(!heap->is_evacuation_in_progress(), "Old gen evacuations are not supported");
-
-  // Concurrent stack processing
-  if (heap->is_evacuation_in_progress()) {
-    entry_thread_roots();
-  }
 
   // Process weak roots that might still point to regions that would be broken by cleanup
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
   }
+
+  // Coalesce and fill objects _after_ weak root processing because coalescing
+  // invalidates the mark bitmap.
+  entry_coalesce_and_fill();
+
+  // Prepare for old evacuations (actual evacuations will happen on subsequent young collects).
+  entry_old_evacuations();
 
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.
