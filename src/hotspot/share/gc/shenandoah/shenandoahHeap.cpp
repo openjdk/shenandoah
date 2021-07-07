@@ -753,7 +753,7 @@ bool ShenandoahHeap::is_in_old(const void* p) const {
   return heap_region_containing(p)->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION;
 }
 
-bool ShenandoahHeap::in_collected_generation(oop obj) const {
+bool ShenandoahHeap::is_in_active_generation(oop obj) const {
   if (!mode()->is_generational()) {
     // everything is the same single generation
     return true;

@@ -107,7 +107,7 @@ inline oop ShenandoahBarrierSet::load_reference_barrier(oop obj, T* load_addr) {
   // Prevent resurrection of unreachable phantom (i.e. weak-native) references.
   if (HasDecorator<decorators, ON_PHANTOM_OOP_REF>::value && obj != NULL &&
       _heap->is_concurrent_weak_root_in_progress() &&
-      _heap->in_collected_generation(obj) &&
+      _heap->is_in_active_generation(obj) &&
       !_heap->marking_context()->is_marked(obj)) {
     return NULL;
   }
@@ -115,20 +115,15 @@ inline oop ShenandoahBarrierSet::load_reference_barrier(oop obj, T* load_addr) {
   // Prevent resurrection of unreachable weak references.
   if ((HasDecorator<decorators, ON_WEAK_OOP_REF>::value || HasDecorator<decorators, ON_UNKNOWN_OOP_REF>::value) &&
       obj != NULL && _heap->is_concurrent_weak_root_in_progress() &&
-      _heap->in_collected_generation(obj) &&
+      _heap->is_in_active_generation(obj) &&
       !_heap->marking_context()->is_marked_strong(obj)) {
     return NULL;
   }
 
   // Prevent resurrection of unreachable objects that are visited during
   // concurrent class-unloading.
-  // TODO: Not sure if this is the right thing to do with respect to generations.
-  // This check is a bit tricky... here we are allowing access to a from
-  // space object to satisfy a use case for class unloading, but we are _not_
-  // allowing it to be evacuated because we don't want it to be kept alive.
   if (HasDecorator<decorators, AS_NO_KEEPALIVE>::value && obj != NULL &&
       _heap->is_evacuation_in_progress() &&
-      _heap->in_collected_generation(obj) &&
       !_heap->marking_context()->is_marked(obj)) {
     return obj;
   }
