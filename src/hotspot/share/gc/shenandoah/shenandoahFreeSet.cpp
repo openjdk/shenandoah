@@ -184,12 +184,19 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       _heap->clear_cards_for(r);
     }
     r->set_affiliation(req.affiliation());
-#ifdef KELVIN_VERBOSE
-    printf("clearing bitmap for region [%llx, %llx] at transition from FREE to %s\n",
-           (unsigned long long) r->bottom(), (unsigned long long) r->end(), affiliation_name(req.affiliation()));
-    fflush(stdout);
-#endif
-    ctx->clear_bitmap(r);
+    r->set_update_watermark(r->bottom());
+    ctx->capture_top_at_mark_start(r);
+
+    assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
+    assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
+    assert(ctx->is_bitmap_clear_range(r->bottom(), ctx->top_at_mark_start(r)), "Bitmap below TAMS must be clear");
+
+    // Leave top_bitmap alone.  The first time a heap region is put into service, top_bitmap should equal end.
+    // Thereafter, it should represent the upper bound on parts of the bitmap that need to be cleared.
+    // ctx->clear_bitmap(r);
+    log_debug(gc)("NOT clearing bitmap for region [" PTR_FORMAT ", " PTR_FORMAT "], top_bitmap: "
+                  PTR_FORMAT " at transition from FREE to %s",
+                  p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), affiliation_name(req.affiliation()));
   } else if (r->affiliation() != req.affiliation()) {
     return NULL;
   }

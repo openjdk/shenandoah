@@ -284,7 +284,9 @@ void ShenandoahHeapRegion::make_trash_immediate() {
   // On this path, we know there are no marked objects in the region,
   // tell marking context about it to bypass bitmap resets.
   assert(ShenandoahHeap::heap()->active_generation()->is_mark_complete(), "Marking should be complete here.");
-  ShenandoahHeap::heap()->marking_context()->reset_top_bitmap(this);
+  // Leave top_bitmap alone.  If it is greater than bottom(), then we still need to clear between bottom() and top_bitmap()
+  // when this FREE region is repurposed for YOUNG or OLD.
+  // ShenandoahHeap::heap()->marking_context()->reset_top_bitmap(this);
 }
 
 void ShenandoahHeapRegion::make_empty() {
@@ -840,13 +842,24 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
 #ifdef KELVIN_VERBOSE
-  if ((new_affiliation == OLD_GENERATION) || (_affiliation == OLD_GENERATION)) {
+  {
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
-    printf(" setting affiliation of region [%llx, %llx] from %s to %s, TAMS: %llx, watermark: %llx\n",
-           (unsigned long long) bottom(), (unsigned long long) top(),
-           affiliation_name(_affiliation), affiliation_name(new_affiliation),
-           (unsigned long long) ctx->top_at_mark_start(this), (unsigned long long) this->get_update_watermark());
-    fflush(stdout);
+    log_debug(gc)(" setting affiliation of region [" PTR_FORMAT ", " PTR_FORMAT
+                  "] from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT,
+                  p2i(bottom()), p2i(end()), affiliation_name(_affiliation), affiliation_name(new_affiliation),
+                  p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
+  }
+#endif
+
+#ifdef ASSERT
+  {
+    ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
+    size_t idx = this->index();
+    HeapWord* top_bitmap = ctx->top_bitmap(this);
+
+    assert(ctx->is_bitmap_clear_range(top_bitmap, _end),
+           "Region " SIZE_FORMAT ", bitmap should be clear between top_bitmap: " PTR_FORMAT " and end: " PTR_FORMAT, idx,
+           p2i(top_bitmap), p2i(_end));
   }
 #endif
 

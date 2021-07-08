@@ -49,32 +49,45 @@ bool ShenandoahMarkingContext::is_bitmap_clear() const {
   return true;
 }
 
-bool ShenandoahMarkingContext::is_bitmap_clear_range(HeapWord* start, HeapWord* end) const {
-  return _mark_bit_map.get_next_marked_addr(start, end) == end;
+bool ShenandoahMarkingContext::is_bitmap_clear_range(const HeapWord* start, const HeapWord* end) const {
+  if (start < end) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    size_t start_idx = heap->heap_region_index_containing(start);
+    size_t end_idx = heap->heap_region_index_containing(end - 1);
+    while (start_idx <= end_idx) {
+      ShenandoahHeapRegion* r = heap->get_region(start_idx);
+      if (!heap->is_bitmap_slice_committed(r))
+        return true;
+      start_idx++;
+    }
+  }
+  return _mark_bit_map.is_bitmap_clear_range(start, end);
 }
 
 void ShenandoahMarkingContext::initialize_top_at_mark_start(ShenandoahHeapRegion* r) {
   size_t idx = r->index();
   HeapWord *bottom = r->bottom();
-#ifdef KELVIN_VERBOSE
-  if (r->is_old()) {
-    printf("SMC:initialize_top_at_mark_start for region [%llx, %llx]\n", (unsigned long long) r->bottom(), (unsigned long long) r->top());
-    fflush(stdout);
-  }
-#endif
+  
   _top_at_mark_starts_base[idx] = bottom;
-  _top_bitmaps[idx] = bottom;
+  // Arrange that the first time we use this bitmap, we clean from bottom to end.
+  _top_bitmaps[idx] = r->end();
+
+  log_debug(gc)("SMC:initialize_top_at_mark_start for region [" PTR_FORMAT ", " PTR_FORMAT "], top_bitmaps set to " PTR_FORMAT,
+                p2i(r->bottom()), p2i(r->end()), p2i(r->end()));
+}
+
+HeapWord* ShenandoahMarkingContext::top_bitmap(ShenandoahHeapRegion* r) {
+  return _top_bitmaps[r->index()];
 }
 
 void ShenandoahMarkingContext::clear_bitmap(ShenandoahHeapRegion* r) {
   HeapWord* bottom = r->bottom();
   HeapWord* top_bitmap = _top_bitmaps[r->index()];
+
+  log_debug(gc)("SMC:clear_bitmap for %s region [" PTR_FORMAT ", " PTR_FORMAT "], top_bitmap: " PTR_FORMAT,
+                affiliation_name(r->affiliation()), p2i(r->bottom()), p2i(r->end()), p2i(top_bitmap));
+
   if (r->affiliation() != FREE) {
-#ifdef KELVIN_VERBOSE
-    printf("SMC:clear_bitmap for %s region [%llx, %llx], top_bitmap: %llx\n", affiliation_name(r->affiliation()),
-           (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) top_bitmap);
-    fflush(stdout);
-#endif
     if (top_bitmap > bottom) {
       _mark_bit_map.clear_range_large(MemRegion(bottom, top_bitmap));
       _top_bitmaps[r->index()] = bottom;

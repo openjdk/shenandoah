@@ -261,12 +261,8 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* r = heap->get_region(idx);
     if (contains(r) && (r->affiliation() != FREE)) {
-      if (heap->is_bitmap_slice_committed(r) && !context->is_bitmap_clear_range(r->bottom(), r->end())) {
-#ifdef KELVIN_VERBOSE
-        printf("%s::is_bitmap_clear() very unhappy for %s region [%llx, %llx]\n", name(), affiliation_name(r->affiliation()),
-               (unsigned long long) r->bottom(), (unsigned long long) r->end());
-        fflush(stdout);
-#endif
+      if (heap->is_bitmap_slice_committed(r) && (context->top_at_mark_start(r) > r->bottom()) &&
+          !context->is_bitmap_clear_range(r->bottom(), r->end())) {
         return false;
       }
     }

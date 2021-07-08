@@ -2177,8 +2177,7 @@ private:
       if (r->is_active() && !r->is_cset()) {
         if (!_heap->mode()->is_generational() || r->affiliation() == YOUNG_GENERATION) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
-        } else {
-          assert(r->affiliation() == OLD_GENERATION, "Should not be updating references on FREE regions");
+        } else if (r->affiliation() == OLD_GENERATION) {
           if (_heap->active_generation()->generation_mode() == GLOBAL) {
             // This code is only relevant to GLOBAL GC.  With OLD GC, all coalescing and filling is done before any relevant
             // evacuations.
@@ -2237,6 +2236,13 @@ private:
               }
             }
           }
+        } else {
+          // else, r->affiliation() is both FREE and active!  Very strange!
+          ShenandoahMarkingContext* ctx = _heap->marking_context();
+          assert(false, "Not expecting %s Region " SIZE_FORMAT " to be active: [" PTR_FORMAT ", " PTR_FORMAT
+                 "] (top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", update_watermark: " PTR_FORMAT ", top_bitmaps: " PTR_FORMAT,
+                 affiliation_name(r->affiliation()), r->index(), p2i(r->bottom()), p2i(r->end()), p2i(r->top()),
+                 p2i(ctx->top_at_mark_start(r)), p2i(r->get_update_watermark()), p2i(ctx->top_bitmap(r)));
         }
       }
       if (ShenandoahPacing) {
