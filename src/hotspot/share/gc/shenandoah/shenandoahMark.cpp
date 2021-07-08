@@ -110,7 +110,9 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
   ShenandoahObjToScanQueue* q;
   ShenandoahMarkTask t;
 
-  heap->ref_processor()->set_mark_closure(worker_id, cl);
+  // TODO: This one worries me.
+  assert(heap->active_generation()->generation_mode() == GENERATION, "Sanity");
+  heap->active_generation()->ref_processor()->set_mark_closure(worker_id, cl);
 
   /*
    * Process outstanding queues, if any.

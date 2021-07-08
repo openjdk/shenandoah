@@ -498,7 +498,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
   }
 
   // Weak reference processing
-  ShenandoahReferenceProcessor* rp = heap->ref_processor();
+  ShenandoahReferenceProcessor* rp = _generation->ref_processor();
   rp->reset_thread_locals();
   rp->set_soft_reference_policy(heap->soft_ref_policy()->should_clear_all_soft_refs());
 
@@ -638,7 +638,7 @@ void ShenandoahConcurrentGC::op_weak_refs() {
   assert(heap->is_concurrent_weak_root_in_progress(), "Only during this phase");
   // Concurrent weak refs processing
   ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::conc_weak_refs);
-  heap->ref_processor()->process_references(ShenandoahPhaseTimings::conc_weak_refs, heap->workers(), true /* concurrent */);
+  _generation->ref_processor()->process_references(ShenandoahPhaseTimings::conc_weak_refs, heap->workers(), true /* concurrent */);
 }
 
 class ShenandoahEvacUpdateCleanupOopStorageRootsClosure : public BasicOopIterateClosure {

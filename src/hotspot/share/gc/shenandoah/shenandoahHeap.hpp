@@ -468,14 +468,6 @@ public:
   GCTracer* tracer();
   ConcurrentGCTimer* gc_timer() const;
 
-// ---------- Reference processing
-//
-private:
-  ShenandoahReferenceProcessor* const _ref_processor;
-
-public:
-  ShenandoahReferenceProcessor* ref_processor() { return _ref_processor; }
-
 // ---------- Class Unloading
 //
 private:

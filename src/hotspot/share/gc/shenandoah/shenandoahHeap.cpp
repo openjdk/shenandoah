@@ -523,7 +523,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_timer(new (ResourceObj::C_HEAP, mtGC) ConcurrentGCTimer()),
   _soft_ref_policy(),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
-  _ref_processor(new ShenandoahReferenceProcessor(MAX2(_max_workers, 1U))),
   _marking_context(NULL),
   _bitmap_size(0),
   _bitmap_regions_per_slice(0),
@@ -1730,7 +1729,7 @@ void ShenandoahHeap::stw_weak_refs(bool full_gc) {
                                                 : ShenandoahPhaseTimings::degen_gc_weakrefs;
   ShenandoahTimingsTracker t(phase);
   ShenandoahGCWorkerPhase worker_phase(phase);
-  ref_processor()->process_references(phase, workers(), false /* concurrent */);
+  active_generation()->ref_processor()->process_references(phase, workers(), false /* concurrent */);
 }
 
 void ShenandoahHeap::prepare_update_heap_references(bool concurrent) {
@@ -1849,9 +1848,6 @@ void ShenandoahHeap::cancel_concurrent_mark() {
   _global_generation->cancel_marking();
 
   ShenandoahBarrierSet::satb_mark_queue_set().abandon_partial_marking();
-
-  // HEY! Previously, only ShenandoahConcurrentMark::cancel (static) cleared ref processor.
-  ref_processor()->abandon_partial_discovery();
 }
 
 void ShenandoahHeap::cancel_gc(GCCause::Cause cause) {
