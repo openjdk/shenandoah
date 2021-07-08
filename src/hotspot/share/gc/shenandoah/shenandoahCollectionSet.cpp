@@ -33,6 +33,8 @@
 #include "services/memTracker.hpp"
 #include "utilities/copy.hpp"
 
+#undef KELVIN_PARANOID
+
 ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedSpace space, char* heap_base) :
   _map_size(heap->num_regions()),
   _region_size_bytes_shift(ShenandoahHeapRegion::region_size_bytes_shift()),
@@ -89,7 +91,9 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _garbage += r->garbage();
   _used += r->used();
   _has_old_regions |= r->is_old();
-
+#ifdef KELVIN_PARANOID
+  printf("%llx ", (unsigned long long) r->bottom());
+#endif
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
 }
