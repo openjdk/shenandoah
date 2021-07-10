@@ -1,20 +1,38 @@
-//
-// Created by Young, Christian on 6/28/21.
-//
+/*
+ * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ *
+ */
 
 #include "precompiled.hpp"
 #include "jvm.h"
-#include "logging/log.hpp"
 #include "logging/logConfiguration.hpp"
-#include "memory/allocation.inline.hpp"
+#include "logging/logFileStreamOutput.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/os.inline.hpp"
 #include "runtime/perfData.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/defaultStream.hpp"
 
-#include "shenandoahLogFileOutput.hpp"
-#include "logging/logFileOutput.hpp"
+#include "gc/shenandoah/shenandoahLogFileOutput.hpp"
 
 const char* const ShenandoahLogFileOutput::Prefix = "file=";
 const char* const ShenandoahLogFileOutput::FileOpenMode = "a+";
@@ -23,21 +41,6 @@ const char* const ShenandoahLogFileOutput::TimestampFilenamePlaceholder = "%t";
 const char* const ShenandoahLogFileOutput::TimestampFormat = "%Y-%m-%d_%H-%M-%S";
 char        ShenandoahLogFileOutput::_pid_str[PidBufferSize];
 char        ShenandoahLogFileOutput::_vm_start_time_str[StartTimeBufferSize];
-
-// Functions/macro from LogFileStreamOutput.cpp
-class FileLocker : public StackObj {
-private:
-    FILE *_file;
-
-public:
-    FileLocker(FILE *file) : _file(file) {
-      os::flockfile(_file);
-    }
-
-    ~FileLocker() {
-      os::funlockfile(_file);
-    }
-};
 
 #define WRITE_LOG_WITH_RESULT_CHECK(op, total)                \
 {                                                             \
@@ -54,16 +57,9 @@ public:
   total += result;                                            \
 }
 
-// Function from LogFileOutput.cpp
-static bool file_exists(const char* filename) {
-  struct stat dummy_stat;
-  return os::stat(filename, &dummy_stat) == 0;
-}
-
-ShenandoahLogFileOutput::ShenandoahLogFileOutput(const char* name)
-        : LogFileOutput(name), _name(os::strdup_check_oom(name, mtLogging)),
-          _file_name(NULL), _snapshot_count(0), _current_size(0) {
-  assert(strstr(name, Prefix) == name, "invalid output name '%s': missing prefix: %s", name, Prefix);
+ShenandoahLogFileOutput::ShenandoahLogFileOutput(const char* name, jlong vm_start_time)
+  : _name(os::strdup_check_oom(name, mtLogging)), _file_name(NULL), _stream(NULL) {
+  set_file_name_parameters(vm_start_time);
   _file_name = make_file_name(name, _pid_str, _vm_start_time_str);
 }
 
@@ -102,38 +98,6 @@ bool ShenandoahLogFileOutput::initialize(const char* options, outputStream* errs
   return true;
 }
 
-bool ShenandoahLogFileOutput::initialize() {
-  return initialize(NULL, tty);
-}
-
-int ShenandoahLogFileOutput::write(const LogDecorations& decorations, const char* msg) {
-  if (_stream == NULL) {
-    // An error has occurred with this output, avoid writing to it.
-    return 0;
-  }
-
-  int written = LogFileStreamOutput::write(decorations, msg);
-  if (written > 0) {
-    _current_size += written;
-  }
-
-  return written;
-}
-
-int ShenandoahLogFileOutput::write(LogMessageBuffer::Iterator msg_iterator) {
-  if (_stream == NULL) {
-    // An error has occurred with this output, avoid writing to it.
-    return 0;
-  }
-
-  int written = LogFileStreamOutput::write(msg_iterator);
-  if (written > 0) {
-    _current_size += written;
-  }
-
-  return written;
-}
-
 int ShenandoahLogFileOutput::write_snapshot(PerfLongVariable** regions,
                                             PerfLongVariable* ts,
                                             PerfLongVariable* status,
@@ -141,8 +105,7 @@ int ShenandoahLogFileOutput::write_snapshot(PerfLongVariable** regions,
                                             size_t rs) {
   int written = 0;
   FileLocker flocker(_stream);
-  WRITE_LOG_WITH_RESULT_CHECK(jio_fprintf(_stream, "S%d:%lli;%lli;%u;%u\n",
-                                          _snapshot_count++,
+  WRITE_LOG_WITH_RESULT_CHECK(jio_fprintf(_stream, "%lli %lli %u %u\n",
                                           ts->get_value(),
                                           status->get_value(),
                                           num_regions,
@@ -169,8 +132,8 @@ void ShenandoahLogFileOutput::set_file_name_parameters(jlong vm_start_time) {
 }
 
 char* ShenandoahLogFileOutput::make_file_name(const char* file_name,
-                                    const char* pid_string,
-                                    const char* timestamp_string) {
+                                              const char* pid_string,
+                                              const char* timestamp_string) {
   char* result = NULL;
 
   // Lets start finding out if we have any %d and/or %t in the name.
