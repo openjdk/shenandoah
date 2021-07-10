@@ -1,6 +1,10 @@
 /*
+<<<<<<< HEAD
  * Copyright (c) 2021, Amazon.com, Inc. All rights reserved.
  * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+=======
+ * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
+>>>>>>> 6be92fadc66 (Changed ShenandoahLogFileOutput to independent class and added copyrights)
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -94,7 +98,6 @@ void ShenandoahLogFileOutput::initialize(const char* options, outputStream* errs
   if (_stream == NULL) {
     errstream->print_cr("Error opening log file '%s': %s",
                         _file_name, os::strerror(errno));
-
     _file_name = make_file_name("./shenandoahSnapshots_pid%p.log", _pid_str, _vm_start_time_str);
     _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
     errstream->print_cr("Writing to default log file: %s", _file_name);
