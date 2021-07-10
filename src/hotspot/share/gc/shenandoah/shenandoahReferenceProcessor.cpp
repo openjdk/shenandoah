@@ -270,15 +270,6 @@ bool ShenandoahReferenceProcessor::should_discover(oop reference, ReferenceType 
   oop referent = CompressedOops::decode(heap_oop);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-  if (heap->is_gc_generation_young() && heap->is_in_young(reference) && heap->is_in_old(referent)) {
-      // Young collect should not discover old reference.
-      // TODO: Should we not discover? or discover but not process later? Doesn't make sense for young collect
-      // TODO: mark through and old referent. This has the effect of making old weak references into old-gen
-      //  strong roots
-      log_trace(gc,ref)("Young reference: " PTR_FORMAT " with old referent: " PTR_FORMAT, p2i(reference), p2i(reference));
-      return false;
-  }
-
   if (is_inactive<T>(reference, referent, type)) {
     log_trace(gc,ref)("Reference inactive: " PTR_FORMAT, p2i(reference));
     return false;
@@ -291,6 +282,11 @@ bool ShenandoahReferenceProcessor::should_discover(oop reference, ReferenceType 
 
   if (is_softly_live(reference, type)) {
     log_trace(gc,ref)("Reference softly live: " PTR_FORMAT, p2i(reference));
+    return false;
+  }
+
+  if (!heap->is_in_active_generation(referent)) {
+    log_trace(gc,ref)("Referent outside of active generation: " PTR_FORMAT, p2i(referent));
     return false;
   }
 
