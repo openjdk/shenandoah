@@ -75,3 +75,4 @@ public:
     static void set_file_name_parameters(jlong start_time);
 };
 #endif //SHARE_GC_SHENANDOAH_SHENANDOAHLOGFILEOUTPUT_HPP
+
