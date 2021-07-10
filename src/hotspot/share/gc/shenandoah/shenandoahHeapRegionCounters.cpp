@@ -74,15 +74,17 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
 
     if (ShenandoahLogRegionSampling) {
       const char* name = ShenandoahRegionSamplingFile ? ShenandoahRegionSamplingFile : "./shenandoahSnapshots_pid%p.log";
-      _logFile->set_file_name_parameters(_timestamp->get_value());
-      _logFile = new ShenandoahLogFileOutput(name);
-      _logFile->initialize();
+      if (name == NULL || name[0] == '\0') ShenandoahRegionSamplingFile = "./shenandoahSnapshots_pid%p.log";
+
+      _log_file = new ShenandoahLogFileOutput(name, _timestamp->get_value());
+      _log_file->initialize(NULL, tty);
     }
   }
 }
 
 ShenandoahHeapRegionCounters::~ShenandoahHeapRegionCounters() {
   if (_name_space != NULL) FREE_C_HEAP_ARRAY(char, _name_space);
+  if (_log_file != NULL) FREE_C_HEAP_OBJ(_log_file);
 }
 
 void ShenandoahHeapRegionCounters::update() {
@@ -90,7 +92,7 @@ void ShenandoahHeapRegionCounters::update() {
     jlong current = nanos_to_millis(os::javaTimeNanos());
     jlong last = _last_sample_millis;
     if (current - last > ShenandoahRegionSamplingRate &&
-            Atomic::cmpxchg(&_last_sample_millis, last, current) == last) {
+        Atomic::cmpxchg(&_last_sample_millis, last, current) == last) {
 
       ShenandoahHeap* heap = ShenandoahHeap::heap();
 
@@ -121,7 +123,7 @@ void ShenandoahHeapRegionCounters::update() {
 
         // If logging enabled, dump current region snapshot to log file
         if (ShenandoahLogRegionSampling) {
-          _logFile->write_snapshot(_regions_data, _timestamp, _status, num_regions, rs);
+          _log_file->write_snapshot(_regions_data, _timestamp, _status, num_regions, rs);
         }
       }
     }
@@ -172,7 +174,7 @@ jlong ShenandoahHeapRegionCounters::encode_heap_status(ShenandoahHeap* heap) {
       status |= (1 << 2);
     }
     log_develop_trace(gc)("%s, phase=%u, old_mark=%s, status=" JLONG_FORMAT,
-      generation->name(), phase, BOOL_TO_STR(heap->is_concurrent_old_mark_in_progress()), status);
+                          generation->name(), phase, BOOL_TO_STR(heap->is_concurrent_old_mark_in_progress()), status);
   }
 
   if (heap->is_degenerated_gc_in_progress()) {
@@ -184,3 +186,4 @@ jlong ShenandoahHeapRegionCounters::encode_heap_status(ShenandoahHeap* heap) {
 
   return status;
 }
+
