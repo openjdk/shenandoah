@@ -289,7 +289,7 @@ public:
       fflush(stdout);
 #endif
       r->clear_live_data();
-    } 
+    }
 #ifdef KELVIN_DEBUG_LIVENESS
     else {
       printf("ShenandoahPrepareForMarkClosure() NOT clearing data for %s Region " SIZE_FORMAT "\n",

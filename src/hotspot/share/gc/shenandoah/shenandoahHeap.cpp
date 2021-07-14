@@ -98,7 +98,7 @@
 #include "utilities/powerOfTwo.hpp"
 
 #undef KELVIN_VERBOSE
-#undef KELVIN_DEBUG_LIVENESS  
+#undef KELVIN_DEBUG_LIVENESS
 
 class ShenandoahPretouchHeapTask : public AbstractGangTask {
 private:
@@ -2540,7 +2540,7 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   assert(_liveness_cache != NULL, "sanity");
   ShenandoahLiveData* ld = _liveness_cache[worker_id];
 
-#ifdef KELVIN_DEBUG_LIVENESS  
+#ifdef KELVIN_DEBUG_LIVENESS
   printf("worker[%u] flushing liveness cache for all " SIZE_FORMAT " regions in final_mark\n", worker_id, num_regions());
   fflush(stdout);
 #endif
