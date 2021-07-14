@@ -30,6 +30,7 @@
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
+#undef KELVIN_DEBUG_LIVENESS
 
 ShenandoahFinalMarkUpdateRegionStateClosure::ShenandoahFinalMarkUpdateRegionStateClosure(
   ShenandoahMarkingContext *ctx) :
@@ -42,6 +43,12 @@ void ShenandoahFinalMarkUpdateRegionStateClosure::heap_region_do(ShenandoahHeapR
     HeapWord *tams = _ctx->top_at_mark_start(r);
     HeapWord *top = r->top();
     if (top > tams) {
+
+#ifdef KELVIN_DEBUG_LIVENESS
+      printf("SheandoahFinalMarkUpdateRegionStateClosure: heap_region_do() is adding live mem " SIZE_FORMAT " above TAMS to total for %s Region " SIZE_FORMAT "\n",
+             (size_t) (top - tams), affiliation_name(r->affiliation()), r->index());
+#endif
+
       r->increase_live_data_alloc_words(pointer_delta(top, tams));
     }
 

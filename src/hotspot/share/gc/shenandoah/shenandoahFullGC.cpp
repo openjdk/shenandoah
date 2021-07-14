@@ -63,6 +63,8 @@
 #include "utilities/growableArray.hpp"
 #include "gc/shared/workgroup.hpp"
 
+#undef KELVIN_DEBUG_LIVENESS
+
 ShenandoahFullGC::ShenandoahFullGC() :
   _gc_timer(ShenandoahHeap::heap()->gc_timer()),
   _preserved_marks(new PreservedMarksSet(true)) {}
@@ -120,6 +122,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    fatal("Full GC not yet supported for generational mode in do_it().");
+  }
   if (ShenandoahVerify) {
     heap->verifier()->verify_before_fullgc();
   }
@@ -276,8 +281,22 @@ public:
   ShenandoahPrepareForMarkClosure() : _ctx(ShenandoahHeap::heap()->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion *r) {
-    _ctx->capture_top_at_mark_start(r);
-    r->clear_live_data();
+    if (r->affiliation() != FREE) {
+      _ctx->capture_top_at_mark_start(r);
+#ifdef KELVIN_DEBUG_LIVENESS
+      printf("ShenandoahPrepareForMarkClosure() clearing data for %s Region " SIZE_FORMAT "\n",
+             affiliation_name(r->affiliation()), r->index());
+      fflush(stdout);
+#endif
+      r->clear_live_data();
+    } 
+#ifdef KELVIN_DEBUG_LIVENESS
+    else {
+      printf("ShenandoahPrepareForMarkClosure() NOT clearing data for %s Region " SIZE_FORMAT "\n",
+             affiliation_name(r->affiliation()), r->index());
+      fflush(stdout);
+    }
+#endif
   }
 
   bool is_thread_safe() { return true; }
@@ -534,25 +553,30 @@ public:
     _ctx(ShenandoahHeap::heap()->complete_marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) {
-    if (r->is_humongous_start()) {
-      oop humongous_obj = oop(r->bottom());
-      if (!_ctx->is_marked(humongous_obj)) {
-        assert(!r->has_live(),
-               "Region " SIZE_FORMAT " is not marked, should not have live", r->index());
-        _heap->trash_humongous_region_at(r);
-      } else {
-        assert(r->has_live(),
-               "Region " SIZE_FORMAT " should have live", r->index());
-      }
-    } else if (r->is_humongous_continuation()) {
-      // If we hit continuation, the non-live humongous starts should have been trashed already
-      assert(r->humongous_start_region()->has_live(),
-             "Region " SIZE_FORMAT " should have live", r->index());
-    } else if (r->is_regular()) {
-      if (!r->has_live()) {
-        r->make_trash_immediate();
+    if (r->affiliation() != FREE) {
+      if (r->is_humongous_start()) {
+        oop humongous_obj = oop(r->bottom());
+        if (!_ctx->is_marked(humongous_obj)) {
+          assert(!r->has_live(),
+                 "Humongous Start %s Region " SIZE_FORMAT " is not marked, should not have live",
+                 affiliation_name(r->affiliation()),  r->index());
+          _heap->trash_humongous_region_at(r);
+        } else {
+          assert(r->has_live(),
+                 "Humongous Start %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
+        }
+      } else if (r->is_humongous_continuation()) {
+        // If we hit continuation, the non-live humongous starts should have been trashed already
+        assert(r->humongous_start_region()->has_live(),
+               "Humongous Continuation %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
+      } else if (r->is_regular()) {
+        if (!r->has_live()) {
+          r->make_trash_immediate();
+        }
       }
     }
+    // else, ignore this FREE region.
+    // TODO: change iterators so they do not process FREE regions.
   }
 };
 

@@ -28,6 +28,7 @@
 #include "utilities/quickSort.hpp"
 
 #undef KELVIN_PARANOID
+#undef KELVIN_DEBUG_LIVENESS
 
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation) :
     ShenandoahHeuristics(generation),
@@ -187,6 +188,11 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       }
     }
   }
+
+#ifdef KELVIN_DEBUG_LIVENESS
+  printf("Computing candidate collection sets for old-gen.  Did we update live data first?");
+  fflush(stdout);
+#endif
 
   // Prioritize regions to select garbage-first regions
   QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_garbage, false);

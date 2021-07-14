@@ -98,6 +98,7 @@
 #include "utilities/powerOfTwo.hpp"
 
 #undef KELVIN_VERBOSE
+#undef KELVIN_DEBUG_LIVENESS  
 
 class ShenandoahPretouchHeapTask : public AbstractGangTask {
 private:
@@ -2175,9 +2176,9 @@ private:
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
       if (r->is_active() && !r->is_cset()) {
-        if (!_heap->mode()->is_generational() || r->affiliation() == YOUNG_GENERATION) {
+        if (!_heap->mode()->is_generational() || (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION)) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
-        } else if (r->affiliation() == OLD_GENERATION) {
+        } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
           if (_heap->active_generation()->generation_mode() == GLOBAL) {
             // This code is only relevant to GLOBAL GC.  With OLD GC, all coalescing and filling is done before any relevant
             // evacuations.
@@ -2237,12 +2238,19 @@ private:
             }
           }
         } else {
-          // else, r->affiliation() is both FREE and active!  Very strange!
-          ShenandoahMarkingContext* ctx = _heap->marking_context();
-          assert(false, "Not expecting %s Region " SIZE_FORMAT " to be active: [" PTR_FORMAT ", " PTR_FORMAT
-                 "] (top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", update_watermark: " PTR_FORMAT ", top_bitmaps: " PTR_FORMAT,
-                 affiliation_name(r->affiliation()), r->index(), p2i(r->bottom()), p2i(r->end()), p2i(r->top()),
-                 p2i(ctx->top_at_mark_start(r)), p2i(r->get_update_watermark()), p2i(ctx->top_bitmap(r)));
+          // Because updating of references runs concurrently, it is possible that a FREE inactive region transitions
+          // to a non-free active region while this loop is executing.  Whenever this happens, the changing of a region's
+          // active status may propagate at a different speed than the changing of the region's affiliation.
+
+          // When we reach this control point, it is because a race has allowed a region's is_active() status to be seen
+          // by this thread before the region's affiliation() is seen by this thread.
+
+          // It's ok for this race to occur because the newly transformed region does not have any references to be
+          // updated.
+
+          assert(r->get_update_watermark() == r->bottom(),
+                 "%s Region " SIZE_FORMAT " is_active but not recognized as YOUNG or OLD so must be newly transitioned from FREE",
+                 affiliation_name(r->affiliation()), r->index());
         }
       }
       if (ShenandoahPacing) {
@@ -2531,6 +2539,11 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   assert(worker_id < _max_workers, "sanity");
   assert(_liveness_cache != NULL, "sanity");
   ShenandoahLiveData* ld = _liveness_cache[worker_id];
+
+#ifdef KELVIN_DEBUG_LIVENESS  
+  printf("worker[%u] flushing liveness cache for all " SIZE_FORMAT " regions in final_mark\n", worker_id, num_regions());
+  fflush(stdout);
+#endif
   for (uint i = 0; i < num_regions(); i++) {
     ShenandoahLiveData live = ld[i];
     if (live > 0) {

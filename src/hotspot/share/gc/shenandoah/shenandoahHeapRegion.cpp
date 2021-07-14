@@ -48,6 +48,7 @@
 #include "utilities/powerOfTwo.hpp"
 
 #undef KELVIN_VERBOSE
+#undef KELVIN_DEBUG_LIVENESS
 
 size_t ShenandoahHeapRegion::RegionCount = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytes = 0;
@@ -538,6 +539,9 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= (size_t) oopDesc::header_size(),
+             "fill size " SIZE_FORMAT " for obj @ " PTR_FORMAT ", next_marked: " PTR_FORMAT ", TAMS: " PTR_FORMAT " is too small",
+             fill_size, p2i(obj_addr), p2i(next_marked_obj), p2i(t));
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
       rem_set_scanner->register_object_wo_lock(obj_addr);
       obj_addr = next_marked_obj;
@@ -595,6 +599,11 @@ void ShenandoahHeapRegion::recycle() {
   }
 
   set_top(bottom());
+#ifdef KELVIN_DEBUG_LIVENESS
+  printf("ShenandoahHeapRegion::recycle() is clearing live data for %s Region " SIZE_FORMAT "\n",
+         affiliation_name(affiliation()), index());
+  fflush(stdout);
+#endif
   clear_live_data();
 
   reset_alloc_metadata();
@@ -848,6 +857,17 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
                   "] from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT,
                   p2i(bottom()), p2i(end()), affiliation_name(_affiliation), affiliation_name(new_affiliation),
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
+  }
+#endif
+
+#ifdef KELVIN_DEBUG_LIVENESS
+  {
+    ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
+    printf(" setting affiliation of Region " SIZE_FORMAT
+           " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT "\n",
+           index(), affiliation_name(_affiliation), affiliation_name(new_affiliation),
+           p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
+    fflush(stdout);
   }
 #endif
 

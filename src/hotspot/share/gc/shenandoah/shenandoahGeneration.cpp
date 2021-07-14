@@ -36,6 +36,7 @@
 
 #undef KELVIN_VERBOSE
 #undef KELVIN_PARANOID
+#undef KELVIN_DEBUG_LIVENESS
 
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
  private:
@@ -55,6 +56,12 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
       // Reset live data and set TAMS optimistically. We would recheck these under the pause
       // anyway to capture any updates that happened since now.
       _ctx->capture_top_at_mark_start(r);
+
+#ifdef KELVIN_DEBUG_LIVENESS
+      printf("ShenandoahResetUpdateRegionStateClosure::heap_region_do() clearing live data for %s Region " SIZE_FORMAT "\n",
+             affiliation_name(r->affiliation()), r->index());
+      fflush(stdout);
+#endif
       r->clear_live_data();
     }
   }
@@ -229,6 +236,13 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                                          ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
+
+#ifdef KELVIN_DEBUG_LIVENESS
+    printf("GC(" SIZE_FORMAT ") Adding live data above TAMS for all regions at final mark (prepare_regions_and_collection_set)\n",
+           (size_t) GCId::current());
+    fflush(stdout);
+#endif
+
     parallel_heap_region_iterate(&cl);
     heap->assert_pinned_region_status();
 

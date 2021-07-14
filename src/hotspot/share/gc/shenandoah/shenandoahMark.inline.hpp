@@ -40,6 +40,7 @@
 #include "utilities/powerOfTwo.hpp"
 
 #undef KELVIN_VERBOSE
+#undef KELVIN_DEBUG_LIVENESS
 
 template<GenerationMode GENERATION>
 ShenandoahInitMarkRootsClosure<GENERATION>::ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q) :
@@ -105,10 +106,18 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
 
   if (!region->is_humongous_start()) {
     assert(!region->is_humongous(), "Cannot have continuations here");
+    assert(region->affiliation() != FREE, "Do not count live data within Free Regular Region " SIZE_FORMAT, region_idx);
     ShenandoahLiveData cur = live_data[region_idx];
     size_t new_val = size + cur;
     if (new_val >= SHENANDOAH_LIVEDATA_MAX) {
       // overflow, flush to region data
+
+#ifdef KELVIN_DEBUG_LIVENESS
+      printf("count_liveness overflows and flushes " SIZE_FORMAT " during marking for %s Region " SIZE_FORMAT "\n",
+             new_val, affiliation_name(region->affiliation()), region_idx);
+      fflush(stdout);
+#endif
+
       region->increase_live_data_gc_words(new_val);
       live_data[region_idx] = 0;
     } else {
@@ -118,10 +127,20 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   } else {
     shenandoah_assert_in_correct_region(NULL, obj);
     size_t num_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
+    
+    assert(region->affiliation() != FREE, "Do not count live data within FREE Humongous Start Region " SIZE_FORMAT, region_idx);
 
     for (size_t i = region_idx; i < region_idx + num_regions; i++) {
       ShenandoahHeapRegion* chain_reg = heap->get_region(i);
       assert(chain_reg->is_humongous(), "Expecting a humongous region");
+      assert(chain_reg->affiliation() != FREE, "Do not count live data within FREE Humongous Continuation Region " SIZE_FORMAT, i);
+
+#ifdef KELVIN_DEBUG_LIVENESS
+      printf("count_liveness flushes " SIZE_FORMAT " HeapWords during marking for %s Humongous Region " SIZE_FORMAT
+             ", words in object: " SIZE_FORMAT "\n",
+             chain_reg->used() >> LogHeapWordSize, affiliation_name(chain_reg->affiliation()), i, size);
+      fflush(stdout);
+#endif
       chain_reg->increase_live_data_gc_words(chain_reg->used() >> LogHeapWordSize);
     }
   }
