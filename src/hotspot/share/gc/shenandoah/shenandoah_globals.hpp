@@ -436,7 +436,8 @@
   product(bool, ShenandoahLogRegionSampling, false,                         \
           "Save GC Snapshots stream to ShenandoahRegionSamplingFile")       \
                                                                             \
-  product(ccstr, ShenandoahRegionSamplingFile, NULL,                        \
+  product(ccstr, ShenandoahRegionSamplingFile,                              \
+          "./shenandoahSnapshots_pid%p.log",                                \
           "If ShenandoahLogRegionSampling is on, save GC Snapshots stream " \
           "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
           "(%p replaced with pid)")
