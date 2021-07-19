@@ -29,8 +29,6 @@
 #include "memory/allocation.hpp"
 #include "utilities/globalDefinitions.hpp"
 
-#undef KELVIN_VERBOSE
-
 // Forward declarations.
 class PLABStats;
 
@@ -146,16 +144,6 @@ public:
   HeapWord* top() {
     return _top;
   }
-
-#ifdef KELVIN_VERBOSE
-  HeapWord* bottom() {
-    return _bottom;
-  }
-
-  HeapWord* end() {
-    return _end;
-  }
-#endif
 };
 
 // PLAB book-keeping.

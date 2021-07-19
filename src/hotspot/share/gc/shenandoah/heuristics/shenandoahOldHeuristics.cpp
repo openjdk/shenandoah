@@ -27,9 +27,6 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "utilities/quickSort.hpp"
 
-#undef KELVIN_PARANOID
-#undef KELVIN_DEBUG_LIVENESS
-
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation) :
     ShenandoahHeuristics(generation),
     _old_collection_candidates(0),
@@ -189,11 +186,6 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
   }
 
-#ifdef KELVIN_DEBUG_LIVENESS
-  printf("Computing candidate collection sets for old-gen.  Did we update live data first?");
-  fflush(stdout);
-#endif
-
   // Prioritize regions to select garbage-first regions
   QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_garbage, false);
 
@@ -218,17 +210,6 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       _first_coalesce_and_fill_candidate = (uint)i;
       _old_coalesce_and_fill_candidates = (uint)(cand_idx - i);
 
-#ifdef KELVIN_PARANOID
-      printf("prepare_for_old_collections identified %lld CF regions\n  : ",
-             (unsigned long long) _old_coalesce_and_fill_candidates);
-      for (size_t j = i; j < cand_idx; j++) {
-        printf("%llx ", (unsigned long long) candidates[j]._region->bottom());
-      }
-      printf(" and %lld regular_regions:\n  : ", (unsigned long long) _hidden_old_collection_candidates);
-      for (size_t j = 0; j < i; j++) {
-        printf("%llx ", (unsigned long long) candidates[j]._region->bottom());
-      }
-#endif
       // Note that we do not coalesce and fill occupied humongous regions
       // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
       log_info(gc)("Old-gen mark evac (%llu RR, %llu CF)",

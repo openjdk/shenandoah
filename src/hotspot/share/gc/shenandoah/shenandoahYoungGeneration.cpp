@@ -31,8 +31,6 @@
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 
-#undef KELVIN_VERBOSE
-
 ShenandoahYoungGeneration::ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity) :
   ShenandoahGeneration(YOUNG, max_queues, max_capacity, soft_max_capacity),
   _old_gen_task_queues(nullptr) {
@@ -109,35 +107,9 @@ bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {
 }
 
 void ShenandoahYoungGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-#ifdef KELVIN_VERBOSE
-  if (_old_gen_task_queues != NULL) {
-    printf("ojo: doing SYG::parallel_heap_region_iterate() with non-null _old_gen_task_queues, GC(%lld)\n",
-           (unsigned long long) GCId::current());
-    printf("  expect this for clearing mark bitmaps.  anything else needs more attention\n");
-    fflush(stdout);
-#ifdef DELETED_CODE
-    if (_old_gen_task_queues != NULL) {
-      // No generation filter on regions, we need to iterate all the regions.
-      ShenandoahHeap::heap()->parallel_heap_region_iterate(cl);
-    } else {
-      // Just the young generations here.
-      ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
-      ShenandoahHeap::heap()->parallel_heap_region_iterate(&young_regions);
-    }
-#endif
-  }
-#endif
-  // Just the young generations here.
-#ifdef KELVIN_VERBOSE
-  printf("ojo: my intent is to do only the young generations here\n");
-  fflush(stdout);
-#endif
+  // Just iterate over the young generation here.
   ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
   ShenandoahHeap::heap()->parallel_heap_region_iterate(&young_regions);
-#ifdef KELVIN_VERBOSE
-  printf("nojo: my intent is to do only the young generations here\n");
-  fflush(stdout);
-#endif
 }
 
 void ShenandoahYoungGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {

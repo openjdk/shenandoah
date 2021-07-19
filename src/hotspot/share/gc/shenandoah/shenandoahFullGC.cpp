@@ -63,8 +63,6 @@
 #include "utilities/growableArray.hpp"
 #include "gc/shared/workgroup.hpp"
 
-#undef KELVIN_DEBUG_LIVENESS
-
 ShenandoahFullGC::ShenandoahFullGC() :
   _gc_timer(ShenandoahHeap::heap()->gc_timer()),
   _preserved_marks(new PreservedMarksSet(true)) {}
@@ -283,20 +281,8 @@ public:
   void heap_region_do(ShenandoahHeapRegion *r) {
     if (r->affiliation() != FREE) {
       _ctx->capture_top_at_mark_start(r);
-#ifdef KELVIN_DEBUG_LIVENESS
-      printf("ShenandoahPrepareForMarkClosure() clearing data for %s Region " SIZE_FORMAT "\n",
-             affiliation_name(r->affiliation()), r->index());
-      fflush(stdout);
-#endif
       r->clear_live_data();
     }
-#ifdef KELVIN_DEBUG_LIVENESS
-    else {
-      printf("ShenandoahPrepareForMarkClosure() NOT clearing data for %s Region " SIZE_FORMAT "\n",
-             affiliation_name(r->affiliation()), r->index());
-      fflush(stdout);
-    }
-#endif
   }
 
   bool is_thread_safe() { return true; }
@@ -488,15 +474,11 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
   size_t to_end = heap->num_regions();
 
   log_debug(gc)("Full GC calculating target humongous objects from end " SIZE_FORMAT, to_end);
-
-
   for (size_t c = heap->num_regions(); c > 0; c--) {
     ShenandoahHeapRegion *r = heap->get_region(c - 1);
     if (r->is_humongous_continuation() || (r->new_top() == r->bottom())) {
       // To-region candidate: record this, and continue scan
       to_begin = r->index();
-      log_debug(gc)(" Setting to_begin to " SIZE_FORMAT
-                    " since region is humongous continuation or region's new top equals its bottom", to_begin);
       continue;
     }
 
@@ -512,16 +494,7 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
         // Fits into current window, and the move is non-trivial. Record the move then, and continue scan.
         _preserved_marks->get(0)->push_if_necessary(old_obj, old_obj->mark());
         old_obj->forward_to(oop(heap->get_region(start)->bottom()));
-
-        log_debug(gc)(" Humongous object starting aligned with Region " SIZE_FORMAT " to be moved to Region " SIZE_FORMAT,
-                      (c - 1), start);
-
         to_end = start;
-
-        log_debug(gc)(" Setting to_end to " SIZE_FORMAT
-                      " since region is humongous start, region can be moved stw, start >= to_begin, and start != r->index",
-                      to_end);
-
         continue;
       }
     }
@@ -743,8 +716,6 @@ void ShenandoahFullGC::phase2_calculate_target_addresses(ShenandoahHeapRegionSet
   ShenandoahGCPhase calculate_address_phase(ShenandoahPhaseTimings::full_gc_calculate_addresses);
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-
-  log_debug(gc)("Full GC phase-2 calculate target addresses");
 
   // About to figure out which regions can be compacted, make sure pinning status
   // had been updated in GC prologue.
@@ -1078,12 +1049,7 @@ public:
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
     while (region != NULL) {
       if (heap->is_bitmap_slice_committed(region) && !region->is_pinned() && region->has_live()) {
-        log_debug(gc)("ShenandoahMCResetCompleteBitmapTask(), worker_id: %u is clearing bitmap for region " SIZE_FORMAT,
-                      worker_id, region->index());
         ctx->clear_bitmap(region);
-      } else {
-        log_debug(gc)("ShenandoahMCResetCompleteBitmapTask(), worker_id: %u is NOT clearing bitmap for region " SIZE_FORMAT "\n"
-                      "  because region !committed or region is_pinned or !region->has_live()", worker_id, region->index());
       }
       region = _regions.next();
     }

@@ -28,9 +28,6 @@
 #include "gc/shenandoah/shenandoahMarkBitMap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_PARANOID
-
 inline bool ShenandoahMarkingContext::mark_strong(oop obj, bool& was_upgraded) {
   return !allocated_after_mark_start(obj) && _mark_bit_map.mark_strong(cast_from_oop<HeapWord*>(obj), was_upgraded);
 }
@@ -111,16 +108,6 @@ inline void ShenandoahMarkingContext::capture_top_at_mark_start(ShenandoahHeapRe
 }
 
 inline void ShenandoahMarkingContext::reset_top_at_mark_start(ShenandoahHeapRegion* r) {
-#ifdef KELVIN_VERBOSE
-  if (r->is_old()) {
-    printf("SMC::reset_top_at_mark_start for region [%llx, %llx], was: %llx, now: %llx\n",
-           (unsigned long long) r->bottom(), (unsigned long long) r->top(),
-           (unsigned long long) _top_at_mark_starts_base[r->index()],
-           (unsigned long long) r->top());
-    fflush(stdout);
-  }
-#endif
-
   _top_at_mark_starts_base[r->index()] = r->bottom();
 }
 

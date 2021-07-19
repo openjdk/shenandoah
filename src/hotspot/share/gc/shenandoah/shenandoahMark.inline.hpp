@@ -39,9 +39,6 @@
 #include "runtime/prefetch.inline.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_DEBUG_LIVENESS
-
 template<GenerationMode GENERATION>
 ShenandoahInitMarkRootsClosure<GENERATION>::ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q) :
   _queue(q),
@@ -111,13 +108,6 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
     size_t new_val = size + cur;
     if (new_val >= SHENANDOAH_LIVEDATA_MAX) {
       // overflow, flush to region data
-
-#ifdef KELVIN_DEBUG_LIVENESS
-      printf("count_liveness overflows and flushes " SIZE_FORMAT " during marking for %s Region " SIZE_FORMAT "\n",
-             new_val, affiliation_name(region->affiliation()), region_idx);
-      fflush(stdout);
-#endif
-
       region->increase_live_data_gc_words(new_val);
       live_data[region_idx] = 0;
     } else {
@@ -129,18 +119,10 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
     size_t num_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
 
     assert(region->affiliation() != FREE, "Do not count live data within FREE Humongous Start Region " SIZE_FORMAT, region_idx);
-
     for (size_t i = region_idx; i < region_idx + num_regions; i++) {
       ShenandoahHeapRegion* chain_reg = heap->get_region(i);
       assert(chain_reg->is_humongous(), "Expecting a humongous region");
       assert(chain_reg->affiliation() != FREE, "Do not count live data within FREE Humongous Continuation Region " SIZE_FORMAT, i);
-
-#ifdef KELVIN_DEBUG_LIVENESS
-      printf("count_liveness flushes " SIZE_FORMAT " HeapWords during marking for %s Humongous Region " SIZE_FORMAT
-             ", words in object: " SIZE_FORMAT "\n",
-             chain_reg->used() >> LogHeapWordSize, affiliation_name(chain_reg->affiliation()), i, size);
-      fflush(stdout);
-#endif
       chain_reg->increase_live_data_gc_words(chain_reg->used() >> LogHeapWordSize);
     }
   }
@@ -298,18 +280,6 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
 
     shenandoah_assert_not_forwarded(p, obj);
     shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
-#ifdef KELVIN_VERBOSE
-    static size_t previous_gc_id = 999;
-    static ShenandoahObjToScanQueue* previous_old_value = NULL;
-    if ((GENERATION == YOUNG) && (GCId::current() != previous_gc_id) ||
-        ((previous_old_value != nullptr) && (old == nullptr)) ||
-        (previous_old_value == nullptr) && (old != nullptr)) {
-      previous_gc_id = GCId::current();
-      previous_old_value = old;
-      printf("marking through ref for GC pass %llu, old is %llx\n",
-             (unsigned long long) previous_gc_id, (unsigned long long) previous_old_value);
-    }
-#endif
     if (in_generation<GENERATION>(obj)) {
       mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);

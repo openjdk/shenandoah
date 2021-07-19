@@ -36,8 +36,6 @@
 #include "runtime/threadSMR.hpp"
 #include "utilities/copy.hpp"
 
-#undef KELVIN_VERBOSE
-
 size_t       ThreadLocalAllocBuffer::_max_size = 0;
 int          ThreadLocalAllocBuffer::_reserve_for_allocation_prefetch = 0;
 unsigned int ThreadLocalAllocBuffer::_target_refills = 0;
@@ -142,16 +140,6 @@ void ThreadLocalAllocBuffer::retire(ThreadLocalAllocStats* stats) {
   if (stats != NULL) {
     accumulate_and_reset_statistics(stats);
   }
-
-#ifdef KELVIN_VERBOSE
-  if (start() != 0) {
-    printf("TLAB::retiring [%llx, %llx], filling @%llx (size: %llx)\n",
-           (unsigned long long) start(), (unsigned long long) hard_end(), (unsigned long long) top(),
-           (unsigned long long) 8 * (hard_end() - top()));
-    fflush(stdout);
-  }
-  // else, this thread's PLAB is not currently active.  no need to retire memory.
-#endif
 
   if (end() != NULL) {
     invariants();

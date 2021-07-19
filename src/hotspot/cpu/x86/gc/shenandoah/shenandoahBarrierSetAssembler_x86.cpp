@@ -671,7 +671,6 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
   bool on_oop = is_reference_type(type);
   bool in_heap = (decorators & IN_HEAP) != 0;
   bool as_normal = (decorators & AS_NORMAL) != 0;
-
   if (on_oop && in_heap) {
     bool needs_pre_barrier = as_normal;
 

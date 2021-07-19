@@ -48,8 +48,6 @@
 #include "runtime/atomic.hpp"
 #include "shenandoahOldGC.hpp"
 
-#undef KELVIN_VERBOSE
-
 ShenandoahControlThread::ShenandoahControlThread() :
   ConcurrentGCThread(),
   _alloc_failure_waiters_lock(Mutex::leaf, "ShenandoahAllocFailureGC_lock", true, Monitor::_safepoint_check_always),
@@ -415,19 +413,9 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
 
   switch (generation) {
     case YOUNG: {
-      // Run a young cycle. This might or might not, have interrupted an ongoing
-      // concurrent mark in the old generation.
+      // Run a young cycle. This might or might not, have interrupted an ongoing concurrent mark in the old generation.
       log_info(gc, ergo)("Start GC cycle (YOUNG)");
-
-#ifdef KELVIN_VERBOSE
-      printf("service_concurrent_cycle() with no old-gen scanning\n");
-      printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
-#endif
       service_concurrent_cycle(heap->young_generation(), cause, false);
-#ifdef KELVIN_VERBOSE
-      printf("done with service_concurrent_cycle() with no old-gen scanning\n");
-      printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
-#endif
       heap->young_generation()->log_status();
       break;
     }
@@ -460,10 +448,6 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   assert(!heap->is_concurrent_old_mark_in_progress(), "Old already in progress.");
   assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");
 
-#ifdef KELVIN_VERBOSE
-  printf("set_old_gen_task_queues() for concurrent_old_cycle\n");
-  printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
-#endif
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
   old_generation->set_mark_incomplete();
   service_concurrent_cycle(young_generation, cause, true);
@@ -524,10 +508,6 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   ShenandoahOldGC gc(generation, _allow_old_preemption);
   if (gc.collect(cause)) {
     // Cycle is complete
-#ifdef KELVIN_VERBOSE
-    printf("clear old_gen_task_queues() after concurrent_old_cycle\n");
-    printf("  _mode is %d, marking_old is %d\n", _mode, marking_old);
-#endif
     // Young generation no longer needs this reference to the old concurrent mark so clean it up.
     heap->young_generation()->set_old_gen_task_queues(NULL);
     generation->heuristics()->record_success_concurrent();
@@ -586,11 +566,6 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   //                                      Full GC  --------------------------/
   //
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-#ifdef KELVIN_VERBOSE
-  printf("SCT::service_concurrent_cycle(generation: %s, do_old_gc_bootstrap: %s)\n",
-         generation->name(), do_old_gc_bootstrap? "true": "false");
-  fflush(stdout);
-#endif
   if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) return;
 
   GCIdMark gc_id_mark;

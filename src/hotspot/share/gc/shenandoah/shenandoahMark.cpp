@@ -35,8 +35,6 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 
-#undef KELVIN_DEBUG_LIVENESS
-
 ShenandoahMarkRefsSuperClosure::ShenandoahMarkRefsSuperClosure(ShenandoahObjToScanQueue* q,  ShenandoahReferenceProcessor* rp, ShenandoahObjToScanQueue* old_q) :
   MetadataVisitingOopIterateClosure(rp),
   _queue(q),
@@ -100,10 +98,6 @@ void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahRefe
     }
   }
 
-#ifdef KELVIN_DEBUG_LIVENESS
-  printf("mark_loop_prework(%u) is calling flush_liveness_cache()\n", w);
-  fflush(stdout);
-#endif
   heap->flush_liveness_cache(w);
 }
 
@@ -186,10 +180,6 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
 void ShenandoahMark::mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
                                bool cancellable, bool strdedup) {
   bool update_refs = ShenandoahHeap::heap()->has_forwarded_objects();
-#ifdef KELVIN_DEBUG_LIVENESS
-  printf("mark_loop(worker %u) expect up to two invocations per GC pass\n", worker_id);
-  fflush(stdout);
-#endif
   switch (generation) {
     case YOUNG: {
       if (cancellable) {

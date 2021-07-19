@@ -35,10 +35,6 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_PARANOID
-#undef KELVIN_DEBUG_LIVENESS
-
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
   _mutator_free_bitmap(max_regions, mtGC),
@@ -162,14 +158,6 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
-#ifdef KELVIN_VERBOSE
-  if (r->is_old() || (req.affiliation() == OLD_GENERATION)) {
-    printf("SFS::try_allocate_in region [%llx, %llx], TLAB? %s, size: %llx, ElasticTLAB? %s\n",
-           (unsigned long long) r->bottom(), (unsigned long long) r->top(), req.is_lab_alloc()? "yes": "no",
-           (unsigned long long) req.size(), ShenandoahElasticTLAB? "yes": "no");
-    fflush(stdout);
-  }
-#endif
 
   if (_heap->is_concurrent_weak_root_in_progress() &&
       r->is_trash()) {
@@ -210,13 +198,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (size > free) {
       size = free;
     }
-#ifdef KELVIN_VERBOSE
-    if (r->is_old()) {
-      printf("SFS::try_allocate_in [%llx, %llx] adjusted elastic tlab size to %llx, req.min_size(): %llx\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->top(),
-             (unsigned long long) size, (unsigned long long) req.min_size());
-    }
-#endif
     if (size >= req.min_size()) {
       result = r->allocate(size, req);
       assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
@@ -236,11 +217,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
     if (req.is_gc_alloc()) {
       r->set_update_watermark(r->top());
-#ifdef KELVIN_PARANOID
-      printf("SFS::try_allocate_in [%llx, %llx] set update_watermark to %llx\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->end(),
-             (unsigned long long) r->top());
-#endif
     }
 
     if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
@@ -276,11 +252,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert_bounds();
   }
-#ifdef KELVIN_VERBOSE
-  if (r->is_old()) {
-    printf("SFS:try_allocate_in() returning %llx\n", (unsigned long long) result);
-  }
-#endif
   return result;
 }
 
@@ -326,12 +297,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   if (num > mutator_count()) {
     return NULL;
   }
-
-#ifdef KELVIN_DEBUG_LIVENESS
-  printf("allocate_contiguous() for words " SIZE_FORMAT ", looking for " SIZE_FORMAT " contiguous regions\n",
-         req.size(), num);
-  fflush(stdout);
-#endif
 
   // Find the continuous interval of $num regions, starting from $beg and ending in $end,
   // inclusive. Contiguous allocations are biased to the beginning.
@@ -391,10 +356,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     r->set_top(r->bottom());    // Set top to bottom so we can capture TAMS
     ctx->capture_top_at_mark_start(r);
     r->set_top(r->bottom() + used_words); // Then change top to reflect allocation of humongous object.
-#ifdef KELVIN_DEBUG_LIVENESS
-    printf("allocate_contiguous() is initializing %s Humongous Region " SIZE_FORMAT "\n", affiliation_name(req.affiliation()),  r->index());
-    fflush(stdout);
-#endif
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
 
@@ -452,13 +413,6 @@ bool ShenandoahFreeSet::has_no_alloc_capacity(ShenandoahHeapRegion *r) {
 
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
   if (r->is_trash()) {
-#ifdef KELVIN_DEBUG
-    if (r->is_old()) {
-      printf("SFS::try_recycle_trashed for region [%llx, %llx], reclaiming used: %llx\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->top(), (unsigned long long) r->used);
-      fflush(stdout);
-    }
-#endif
     _heap->decrease_used(r->used());
     r->recycle();
   }

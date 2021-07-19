@@ -47,8 +47,6 @@
 #include "runtime/safepoint.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_DEBUG_LIVENESS
 
 size_t ShenandoahHeapRegion::RegionCount = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytes = 0;
@@ -160,8 +158,6 @@ void ShenandoahHeapRegion::make_humongous_start() {
 void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
-  log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " to %s in make_humongous_start_bypass",
-                index(), affiliation_name(affiliation));
   set_affiliation(affiliation);
   reset_age();
   switch (_state) {
@@ -193,8 +189,6 @@ void ShenandoahHeapRegion::make_humongous_cont() {
 void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
-  log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " to %s in make_humongous_cont_bypass",
-                index(), affiliation_name(affiliation));
   set_affiliation(affiliation);
   reset_age();
   switch (_state) {
@@ -605,11 +599,6 @@ void ShenandoahHeapRegion::recycle() {
   }
 
   set_top(bottom());
-#ifdef KELVIN_DEBUG_LIVENESS
-  printf("ShenandoahHeapRegion::recycle() is clearing live data for %s Region " SIZE_FORMAT "\n",
-         affiliation_name(affiliation()), index());
-  fflush(stdout);
-#endif
   clear_live_data();
 
   reset_alloc_metadata();
@@ -856,27 +845,6 @@ size_t ShenandoahHeapRegion::pin_count() const {
 void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-#ifdef KELVIN_VERBOSE
-  {
-    ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
-    log_debug(gc)(" setting affiliation of region [" PTR_FORMAT ", " PTR_FORMAT
-                  "] from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT,
-                  p2i(bottom()), p2i(end()), affiliation_name(_affiliation), affiliation_name(new_affiliation),
-                  p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
-  }
-#endif
-
-#ifdef KELVIN_DEBUG_LIVENESS
-  {
-    ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
-    printf(" setting affiliation of Region " SIZE_FORMAT
-           " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT "\n",
-           index(), affiliation_name(_affiliation), affiliation_name(new_affiliation),
-           p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
-    fflush(stdout);
-  }
-#endif
-
   {
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
     log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT
@@ -951,10 +919,9 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
   //   1. The most recent young-GC concurrent mark phase began at the same time or after the most recent old-GC
   //      concurrent mark phase.
   //   2. After the region is promoted, it is still the case that any object within the region that is beneath TAMS
-  //      and is considered alive for the current old GC pass will be "marked" withint he current marking context, and
+  //      and is considered alive for the current old GC pass will be "marked" within the current marking context, and
   //      any object within the region that is above TAMS will be considered alive for the current old GC pass.  Objects
   //      that were dead at promotion time will all reside below TAMS and will be unmarked.
-
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   assert(heap->active_generation()->is_mark_complete(), "sanity");

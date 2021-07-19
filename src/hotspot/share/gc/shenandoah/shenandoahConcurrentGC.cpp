@@ -46,8 +46,6 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
-#undef KELVIN_PARANOID
-
 ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
   _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
@@ -71,12 +69,6 @@ void ShenandoahConcurrentGC::dont_do_old_gc_bootstrap() {
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
-#ifdef KELVIN_PARANOID
-  printf("SCGC::collect(), generation_mode is: %s\n",
-         _generation->generation_mode() == YOUNG? "YOUNG": _generation->generation_mode() == OLD? "OLD": "GLOBAL");
-  fflush(stdout);
-#endif
-
   // Reset for upcoming marking
   entry_reset(_do_old_gc_bootstrap);
 
@@ -95,12 +87,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // Continue concurrent mark
   entry_mark();
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
-
-#ifdef KELVIN_PARANOID
-  printf("SCGC::collect() before final_mark, generation_mode is: %s\n",
-         _generation->generation_mode() == YOUNG? "YOUNG": _generation->generation_mode() == OLD? "OLD": "GLOBAL");
-  fflush(stdout);
-#endif
 
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
@@ -532,7 +518,6 @@ void ShenandoahConcurrentGC::op_init_mark(bool do_old_gc_bootstrap) {
     _generation->parallel_heap_region_iterate(&cl);
   }
 
-
   // Weak reference processing
   ShenandoahReferenceProcessor* rp = heap->ref_processor();
   rp->reset_thread_locals();
@@ -566,11 +551,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
-
-#ifdef KELVIN_PARANOID
-  printf("ShenandoahConcurrentGC::op_final_mark() no surprise override did not work!\n");
-  fflush(stdout);
-#endif
 
   if (ShenandoahVerify) {
     heap->verifier()->verify_roots_no_forwarded();

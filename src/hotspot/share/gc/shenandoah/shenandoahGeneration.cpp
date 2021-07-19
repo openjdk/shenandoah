@@ -34,10 +34,6 @@
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_PARANOID
-#undef KELVIN_DEBUG_LIVENESS
-
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
  private:
   ShenandoahMarkingContext* const _ctx;
@@ -46,22 +42,10 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
     _ctx(ShenandoahHeap::heap()->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) {
-#ifdef KELVIN_VERBOSE
-    printf("heap_region_do() reset live_data and update TAMS for %s %s region [%llx, %llx], top at mark start is: %llx\n",
-           r->is_active()? "active": "inactive", affiliation_name(r->affiliation()),
-           (unsigned long long) r->bottom(), (unsigned long long) r->end(),
-           (unsigned long long) r->top());
-#endif
     if (r->is_active()) {
       // Reset live data and set TAMS optimistically. We would recheck these under the pause
       // anyway to capture any updates that happened since now.
       _ctx->capture_top_at_mark_start(r);
-
-#ifdef KELVIN_DEBUG_LIVENESS
-      printf("ShenandoahResetUpdateRegionStateClosure::heap_region_do() clearing live data for %s Region " SIZE_FORMAT "\n",
-             affiliation_name(r->affiliation()), r->index());
-      fflush(stdout);
-#endif
       r->clear_live_data();
     }
   }
@@ -165,16 +149,8 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
   set_mark_incomplete();
 
-#ifdef KELVIN_VERBOSE
-  printf("reset_mark_bitmap() at start\n");
-  fflush(stdout);
-#endif
   ShenandoahResetBitmapTask task;
   parallel_heap_region_iterate(&task);
-#ifdef KELVIN_VERBOSE
-  printf("reset_mark_bitmap() at end\n");
-  fflush(stdout);
-#endif
 }
 
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
@@ -192,20 +168,12 @@ void ShenandoahGeneration::swap_remembered_set() {
 }
 
 void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
-#ifdef KELVIN_VERBOSE
-  printf("%s::prepare_gc(do_old_gc_bootstrap: %s)\n", name(), reset_old_mark_bitmap_specially? "true": "false");
-  fflush(stdout);
-#endif
   // Reset mark bitmap for this generation (typically young)
   reset_mark_bitmap();
   if (do_old_gc_bootstrap) {
     // Reset mark bitmap for old regions also.  Note that do_old_gc_bootstrap is only true if this generation is YOUNG.
     ShenandoahHeap::heap()->old_generation()->reset_mark_bitmap();
   }
-#ifdef KELVIN_VERBOSE
-  printf("prepare_gc() to reset update region state closure\n");
-  fflush(stdout);
-#endif
 
   ShenandoahResetUpdateRegionStateClosure cl;
     // Capture Top At Mark Start for this generation (typically young)
@@ -214,11 +182,6 @@ void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
     // Capture top at mark start for both old-gen regions also.  Note that do_old_gc_bootstrap is only true if generation is YOUNG.
     ShenandoahHeap::heap()->old_generation()->parallel_heap_region_iterate(&cl);
   }
-
-#ifdef KELVIN_VERBOSE
-  printf("prepare_gc() is done\n");
-  fflush(stdout);
-#endif
 }
 
 // Returns true iff the chosen collection set includes a mix of young-gen and old-gen regions.
@@ -226,22 +189,11 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   bool result;
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-#ifdef KELVIN_PARANOID
-  printf("prepare_regions_and_collection_set(%s), generation_mode: %s\n",
-         concurrent? "true": "false", (generation_mode() == OLD)? "OLD": (generation_mode() == YOUNG)? "YOUNG": "GLOBAL");
-  fflush(stdout);
-#endif
   assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                                          ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
-
-#ifdef KELVIN_DEBUG_LIVENESS
-    printf("GC(" SIZE_FORMAT ") Adding live data above TAMS for all regions at final mark (prepare_regions_and_collection_set)\n",
-           (size_t) GCId::current());
-    fflush(stdout);
-#endif
 
     parallel_heap_region_iterate(&cl);
     heap->assert_pinned_region_status();

@@ -44,8 +44,6 @@
 #include "memory/iterator.inline.hpp"
 #include "memory/resourceArea.hpp"
 
-#undef KELVIN_DEBUG_LIVENESS
-
 class ShenandoahUpdateRootsTask : public AbstractGangTask {
 private:
   ShenandoahRootUpdater*  _root_updater;
@@ -90,10 +88,6 @@ public:
     ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
     ShenandoahReferenceProcessor* rp = heap->ref_processor();
     assert(rp != NULL, "need reference processor");
-#ifdef KELVIN_DEBUG_LIVENESS
-    printf("ShenandoahConcurrentMarkingTask::work() is invoking mark_loop(%u)\n", worker_id);
-    fflush(stdout);
-#endif
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
                    true, // cancellable
                    ShenandoahStringDedup::is_enabled()); // perform string dedup
@@ -160,10 +154,6 @@ public:
       Threads::threads_do(&tc);
     }
 
-#ifdef KELVIN_DEBUG_LIVENESS
-    printf("ShenandaohFinalMarkingTask::work() is invoking mark_loop(%u)\n", worker_id);
-    fflush(stdout);
-#endif
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
                    false, // not cancellable
                    _dedup_string);

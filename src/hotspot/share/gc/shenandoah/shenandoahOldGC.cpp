@@ -34,8 +34,6 @@
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "utilities/events.hpp"
 
-#undef KELVIN_PARANOID
-
 class ShenandoahConcurrentCoalesceAndFillTask : public AbstractGangTask {
 private:
   uint _nworkers;
@@ -87,10 +85,6 @@ void ShenandoahOldGC::op_final_mark() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
 
-#ifdef KELVIN_PARANOID
-  printf("OldGC::op_final_mark() surprise override worked!\n");
-  fflush(stdout);
-#endif
   if (ShenandoahVerify) {
     heap->verifier()->verify_roots_no_forwarded();
   }
@@ -99,12 +93,9 @@ void ShenandoahOldGC::op_final_mark() {
     _mark.finish_mark();
     assert(!heap->cancelled_gc(), "STW mark cannot OOM");
 
-    // I believe Notifying JVMTI that the tagmap table will need cleaning is not relevant following old-gen mark
+    // Believe notifying JVMTI that the tagmap table will need cleaning is not relevant following old-gen mark
     // so commenting out for now:
     //   JvmtiTagMap::set_needs_cleaning();
-
-    // YOUNG and GLOBAL GC call prepare_regions_and_collection_set(), which calls choose_collection_set().  For OLD
-    // GC, we need only to call choose_collection_set.
 
     {
       ShenandoahGCPhase phase(ShenandoahPhaseTimings::choose_cset);
@@ -113,7 +104,7 @@ void ShenandoahOldGC::op_final_mark() {
       _generation->heuristics()->choose_collection_set(nullptr, nullptr);
     }
 
-    // I believe verification following old-gen concurrent mark needs to be different than verification following
+    // Believe verification following old-gen concurrent mark needs to be different than verification following
     // young-gen concurrent mark, so am commenting this out for now:
     //   if (ShenandoahVerify) {
     //     heap->verifier()->verify_after_concmark();
@@ -128,23 +119,12 @@ void ShenandoahOldGC::op_final_mark() {
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-#ifdef KELVIN_PARANOID
-  printf("S_Old_GC::collect(), generation_mode is: %s\n",
-         _generation->generation_mode() == YOUNG? "YOUNG": _generation->generation_mode() == OLD? "OLD": "GLOBAL");
-  fflush(stdout);
-#endif
-
   // Continue concurrent mark, do not reset regions, do not mark roots, do not collect $200.
   _allow_preemption.set();
   entry_mark();
   _allow_preemption.unset();
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
 
-#ifdef KELVIN_PARANOID
-  printf("S_Old_GC::collect(), before vmop_entry_final_mark(),  generation_mode is: %s\n",
-         _generation->generation_mode() == YOUNG? "YOUNG": _generation->generation_mode() == OLD? "OLD": "GLOBAL");
-  fflush(stdout);
-#endif
   // Complete marking under STW
   vmop_entry_final_mark();
 

@@ -37,8 +37,6 @@
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
 
-#undef KELVIN_PARANOID
-
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   if (a._garbage > b._garbage)
     return -1;
@@ -163,20 +161,11 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
 
-#ifdef KELVIN_PARANOID
-  printf("choose_collection_set()\n  : ");
-  fflush(stdout);
-#endif
-
   if (immediate_percent <= ShenandoahImmediateThreshold) {
 
     if (old_heuristics != NULL) {
       if (old_heuristics->prime_collection_set(collection_set)) {
         result = true;
-#ifdef KELVIN_PARANOID
-        // Demarcate end of old regions.
-        printf("@ ");  fflush(stdout);
-#endif
       }
     }
     // else, this is global collection and doesn't need to prime_collection_set
@@ -206,7 +195,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      byte_size_in_proper_unit(collection_set->garbage()),
                      proper_unit_for_byte_size(collection_set->garbage()),
                      cset_percent);
-
   return result;
 }
 

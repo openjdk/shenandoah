@@ -27,9 +27,6 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_DEBUG_LIVENESS
-
 ShenandoahMarkingContext::ShenandoahMarkingContext(MemRegion heap_region, MemRegion bitmap_region, size_t num_regions) :
   _mark_bit_map(heap_region, bitmap_region),
   _top_bitmaps(NEW_C_HEAP_ARRAY(HeapWord*, num_regions, mtGC)),
@@ -93,23 +90,10 @@ void ShenandoahMarkingContext::clear_bitmap(ShenandoahHeapRegion* r) {
       _mark_bit_map.clear_range_large(MemRegion(bottom, top_bitmap));
       _top_bitmaps[r->index()] = bottom;
     }
-#ifdef KELVIN_DEBUG_LIVENESS
-    printf("ShenandoahMarkingContext::clear_bitmap() is clearing live data for %s Region " SIZE_FORMAT "\n",
-           affiliation_name(r->affiliation()), r->index());
-    fflush(stdout);
-#endif
     r->clear_live_data();
     assert(is_bitmap_clear_range(bottom, r->end()),
            "Region " SIZE_FORMAT " should have no marks in bitmap", r->index());
   }
-#ifdef KELVIN_DEBUG_LIVENESS
-  else {
-    printf("ShenandoahMarkingContext::clear_bitmap() is NOT clearing live data for %s Region " SIZE_FORMAT "\n",
-           affiliation_name(r->affiliation()), r->index());
-    fflush(stdout);
-  }
-#endif
-
   // heap iterators include FREE regions, which don't need to be cleared.
   // TODO: would be better for certain iterators to not include FREE regions.
 }
