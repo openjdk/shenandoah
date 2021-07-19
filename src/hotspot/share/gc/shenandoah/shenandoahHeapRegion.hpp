@@ -172,8 +172,8 @@ public:
   void make_regular_bypass();
   void make_humongous_start();
   void make_humongous_cont();
-  void make_humongous_start_bypass();
-  void make_humongous_cont_bypass();
+  void make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation);
+  void make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation);
   void make_pinned();
   void make_unpinned();
   void make_cset();

@@ -67,7 +67,7 @@ HeapWord* ShenandoahMarkBitMap::get_next_marked_addr(const HeapWord* addr,
   assert(limit != NULL, "limit must not be NULL");
   assert(limit <= tams, "limit must be less than TAMS");
 #endif
-    
+
   // Round addr up to a possible object boundary to be safe.
   size_t const addr_offset = address_to_index(align_up(addr, HeapWordSize << LogMinObjAlignment));
   size_t const limit_offset = address_to_index(limit);

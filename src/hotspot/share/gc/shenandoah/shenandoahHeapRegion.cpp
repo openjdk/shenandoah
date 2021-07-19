@@ -157,9 +157,12 @@ void ShenandoahHeapRegion::make_humongous_start() {
   }
 }
 
-void ShenandoahHeapRegion::make_humongous_start_bypass() {
+void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
+  log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " to %s in make_humongous_start_bypass",
+                index(), affiliation_name(affiliation));
+  set_affiliation(affiliation);
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -187,9 +190,12 @@ void ShenandoahHeapRegion::make_humongous_cont() {
   }
 }
 
-void ShenandoahHeapRegion::make_humongous_cont_bypass() {
+void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
+  log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " to %s in make_humongous_cont_bypass",
+                index(), affiliation_name(affiliation));
+  set_affiliation(affiliation);
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -870,6 +876,14 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
     fflush(stdout);
   }
 #endif
+
+  {
+    ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
+    log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT
+                  ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT "\n",
+                  index(), affiliation_name(_affiliation), affiliation_name(new_affiliation),
+                  p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
+  }
 
 #ifdef ASSERT
   {

@@ -74,7 +74,7 @@ public:
   inline void capture_top_at_mark_start(ShenandoahHeapRegion* r);
   inline void reset_top_at_mark_start(ShenandoahHeapRegion* r);
   void initialize_top_at_mark_start(ShenandoahHeapRegion* r);
-  
+
   HeapWord* top_bitmap(ShenandoahHeapRegion* r);
 
   inline void reset_top_bitmap(ShenandoahHeapRegion *r);
