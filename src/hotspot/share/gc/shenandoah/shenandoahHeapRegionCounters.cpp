@@ -74,8 +74,6 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
 
     if (ShenandoahLogRegionSampling) {
       const char* name = ShenandoahRegionSamplingFile ? ShenandoahRegionSamplingFile : "./shenandoahSnapshots_pid%p.log";
-      if (name == NULL || name[0] == '\0') ShenandoahRegionSamplingFile = "./shenandoahSnapshots_pid%p.log";
-
       _log_file = new ShenandoahLogFileOutput(name, _timestamp->get_value());
       _log_file->initialize(NULL, tty);
     }
