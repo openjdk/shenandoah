@@ -97,9 +97,6 @@
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-#undef KELVIN_VERBOSE
-#undef KELVIN_DEBUG_LIVENESS
-
 class ShenandoahPretouchHeapTask : public AbstractGangTask {
 private:
   ShenandoahRegionIterator _regions;
@@ -900,11 +897,6 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     // If retiring the plab created a filler object, then we
     // need to register it with our card scanner so it can
     // safely walk the region backing the plab.
-#ifdef KELVIN_VERBOSE
-    printf("SH:retire_plab[%llx, %llx] registering object at top: %llx\n",
-           (unsigned long long) plab->bottom(), (unsigned long long) plab->end(), (unsigned long long) plab->top());
-    fflush(stdout);
-#endif
     card_scan()->register_object_wo_lock(top);
   }
 }
@@ -2540,10 +2532,6 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   assert(_liveness_cache != NULL, "sanity");
   ShenandoahLiveData* ld = _liveness_cache[worker_id];
 
-#ifdef KELVIN_DEBUG_LIVENESS
-  printf("worker[%u] flushing liveness cache for all " SIZE_FORMAT " regions in final_mark\n", worker_id, num_regions());
-  fflush(stdout);
-#endif
   for (uint i = 0; i < num_regions(); i++) {
     ShenandoahLiveData live = ld[i];
     if (live > 0) {
@@ -2562,11 +2550,6 @@ template<>
 void ShenandoahGenerationRegionClosure<YOUNG>::heap_region_do(ShenandoahHeapRegion* region) {
   // Visit young and free regions
   if (region->affiliation() != OLD_GENERATION) {
-#ifdef KELVIN_VERBOSE
-    printf("iterating over SGRC<YOUNG> with non-old %s region [%llx, %llx]\n", affiliation_name(region->affiliation()),
-           (unsigned long long) region->bottom(), (unsigned long long) region->end());
-    fflush(stdout);
-#endif
     _cl->heap_region_do(region);
   }
 }
@@ -2575,22 +2558,12 @@ template<>
 void ShenandoahGenerationRegionClosure<OLD>::heap_region_do(ShenandoahHeapRegion* region) {
   // Visit old and free regions
   if (region->affiliation() != YOUNG_GENERATION) {
-#ifdef KELVIN_VERBOSE
-    printf("iterating over SGRC<OLD> with non-young %s region [%llx, %llx]\n", affiliation_name(region->affiliation()),
-           (unsigned long long) region->bottom(), (unsigned long long) region->end());
-    fflush(stdout);
-#endif
     _cl->heap_region_do(region);
   }
 }
 
 template<>
 void ShenandoahGenerationRegionClosure<GLOBAL>::heap_region_do(ShenandoahHeapRegion* region) {
-#ifdef KELVIN_VERBOSE
-    printf("iterating over SGRC<GLOBAL> with any %s region [%llx, %llx]\n", affiliation_name(region->affiliation()),
-           (unsigned long long) region->bottom(), (unsigned long long) region->end());
-    fflush(stdout);
-#endif
   _cl->heap_region_do(region);
 }
 
@@ -2619,10 +2592,6 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
     if (r == nullptr)
       break;
     if (r->is_old()) {
-#ifdef KELVIN_VERBOSE
-      printf("SH::verify_rem_set_at_mark() for region [%llx, %llx]\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->top());
-#endif
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
@@ -2636,10 +2605,6 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
           // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
         }
         // else, this humongous object is not marked so no need to verify its internal pointers
-#ifdef KELVIN_VERBOSE
-        printf(" vr(%llx, %llx)\n", (unsigned long long) obj_addr, (unsigned long long) obj->size() * 8);
-        fflush(stdout);
-#endif
         if (!scanner->verify_registration(obj_addr, obj->size())) {
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                           "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2656,10 +2621,6 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
               obj->oop_iterate(&check_interesting_pointers);
             }
             // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-#ifdef KELVIN_VERBOSE
-            printf(" vr(%llx, %llx)\n", (unsigned long long) obj_addr, (unsigned long long) obj->size() * 8);
-            fflush(stdout);
-#endif
             if (!scanner->verify_registration(obj_addr, obj->size())) {
               ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                             "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2706,10 +2667,6 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
     if (r == nullptr)
       break;
     if (r->is_old() && !r->is_cset()) {
-#ifdef KELVIN_VERBOSE
-      printf("SH::verify_rem_set_at_update_ref() for region [%llx, %llx]\n",
-             (unsigned long long) r->bottom(), (unsigned long long) r->top());
-#endif
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
@@ -2724,10 +2681,6 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
           // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
         }
         // else, this humongous object is not live so no need to verify its internal pointers
-#ifdef KELVIN_VERBOSE
-        printf(" vr(%llx, %llx)\n", (unsigned long long) obj_addr, (unsigned long long) obj->size() * 8);
-        fflush(stdout);
-#endif
         if (!scanner->verify_registration(obj_addr, obj->size())) {
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                           "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2745,10 +2698,6 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
               obj->oop_iterate(&check_interesting_pointers);
             }
             // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-#ifdef KELVIN_VERBOSE
-            printf(" vr(%llx, %llx)\n", (unsigned long long) obj_addr, (unsigned long long) obj->size() * 8);
-            fflush(stdout);
-#endif
             if (!scanner->verify_registration(obj_addr, obj->size())) {
               ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                                "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
@@ -2779,10 +2728,6 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
               obj->oop_iterate(&check_interesting_pointers);
             }
             // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-#ifdef KELVIN_VERBOSE
-            printf(" vr(%llx, %llx)\n", (unsigned long long) obj_addr, (unsigned long long) obj->size() * 8);
-            fflush(stdout);
-#endif
             if (!scanner->verify_registration(obj_addr, obj->size())) {
               ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
                                                "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
