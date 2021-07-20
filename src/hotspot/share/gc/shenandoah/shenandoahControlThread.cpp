@@ -449,6 +449,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");
 
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
+  young_generation->set_mark_incomplete();
   old_generation->set_mark_incomplete();
   service_concurrent_cycle(young_generation, cause, true);
   if (!heap->cancelled_gc()) {
@@ -507,8 +508,7 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   // precisely where the regulator is allowed to cancel a GC.
   ShenandoahOldGC gc(generation, _allow_old_preemption);
   if (gc.collect(cause)) {
-    // Cycle is complete
-    // Young generation no longer needs this reference to the old concurrent mark so clean it up.
+    // Old collection is complete.  The young generation no longer needs this reference to the old concurrent mark so clean it up.
     heap->young_generation()->set_old_gen_task_queues(NULL);
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
@@ -528,8 +528,7 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   }
 }
 
-void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* generation, GCCause::Cause cause,
-                                                       bool do_old_gc_bootstrap) {
+void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* generation, GCCause::Cause cause, bool do_old_gc_bootstrap) {
   // Normal cycle goes via all concurrent phases. If allocation failure (af) happens during
   // any of the concurrent phases, it first degrades to Degenerated GC and completes GC there.
   // If second allocation failure happens during Degenerated GC cycle (for example, when GC
@@ -573,13 +572,8 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
-  ShenandoahConcurrentGC gc(generation);
-  if (do_old_gc_bootstrap) {
-    gc.do_old_gc_bootstrap();
-  }
-  bool status = gc.collect(cause);
-  gc.dont_do_old_gc_bootstrap();
-  if (status) {
+  ShenandoahConcurrentGC gc(generation, do_old_gc_bootstrap);
+  if (gc.collect(cause)) {
     // Cycle is complete
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();

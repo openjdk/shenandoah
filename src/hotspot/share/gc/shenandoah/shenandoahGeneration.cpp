@@ -175,6 +175,7 @@ void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
     ShenandoahHeap::heap()->old_generation()->reset_mark_bitmap();
   }
 
+  // Capture Top At Mark Start for this generation (typically young)
   ShenandoahResetUpdateRegionStateClosure cl;
     // Capture Top At Mark Start for this generation (typically young)
   parallel_heap_region_iterate(&cl);
@@ -298,7 +299,6 @@ void ShenandoahGeneration::scan_remembered_set() {
   assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-
   uint nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 

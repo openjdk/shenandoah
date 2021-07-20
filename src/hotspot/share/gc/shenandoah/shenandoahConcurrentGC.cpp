@@ -46,11 +46,10 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
-ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation) :
+ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap) :
   _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
-  _mixed_evac (false),
-  _do_old_gc_bootstrap (false),
+  _do_old_gc_bootstrap(do_old_gc_bootstrap),
   _generation(generation) {
 }
 
@@ -450,12 +449,16 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   op_cleanup_complete();
 }
 
-void ShenandoahConcurrentGC::op_reset(bool do_old_gc_bootstrap) {
+void ShenandoahConcurrentGC::op_reset() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   if (ShenandoahPacing) {
     heap->pacer()->setup_for_reset();
   }
-  _generation->prepare_gc(do_old_gc_bootstrap);
+  if (_do_old_gc_bootstrap) {
+    heap->global_generation()->prepare_gc();
+  } else {
+    _generation->prepare_gc();
+  }
 }
 
 class ShenandoahInitMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -482,7 +485,7 @@ public:
   bool is_thread_safe() { return true; }
 };
 
-void ShenandoahConcurrentGC::op_init_mark(bool do_old_gc_bootstrap) {
+void ShenandoahConcurrentGC::op_init_mark() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(Thread::current()->is_VM_thread(), "can only do this in VMThread");
@@ -501,16 +504,11 @@ void ShenandoahConcurrentGC::op_init_mark(bool do_old_gc_bootstrap) {
 
   _generation->set_concurrent_mark_in_progress(true);
 
-  if (do_old_gc_bootstrap) {
+  if (_do_old_gc_bootstrap) {
     // Update region state for both young and old regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
-
-    assert(_generation->is_bitmap_clear(), "need clear marking bitmap");
-    assert(!_generation->is_mark_complete(), "should not be complete");
-
-    _generation->parallel_heap_region_iterate(&cl);
-    heap->old_generation()->parallel_heap_region_iterate(&cl);
+    heap->parallel_heap_region_iterate(&cl);
   } else {
     // Update region state for only young regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);

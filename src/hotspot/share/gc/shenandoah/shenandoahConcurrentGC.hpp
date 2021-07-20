@@ -48,14 +48,13 @@ protected:
 
 private:
   ShenandoahDegenPoint        _degen_point;
-  bool                        _mixed_evac; // true iff most recent evacuation includes old-gen HeapRegions
-  bool                        _do_old_gc_bootstrap;
+  const bool                  _do_old_gc_bootstrap;
 
 protected:
   ShenandoahGeneration* const _generation;
 
 public:
-  ShenandoahConcurrentGC(ShenandoahGeneration* generation);
+  ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap = false);
   bool collect(GCCause::Cause cause);
   ShenandoahDegenPoint degen_point() const;
   void do_old_gc_bootstrap();
