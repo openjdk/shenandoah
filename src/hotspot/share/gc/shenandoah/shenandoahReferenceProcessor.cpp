@@ -396,9 +396,9 @@ oop ShenandoahReferenceProcessor::drop(oop reference, ReferenceType type) {
   reference_set_discovered<T>(reference, NULL);
   // When this reference was discovered, it would not have been marked. If it ends up surviving
   // the cycle, we need to dirty the card if the reference is old and the referent is young.  Note
-  // that if the reference is not dropped, then its pointer to the referent will be nulled before
+  // that if the reference is not dropped, then its pointer to the referent will be cleared before
   // evacuation begins so card does not need to be dirtied.
-  if (heap->mode()->is_generational() && heap->is_old(reference) && heap->is_in_young(referent)) {
+  if (heap->mode()->is_generational() && heap->is_in_old(reference) && heap->is_in_young(referent)) {
     // Note: would be sufficient to mark only the card that holds the start of this Reference object.
     heap->card_scan()->mark_range_as_dirty(cast_from_oop<HeapWord*>(reference), reference->size());
   }
