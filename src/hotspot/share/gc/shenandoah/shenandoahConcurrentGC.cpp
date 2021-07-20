@@ -49,6 +49,7 @@
 ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap) :
   _mark(generation),
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
+  _mixed_evac (false),
   _do_old_gc_bootstrap(do_old_gc_bootstrap),
   _generation(generation) {
 }
@@ -57,22 +58,14 @@ ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
   return _degen_point;
 }
 
-void ShenandoahConcurrentGC::do_old_gc_bootstrap() {
-  _do_old_gc_bootstrap = true;
-}
-
-void ShenandoahConcurrentGC::dont_do_old_gc_bootstrap() {
-  _do_old_gc_bootstrap = false;
-}
-
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
   // Reset for upcoming marking
-  entry_reset(_do_old_gc_bootstrap);
+  entry_reset();
 
   // Start initial mark under STW
-  vmop_entry_init_mark(_do_old_gc_bootstrap);
+  vmop_entry_init_mark();
 
   // Concurrent remembered set scanning
   if (_generation->generation_mode() == YOUNG) {
@@ -155,13 +148,13 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   return true;
 }
 
-void ShenandoahConcurrentGC::vmop_entry_init_mark(bool do_old_gc_bootstrap) {
+void ShenandoahConcurrentGC::vmop_entry_init_mark() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->stw_collection_counters());
   ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::init_mark_gross);
 
   heap->try_inject_alloc_failure();
-  VM_ShenandoahInitMark op(this, do_old_gc_bootstrap);
+  VM_ShenandoahInitMark op(this, _do_old_gc_bootstrap);
   VMThread::execute(&op); // jump to entry_init_mark() under safepoint
 }
 
@@ -195,7 +188,7 @@ void ShenandoahConcurrentGC::vmop_entry_final_updaterefs() {
   VMThread::execute(&op);
 }
 
-void ShenandoahConcurrentGC::entry_init_mark(bool do_old_gc_bootstrap) {
+void ShenandoahConcurrentGC::entry_init_mark() {
   char msg[1024];
   init_mark_event_message(msg, sizeof(msg));
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::init_mark);
@@ -211,7 +204,7 @@ void ShenandoahConcurrentGC::entry_init_mark(bool do_old_gc_bootstrap) {
     _generation->swap_remembered_set();
   }
 
-  op_init_mark(do_old_gc_bootstrap);
+  op_init_mark();
 }
 
 void ShenandoahConcurrentGC::entry_final_mark() {
@@ -248,7 +241,7 @@ void ShenandoahConcurrentGC::entry_final_updaterefs() {
   op_final_updaterefs();
 }
 
-void ShenandoahConcurrentGC::entry_reset(bool do_old_gc_bootstrap) {
+void ShenandoahConcurrentGC::entry_reset() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
   static const char* msg = "Concurrent reset";
@@ -260,7 +253,7 @@ void ShenandoahConcurrentGC::entry_reset(bool do_old_gc_bootstrap) {
                               "concurrent reset");
 
   heap->try_inject_alloc_failure();
-  op_reset(do_old_gc_bootstrap);
+  op_reset();
 }
 
 void ShenandoahConcurrentGC::entry_mark_roots() {
@@ -454,11 +447,7 @@ void ShenandoahConcurrentGC::op_reset() {
   if (ShenandoahPacing) {
     heap->pacer()->setup_for_reset();
   }
-  if (_do_old_gc_bootstrap) {
-    heap->global_generation()->prepare_gc();
-  } else {
-    _generation->prepare_gc();
-  }
+  _generation->prepare_gc(_do_old_gc_bootstrap);
 }
 
 class ShenandoahInitMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -509,6 +498,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
     heap->parallel_heap_region_iterate(&cl);
+    heap->old_generation()->parallel_heap_region_iterate(&cl);
   } else {
     // Update region state for only young regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);

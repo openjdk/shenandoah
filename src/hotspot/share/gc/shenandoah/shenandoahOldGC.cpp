@@ -65,7 +65,7 @@ public:
 
 
 ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption) :
-  ShenandoahConcurrentGC(generation), _allow_preemption(allow_preemption) {
+    ShenandoahConcurrentGC(generation, false), _allow_preemption(allow_preemption) {
   _coalesce_and_fill_region_array = NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC);
 }
 
@@ -90,6 +90,7 @@ void ShenandoahOldGC::op_final_mark() {
   }
 
   if (!heap->cancelled_gc()) {
+    assert(_mark.generation()->generation_mode() == OLD, "Generation of Old-Gen GC should be OLD");
     _mark.finish_mark();
     assert(!heap->cancelled_gc(), "STW mark cannot OOM");
 

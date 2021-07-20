@@ -177,7 +177,6 @@ void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
 
   // Capture Top At Mark Start for this generation (typically young)
   ShenandoahResetUpdateRegionStateClosure cl;
-    // Capture Top At Mark Start for this generation (typically young)
   parallel_heap_region_iterate(&cl);
   if (do_old_gc_bootstrap) {
     // Capture top at mark start for both old-gen regions also.  Note that do_old_gc_bootstrap is only true if generation is YOUNG.

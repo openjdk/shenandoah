@@ -48,22 +48,21 @@ protected:
 
 private:
   ShenandoahDegenPoint        _degen_point;
+  bool                        _mixed_evac; // true iff most recent evacuation includes old-gen HeapRegions
   const bool                  _do_old_gc_bootstrap;
 
 protected:
   ShenandoahGeneration* const _generation;
 
 public:
-  ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap = false);
+  ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap);
   bool collect(GCCause::Cause cause);
   ShenandoahDegenPoint degen_point() const;
-  void do_old_gc_bootstrap();
-  void dont_do_old_gc_bootstrap();
 
 private:
   // Entry points to STW GC operations, these cause a related safepoint, that then
   // call the entry method below
-  void vmop_entry_init_mark(bool do_old_gc_bootstrap);
+  void vmop_entry_init_mark();
 
 protected:
   void vmop_entry_final_mark();
@@ -74,14 +73,14 @@ private:
 
   // Entry methods to normally STW GC operations. These set up logging, monitoring
   // and workers for net VM operation
-  void entry_init_mark(bool do_old_gc_bootstrap);
+  void entry_init_mark();
   void entry_final_mark();
   void entry_init_updaterefs();
   void entry_final_updaterefs();
 
   // Entry methods to normally concurrent GC operations. These set up logging, monitoring
   // for concurrent operation.
-  void entry_reset(bool do_old_gc_bootstrap);
+  void entry_reset();
   void entry_mark_roots();
 
 protected:
@@ -102,8 +101,8 @@ private:
   void entry_cleanup_complete();
 
   // Actual work for the phases
-  void op_reset(bool do_old_gc_bootstrap);
-  void op_init_mark(bool do_old_gc_bootstrap);
+  void op_reset();
+  void op_init_mark();
   void op_mark_roots();
   void op_mark();
   void op_thread_roots();

@@ -59,7 +59,7 @@ public:
 class VM_ShenandoahInitMark: public VM_ShenandoahOperation {
 private:
   ShenandoahConcurrentGC* const _gc;
-  bool _do_old_gc_bootstrap;
+  const bool _do_old_gc_bootstrap;
 public:
   VM_ShenandoahInitMark(ShenandoahConcurrentGC* gc, bool do_old_gc_bootstrap) :
     VM_ShenandoahOperation(),

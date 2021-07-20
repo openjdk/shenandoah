@@ -443,6 +443,7 @@ void ShenandoahHeapRegion::oop_fill_and_coalesce() {
 
   // Expect this to be invoked only from within threads perfoming old-gen GC, and expect
   // old-gen marking to be completed before these threads invoke this service.
+  assert(heap->active_generation()->generation_mode() == OLD, "sanity");
   assert(heap->active_generation()->is_mark_complete(), "sanity");
 
   while (obj_addr < t) {
