@@ -99,13 +99,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     entry_weak_roots();
   }
 
-  // Coalesce and fill objects _after_ weak root processing because coalescing
-  // invalidates the mark bitmap.
-  entry_coalesce_and_fill();
-
-  // Prepare for old evacuations (actual evacuations will happen on subsequent young collects).
-  entry_old_evacuations();
-
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.
   entry_cleanup_early();
@@ -121,12 +114,18 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     entry_class_unloading();
   }
 
-  // Processing strong roots
-  // This may be skipped if there is nothing to update/evacuate.
-  // If so, strong_root_in_progress would be unset.
-  if (heap->is_concurrent_strong_root_in_progress()) {
-    entry_strong_roots();
-  }
+  // Coalesce and fill objects _after_ weak root processing and class unloading.
+  // Weak root and reference processing makes assertions about unmarked referents
+  // that will fail if they've been overwritten with filler objects. There is also
+  // a case in the LRB that permits access to from-space objects for the purpose
+  // of class unloading that is unlikely to function correctly if the object has
+  // been filled.
+  entry_coalesce_and_fill();
+
+  // Prepare for old evacuations (actual evacuations will happen on subsequent young collects).
+  entry_old_evacuations();
+
+  assert(!heap->is_concurrent_strong_root_in_progress(), "No evacuations during old gc.");
 
   entry_rendezvous_roots();
   return true;
