@@ -415,7 +415,7 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
     case YOUNG: {
       // Run a young cycle. This might or might not, have interrupted an ongoing
       // concurrent mark in the old generation. We need to think about promotions
-      // in this case.  Promoted objects should be above the TAMS in the old regions
+      // in this case. Promoted objects should be above the TAMS in the old regions
       // they end up in, but we have to be sure we don't promote into any regions
       // that are in the cset.
       log_info(gc, ergo)("Start GC cycle (YOUNG)");
