@@ -82,8 +82,6 @@ void ShenandoahCardTable::clear() {
   CardTable::clear(_whole_heap);
 }
 
-static bool already_initialized = false;
-
 // TODO: This service is not currently used because we are not able to swap _read_byte_map_base and
 // _write_byte_map_base pointers.  If we were able to do so, we would invoke clear_read_table "immediately"
 // following the end of concurrent remembered set scanning so that this read card table would be ready

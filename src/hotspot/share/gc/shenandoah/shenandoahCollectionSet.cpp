@@ -89,6 +89,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _garbage += r->garbage();
   _used += r->used();
   _has_old_regions |= r->is_old();
+
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
 }

@@ -413,7 +413,11 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
 
   switch (generation) {
     case YOUNG: {
-      // Run a young cycle. This might or might not, have interrupted an ongoing concurrent mark in the old generation.
+      // Run a young cycle. This might or might not, have interrupted an ongoing
+      // concurrent mark in the old generation. We need to think about promotions
+      // in this case.  Promoted objects should be above the TAMS in the old regions
+      // they end up in, but we have to be sure we don't promote into any regions
+      // that are in the cset.
       log_info(gc, ergo)("Start GC cycle (YOUNG)");
       service_concurrent_cycle(heap->young_generation(), cause, false);
       heap->young_generation()->log_status();
@@ -508,7 +512,8 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   // precisely where the regulator is allowed to cancel a GC.
   ShenandoahOldGC gc(generation, _allow_old_preemption);
   if (gc.collect(cause)) {
-    // Old collection is complete.  The young generation no longer needs this reference to the old concurrent mark so clean it up.
+    // Old collection is complete, the young generation no longer needs this
+    // reference to the old concurrent mark so clean it up.
     heap->young_generation()->set_old_gen_task_queues(NULL);
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
