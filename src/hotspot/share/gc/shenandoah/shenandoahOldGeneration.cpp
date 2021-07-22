@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
+#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 
@@ -128,7 +129,10 @@ public:
 };
 
 ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
-  : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity) {}
+  : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity) {
+  // Always clear references for old generation
+  ref_processor()->set_soft_reference_policy(true);
+}
 
 const char* ShenandoahOldGeneration::name() const {
   return "OLD";
