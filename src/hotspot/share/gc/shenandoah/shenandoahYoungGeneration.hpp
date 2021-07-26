@@ -44,8 +44,9 @@ public:
   bool contains(ShenandoahHeapRegion* region) const;
 
   void promote_tenured_regions();
+#ifdef KELVIN_DEPRECATE
   void promote_all_regions();
-
+#endif
   void set_old_gen_task_queues(ShenandoahObjToScanQueueSet* old_gen_queues) {
     _old_gen_task_queues = old_gen_queues;
   }

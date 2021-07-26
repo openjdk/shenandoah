@@ -86,6 +86,7 @@ void ShenandoahYoungGeneration::promote_tenured_regions() {
   log_info(gc)("Promoted " SIZE_FORMAT " regions.", task._promoted);
 }
 
+#ifdef KELVIN_DEPRECATE
 void ShenandoahYoungGeneration::promote_all_regions() {
   // This only happens on a full stw collect. No allocations can happen here.
   shenandoah_assert_safepoint();
@@ -100,6 +101,7 @@ void ShenandoahYoungGeneration::promote_all_regions() {
   assert(_affiliated_region_count == 0, "young generation must not have affiliated regions after reset");
   _used = 0;
 }
+#endif
 
 bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {
   // TODO: why not test for equals YOUNG_GENERATION?  As written, returns true for regions that are FREE

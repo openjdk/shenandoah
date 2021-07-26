@@ -372,6 +372,155 @@ void ShenandoahFullGC::phase1_mark_heap() {
   heap->parallel_cleaning(true /* full_gc */);
 }
 
+class ShenandoahPrepareForGenerationalCompactionObjectClosure : public ObjectClosure {
+private:
+  PreservedMarks*          const _preserved_marks;
+  ShenandoahHeap*          const _heap;
+  GrowableArray<ShenandoahHeapRegion*>& _empty_regions;
+  int _empty_regions_pos;
+  ShenandoahHeapRegion*          _old_to_region;
+  ShenandoahHeapRegion*          _young_to_region;
+  ShenandoahHeapRegion*          _from_region;
+  ShenandoahRegionAffiliation    _from_affiliation;
+  HeapWord*                      _old_compact_point;
+  HeapWord*                      _young_compact_point;
+
+public:
+  ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,
+                                                          GrowableArray<ShenandoahHeapRegion*>& empty_regions,
+                                                          ShenandoahHeapRegion* old_to_region,
+                                                          ShenandoahHeapRegion* young_to_region) :
+      _preserved_marks(preserved_marks),
+      _heap(ShenandoahHeap::heap()),
+      _empty_regions(empty_regions),
+      _empty_regions_pos(0),
+      _old_to_region(old_to_region),
+      _young_to_region(young_to_region),
+      _from_region(NULL),
+      _old_compact_point((old_to_region != nullptr)? old_to_region->bottom(): nullptr),
+      _young_compact_point((young_to_region != nullptr)? young_to_region->bottom(): nullptr) {}
+
+
+  void set_from_region(ShenandoahHeapRegion* from_region) {
+    _from_region = from_region;
+    _from_affiliation = from_region->affiliation();
+    if (_from_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      if (_old_to_region == nullptr) {
+        _old_to_region = from_region;
+        _old_compact_point = from_region->bottom();
+      }
+    } else {
+      assert(_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION, "from_region must be OLD or YOUNG");
+      if (_young_to_region == nullptr) {
+        _young_to_region = from_region;
+        _young_compact_point = from_region->bottom();
+      }
+    }
+  }
+
+  void finish() {
+    finish_old_region();
+    finish_young_region();
+  }
+
+  void finish_old_region() {
+    if (_old_to_region != nullptr) {
+      _old_to_region->set_new_top(_old_compact_point);
+      _old_to_region = nullptr;
+    }
+  }
+
+  void finish_young_region() {
+    if (_young_to_region != nullptr) {
+      _young_to_region->set_new_top(_young_compact_point);
+      _young_to_region = nullptr;
+    }
+  }
+
+  bool is_compact_same_region() {
+    return (_from_region == _old_to_region) || (_from_region == _young_to_region);
+  }
+
+  int empty_regions_pos() {
+    return _empty_regions_pos;
+  }
+
+  void do_object(oop p) {
+    assert(_from_region != NULL, "must set before work");
+    assert((_from_region->bottom() <= cast_from_oop<HeapWord*>(p)) && (cast_from_oop<HeapWord*>(p) < _from_region->top()),
+           "Object must reside in _from_region");
+    assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
+    assert(!_heap->complete_marking_context()->allocated_after_mark_start(p), "must be truly marked");
+
+    size_t obj_size = p->size();
+    if (_from_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      assert(_old_to_region != nullptr, "_old_to_region should not be NULL when compacting OLD _from_region");
+      if (_old_compact_point + obj_size > _old_to_region->end()) {
+        ShenandoahHeapRegion* new_to_region;
+
+        // Object does not fit.  Get a new _old_to_region.
+        finish_old_region();
+        if (_empty_regions_pos < _empty_regions.length()) {
+          new_to_region = _empty_regions.at(_empty_regions_pos);
+          _empty_regions_pos++;
+          new_to_region->set_affiliation(OLD_GENERATION);
+        } else {
+          // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
+          // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
+          // Since we're out of empty regions, let's use _from_region to hold the results of its own compaction.
+          new_to_region = _from_region;
+        }
+
+        assert(new_to_region != _old_to_region, "must not reuse same OLD to-region");
+        assert(new_to_region != NULL, "must not be NULL");
+        _old_to_region = new_to_region;
+        _old_compact_point = _old_to_region->bottom();
+      }
+
+      // Object fits into current region, record new location:
+      assert(_old_compact_point + obj_size <= _old_to_region->end(), "must fit");
+      shenandoah_assert_not_forwarded(NULL, p);
+      _preserved_marks->push_if_necessary(p, p->mark());
+      p->forward_to(oop(_old_compact_point));
+      _old_compact_point += obj_size;
+    } else {
+      assert(_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION,
+             "_from_region must be OLD_GENERATION or YOUNG_GENERATION");
+
+      assert(_young_to_region != nullptr, "_young_to_region should not be NULL when compacting YOUNG _from_region");
+      if (_young_compact_point + obj_size > _young_to_region->end()) {
+        ShenandoahHeapRegion* new_to_region;
+
+        // Object does not fit.  Get a new _young_to_region.
+        finish_young_region();
+        if (_empty_regions_pos < _empty_regions.length()) {
+          new_to_region = _empty_regions.at(_empty_regions_pos);
+          _empty_regions_pos++;
+          new_to_region->set_affiliation(YOUNG_GENERATION);
+        } else {
+          // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
+          // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
+          // Since we're out of empty regions, let's use _from_region to hold the results of its own compaction.
+          new_to_region = _from_region;
+        }
+
+        assert(new_to_region != _young_to_region, "must not reuse same OLD to-region");
+        assert(new_to_region != NULL, "must not be NULL");
+        _young_to_region = new_to_region;
+        _young_compact_point = _old_to_region->bottom();
+      }
+
+      // Object fits into current region, record new location:
+      assert(_young_compact_point + obj_size <= _young_to_region->end(), "must fit");
+      shenandoah_assert_not_forwarded(NULL, p);
+      _preserved_marks->push_if_necessary(p, p->mark());
+      p->forward_to(oop(_young_compact_point));
+      _young_compact_point += obj_size;
+    }
+  }
+};
+
+
 class ShenandoahPrepareForCompactionObjectClosure : public ObjectClosure {
 private:
   PreservedMarks*          const _preserved_marks;
@@ -400,14 +549,7 @@ public:
 
   void finish_region() {
     assert(_to_region != NULL, "should not happen");
-    if (_heap->mode()->is_generational() && _to_region->affiliation() == FREE) {
-      // TODO: Changing this region to young during compaction may not be
-      // technically correct here because it completely disregards the ages
-      // and origins of the objects being moved. It is, however, certainly
-      // more correct than putting live objects into a region without a
-      // generational affiliation.
-      _to_region->set_affiliation(YOUNG_GENERATION);
-    }
+    assert(!_heap->mode()->is_generational(), "Generational GC should use different Closure");
     _to_region->set_new_top(_compact_point);
   }
 
@@ -491,31 +633,55 @@ public:
     // Sliding compaction. Walk all regions in the slice, and compact them.
     // Remember empty regions and reuse them as needed.
     ResourceMark rm;
-
     GrowableArray<ShenandoahHeapRegion*> empty_regions((int)_heap->num_regions());
 
-    ShenandoahPrepareForCompactionObjectClosure cl(_preserved_marks->get(worker_id), empty_regions, from_region);
+    if (_heap->mode()->is_generational()) {
+      ShenandoahHeapRegion* old_to_region = (from_region->is_old())? from_region: nullptr;
+      ShenandoahHeapRegion* young_to_region = (from_region->is_young())? from_region: nullptr;
+      ShenandoahPrepareForGenerationalCompactionObjectClosure cl(_preserved_marks->get(worker_id), empty_regions,
+                                                                 old_to_region, young_to_region);
+      while (from_region != NULL) {
+        assert(is_candidate_region(from_region), "Sanity");
+        cl.set_from_region(from_region);
+        if (from_region->has_live()) {
+          _heap->marked_object_iterate(from_region, &cl);
+        }
 
-    while (from_region != NULL) {
-      assert(is_candidate_region(from_region), "Sanity");
-
-      cl.set_from_region(from_region);
-      if (from_region->has_live()) {
-        _heap->marked_object_iterate(from_region, &cl);
-      }
-
-      // Compacted the region to somewhere else? From-region is empty then.
-      if (!cl.is_compact_same_region()) {
-        empty_regions.append(from_region);
+        // Compacted the region to somewhere else? From-region is empty then.
+        if (!cl.is_compact_same_region()) {
+          empty_regions.append(from_region);
+        }
       }
       from_region = it.next();
-    }
-    cl.finish_region();
+      cl.finish();
 
-    // Mark all remaining regions as empty
-    for (int pos = cl.empty_regions_pos(); pos < empty_regions.length(); ++pos) {
-      ShenandoahHeapRegion* r = empty_regions.at(pos);
-      r->set_new_top(r->bottom());
+      // Mark all remaining regions as empty
+      for (int pos = cl.empty_regions_pos(); pos < empty_regions.length(); ++pos) {
+        ShenandoahHeapRegion* r = empty_regions.at(pos);
+        r->set_new_top(r->bottom());
+      }
+    } else {
+      ShenandoahPrepareForCompactionObjectClosure cl(_preserved_marks->get(worker_id), empty_regions, from_region);
+      while (from_region != NULL) {
+        assert(is_candidate_region(from_region), "Sanity");
+        cl.set_from_region(from_region);
+        if (from_region->has_live()) {
+          _heap->marked_object_iterate(from_region, &cl);
+        }
+
+        // Compacted the region to somewhere else? From-region is empty then.
+        if (!cl.is_compact_same_region()) {
+          empty_regions.append(from_region);
+        }
+      }
+      from_region = it.next();
+      cl.finish_region();
+
+      // Mark all remaining regions as empty
+      for (int pos = cl.empty_regions_pos(); pos < empty_regions.length(); ++pos) {
+        ShenandoahHeapRegion* r = empty_regions.at(pos);
+        r->set_new_top(r->bottom());
+      }
     }
   }
 };
@@ -1158,9 +1324,11 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     heap->collection_set()->clear();
     heap->free_set()->rebuild();
 
+#ifdef KELVIN_DEPRECATE
     if (heap->mode()->is_generational()) {
       heap->young_generation()->promote_all_regions();
     }
+#endif
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);
