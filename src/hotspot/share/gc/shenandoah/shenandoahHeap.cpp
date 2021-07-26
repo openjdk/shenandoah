@@ -2642,6 +2642,78 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
   } // all regions have been processed
 }
 
+void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx,
+                                                HeapWord* from, HeapWord* top, const char* message) {
+  RememberedScanner* scanner = card_scan();
+  ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
+
+  HeapWord* obj_addr = from;
+  if (r->is_humongous_start()) {
+    oop obj = oop(obj_addr);
+    if (!ctx || ctx->is_marked(obj)) {
+      size_t card_index = scanner->card_index_for_addr(obj_addr);
+      // For humongous objects, the typical object is an array, so the following checks may be overkill
+      // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+      // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+      if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
+        obj->oop_iterate(&check_interesting_pointers);
+      }
+      // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
+    }
+    // else, this humongous object is not live so no need to verify its internal pointers
+
+    if (!scanner->verify_registration(obj_addr, obj->size())) {
+      ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL, message,
+                                       "object not properly registered", __FILE__, __LINE__);
+    }
+  } else if (!r->is_humongous()) {
+    HeapWord* t = r->get_update_watermark();
+    while (obj_addr < top) {
+      oop obj = oop(obj_addr);
+      // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
+      if (!ctx || ctx->is_marked(obj)) {
+        size_t card_index = scanner->card_index_for_addr(obj_addr);
+        // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+        // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+        if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
+          obj->oop_iterate(&check_interesting_pointers);
+        }
+        // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
+        if (!scanner->verify_registration(obj_addr, obj->size())) {
+          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL, message,
+                                           "object not properly registered", __FILE__, __LINE__);
+        }
+        obj_addr += obj->size();
+      } else {
+        // This object is not live so we don't verify dirty cards contained therein
+        ShenandoahHeapRegion* r = heap_region_containing(obj_addr);
+        HeapWord* tams = ctx->top_at_mark_start(r);
+        if (obj_addr >= tams) {
+          obj_addr += obj->size();
+        } else {
+          obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
+        }
+      }
+    }
+  }
+}
+
+void ShenandoahHeap::verify_rem_set_after_full_gc() {
+  shenandoah_assert_safepoint();
+  assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
+
+  ShenandoahRegionIterator iterator;
+
+  while (iterator.has_next()) {
+    ShenandoahHeapRegion* r = iterator.next();
+    if (r == nullptr)
+      break;
+    if (r->is_old() && !r->is_cset()) {
+      help_verify_region_rem_set(r, nullptr, r->bottom(), r->top(), "Remembered set violation at end of Full GC");
+    }
+  }
+}
+
 // Assure that the remember set has a dirty card everywhere there is an interesting pointer.  Even though
 // the update-references scan of remembered set only examines cards up to update_watermark, the remembered
 // set should be valid through top.  This examines the write_card_table between bottom() and top() because
@@ -2651,13 +2723,10 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
   assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
 
   ShenandoahRegionIterator iterator;
-  ShenandoahMarkingContext* mark_context = marking_context();
-  RememberedScanner* scanner = card_scan();
-  ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
   ShenandoahMarkingContext* ctx;
 
   if (doing_mixed_evacuations()) {
-    ctx = mark_context;
+    ctx = marking_context();
   } else {
     ctx = nullptr;
   }
@@ -2667,84 +2736,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
     if (r == nullptr)
       break;
     if (r->is_old() && !r->is_cset()) {
-      HeapWord* obj_addr = r->bottom();
-      if (r->is_humongous_start()) {
-        oop obj = oop(obj_addr);
-        if (!ctx || ctx->is_marked(obj)) {
-          size_t card_index = scanner->card_index_for_addr(obj_addr);
-          // For humongous objects, the typical object is an array, so the following checks may be overkill
-          // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-          // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-          if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
-            obj->oop_iterate(&check_interesting_pointers);
-          }
-          // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-        }
-        // else, this humongous object is not live so no need to verify its internal pointers
-        if (!scanner->verify_registration(obj_addr, obj->size())) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
-                                          "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
-        }
-      } else if (!r->is_humongous()) {
-        HeapWord* t = r->get_update_watermark();
-        while (obj_addr < t) {
-          oop obj = oop(obj_addr);
-          // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
-          if (!ctx || ctx->is_marked(obj)) {
-            size_t card_index = scanner->card_index_for_addr(obj_addr);
-            // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-            // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-            if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
-              obj->oop_iterate(&check_interesting_pointers);
-            }
-            // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-            if (!scanner->verify_registration(obj_addr, obj->size())) {
-              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
-                                               "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
-            }
-            obj_addr += obj->size();
-          } else {
-            // This object is not live so we don't verify dirty cards contained therein
-            ShenandoahHeapRegion* r = heap_region_containing(obj_addr);
-            HeapWord* tams = ctx->top_at_mark_start(r);
-            if (obj_addr >= tams) {
-              obj_addr += obj->size();
-            } else {
-              obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-            }
-          }
-        }
-        // Update references only cares about remembered set below update_watermark, but entire remset should be valid
-        // We're at safepoint and all LABs have been flushed, so we can parse all the way to top().
-        t = r->top();
-        while (obj_addr < t) {
-          oop obj = oop(obj_addr);
-          // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
-          if (!ctx || ctx->is_marked(obj)) {
-            size_t card_index = scanner->card_index_for_addr(obj_addr);
-            // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-            // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-            if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
-              obj->oop_iterate(&check_interesting_pointers);
-            }
-            // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-            if (!scanner->verify_registration(obj_addr, obj->size())) {
-              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
-                                               "Verify init-update-references remembered set violation", "object not properly registered", __FILE__, __LINE__);
-            }
-            obj_addr += obj->size();
-          } else {
-            // This object is not live so we don't verify dirty cards contained therein
-            ShenandoahHeapRegion* r = heap_region_containing(obj_addr);
-            HeapWord* tams = ctx->top_at_mark_start(r);
-            if (obj_addr >= tams) {
-              obj_addr += obj->size();
-            } else {
-              obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-            }
-          }
-        }
-      }
-    } // else, we don't care about this region
+      help_verify_region_rem_set(r, ctx, r->bottom(), r->top(), "Remembered set violation at init-update-references");
+    }
   }
 }

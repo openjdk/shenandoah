@@ -63,6 +63,59 @@
 #include "utilities/growableArray.hpp"
 #include "gc/shared/workgroup.hpp"
 
+// After Full GC is done, reconstruct the remembered set by iterating over OLD regions,
+// registering all objects between bottom() and top(), and setting remembered set cards to
+// DIRTY if they hold interesting pointers.
+class ShenandoahReconstructRememberedSetTask : public AbstractGangTask {
+private:
+  ShenandoahRegionIterator _regions;
+
+public:
+  ShenandoahReconstructRememberedSetTask() :
+    AbstractGangTask("Shenandoah Reset Bitmap") { }
+
+  void work(uint worker_id) {
+    ShenandoahParallelWorkerSession worker_session(worker_id);
+    ShenandoahHeapRegion* r = _regions.next();
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    RememberedScanner* scanner = heap->card_scan();
+    ShenandoahDirtyRememberedSetClosure dirty_cards_for_interesting_pointers;
+
+    while (r != NULL) {
+      if (r->is_old()) {
+        HeapWord* obj_addr = r->bottom();
+        if (r->is_humongous_start()) {
+          // First, clear the remembered set
+          oop obj = oop(obj_addr);
+          size_t size = obj->size();
+          scanner->reset_object_range(r->bottom(), r->bottom() + size);
+          scanner->reset_remset(r->bottom(), size);
+
+          // Then register the humongous object and DIRTY relevant remembered set cards
+          scanner->register_object_wo_lock(obj_addr);
+          obj->oop_iterate(&dirty_cards_for_interesting_pointers);
+        } else if (!r->is_humongous()) {
+          // First, clear the remembered set
+          scanner->reset_object_range(r->bottom(), r->end());
+          scanner->reset_remset(r->bottom(), ShenandoahHeapRegion::region_size_words());
+
+          // Then iterate over all objects, registering object and DIRTYing relevant remembered set cards
+          HeapWord* t = r->top();
+          while (obj_addr < t) {
+            oop obj = oop(obj_addr);
+            size_t size = obj->size();
+            scanner->register_object_wo_lock(obj_addr);
+            obj->oop_iterate(&dirty_cards_for_interesting_pointers);
+            obj_addr += size;
+          }
+        } // else, ignore humongous continuation region
+      }
+      // else, this is a FREE or YOUNG region and I can ignore it.
+      r = _regions.next();
+    }
+  }
+};
+
 ShenandoahFullGC::ShenandoahFullGC() :
   _gc_timer(ShenandoahHeap::heap()->gc_timer()),
   _preserved_marks(new PreservedMarksSet(true)) {}
@@ -243,6 +296,13 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     _preserved_marks->restore(heap->workers());
     BiasedLocking::restore_marks();
     _preserved_marks->reclaim();
+
+    if (heap->mode()->is_generational())
+    {
+      ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_reconstruct_remembered_set);
+      ShenandoahReconstructRememberedSetTask task;
+      heap->workers()->run_task(&task);
+    }
   }
 
   // Resize metaspace
@@ -258,7 +318,11 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_full_gc_in_progress(false);
 
   if (ShenandoahVerify) {
-    heap->verifier()->verify_after_fullgc();
+    if (heap->mode()->is_generational()) {
+      heap->verifier()->verify_after_generational_fullgc();
+    } else {
+      heap->verifier()->verify_after_fullgc();
+    }
   }
 
   if (VerifyAfterGC) {

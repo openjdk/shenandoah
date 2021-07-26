@@ -752,6 +752,8 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       _heap->verify_rem_set_at_mark();
     } else if (remembered == _verify_remembered_for_updating_references) {
       _heap->verify_rem_set_at_update_ref();
+    } else if (remembered == _verify_remembered_after_full_gc) {
+      _heap->verify_rem_set_after_full_gc();
     }
 
     ShenandoahCalculateRegionStatsClosure cl;
@@ -952,7 +954,7 @@ void ShenandoahVerifier::verify_after_evacuation() {
 void ShenandoahVerifier::verify_before_updaterefs() {
   verify_at_safepoint(
           "Before Updating References",
-          _verify_remembered_for_updating_references,  // do not verify remembered set
+          _verify_remembered_for_updating_references,  // verify read-write remembered set
           _verify_forwarded_allow,                     // forwarded references allowed
           _verify_marked_complete,                     // bitmaps might be stale, but alloc-after-mark should be well
           _verify_cset_forwarded,                      // all cset refs are fully forwarded
@@ -1001,6 +1003,20 @@ void ShenandoahVerifier::verify_before_fullgc() {
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_disable,     // no reliable region data here
           _verify_gcstate_disable,     // no reliable gcstate data
+          _verify_all_weak_roots
+  );
+}
+
+void ShenandoahVerifier::verify_after_generational_fullgc() {
+  verify_at_safepoint(
+          "After Full Generational GC",
+          _verify_remembered_after_full_gc,  // verify read-write remembered set
+          _verify_forwarded_none,      // all objects are non-forwarded
+          _verify_marked_complete,     // all objects are marked in complete bitmap
+          _verify_cset_none,           // no cset references
+          _verify_liveness_disable,    // no reliable liveness data anymore
+          _verify_regions_notrash_nocset, // no trash, no cset
+          _verify_gcstate_stable,       // full gc cleaned up everything
           _verify_all_weak_roots
   );
 }
