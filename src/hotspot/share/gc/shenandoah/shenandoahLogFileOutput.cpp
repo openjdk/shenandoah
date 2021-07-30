@@ -36,7 +36,7 @@
 #include "gc/shenandoah/shenandoahLogFileOutput.hpp"
 
 const char* const ShenandoahLogFileOutput::Prefix = "file=";
-const char* const ShenandoahLogFileOutput::FileOpenMode = "a+";
+const char* const ShenandoahLogFileOutput::FileOpenMode = "w+";
 const char* const ShenandoahLogFileOutput::PidFilenamePlaceholder = "%p";
 const char* const ShenandoahLogFileOutput::TimestampFilenamePlaceholder = "%t";
 const char* const ShenandoahLogFileOutput::TimestampFormat = "%Y-%m-%d_%H-%M-%S";
@@ -89,14 +89,16 @@ bool ShenandoahLogFileOutput::flush() {
   return result;
 }
 
-bool ShenandoahLogFileOutput::initialize(const char* options, outputStream* errstream) {
+void ShenandoahLogFileOutput::initialize(const char* options, outputStream* errstream) {
   _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
   if (_stream == NULL) {
     errstream->print_cr("Error opening log file '%s': %s",
                         _file_name, os::strerror(errno));
-    return false;
+
+    _file_name = make_file_name("./shenandoahSnapshots_pid%p.log", _pid_str, _vm_start_time_str);
+    _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
+    errstream->print_cr("Writing to default log file: %s", _file_name);
   }
-  return true;
 }
 
 int ShenandoahLogFileOutput::write_snapshot(PerfLongVariable** regions,
@@ -214,3 +216,4 @@ char* ShenandoahLogFileOutput::make_file_name(const char* file_name,
   result[result_len] = '\0';
   return result;
 }
+

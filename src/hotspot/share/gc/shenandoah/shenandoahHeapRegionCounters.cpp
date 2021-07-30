@@ -120,8 +120,8 @@ void ShenandoahHeapRegionCounters::update() {
         }
 
         // If logging enabled, dump current region snapshot to log file
-        if (ShenandoahLogRegionSampling) {
-          _log_file->write_snapshot(_regions_data, _timestamp, _status, num_regions, rs);
+        if (ShenandoahLogRegionSampling && _log_file != NULL) {
+          _log_file->write_snapshot(_regions_data, _timestamp, _status, num_regions, rs >> 10);
         }
       }
     }
