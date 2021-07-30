@@ -58,7 +58,7 @@ public:
     ShenandoahLogFileOutput(const char *name, jlong vm_start_time);
     ~ShenandoahLogFileOutput();
 
-    bool initialize(const char* options, outputStream* errstream);
+    void initialize(const char* options, outputStream* errstream);
 
     int write_snapshot(PerfLongVariable** regions,
                        PerfLongVariable* ts,
