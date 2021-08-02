@@ -140,6 +140,7 @@ class ShenandoahHeap : public CollectedHeap {
   friend class ShenandoahSafepoint;
   // Supported GC
   friend class ShenandoahConcurrentGC;
+  friend class ShenandoahOldGC;
   friend class ShenandoahDegenGC;
   friend class ShenandoahFullGC;
 

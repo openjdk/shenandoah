@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
+#include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
 class ShenandoahConcurrentCoalesceAndFillTask : public AbstractGangTask {
@@ -93,9 +94,8 @@ void ShenandoahOldGC::op_final_mark() {
     _mark.finish_mark();
     assert(!heap->cancelled_gc(), "STW mark cannot OOM");
 
-    // Believe notifying JVMTI that the tagmap table will need cleaning is not relevant following old-gen mark
-    // so commenting out for now:
-    //   JvmtiTagMap::set_needs_cleaning();
+    // We need to do this because weak root cleaning reports the number of dead handles
+    JvmtiTagMap::set_needs_cleaning();
 
     {
       ShenandoahGCPhase phase(ShenandoahPhaseTimings::choose_cset);
@@ -103,6 +103,9 @@ void ShenandoahOldGC::op_final_mark() {
       // Old-gen choose_collection_set() does not directly manipulate heap->collection_set() so no need to clear it.
       _generation->heuristics()->choose_collection_set(nullptr, nullptr);
     }
+
+    heap->set_unload_classes(false);
+    heap->prepare_concurrent_roots();
 
     // Believe verification following old-gen concurrent mark needs to be different than verification following
     // young-gen concurrent mark, so am commenting this out for now:
@@ -136,6 +139,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
+    heap->set_concurrent_weak_root_in_progress(false);
   }
 
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
