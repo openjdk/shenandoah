@@ -71,7 +71,7 @@ inline void ShenandoahVerifyRemSetClosure::work(T* p) {
 }
 
 template<class T>
-inline void ShenandoahDirtyRememberedSetClosure::work(T* p) {
+inline void ShenandoahSetRememberedCardsToDirtyClosure::work(T* p) {
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
     oop obj = CompressedOops::decode_not_null(o);

@@ -249,7 +249,7 @@ class ShenandoahVerifyRemSetClosure : public BasicOopIterateClosure {
   virtual void do_oop(oop* p) { work(p); }
 };
 
-class ShenandoahDirtyRememberedSetClosure : public BasicOopIterateClosure {
+class ShenandoahSetRememberedCardsToDirtyClosure : public BasicOopIterateClosure {
 
 protected:
   ShenandoahHeap* _heap;
@@ -257,7 +257,7 @@ protected:
 
 public:
 
-  ShenandoahDirtyRememberedSetClosure() :
+  ShenandoahSetRememberedCardsToDirtyClosure() :
       _heap(ShenandoahHeap::heap()),
       _scanner(_heap->card_scan()) {  }
 

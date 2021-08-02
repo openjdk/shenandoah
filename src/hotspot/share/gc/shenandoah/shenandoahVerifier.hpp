@@ -66,12 +66,12 @@ public:
     // appropriate at the init_mark safepoint since all TLABS are retired before we reach this code.
     _verify_remembered_for_marking,
 
-    // Assure old objects are registered and remembered set cards are dirty for every interesting pointer within
-    // each OLD ShenandoahHeapRegion between bottom() and top().
+    // Assure old objects are registered and remembered set cards within the read-write remembered set are dirty
+    // for every interesting pointer within each OLD ShenandoahHeapRegion between bottom() and top().
     _verify_remembered_for_updating_references,
 
-    // Assure old objects are registered and remembered set cards are dirty for every interesting pointer within
-    // each OLD ShenandoahHeapRegion between bottom() and top().
+    // Assure old objects are registered and remembered set cards within the read-write remembered set are dirty
+    // for every interesting pointer within each OLD ShenandoahHeapRegion between bottom() and top().
     _verify_remembered_after_full_gc
   } VerifyRememberedSet;
 

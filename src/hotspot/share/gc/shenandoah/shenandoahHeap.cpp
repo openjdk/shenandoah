@@ -2667,7 +2667,6 @@ void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, Shenand
                                        "object not properly registered", __FILE__, __LINE__);
     }
   } else if (!r->is_humongous()) {
-    HeapWord* t = r->get_update_watermark();
     while (obj_addr < top) {
       oop obj = oop(obj_addr);
       // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
