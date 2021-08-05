@@ -168,10 +168,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
-    if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-      // This free region might have garbage in its remembered set representation.
-      _heap->clear_cards_for(r);
-    }
     r->set_affiliation(req.affiliation());
     r->set_update_watermark(r->bottom());
     ctx->capture_top_at_mark_start(r);
@@ -490,7 +486,7 @@ void ShenandoahFreeSet::rebuild() {
       assert(!is_mutator_free(idx), "We are about to add it, it shouldn't be there already");
       _mutator_free_bitmap.set_bit(idx);
 
-      log_debug(gc)("  Setting _mutator_free_bitmap bit for " SIZE_FORMAT, idx);
+      log_debug(gc)("  Setting Region " SIZE_FORMAT " _mutator_free_bitmap bit to true", idx);
     }
   }
 

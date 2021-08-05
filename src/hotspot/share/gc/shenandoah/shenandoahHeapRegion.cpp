@@ -560,11 +560,7 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
     obj_addr += obj->size();
   }
 
-  // In case top() does not align with a card boundary, it's necessary to fill remainder of memory beyond top().
-  if (top() < end()) {
-    ShenandoahHeap::fill_with_object(top(), end() - top());;
-    rem_set_scanner->register_object_wo_lock(obj_addr);
-  }
+  // Remembered set scanning stops at top() so no need to fill beyond it.
 }
 
 void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
@@ -610,6 +606,8 @@ void ShenandoahHeapRegion::recycle() {
 
   make_empty();
   set_affiliation(FREE);
+
+  heap->clear_cards_for(this);
 
   if (ZapUnusedHeapArea) {
     SpaceMangler::mangle_region(MemRegion(bottom(), end()));
