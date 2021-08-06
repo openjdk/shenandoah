@@ -498,7 +498,7 @@ public:
 
   void finish_young_region() {
     if (_young_to_region != nullptr) {
-      _compactor->add_to_old_used(_worker_id, _old_compact_point - _old_to_region->bottom());
+      _compactor->add_to_old_used(_worker_id, _old_compact_point - _young_to_region->bottom());
       _young_to_region->set_new_top(_young_compact_point);
       _young_to_region = nullptr;
     }
