@@ -26,7 +26,7 @@
 #define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
 
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
-#include "oops/oop.hpp"
+#include "oops/oopsHierarchy.hpp"
 
 enum GenerationMode {
   YOUNG,
