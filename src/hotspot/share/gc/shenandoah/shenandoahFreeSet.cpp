@@ -168,6 +168,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
+
     r->set_affiliation(req.affiliation());
     r->set_update_watermark(r->bottom());
     ctx->capture_top_at_mark_start(r);
