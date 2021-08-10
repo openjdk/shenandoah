@@ -213,6 +213,13 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     req.set_actual_size(size);
 
     if (req.is_gc_alloc()) {
+      // For GC allocations, we advance update_watermark because the objects relocated into this memory during
+      // evacuation are not updated during evacuation.  For both young and old regions r, it is essential that all
+      // PLABs be made parsable at the end of evacuation.  This is enabled by retiring all plabs at end of evacuation.
+      // TODO: Making a PLAB parsable involves placing a filler object in its remnant memory but does not require
+      // that the PLAB be disabled for all future purposes.  We may want to introduce a new service to make the
+      // PLABs parsable while still allowing the PLAB to serve future allocation requests that arise during the
+      // next evacuation pass.
       r->set_update_watermark(r->top());
     }
 

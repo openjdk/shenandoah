@@ -854,6 +854,7 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   return gclab->allocate(size);
 }
 
+// Establish a new PLAB and allocate size HeapWords within it.
 HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
   // New object should fit the PLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
@@ -876,6 +877,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
 
   // Retire current PLAB, and allocate a new one.
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+  // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.  This
+  // is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each PLAB is
+  // aligned with the start of a card's memory range.
   retire_plab(plab);
 
   size_t actual_size = 0;
@@ -911,6 +915,8 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     // If retiring the plab created a filler object, then we
     // need to register it with our card scanner so it can
     // safely walk the region backing the plab.
+    log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
+                  plab->waste() - waste, p2i(top));
     card_scan()->register_object_wo_lock(top);
   }
 }
@@ -1248,6 +1254,14 @@ public:
 
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
     assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
+    // TODO; Retiring a PLAB disables it so it cannot support future allocations.  This is overkill.  For old-gen
+    // regions, the important thing is to make the memory parsable by the remembered-set scanning code that drives
+    // the update-refs processing that follows.  After the updating of old-gen references is done, it is ok to carve
+    // this remnan object into smaller pieces during the subsequent evacuation pass, as long as the PLAB is made parsable
+    // again before the next update-refs phase.
+    ShenandoahHeapRegion* r = ShenandoahHeap::heap()->heap_region_containing(plab->top());
+    log_debug(gc)("Retiring plab with top: " PTR_FORMAT ", hard_end: " PTR_FORMAT " + AlignmentReserve, in %s Region " SIZE_FORMAT,
+                  p2i(plab->top()), p2i(plab->top() + plab->words_remaining()), affiliation_name(r->affiliation()), r->index());
     ShenandoahHeap::heap()->retire_plab(plab);
     if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_plab_size(thread, 0);
@@ -2592,6 +2606,8 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
   ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
   ShenandoahMarkingContext* ctx;
 
+  log_debug(gc)("Verifying remembered set at %s mark", doing_mixed_evacuations()? "mixed": "young");
+
   if (doing_mixed_evacuations()) {
     ctx = mark_context;
   } else {
@@ -2624,7 +2640,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
         HeapWord* t = r->top();
         while (obj_addr < t) {
           oop obj = oop(obj_addr);
-          // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
+          // ctx->is_marked() returns true if mark bit set (TAMS not relevant here)
           if (!ctx || ctx->is_marked(obj)) {
             // For regular objects (not object arrays), if the card holding the start of the object is dirty,
             // we do not need to verify that cards spanning interesting pointers within this object are dirty.
@@ -2637,15 +2653,13 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
                                             "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
             }
             obj_addr += obj->size();
+          } // Else, this object is not live so we don't verify dirty cards contained therein.
+
+          if (ctx) {
+            // TAMS not relevant here
+            obj_addr = ctx->get_next_marked_addr(obj_addr, t);
           } else {
-            // This object is not live so we don't verify dirty cards contained therein
-            ShenandoahHeapRegion* r = heap_region_containing(obj_addr);
-            HeapWord* tams = ctx->top_at_mark_start(r);
-            if (obj_addr >= tams) {
-              obj_addr += obj->size();
-            } else {
-              obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-            }
+            obj_addr += obj->size();
           }
         }
       } // else, we ignore humongous continuation region

@@ -670,6 +670,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
   // Avoid side-effect of changing workers' active thread count, but bypass concurrent/parallel protocol check
   ShenandoahPushWorkerScope verify_worker_scope(_heap->workers(), _heap->max_workers(), false /*bypass check*/);
 
+  log_debug(gc)("Start safepoint verification [%s], level " INTX_FORMAT, label, ShenandoahVerifyLevel);
   log_info(gc,start)("Verify %s, Level " INTX_FORMAT, label, ShenandoahVerifyLevel);
 
   // GC state checks
