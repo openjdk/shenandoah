@@ -371,8 +371,6 @@ private:
 
   bool is_subject_to_discovery(oop const obj) const;
 
-  bool is_mt_processing_set_up(AbstractRefProcTaskExecutor* task_executor) const;
-
 public:
   // Default parameters give you a vanilla reference processor.
   ReferenceProcessor(BoolObjectClosure* is_subject_to_discovery,
@@ -598,28 +596,6 @@ class ReferenceProcessorAtomicMutator: StackObj {
 
   ~ReferenceProcessorAtomicMutator() {
     _rp->set_atomic_discovery(_saved_atomic_discovery);
-  }
-};
-
-
-// A utility class to temporarily change the MT processing
-// disposition of the given ReferenceProcessor instance
-// in the scope that contains it.
-class ReferenceProcessorMTProcMutator: StackObj {
- private:
-  ReferenceProcessor* _rp;
-  bool  _saved_mt;
-
- public:
-  ReferenceProcessorMTProcMutator(ReferenceProcessor* rp,
-                                  bool mt):
-    _rp(rp) {
-    _saved_mt = _rp->processing_is_mt();
-    _rp->set_mt_processing(mt);
-  }
-
-  ~ReferenceProcessorMTProcMutator() {
-    _rp->set_mt_processing(_saved_mt);
   }
 };
 

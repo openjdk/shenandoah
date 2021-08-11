@@ -23,7 +23,6 @@
  */
 
 #include "precompiled.hpp"
-
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahControlThread.hpp"
@@ -702,6 +701,7 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
          cause == GCCause::_metadata_GC_clear_soft_refs ||
          cause == GCCause::_full_gc_alot ||
          cause == GCCause::_wb_full_gc ||
+         cause == GCCause::_wb_breakpoint ||
          cause == GCCause::_scavenge_alot,
          "only requested GCs here");
 
@@ -765,8 +765,10 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
   while (current_gc_id < required_gc_id) {
     _gc_requested.set();
     _requested_gc_cause = cause;
-    notify_control_thread();
-    ml.wait();
+    // TODO: What about notify_control_thread() ?
+    if (cause != GCCause::_wb_breakpoint) {
+      ml.wait();
+    }
     current_gc_id = get_gc_id();
   }
 }

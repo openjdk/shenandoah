@@ -206,6 +206,11 @@ public:
   void verify_rem_set_at_mark();
   void verify_rem_set_at_update_ref();
 
+// WhiteBox testing support.
+  bool supports_concurrent_gc_breakpoints() const {
+    return true;
+  }
+
 // ---------- Heap counters and metrics
 //
 private:
