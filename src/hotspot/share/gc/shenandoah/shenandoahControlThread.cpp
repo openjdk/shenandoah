@@ -765,7 +765,7 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
   while (current_gc_id < required_gc_id) {
     _gc_requested.set();
     _requested_gc_cause = cause;
-    // TODO: What about notify_control_thread() ?
+    notify_control_thread();
     if (cause != GCCause::_wb_breakpoint) {
       ml.wait();
     }
