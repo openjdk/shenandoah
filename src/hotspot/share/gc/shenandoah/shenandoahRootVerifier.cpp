@@ -56,7 +56,7 @@ ShenandoahGCStateResetter::~ShenandoahGCStateResetter() {
   _heap->set_concurrent_weak_root_in_progress(_concurrent_weak_root_in_progress);
 }
 
-void ShenandoahRootVerifier::roots_do(OopIterateClosure* oops) {
+void ShenandoahRootVerifier::roots_do(OopClosure* oops) {
   ShenandoahGCStateResetter resetter;
   shenandoah_assert_safepoint();
 
@@ -86,7 +86,7 @@ void ShenandoahRootVerifier::roots_do(OopIterateClosure* oops) {
   Threads::possibly_parallel_oops_do(true, oops, NULL);
 }
 
-void ShenandoahRootVerifier::strong_roots_do(OopIterateClosure* oops) {
+void ShenandoahRootVerifier::strong_roots_do(OopClosure* oops) {
   ShenandoahGCStateResetter resetter;
   shenandoah_assert_safepoint();
 
@@ -97,14 +97,15 @@ void ShenandoahRootVerifier::strong_roots_do(OopIterateClosure* oops) {
     ShenandoahStringDedup::oops_do_slow(oops);
   }
 
+  for (auto id : EnumRange<OopStorageSet::StrongId>()) {
+    OopStorageSet::storage(id)->oops_do(oops);
+  }
+
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
     heap->card_scan()->oops_do(oops);
   }
 
-  for (auto id : EnumRange<OopStorageSet::StrongId>()) {
-    OopStorageSet::storage(id)->oops_do(oops);
-  }
   // Do thread roots the last. This allows verification code to find
   // any broken objects from those special roots first, not the accidental
   // dangling reference from the thread root.
