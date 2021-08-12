@@ -56,75 +56,6 @@ ShenandoahGCStateResetter::~ShenandoahGCStateResetter() {
   _heap->set_concurrent_weak_root_in_progress(_concurrent_weak_root_in_progress);
 }
 
-// Check for overflow of number of root types.
-STATIC_ASSERT((static_cast<uint>(ShenandoahRootVerifier::AllRoots) + 1) > static_cast<uint>(ShenandoahRootVerifier::AllRoots));
-
-ShenandoahRootVerifier::ShenandoahRootVerifier(RootTypes types) : _types(types) {
-  Threads::change_thread_claim_token();
-}
-
-void ShenandoahRootVerifier::excludes(RootTypes types) {
-  _types = static_cast<ShenandoahRootVerifier::RootTypes>(static_cast<uint>(_types) & (~static_cast<uint>(types)));
-}
-
-bool ShenandoahRootVerifier::verify(RootTypes type) const {
-  return (_types & type) == type;
-}
-
-ShenandoahRootVerifier::RootTypes ShenandoahRootVerifier::combine(RootTypes t1, RootTypes t2) {
-  return static_cast<ShenandoahRootVerifier::RootTypes>(static_cast<uint>(t1) | static_cast<uint>(t2));
-}
-
-void ShenandoahRootVerifier::oops_do(OopClosure* oops) {
-  ShenandoahGCStateResetter resetter;
-
-  CodeBlobToOopClosure blobs(oops, !CodeBlobToOopClosure::FixRelocations);
-  if (verify(CodeRoots)) {
-    shenandoah_assert_locked_or_safepoint(CodeCache_lock);
-    CodeCache::blobs_do(&blobs);
-  }
-
-  if (verify(CLDGRoots)) {
-    shenandoah_assert_locked_or_safepoint(ClassLoaderDataGraph_lock);
-    CLDToOopClosure clds(oops, ClassLoaderData::_claim_none);
-    ClassLoaderDataGraph::cld_do(&clds);
-  }
-
-  if (verify(SerialRoots)) {
-    shenandoah_assert_safepoint();
-  }
-
-  if (verify(JNIHandleRoots)) {
-    shenandoah_assert_safepoint();
-    JNIHandles::oops_do(oops);
-    Universe::vm_global()->oops_do(oops);
-  }
-
-  if (verify(WeakRoots)) {
-    shenandoah_assert_safepoint();
-    weak_roots_do(oops);
-  }
-
-  if (ShenandoahStringDedup::is_enabled() && verify(StringDedupRoots)) {
-    shenandoah_assert_safepoint();
-    ShenandoahStringDedup::oops_do_slow(oops);
-  }
-
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational() && heap->is_gc_generation_young() && verify(RememberedSetRoots)) {
-    shenandoah_assert_safepoint();
-    heap->card_scan()->oops_do(oops);
-  }
-
-  if (verify(ThreadRoots)) {
-    shenandoah_assert_safepoint();
-    // Do thread roots the last. This allows verification code to find
-    // any broken objects from those special roots first, not the accidental
-    // dangling reference from the thread root.
-    Threads::possibly_parallel_oops_do(false, oops, &blobs);
-  }
-}
-
 void ShenandoahRootVerifier::roots_do(OopIterateClosure* oops) {
   ShenandoahGCStateResetter resetter;
   shenandoah_assert_safepoint();
@@ -135,45 +66,48 @@ void ShenandoahRootVerifier::roots_do(OopIterateClosure* oops) {
   CLDToOopClosure clds(oops, ClassLoaderData::_claim_none);
   ClassLoaderDataGraph::cld_do(&clds);
 
-  JNIHandles::oops_do(oops);
-  Universe::vm_global()->oops_do(oops);
+  if (ShenandoahStringDedup::is_enabled()) {
+    ShenandoahStringDedup::oops_do_slow(oops);
+  }
+
+  for (auto id : EnumRange<OopStorageSet::StrongId>()) {
+    OopStorageSet::storage(id)->oops_do(oops);
+  }
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
-    heap->card_scan()->roots_do(oops);
+    shenandoah_assert_safepoint();
+    heap->card_scan()->oops_do(oops);
   }
 
   // Do thread roots the last. This allows verification code to find
   // any broken objects from those special roots first, not the accidental
   // dangling reference from the thread root.
-  Threads::possibly_parallel_oops_do(true, oops, &blobs);
+  Threads::possibly_parallel_oops_do(true, oops, NULL);
 }
 
 void ShenandoahRootVerifier::strong_roots_do(OopIterateClosure* oops) {
   ShenandoahGCStateResetter resetter;
   shenandoah_assert_safepoint();
 
-  CodeBlobToOopClosure blobs(oops, !CodeBlobToOopClosure::FixRelocations);
-
   CLDToOopClosure clds(oops, ClassLoaderData::_claim_none);
-  ClassLoaderDataGraph::roots_cld_do(&clds, NULL);
+  ClassLoaderDataGraph::always_strong_cld_do(&clds);
 
-  JNIHandles::oops_do(oops);
-  Universe::vm_global()->oops_do(oops);
+  if (ShenandoahStringDedup::is_enabled()) {
+    ShenandoahStringDedup::oops_do_slow(oops);
+  }
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
-    heap->card_scan()->roots_do(oops);
+    heap->card_scan()->oops_do(oops);
   }
 
+  for (auto id : EnumRange<OopStorageSet::StrongId>()) {
+    OopStorageSet::storage(id)->oops_do(oops);
+  }
   // Do thread roots the last. This allows verification code to find
   // any broken objects from those special roots first, not the accidental
   // dangling reference from the thread root.
+  CodeBlobToOopClosure blobs(oops, !CodeBlobToOopClosure::FixRelocations);
   Threads::possibly_parallel_oops_do(true, oops, &blobs);
-}
-
-void ShenandoahRootVerifier::weak_roots_do(OopClosure* cl) {
-  for (auto id : EnumRange<OopStorageSet::WeakId>()) {
-    OopStorageSet::storage(id)->oops_do(cl);
-  }
 }
