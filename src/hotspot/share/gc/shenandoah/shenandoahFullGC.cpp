@@ -160,11 +160,6 @@ void ShenandoahFullGC::entry_full(GCCause::Cause cause) {
 }
 
 void ShenandoahFullGC::op_full(GCCause::Cause cause) {
-#ifdef KELVIN_DEPRECATE
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    fatal("Full GC not yet supported for generational mode.");
-  }
-#endif
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
 
@@ -184,12 +179,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
 void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
+  heap->set_gc_generation(heap->global_generation());
 
-#ifdef KELVIN_DEPRECATE
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    fatal("Full GC not yet supported for generational mode in do_it().");
-  }
-#endif
   if (ShenandoahVerify) {
     heap->verifier()->verify_before_fullgc();
   }
@@ -1481,12 +1473,6 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
 
     heap->collection_set()->clear();
     heap->free_set()->rebuild();
-
-#ifdef KELVIN_DEPRECATE
-    if (heap->mode()->is_generational()) {
-      heap->young_generation()->promote_all_regions();
-    }
-#endif
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);
