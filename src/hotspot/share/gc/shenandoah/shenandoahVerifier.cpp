@@ -738,6 +738,8 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
               byte_size_in_proper_unit(cl.committed()), proper_unit_for_byte_size(cl.committed()));
   }
 
+  log_debug(gc)("Safepoint verification finished heap usage verification");
+
   ShenandoahGeneration* generation;
   if (_heap->mode()->is_generational()) {
     generation = _heap->active_generation();
@@ -748,6 +750,14 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
   if (generation != NULL) {
     ShenandoahHeapLocker lock(_heap->lock());
+
+    if (remembered == _verify_remembered_for_marking) {
+      log_debug(gc)("Safepoint verification of remembered set at mark");
+    } else if (remembered == _verify_remembered_for_updating_references) {
+      log_debug(gc)("Safepoint verification of remembered set at update ref");
+    } else if (remembered == _verify_remembered_after_full_gc) {
+      log_debug(gc)("Safepoint verification of remembered set after full gc");
+    }
 
     if (remembered == _verify_remembered_for_marking) {
       _heap->verify_rem_set_at_mark();
@@ -767,6 +777,8 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
               byte_size_in_proper_unit(cl.used()), proper_unit_for_byte_size(cl.used()));
   }
 
+  log_debug(gc)("Safepoint verification finished remembered set verification");
+
   // Internal heap region checks
   if (ShenandoahVerifyLevel >= 1) {
     ShenandoahVerifyHeapRegionClosure cl(label, regions);
@@ -776,6 +788,8 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       _heap->heap_region_iterate(&cl);
     }
   }
+
+  log_debug(gc)("Safepoint verification finished heap region closure verification");
 
   OrderAccess::fence();
 
@@ -802,6 +816,8 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
     count_reachable = task.processed();
   }
 
+  log_debug(gc)("Safepoint verification finished getting initial reachable set");
+
   // Step 3. Walk marked objects. Marked objects might be unreachable. This verifies what collector,
   // not the application, can see during the region scans. There is no reason to process the objects
   // that were already verified, e.g. those marked in verification bitmap. There is interaction with TAMS:
@@ -818,6 +834,8 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
   } else {
     guarantee(ShenandoahVerifyLevel < 4 || marked == _verify_marked_incomplete || marked == _verify_marked_disable, "Should be");
   }
+
+  log_debug(gc)("Safepoint verification finished walking marked objects");
 
   // Step 4. Verify accumulated liveness data, if needed. Only reliable if verification level includes
   // marked objects.
@@ -851,6 +869,9 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       }
     }
   }
+
+  log_debug(gc)("Safepoint verification finished accumulation of liveness data");
+
 
   log_info(gc)("Verify %s, Level " INTX_FORMAT " (" SIZE_FORMAT " reachable, " SIZE_FORMAT " marked)",
                label, ShenandoahVerifyLevel, count_reachable, count_marked);

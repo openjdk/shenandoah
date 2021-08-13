@@ -342,7 +342,7 @@ size_t ShenandoahGeneration::used_regions_size() const {
   return _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes();
 }
 
-size_t ShenandoahGeneration::available() const {
+size_t ShenandoahGeneration::available () const {
   size_t in_use = used();
   size_t soft_capacity = soft_max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
