@@ -67,11 +67,11 @@ private:
 
 protected:
   void vmop_entry_final_mark();
+  void vmop_entry_final_roots();
 
 private:
   void vmop_entry_init_updaterefs();
   void vmop_entry_final_updaterefs();
-  void vmop_entry_final_roots();
 
   // Entry methods to normally STW GC operations. These set up logging, monitoring
   // and workers for net VM operation
