@@ -83,6 +83,7 @@
 
 #include "classfile/systemDictionary.hpp"
 #include "memory/classLoaderMetaspace.hpp"
+#include "memory/metaspaceUtils.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "prims/jvmtiTagMap.hpp"
 #include "runtime/atomic.hpp"
@@ -162,6 +163,7 @@ jint ShenandoahHeap::initialize() {
   Universe::check_alignment(init_byte_size, reg_size_bytes, "Shenandoah heap");
 
   _num_regions = ShenandoahHeapRegion::region_count();
+  assert(_num_regions == (max_byte_size / reg_size_bytes), "Must match");
 
   size_t num_committed_regions = init_byte_size / reg_size_bytes;
   num_committed_regions = MIN2(num_committed_regions, _num_regions);
@@ -1197,7 +1199,7 @@ void ShenandoahHeap::print_heap_regions_on(outputStream* st) const {
 size_t ShenandoahHeap::trash_humongous_region_at(ShenandoahHeapRegion* start) {
   assert(start->is_humongous_start(), "reclaim regions starting with the first one");
 
-  oop humongous_obj = oop(start->bottom());
+  oop humongous_obj = cast_to_oop(start->bottom());
   size_t size = humongous_obj->size();
   size_t required_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
   size_t index = start->index() + required_regions - 1;
@@ -1734,6 +1736,12 @@ void ShenandoahHeap::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* b
   }
 }
 
+class ShenandoahRendezvousClosure : public HandshakeClosure {
+public:
+  inline ShenandoahRendezvousClosure() : HandshakeClosure("ShenandoahRendezvous") {}
+  inline void do_thread(Thread* thread) {}
+};
+
 void ShenandoahHeap::rendezvous_threads() {
   ShenandoahRendezvousClosure cl;
   Handshake::execute(&cl);
@@ -1745,7 +1753,6 @@ void ShenandoahHeap::recycle_trash() {
 
 void ShenandoahHeap::do_class_unloading() {
   _unloader.unload();
-  set_concurrent_weak_root_in_progress(false);
 }
 
 void ShenandoahHeap::stw_weak_refs(bool full_gc) {
@@ -1834,12 +1841,8 @@ void ShenandoahHeap::set_concurrent_strong_root_in_progress(bool in_progress) {
   }
 }
 
-void ShenandoahHeap::set_concurrent_weak_root_in_progress(bool in_progress) {
-  if (in_progress) {
-    _concurrent_weak_root_in_progress.set();
-  } else {
-    _concurrent_weak_root_in_progress.unset();
-  }
+void ShenandoahHeap::set_concurrent_weak_root_in_progress(bool cond) {
+  set_gc_state_mask(WEAK_ROOTS, cond);
 }
 
 GCTracer* ShenandoahHeap::tracer() {

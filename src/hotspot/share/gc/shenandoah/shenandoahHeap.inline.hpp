@@ -325,7 +325,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   // Copy the object:
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
-  oop copy_val = oop(copy);
+  oop copy_val = cast_to_oop(copy);
   if (target_gen == YOUNG_GENERATION) {
     // Increment the age in young copies, absorbing region age.
     // (Only retired regions will have more than zero age to pass along.)
@@ -409,7 +409,7 @@ inline bool ShenandoahHeap::is_old(oop obj) const {
 }
 
 inline bool ShenandoahHeap::requires_marking(const void* entry) const {
-  oop obj = oop(entry);
+  oop obj = cast_to_oop(entry);
   return !_marking_context->is_marked_strong(obj);
 }
 
@@ -476,7 +476,7 @@ inline bool ShenandoahHeap::is_concurrent_strong_root_in_progress() const {
 }
 
 inline bool ShenandoahHeap::is_concurrent_weak_root_in_progress() const {
-  return _concurrent_weak_root_in_progress.is_set();
+  return _gc_state.is_set(WEAK_ROOTS);
 }
 
 template<class T>
@@ -537,7 +537,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
       for (int c = 0; c < avail; c++) {
         assert (slots[c] < tams,  "only objects below TAMS here: "  PTR_FORMAT " (" PTR_FORMAT ")", p2i(slots[c]), p2i(tams));
         assert (slots[c] < limit, "only objects below limit here: " PTR_FORMAT " (" PTR_FORMAT ")", p2i(slots[c]), p2i(limit));
-        oop obj = oop(slots[c]);
+        oop obj = cast_to_oop(slots[c]);
         assert(oopDesc::is_oop(obj), "sanity");
         assert(ctx->is_marked(obj), "object expected to be marked");
         cl->do_object(obj);
@@ -547,7 +547,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     while (cb < limit_bitmap) {
       assert (cb < tams,  "only objects below TAMS here: "  PTR_FORMAT " (" PTR_FORMAT ")", p2i(cb), p2i(tams));
       assert (cb < limit, "only objects below limit here: " PTR_FORMAT " (" PTR_FORMAT ")", p2i(cb), p2i(limit));
-      oop obj = oop(cb);
+      oop obj = cast_to_oop(cb);
       assert(oopDesc::is_oop(obj), "sanity");
       assert(ctx->is_marked(obj), "object expected to be marked");
       cl->do_object(obj);
@@ -565,7 +565,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
   while (cs < limit) {
     assert (cs >= tams, "only objects past TAMS here: "   PTR_FORMAT " (" PTR_FORMAT ")", p2i(cs), p2i(tams));
     assert (cs < limit, "only objects below limit here: " PTR_FORMAT " (" PTR_FORMAT ")", p2i(cs), p2i(limit));
-    oop obj = oop(cs);
+    oop obj = cast_to_oop(cs);
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
     int size = obj->size();
