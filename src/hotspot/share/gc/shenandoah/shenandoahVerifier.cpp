@@ -943,13 +943,13 @@ void ShenandoahVerifier::verify_after_evacuation() {
 void ShenandoahVerifier::verify_before_updaterefs() {
   verify_at_safepoint(
           "Before Updating References",
-          _verify_remembered_for_updating_references,  // do not verify remembered set
+          _verify_remembered_for_updating_references,  // verify remembered set
           _verify_forwarded_allow,     // forwarded references allowed
           _verify_marked_complete,     // bitmaps might be stale, but alloc-after-mark should be well
           _verify_cset_forwarded,      // all cset refs are fully forwarded
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash,     // trash regions have been recycled already
-          _verify_gcstate_forwarded    // evacuation should have produced some forwarded objects
+          _verify_gcstate_updating     // evacuation should have produced some forwarded objects
   );
 }
 
