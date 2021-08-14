@@ -2224,7 +2224,7 @@ private:
                 // Anything beyond update_watermark was allocated during evacuation.  Thus, it is known to not hold
                 // references to collection set objects.
                 while (p < update_watermark) {
-                  oop obj = oop(p);
+                  oop obj = cast_to_oop(p);
                   if (ctx->is_marked(obj)) {
                     objs.do_object(obj);
                     p += obj->size();
@@ -2279,7 +2279,7 @@ private:
       ShenandoahObjectToOopBoundedClosure<T> objs(cl, p, update_watermark);
       // Anything beyond update_watermark is not yet allocated or initialized.
       while (p < update_watermark) {
-        oop obj = oop(p);
+        oop obj = cast_to_oop(p);
         objs.do_object(obj);
         p += obj->size();
       }
@@ -2606,7 +2606,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
     if (r->is_old()) {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
-        oop obj = oop(obj_addr);
+        oop obj = cast_to_oop(obj_addr);
         if (!ctx || ctx->is_marked(obj)) {
           // For humongous objects, the typical object is an array, so the following checks may be overkill
           // For regular objects (not object arrays), if the card holding the start of the object is dirty,
@@ -2624,7 +2624,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
       } else if (!r->is_humongous()) {
         HeapWord* t = r->top();
         while (obj_addr < t) {
-          oop obj = oop(obj_addr);
+          oop obj = cast_to_oop(obj_addr);
           // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
           if (!ctx || ctx->is_marked(obj)) {
             // For regular objects (not object arrays), if the card holding the start of the object is dirty,
@@ -2681,7 +2681,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
     if (r->is_old() && !r->is_cset()) {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
-        oop obj = oop(obj_addr);
+        oop obj = cast_to_oop(obj_addr);
         if (!ctx || ctx->is_marked(obj)) {
           size_t card_index = scanner->card_index_for_addr(obj_addr);
           // For humongous objects, the typical object is an array, so the following checks may be overkill
@@ -2700,7 +2700,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
       } else if (!r->is_humongous()) {
         HeapWord* t = r->get_update_watermark();
         while (obj_addr < t) {
-          oop obj = oop(obj_addr);
+          oop obj = cast_to_oop(obj_addr);
           // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
           if (!ctx || ctx->is_marked(obj)) {
             size_t card_index = scanner->card_index_for_addr(obj_addr);
@@ -2730,7 +2730,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
         // We're at safepoint and all LABs have been flushed, so we can parse all the way to top().
         t = r->top();
         while (obj_addr < t) {
-          oop obj = oop(obj_addr);
+          oop obj = cast_to_oop(obj_addr);
           // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
           if (!ctx || ctx->is_marked(obj)) {
             size_t card_index = scanner->card_index_for_addr(obj_addr);

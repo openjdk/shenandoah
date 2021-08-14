@@ -447,7 +447,7 @@ void ShenandoahHeapRegion::oop_fill_and_coalesce() {
   assert(heap->active_generation()->is_mark_complete(), "sanity");
 
   while (obj_addr < t) {
-    oop obj = oop(obj_addr);
+    oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
       assert(obj->klass() != NULL, "klass should not be NULL");
       obj_addr += obj->size();
@@ -487,7 +487,7 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
   assert(heap->active_generation()->is_mark_complete(), "sanity");
 
   while (obj_addr < t) {
-    oop obj = oop(obj_addr);
+    oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
       assert(obj->klass() != NULL, "klass should not be NULL");
       // when promoting an entire region, we have to register the marked objects as well
@@ -529,7 +529,7 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
   // end() might be overkill as end of range, but top() may not align with card boundary.
   rem_set_scanner->reset_object_range(bottom(), end());
   while (obj_addr < t) {
-    oop obj = oop(obj_addr);
+    oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
       assert(obj->klass() != NULL, "klass should not be NULL");
       // when promoting an entire region, we have to register the marked objects as well
@@ -552,7 +552,7 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
   // Any object above TAMS and below top() is considered live.
   t = top();
   while (obj_addr < t) {
-    oop obj = oop(obj_addr);
+    oop obj = cast_to_oop(obj_addr);
     assert(obj->klass() != NULL, "klass should not be NULL");
     // when promoting an entire region, we have to register the marked objects as well
     rem_set_scanner->register_object_wo_lock(obj_addr);
@@ -934,7 +934,7 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
   ShenandoahGeneration* young_generation = heap->young_generation();
 
   if (is_humongous_start()) {
-    oop obj = oop(bottom());
+    oop obj = cast_to_oop(bottom());
     assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
     // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
