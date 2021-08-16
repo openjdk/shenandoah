@@ -205,7 +205,6 @@ inline oop ShenandoahBarrierSet::oop_load(DecoratorSet decorators, T* addr) {
   return value;
 }
 
-// XXX: Need post-write barrier here?
 template <typename T>
 inline oop ShenandoahBarrierSet::oop_cmpxchg(DecoratorSet decorators, T* addr, oop compare_value, oop new_value) {
   iu_barrier(new_value);
@@ -300,7 +299,7 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   assert((decorators & (AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF)) == 0, "must be absent");
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   oop result = bs->oop_cmpxchg(decorators, addr, compare_value, new_value);
-  ShenandoahBarrierSet::barrier_set()->write_ref_field_post<decorators>(addr, new_value);
+  bs->write_ref_field_post<decorators>(addr, new_value);
   return result;
 }
 
@@ -309,8 +308,9 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   assert((decorators & AS_NO_KEEPALIVE) == 0, "must be absent");
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
-  oop result = bs->oop_cmpxchg(resolved_decorators, AccessInternal::oop_field_addr<decorators>(base, offset), compare_value, new_value);
-  ShenandoahBarrierSet::barrier_set()->write_ref_field_post<decorators>(addr, new_value);
+  auto addr = AccessInternal::oop_field_addr<decorators>(base, offset);
+  oop result = bs->oop_cmpxchg(resolved_decorators, addr, compare_value, new_value);
+  bs->write_ref_field_post<decorators>(addr, new_value);
   return result;
 }
 
@@ -328,7 +328,7 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   assert((decorators & (AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF)) == 0, "must be absent");
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   oop result = bs->oop_xchg(decorators, addr, new_value);
-  ShenandoahBarrierSet::barrier_set()->write_ref_field_post<decorators>(addr, new_value);
+  bs->write_ref_field_post<decorators>(addr, new_value);
   return result;
 }
 
@@ -337,8 +337,9 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   assert((decorators & AS_NO_KEEPALIVE) == 0, "must be absent");
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
-  oop result = bs->oop_xchg(resolved_decorators, AccessInternal::oop_field_addr<decorators>(base, offset), new_value);
-  ShenandoahBarrierSet::barrier_set()->write_ref_field_post<decorators>(addr, new_value);
+  auto addr = AccessInternal::oop_field_addr<decorators>(base, offset);
+  oop result = bs->oop_xchg(resolved_decorators, addr, new_value);
+  bs->write_ref_field_post<decorators>(addr, new_value);
   return result;
 }
 
