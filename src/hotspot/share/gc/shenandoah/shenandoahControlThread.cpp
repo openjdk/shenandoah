@@ -44,6 +44,7 @@
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "memory/iterator.hpp"
 #include "memory/metaspaceUtils.hpp"
+#include "memory/metaspaceStats.hpp"
 #include "memory/universe.hpp"
 #include "runtime/atomic.hpp"
 #include "shenandoahOldGC.hpp"
@@ -231,8 +232,7 @@ void ShenandoahControlThread::run_service() {
 
       heap->reset_bytes_allocated_since_gc_start();
 
-      // Use default constructor to snapshot the Metaspace state before GC.
-      metaspace::MetaspaceSizesSnapshot meta_sizes;
+      MetaspaceCombinedStats meta_sizes = MetaspaceUtils::get_combined_statistics();
 
       // If GC was requested, we are sampling the counters even without actual triggers
       // from allocation machinery. This captures GC phases more accurately.

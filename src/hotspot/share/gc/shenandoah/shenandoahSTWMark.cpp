@@ -153,7 +153,7 @@ void ShenandoahSTWMark::finish_mark(uint worker_id) {
 
   mark_loop(_generation->generation_mode(),
             worker_id, &_terminator, rp,
-            false, // not cancellable
-            ShenandoahStringDedup::is_enabled());
+            false /* not cancellable */,
+            ShenandoahStringDedup::is_enabled() ? ALWAYS_DEDUP : NO_DEDUP);
 }
 

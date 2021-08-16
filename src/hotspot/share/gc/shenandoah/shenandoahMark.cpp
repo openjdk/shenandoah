@@ -50,7 +50,7 @@ ShenandoahMark::ShenandoahMark(ShenandoahGeneration* generation) :
   _old_gen_task_queues(generation->old_gen_task_queues()) {
 }
 
-template <GenerationMode GENERATION, bool CANCELLABLE>
+template <GenerationMode GENERATION, bool CANCELLABLE, StringDedupMode STRING_DEDUP>
 void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahReferenceProcessor *rp,
                                        bool strdedup, bool update_refs) {
   ShenandoahObjToScanQueue* q = get_queue(w);
@@ -63,54 +63,94 @@ void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahRefe
   // play nice with specialized_oop_iterators.
   if (heap->unload_classes()) {
     if (update_refs) {
-      if (strdedup) {
-        using Closure = ShenandoahMarkUpdateRefsMetadataClosure<GENERATION, ENQUEUE_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      } else {
-        using Closure = ShenandoahMarkUpdateRefsMetadataClosure<GENERATION, NO_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      }
+      using Closure = ShenandoahMarkUpdateRefsMetadataClosure<GENERATION, STRING_DEDUP>;
+      Closure cl(q, rp, old);
+      mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
     } else {
-      if (strdedup) {
-        using Closure = ShenandoahMarkRefsMetadataClosure<GENERATION, ENQUEUE_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      } else {
-        using Closure = ShenandoahMarkRefsMetadataClosure<GENERATION, NO_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      }
+      using Closure = ShenandoahMarkRefsMetadataClosure<GENERATION, STRING_DEDUP>;
+      Closure cl(q, rp, old);
+      mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
     }
   } else {
     if (update_refs) {
-      if (strdedup) {
-        using Closure = ShenandoahMarkUpdateRefsClosure<GENERATION, ENQUEUE_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      } else {
-        using Closure = ShenandoahMarkUpdateRefsClosure<GENERATION, NO_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      }
+      using Closure = ShenandoahMarkUpdateRefsClosure<GENERATION, STRING_DEDUP>;
+      Closure cl(q, rp, old);
+      mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
     } else {
-      if (strdedup) {
-        using Closure = ShenandoahMarkRefsClosure<GENERATION, ENQUEUE_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      } else {
-        using Closure = ShenandoahMarkRefsClosure<GENERATION, NO_DEDUP>;
-        Closure cl(q, rp, old);
-        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
-      }
+      using Closure = ShenandoahMarkRefsClosure<GENERATION, STRING_DEDUP>;
+      Closure cl(q, rp, old);
+      mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
     }
   }
 
   heap->flush_liveness_cache(w);
 }
 
-template <class T, GenerationMode GENERATION, bool CANCELLABLE>
+void ShenandoahMark::mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
+                               bool cancellable, bool strdedup) {
+  bool update_refs = ShenandoahHeap::heap()->has_forwarded_objects();
+  switch (generation) {
+    case YOUNG: {
+      if (cancellable) {
+        mark_loop_prework<YOUNG, true>(worker_id, terminator, rp, strdedup, update_refs);
+      } else {
+        mark_loop_prework<YOUNG, false>(worker_id, terminator, rp, strdedup, update_refs);
+      }
+      break;
+    }
+    case OLD: {
+      // Old generation collection only performs marking, it should to update references.
+      if (cancellable) {
+        mark_loop_prework<OLD, true>(worker_id, terminator, rp, strdedup, false);
+      } else {
+        mark_loop_prework<OLD, false>(worker_id, terminator, rp, strdedup, false);
+      }
+      break;
+    }
+    case GLOBAL: {
+      if (cancellable) {
+        mark_loop_prework<GLOBAL, true>(worker_id, terminator, rp, strdedup, update_refs);
+      } else {
+        mark_loop_prework<GLOBAL, false>(worker_id, terminator, rp, strdedup, update_refs);
+      }
+      break;
+    }
+    default:
+      ShouldNotReachHere();
+      break;
+  }
+}
+
+void ShenandoahMark::mark_loop(uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
+               bool cancellable, StringDedupMode dedup_mode) {
+  if (cancellable) {
+    switch(dedup_mode) {
+      case NO_DEDUP:
+        mark_loop_prework<true, NO_DEDUP>(worker_id, terminator, rp);
+        break;
+      case ENQUEUE_DEDUP:
+        mark_loop_prework<true, ENQUEUE_DEDUP>(worker_id, terminator, rp);
+        break;
+      case ALWAYS_DEDUP:
+        mark_loop_prework<true, ALWAYS_DEDUP>(worker_id, terminator, rp);
+        break;
+    }
+  } else {
+    switch(dedup_mode) {
+      case NO_DEDUP:
+        mark_loop_prework<false, NO_DEDUP>(worker_id, terminator, rp);
+        break;
+      case ENQUEUE_DEDUP:
+        mark_loop_prework<false, ENQUEUE_DEDUP>(worker_id, terminator, rp);
+        break;
+      case ALWAYS_DEDUP:
+        mark_loop_prework<false, ALWAYS_DEDUP>(worker_id, terminator, rp);
+        break;
+    }
+  }
+}
+
+template <class T, bool CANCELLABLE>
 void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *terminator) {
   uintx stride = ShenandoahMarkLoopStride;
 
@@ -186,39 +226,3 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
     }
   }
 }
-
-void ShenandoahMark::mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
-                               bool cancellable, bool strdedup) {
-  bool update_refs = ShenandoahHeap::heap()->has_forwarded_objects();
-  switch (generation) {
-    case YOUNG: {
-      if (cancellable) {
-        mark_loop_prework<YOUNG, true>(worker_id, terminator, rp, strdedup, update_refs);
-      } else {
-        mark_loop_prework<YOUNG, false>(worker_id, terminator, rp, strdedup, update_refs);
-      }
-      break;
-    }
-    case OLD: {
-      // Old generation collection only performs marking, it should to update references.
-      if (cancellable) {
-        mark_loop_prework<OLD, true>(worker_id, terminator, rp, strdedup, false);
-      } else {
-        mark_loop_prework<OLD, false>(worker_id, terminator, rp, strdedup, false);
-      }
-      break;
-    }
-    case GLOBAL: {
-      if (cancellable) {
-        mark_loop_prework<GLOBAL, true>(worker_id, terminator, rp, strdedup, update_refs);
-      } else {
-        mark_loop_prework<GLOBAL, false>(worker_id, terminator, rp, strdedup, update_refs);
-      }
-      break;
-    }
-    default:
-      ShouldNotReachHere();
-      break;
-  }
-}
-

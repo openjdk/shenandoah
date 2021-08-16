@@ -89,8 +89,8 @@ public:
     ShenandoahReferenceProcessor* rp = heap->active_generation()->ref_processor();
     assert(rp != NULL, "need reference processor");
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
-                   true, // cancellable
-                   ShenandoahStringDedup::is_enabled()); // perform string dedup
+                   true /*cancellable*/,
+                   ShenandoahStringDedup::is_enabled() ? ENQUEUE_DEDUP : NO_DEDUP);
   }
 };
 
@@ -153,11 +153,9 @@ public:
                                                ShenandoahIUBarrier ? &mark_cl : NULL);
       Threads::threads_do(&tc);
     }
-
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
-                   false, // not cancellable
-                   _dedup_string);
-
+                   false /*not cancellable*/,
+                   _dedup_string ? ENQUEUE_DEDUP : NO_DEDUP);
     assert(_cm->task_queues()->is_empty(), "Should be empty");
   }
 };
