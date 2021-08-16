@@ -63,37 +63,45 @@ void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, ShenandoahRefe
   if (heap->unload_classes()) {
     if (update_refs) {
       if (strdedup) {
-        ShenandoahMarkUpdateRefsMetadataDedupClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkUpdateRefsMetadataDedupClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkUpdateRefsMetadataClosure<GENERATION, ENQUEUE_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       } else {
-        ShenandoahMarkUpdateRefsMetadataClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkUpdateRefsMetadataClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkUpdateRefsMetadataClosure<GENERATION, NO_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       }
     } else {
       if (strdedup) {
-        ShenandoahMarkRefsMetadataDedupClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkRefsMetadataDedupClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkRefsMetadataClosure<GENERATION, ENQUEUE_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       } else {
-        ShenandoahMarkRefsMetadataClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkRefsMetadataClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkRefsMetadataClosure<GENERATION, NO_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       }
     }
   } else {
     if (update_refs) {
       if (strdedup) {
-        ShenandoahMarkUpdateRefsDedupClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkUpdateRefsDedupClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkUpdateRefsClosure<GENERATION, ENQUEUE_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       } else {
-        ShenandoahMarkUpdateRefsClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkUpdateRefsClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkUpdateRefsClosure<GENERATION, NO_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       }
     } else {
       if (strdedup) {
-        ShenandoahMarkRefsDedupClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkRefsDedupClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkRefsClosure<GENERATION, ENQUEUE_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       } else {
-        ShenandoahMarkRefsClosure<GENERATION> cl(q, rp, old);
-        mark_loop_work<ShenandoahMarkRefsClosure<GENERATION>, GENERATION, CANCELLABLE>(&cl, ld, w, t);
+        using Closure = ShenandoahMarkRefsClosure<GENERATION, NO_DEDUP>;
+        Closure cl(q, rp, old);
+        mark_loop_work<Closure, GENERATION, CANCELLABLE>(&cl, ld, w, t);
       }
     }
   }
