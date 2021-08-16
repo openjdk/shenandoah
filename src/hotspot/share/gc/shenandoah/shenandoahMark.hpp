@@ -89,6 +89,8 @@ private:
 protected:
   void mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
                  bool cancellable, StringDedupMode dedup_mode);
+  template<bool CANCELLABLE, StringDedupMode STRING_DEDUP>
+  void mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHMARK_HPP
