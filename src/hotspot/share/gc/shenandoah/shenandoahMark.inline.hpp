@@ -215,6 +215,7 @@ inline void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl,
 template <GenerationMode GENERATION>
 class ShenandoahSATBBufferClosure : public SATBBufferClosure {
 private:
+  StringDedup::Requests     _stringdedup_requests;
   ShenandoahObjToScanQueue* _queue;
   ShenandoahObjToScanQueue* _old;
   ShenandoahHeap* _heap;
@@ -241,7 +242,7 @@ public:
   void do_buffer_impl(void **buffer, size_t size) {
     for (size_t i = 0; i < size; ++i) {
       oop *p = (oop *) &buffer[i];
-      ShenandoahMark::mark_through_ref<oop, GENERATION, STRING_DEDUP>(p, _queue, _old, _mark_context, false);
+      ShenandoahMark::mark_through_ref<oop, GENERATION, STRING_DEDUP>(p, _queue, _old, _mark_context, &_stringdedup_requests, false);
     }
   }
 };
@@ -260,7 +261,7 @@ bool ShenandoahMark::in_generation(oop obj) {
 }
 
 template<class T, GenerationMode GENERATION, StringDedupMode STRING_DEDUP>
-inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak) {
+inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, StringDedup::Requests* const req, bool weak) {
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
     oop obj = CompressedOops::decode_not_null(o);
@@ -268,7 +269,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
     shenandoah_assert_not_forwarded(p, obj);
     shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
     if (in_generation<GENERATION>(obj)) {
-      mark_ref<STRING_DEDUP>(q, mark_context, weak, obj);
+      mark_ref<STRING_DEDUP>(q, mark_context, req, weak, obj);
       shenandoah_assert_marked(p, obj);
       if (ShenandoahHeap::heap()->mode()->is_generational()) {
         // TODO: As implemented herein, GLOBAL collections reconstruct the card table during GLOBAL concurrent
@@ -290,7 +291,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
       }
     } else if (old != nullptr) {
       // Young mark, bootstrapping old or concurrent with old marking.
-      mark_ref<STRING_DEDUP>(old, mark_context, weak, obj);
+      mark_ref<STRING_DEDUP>(old, mark_context, req, weak, obj);
       shenandoah_assert_marked(p, obj);
     } else if (GENERATION == OLD) {
       // Old mark, found a young pointer.
@@ -305,6 +306,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
 template<StringDedupMode STRING_DEDUP>
 void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
                               ShenandoahMarkingContext* const mark_context,
+                              StringDedup::Requests* const req
                               bool weak, oop obj) {
   bool skip_live = false;
   bool marked;
@@ -319,7 +321,7 @@ void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
 
     if ((STRING_DEDUP == ENQUEUE_DEDUP) && ShenandoahStringDedup::is_candidate(obj)) {
       assert(ShenandoahStringDedup::is_enabled(), "Must be enabled");
-      ShenandoahStringDedup::enqueue_candidate(obj);
+      req->add(obj);
     }
   }
 }

@@ -721,8 +721,6 @@ public:
 
   size_t trash_humongous_region_at(ShenandoahHeapRegion *r);
 
-  void deduplicate_string(oop str);
-
   static inline void increase_object_age(oop obj, uint additional_age);
 
   void purge_old_satb_buffers(bool abandon);

@@ -163,7 +163,9 @@ jint ShenandoahHeap::initialize() {
   Universe::check_alignment(init_byte_size, reg_size_bytes, "Shenandoah heap");
 
   _num_regions = ShenandoahHeapRegion::region_count();
-  assert(_num_regions == (max_byte_size / reg_size_bytes), "Must match");
+  assert(_num_regions == (max_byte_size / reg_size_bytes),
+         "Regions should cover entire heap exactly: " SIZE_FORMAT " != " SIZE_FORMAT "/" SIZE_FORMAT,
+         _num_regions, max_byte_size, reg_size_bytes);
 
   size_t num_committed_regions = init_byte_size / reg_size_bytes;
   num_committed_regions = MIN2(num_committed_regions, _num_regions);
@@ -339,7 +341,7 @@ jint ShenandoahHeap::initialize() {
     for (uintptr_t addr = min; addr <= max; addr <<= 1u) {
       char* req_addr = (char*)addr;
       assert(is_aligned(req_addr, cset_align), "Should be aligned");
-      ReservedSpace cset_rs(cset_size, cset_align, false, req_addr);
+      ReservedSpace cset_rs(cset_size, cset_align, os::vm_page_size(), req_addr);
       if (cset_rs.is_reserved()) {
         assert(cset_rs.base() == req_addr, "Allocated where requested: " PTR_FORMAT ", " PTR_FORMAT, p2i(cset_rs.base()), addr);
         _collection_set = new ShenandoahCollectionSet(this, cset_rs, sh_rs.base());
@@ -348,7 +350,7 @@ jint ShenandoahHeap::initialize() {
     }
 
     if (_collection_set == NULL) {
-      ReservedSpace cset_rs(cset_size, cset_align, false);
+      ReservedSpace cset_rs(cset_size, cset_align, os::vm_page_size());
       _collection_set = new ShenandoahCollectionSet(this, cset_rs, sh_rs.base());
     }
   }
@@ -427,7 +429,6 @@ jint ShenandoahHeap::initialize() {
 
   _monitoring_support = new ShenandoahMonitoringSupport(this);
   _phase_timings = new ShenandoahPhaseTimings(max_workers());
-  ShenandoahStringDedup::initialize();
   ShenandoahCodeRoots::initialize();
 
   if (ShenandoahPacing) {
@@ -1910,11 +1911,6 @@ void ShenandoahHeap::stop() {
 
   // Step 3. Wait until GC worker exits normally.
   control_thread()->stop();
-
-  // Step 4. Stop String Dedup thread if it is active
-  if (ShenandoahStringDedup::is_enabled()) {
-    ShenandoahStringDedup::stop();
-  }
 }
 
 void ShenandoahHeap::stw_unload_classes(bool full_gc) {
@@ -2518,14 +2514,6 @@ bool ShenandoahRegionIterator::has_next() const {
 
 char ShenandoahHeap::gc_state() const {
   return _gc_state.raw_value();
-}
-
-void ShenandoahHeap::deduplicate_string(oop str) {
-  assert(java_lang_String::is_instance(str), "invariant");
-
-  if (ShenandoahStringDedup::is_enabled()) {
-    ShenandoahStringDedup::deduplicate(str);
-  }
 }
 
 ShenandoahLiveData* ShenandoahHeap::get_liveness_cache(uint worker_id) {

@@ -250,7 +250,14 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier(MacroAssembler* masm,
   __ ldrb(rscratch2, gc_state);
 
   // Check for heap stability
-  __ tbz(rscratch2, ShenandoahHeap::HAS_FORWARDED_BITPOS, heap_stable);
+  if (is_strong) {
+    __ tbz(rscratch2, ShenandoahHeap::HAS_FORWARDED_BITPOS, heap_stable);
+  } else {
+    Label lrb;
+    __ tbnz(rscratch2, ShenandoahHeap::WEAK_ROOTS_BITPOS, lrb);
+    __ tbz(rscratch2, ShenandoahHeap::HAS_FORWARDED_BITPOS, heap_stable);
+    __ bind(lrb);
+  }
 
   // use r1 for load address
   Register result_dst = dst;
@@ -289,7 +296,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier(MacroAssembler* masm,
   } else {
     assert(is_phantom, "only remaining strength");
     assert(!is_narrow, "phantom access cannot be narrow");
-    __ mov(lr, CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_weak));
+    __ mov(lr, CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_phantom));
   }
   __ blr(lr);
   __ mov(rscratch1, r0);
@@ -749,9 +756,13 @@ void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAss
   // Is marking still active?
   Address gc_state(thread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
   __ ldrb(tmp, gc_state);
-  __ mov(rscratch2, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
-  __ tst(tmp, rscratch2);
-  __ br(Assembler::EQ, done);
+  if (!ShenandoahHeap::heap()->mode()->is_generational()) {
+    __ tbz(tmp, ShenandoahHeap::YOUNG_MARKING_BITPOS, done);
+  } else {
+    __ mov(rscratch2, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
+    __ tst(tmp, rscratch2);
+    __ br(Assembler::EQ, done);
+  }
 
   // Can we store original value in the thread's buffer?
   __ ldr(tmp, queue_index);

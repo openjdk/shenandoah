@@ -63,7 +63,7 @@ template <GenerationMode GENERATION>
 template <class T>
 void ShenandoahInitMarkRootsClosure<GENERATION>::do_oop_work(T* p) {
   // Only called from STW mark, should not be used to bootstrap old generation marking.
-  ShenandoahMark::mark_through_ref<T, GENERATION, NO_DEDUP>(p, _queue, nullptr, _mark_context, false);
+  ShenandoahMark::mark_through_ref<T, GENERATION, NO_DEDUP>(p, _queue, nullptr, _mark_context, nullptr, false);
 }
 
 class ShenandoahSTWMarkTask : public AbstractGangTask {
