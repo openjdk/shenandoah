@@ -141,7 +141,6 @@ int SharedRuntime::_resolve_virtual_ctr = 0;
 int SharedRuntime::_resolve_opt_virtual_ctr = 0;
 int SharedRuntime::_implicit_null_throws = 0;
 int SharedRuntime::_implicit_div0_throws = 0;
-int SharedRuntime::_throw_null_ctr = 0;
 
 int64_t SharedRuntime::_nof_normal_calls = 0;
 int64_t SharedRuntime::_nof_optimized_calls = 0;
@@ -156,7 +155,6 @@ int64_t SharedRuntime::_nof_megamorphic_interface_calls = 0;
 
 int SharedRuntime::_new_instance_ctr=0;
 int SharedRuntime::_new_array_ctr=0;
-int SharedRuntime::_multi1_ctr=0;
 int SharedRuntime::_multi2_ctr=0;
 int SharedRuntime::_multi3_ctr=0;
 int SharedRuntime::_multi4_ctr=0;
@@ -511,6 +509,9 @@ address SharedRuntime::raw_exception_handler_for_return_address(JavaThread* curr
     // The deferred StackWatermarkSet::after_unwind check will be performed in
     // JavaCallWrapper::~JavaCallWrapper
     return StubRoutines::catch_exception_entry();
+  }
+  if (blob != NULL && blob->is_optimized_entry_blob()) {
+    return ((OptimizedEntryBlob*)blob)->exception_handler();
   }
   // Interpreted code
   if (Interpreter::contains(return_address)) {
@@ -989,7 +990,7 @@ JRT_END
 jlong SharedRuntime::get_java_tid(Thread* thread) {
   if (thread != NULL) {
     if (thread->is_Java_thread()) {
-      oop obj = thread->as_Java_thread()->threadObj();
+      oop obj = JavaThread::cast(thread)->threadObj();
       return (obj == NULL) ? 0 : java_lang_Thread::thread_id(obj);
     }
   }
@@ -1439,7 +1440,7 @@ JRT_BLOCK_ENTRY(address, SharedRuntime::handle_wrong_method_ic_miss(JavaThread* 
   frame stub_frame = current->last_frame();
   assert(stub_frame.is_runtime_frame(), "sanity check");
   frame caller_frame = stub_frame.sender(&reg_map);
-  assert(!caller_frame.is_interpreted_frame() && !caller_frame.is_entry_frame(), "unexpected frame");
+  assert(!caller_frame.is_interpreted_frame() && !caller_frame.is_entry_frame() && !caller_frame.is_optimized_entry_frame(), "unexpected frame");
 #endif /* ASSERT */
 
   methodHandle callee_method;
@@ -1471,7 +1472,8 @@ JRT_BLOCK_ENTRY(address, SharedRuntime::handle_wrong_method(JavaThread* current)
   frame caller_frame = stub_frame.sender(&reg_map);
 
   if (caller_frame.is_interpreted_frame() ||
-      caller_frame.is_entry_frame()) {
+      caller_frame.is_entry_frame() ||
+      caller_frame.is_optimized_entry_frame()) {
     Method* callee = current->callee_target();
     guarantee(callee != NULL && callee->is_method(), "bad handshake");
     current->set_vm_result_2(callee);
@@ -2154,14 +2156,11 @@ void SharedRuntime::print_statistics() {
   ttyLocker ttyl;
   if (xtty != NULL)  xtty->head("statistics type='SharedRuntime'");
 
-  if (_throw_null_ctr) tty->print_cr("%5d implicit null throw", _throw_null_ctr);
-
   SharedRuntime::print_ic_miss_histogram();
 
   // Dump the JRT_ENTRY counters
   if (_new_instance_ctr) tty->print_cr("%5d new instance requires GC", _new_instance_ctr);
   if (_new_array_ctr) tty->print_cr("%5d new array requires GC", _new_array_ctr);
-  if (_multi1_ctr) tty->print_cr("%5d multianewarray 1 dim", _multi1_ctr);
   if (_multi2_ctr) tty->print_cr("%5d multianewarray 2 dim", _multi2_ctr);
   if (_multi3_ctr) tty->print_cr("%5d multianewarray 3 dim", _multi3_ctr);
   if (_multi4_ctr) tty->print_cr("%5d multianewarray 4 dim", _multi4_ctr);

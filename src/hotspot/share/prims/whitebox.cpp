@@ -99,7 +99,7 @@
 #include "gc/g1/g1ConcurrentMark.hpp"
 #include "gc/g1/g1ConcurrentMarkThread.inline.hpp"
 #include "gc/g1/heapRegionManager.hpp"
-#include "gc/g1/heapRegionRemSet.hpp"
+#include "gc/g1/heapRegionRemSet.inline.hpp"
 #endif // INCLUDE_G1GC
 #if INCLUDE_PARALLELGC
 #include "gc/parallel/parallelScavengeHeap.inline.hpp"
@@ -2022,7 +2022,7 @@ WB_ENTRY(jint, WB_HandshakeWalkStack(JNIEnv* env, jobject wb, jobject thread_han
     jint _num_threads_completed;
 
     void do_thread(Thread* th) {
-      JavaThread* jt = th->as_Java_thread();
+      JavaThread* jt = JavaThread::cast(th);
       ResourceMark rm;
 
       jt->print_on(tty);
@@ -2058,7 +2058,7 @@ WB_ENTRY(void, WB_AsyncHandshakeWalkStack(JNIEnv* env, jobject wb, jobject threa
       // AsynchHandshake handshakes are only executed by target.
       assert(_self == th, "Must be");
       assert(Thread::current() == th, "Must be");
-      JavaThread* jt = th->as_Java_thread();
+      JavaThread* jt = JavaThread::cast(th);
       ResourceMark rm;
       jt->print_on(tty);
       jt->print_stack_on(tty);
@@ -2300,13 +2300,14 @@ WB_ENTRY(void, WB_CheckThreadObjOfTerminatingThread(JNIEnv* env, jobject wb, job
   }
 WB_END
 
-WB_ENTRY(void, WB_VerifyFrames(JNIEnv* env, jobject wb, jboolean log))
+WB_ENTRY(void, WB_VerifyFrames(JNIEnv* env, jobject wb, jboolean log, jboolean update_map))
   intx tty_token = -1;
   if (log) {
     tty_token = ttyLocker::hold_tty();
     tty->print_cr("[WhiteBox::VerifyFrames] Walking Frames");
   }
-  for (StackFrameStream fst(JavaThread::current(), true, true); !fst.is_done(); fst.next()) {
+  ResourceMark rm; // for verify
+  for (StackFrameStream fst(JavaThread::current(), update_map, true); !fst.is_done(); fst.next()) {
     frame* current_frame = fst.current();
     if (log) {
       current_frame->print_value();
@@ -2566,7 +2567,7 @@ static JNINativeMethod methods[] = {
   {CC"handshakeWalkStack", CC"(Ljava/lang/Thread;Z)I", (void*)&WB_HandshakeWalkStack },
   {CC"asyncHandshakeWalkStack", CC"(Ljava/lang/Thread;)V", (void*)&WB_AsyncHandshakeWalkStack },
   {CC"checkThreadObjOfTerminatingThread", CC"(Ljava/lang/Thread;)V", (void*)&WB_CheckThreadObjOfTerminatingThread },
-  {CC"verifyFrames",                CC"(Z)V",            (void*)&WB_VerifyFrames },
+  {CC"verifyFrames",                CC"(ZZ)V",            (void*)&WB_VerifyFrames },
   {CC"addCompilerDirective",    CC"(Ljava/lang/String;)I",
                                                       (void*)&WB_AddCompilerDirective },
   {CC"removeCompilerDirective",   CC"(I)V",           (void*)&WB_RemoveCompilerDirective },

@@ -939,7 +939,7 @@ JavaThread* CompileBroker::make_thread(ThreadType type, jobject thread_handle, C
 
       new_thread->set_threadObj(JNIHandles::resolve_non_null(thread_handle));
       if (type == compiler_t) {
-        new_thread->as_CompilerThread()->set_compiler(comp);
+        CompilerThread::cast(new_thread)->set_compiler(comp);
       }
       Threads::add(new_thread);
       Thread::start(new_thread);
@@ -1276,7 +1276,7 @@ void CompileBroker::compile_method_base(const methodHandle& method,
 
       if (!UseJVMCINativeLibrary) {
         // Don't allow blocking compiles if inside a class initializer or while performing class loading
-        vframeStream vfst(thread->as_Java_thread());
+        vframeStream vfst(JavaThread::cast(thread));
         for (; !vfst.at_end(); vfst.next()) {
           if (vfst.method()->is_static_initializer() ||
               (vfst.method()->method_holder()->is_subclass_of(vmClasses::ClassLoader_klass()) &&

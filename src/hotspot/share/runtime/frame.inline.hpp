@@ -50,7 +50,13 @@ inline bool frame::is_stub_frame() const {
 }
 
 inline bool frame::is_first_frame() const {
-  return is_entry_frame() && entry_frame_is_first();
+  return (is_entry_frame() && entry_frame_is_first())
+      // Optimized entry frames are only present on certain platforms
+      || (is_optimized_entry_frame() && optimized_entry_frame_is_first());
+}
+
+inline bool frame::is_optimized_entry_frame() const {
+  return _cb != NULL && _cb->is_optimized_entry_blob();
 }
 
 inline address frame::oopmapreg_to_location(VMReg reg, const RegisterMap* reg_map) const {
