@@ -63,8 +63,6 @@
 #include "utilities/growableArray.hpp"
 #include "gc/shared/workgroup.hpp"
 
-#undef KELVIN_VERBOSE
-
 // After Full GC is done, reconstruct the remembered set by iterating over OLD regions,
 // registering all objects between bottom() and top(), and setting remembered set cards to
 // DIRTY if they hold interesting pointers.
@@ -446,28 +444,15 @@ public:
   void set_from_region(ShenandoahHeapRegion* from_region) {
     _from_region = from_region;
     _from_affiliation = from_region->affiliation();
-#ifdef KELVIN_VERBOSE
-    printf("SPFGCOC(%u)::set_from_region() to " SIZE_FORMAT ", affiliation: %s, has_live: %s\n", _worker_id,
-           from_region->index(), affiliation_name(from_region->affiliation()), _from_region->has_live()? "yes": "no");
-    fflush(stdout);
-#endif
     if (_from_region->has_live()) {
       if (_from_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
         if (_old_to_region == nullptr) {
-#ifdef KELVIN_VERBOSE
-          printf("SPFGCOC(%u)::establishing _old_to_region as " SIZE_FORMAT, _worker_id, from_region->index());
-          fflush(stdout);
-#endif
           _old_to_region = from_region;
           _old_compact_point = from_region->bottom();
         }
       } else {
         assert(_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION, "from_region must be OLD or YOUNG");
         if (_young_to_region == nullptr) {
-#ifdef KELVIN_VERBOSE
-          printf("SPFGCOC(%u)::establishing _young_to_region as " SIZE_FORMAT "\n", _worker_id, from_region->index());
-          fflush(stdout);
-#endif
           _young_to_region = from_region;
           _young_compact_point = from_region->bottom();
         }
@@ -482,7 +467,9 @@ public:
 
   void finish_old_region() {
     if (_old_to_region != nullptr) {
-      _compactor->add_to_young_used(_worker_id, _old_compact_point - _old_to_region->bottom());
+      log_debug(gc)("Planned compaction into Old Region " SIZE_FORMAT ", used: " SIZE_FORMAT " tabulated by worker %u",
+                    _old_to_region->index(), _old_compact_point - _old_to_region->bottom(), _worker_id);
+      _compactor->add_to_old_used(_worker_id, _old_compact_point - _old_to_region->bottom());
       _old_to_region->set_new_top(_old_compact_point);
       _old_to_region = nullptr;
     }
@@ -490,7 +477,9 @@ public:
 
   void finish_young_region() {
     if (_young_to_region != nullptr) {
-      _compactor->add_to_old_used(_worker_id, _old_compact_point - _young_to_region->bottom());
+      log_debug(gc)("Worker %u planned compaction into Young Region " SIZE_FORMAT ", used: " SIZE_FORMAT,
+                    _worker_id, _young_to_region->index(), _young_compact_point - _young_to_region->bottom());
+      _compactor->add_to_young_used(_worker_id, _young_compact_point - _young_to_region->bottom());
       _young_to_region->set_new_top(_young_compact_point);
       _young_to_region = nullptr;
     }
@@ -511,55 +500,31 @@ public:
     assert(_heap->complete_marking_context()->is_marked(p), "must be marked");
     assert(!_heap->complete_marking_context()->allocated_after_mark_start(p), "must be truly marked");
 
-#ifdef KELVIN_VERBOSE
-    printf("SPFGCOC(%u)::do_object(" PTR_FORMAT ")\n", _worker_id, p2i(cast_from_oop<HeapWord*>(p)));
-    fflush(stdout);
-#endif
-
     size_t obj_size = p->size();
-#ifdef KELVIN_VERBOSE
-    // I suspect the SIGSEGV is happening between previous report and this one.
-    printf("SPFGCOC(%u)::do_object() fetched size " SIZE_FORMAT "\n", _worker_id, obj_size);
-    fflush(stdout);
-#endif
-
     if (_from_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
       assert(_old_to_region != nullptr, "_old_to_region should not be NULL when compacting OLD _from_region");
       if (_old_compact_point + obj_size > _old_to_region->end()) {
         ShenandoahHeapRegion* new_to_region;
 
+        log_debug(gc)("Worker %u finishing old region " SIZE_FORMAT ", compact_point: " PTR_FORMAT ", obj_size: " SIZE_FORMAT
+                      ", &compact_point[obj_size]: " PTR_FORMAT ", region end: " PTR_FORMAT,  _worker_id, _old_to_region->index(),
+                      p2i(_old_compact_point), obj_size, p2i(_old_compact_point + obj_size), p2i(_old_to_region->end()));
+
         // Object does not fit.  Get a new _old_to_region.
         finish_old_region();
-#ifdef KELVIN_VERBOSE
-        printf("SPFGCOC(%u)::do_object<OLD>() needs new _old_to_region, empty_regions_pos: %u, empty_regions.length(): %u\n",
-               _worker_id, _empty_regions_pos, _empty_regions.length());
-        fflush(stdout);
-#endif
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
           new_to_region->set_affiliation(OLD_GENERATION);
-#ifdef KELVIN_VERBOSE
-          printf("SPFGCOC(%u)::do_object<OLD>() got empty region " SIZE_FORMAT "\n", _worker_id, new_to_region->index());
-          fflush(stdout);
-#endif
         } else {
           // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
           // Since we're out of empty regions, let's use _from_region to hold the results of its own compaction.
           new_to_region = _from_region;
-#ifdef KELVIN_VERBOSE
-          printf("SPFGCOC(%u)::do_object<OLD>() reusing _from_region " SIZE_FORMAT "\n", _worker_id, _from_region->index());
-          fflush(stdout);
-#endif
         }
 
         assert(new_to_region != _old_to_region, "must not reuse same OLD to-region");
         assert(new_to_region != NULL, "must not be NULL");
-#ifdef KELVIN_VERBOSE
-        printf("SPFGCOC(%u)::replacing _old_to_region with " SIZE_FORMAT "\n", _worker_id, new_to_region->index());
-        fflush(stdout);
-#endif
         _old_to_region = new_to_region;
         _old_compact_point = _old_to_region->bottom();
       }
@@ -568,11 +533,6 @@ public:
       assert(_old_compact_point + obj_size <= _old_to_region->end(), "must fit");
       shenandoah_assert_not_forwarded(NULL, p);
       _preserved_marks->push_if_necessary(p, p->mark());
-#ifdef KELVIN_VERBOSE
-      printf("SPFGCOC(%u)::do_object<OLD>(" PTR_FORMAT ") of size " SIZE_FORMAT " to be copied to " PTR_FORMAT "\n",
-             _worker_id, p2i(cast_from_oop<HeapWord*>(p)), obj_size, p2i(_old_compact_point));
-      fflush(stdout);
-#endif
       p->forward_to(oop(_old_compact_point));
       _old_compact_point += obj_size;
     } else {
@@ -583,38 +543,26 @@ public:
       if (_young_compact_point + obj_size > _young_to_region->end()) {
         ShenandoahHeapRegion* new_to_region;
 
+
+        log_debug(gc)("Worker %u finishing young region " SIZE_FORMAT ", compact_point: " PTR_FORMAT ", obj_size: " SIZE_FORMAT
+                      ", &compact_point[obj_size]: " PTR_FORMAT ", region end: " PTR_FORMAT,  _worker_id, _young_to_region->index(),
+                      p2i(_young_compact_point), obj_size, p2i(_young_compact_point + obj_size), p2i(_young_to_region->end()));
+
         // Object does not fit.  Get a new _young_to_region.
         finish_young_region();
-#ifdef KELVIN_VERBOSE
-        printf("SPFGCOC(%u)::do_object<YOUNG>() needs new _young_to_region, empty_regions_pos: %u, empty_regions.length(): %u\n",
-               _worker_id, _empty_regions_pos, _empty_regions.length());
-        fflush(stdout);
-#endif
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
           new_to_region->set_affiliation(YOUNG_GENERATION);
-#ifdef KELVIN_VERBOSE
-          printf("SPFGCOC(%u)::do_object<YOUNG>() got empty region " SIZE_FORMAT "\n", _worker_id, new_to_region->index());
-          fflush(stdout);
-#endif
         } else {
           // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
           // Since we're out of empty regions, let's use _from_region to hold the results of its own compaction.
           new_to_region = _from_region;
-#ifdef KELVIN_VERBOSE
-          printf("SPFGCOC(%u)::do_object<YOUNG>() reusing _from_region " SIZE_FORMAT "\n", _worker_id, _from_region->index());
-          fflush(stdout);
-#endif
         }
 
         assert(new_to_region != _young_to_region, "must not reuse same OLD to-region");
         assert(new_to_region != NULL, "must not be NULL");
-#ifdef KELVIN_VERBOSE
-        printf("SPFGCOC(%u)::replacing _young_to_region with " SIZE_FORMAT "\n", _worker_id, new_to_region->index());
-        fflush(stdout);
-#endif
         _young_to_region = new_to_region;
         _young_compact_point = _young_to_region->bottom();
       }
@@ -623,11 +571,6 @@ public:
       assert(_young_compact_point + obj_size <= _young_to_region->end(), "must fit");
       shenandoah_assert_not_forwarded(NULL, p);
       _preserved_marks->push_if_necessary(p, p->mark());
-#ifdef KELVIN_VERBOSE
-      printf("SPFGCOC(%u)::do_object<YOUNG>(" PTR_FORMAT ") of size " SIZE_FORMAT " to be copied to " PTR_FORMAT "\n",
-             _worker_id, p2i(cast_from_oop<HeapWord*>(p)), obj_size, p2i(_young_compact_point));
-      fflush(stdout);
-#endif
       p->forward_to(oop(_young_compact_point));
       _young_compact_point += obj_size;
     }
@@ -747,6 +690,9 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
                                                                old_to_region, young_to_region, worker_id);
     while (from_region != NULL) {
       assert(is_candidate_region(from_region), "Sanity");
+      log_debug(gc)("Worker %u compacting %s Region " SIZE_FORMAT " which had used " SIZE_FORMAT " and %s live",
+                    worker_id, affiliation_name(from_region->affiliation()),
+                    from_region->index(), from_region->used(), from_region->has_live()? "has": "does not have");
       cl.set_from_region(from_region);
       if (from_region->has_live()) {
         _heap->marked_object_iterate(from_region, &cl);
@@ -790,27 +736,41 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
   }
 }
 
+// Accumulate HeapWords of memory used in young-gen memory.
 void ShenandoahPrepareForCompactionTask::add_to_young_used(size_t worker_id, size_t amount) {
+  log_debug(gc)("Adding to _young_used for worker_id: " SIZE_FORMAT ", amount: " SIZE_FORMAT, worker_id, amount);
   _young_used[worker_id] += amount;
 }
 
+// Accumulate HeapWords of memory used in old-gen memory.
 void ShenandoahPrepareForCompactionTask::add_to_old_used(size_t worker_id, size_t amount) {
+  log_debug(gc)("Adding to _old_used for worker_id: " SIZE_FORMAT ", amount: " SIZE_FORMAT, worker_id, amount);
   _old_used[worker_id] += amount;
 }
 
+// Return total number of bytes used in young-gen memory
 size_t ShenandoahPrepareForCompactionTask::young_used() {
-  size_t result;
+  size_t result = 0;
+  log_debug(gc)("Calculating young_used by accumulating worker totals");
   for (size_t i = 0; i < _num_workers; i++) {
+    log_debug(gc)("  worker [" SIZE_FORMAT "] contributed " SIZE_FORMAT, i, _young_used[i]);
     result += _young_used[i];
   }
+  result *= HeapWordSize;
+  log_debug(gc)("Accumulated _young_used is: " SIZE_FORMAT, result);
   return result;
 }
 
+// Return total number of bytes used in old-gen memory
 size_t ShenandoahPrepareForCompactionTask::old_used() {
-  size_t result;
+  size_t result = 0;
+  log_debug(gc)("Calculating old_used by accumulating worker totals");
   for (size_t i = 0; i < _num_workers; i++) {
-    result += _young_used[i];
+    log_debug(gc)("  worker [" SIZE_FORMAT "] contributed " SIZE_FORMAT, i, _old_used[i]);
+    result += _old_used[i];
   }
+  log_debug(gc)("Accumulated _old_used is: " SIZE_FORMAT, result);
+  result *= HeapWordSize;
   return result;
 }
 
@@ -837,10 +797,12 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
 
     if (r->is_humongous_start() && heap->mode()->is_generational()) {
       oop obj = oop(r->bottom());
+      size_t humongous_bytes = obj->size() * HeapWordSize;
+      log_debug(gc)("Adjusting used for humongous %s object by " SIZE_FORMAT, r->is_old()? "OLD": "YOUNG", humongous_bytes);
       if (r->is_old()) {
-        heap->old_generation()->increase_used(obj->size());
+        heap->old_generation()->increase_used(humongous_bytes);
       } else {
-        heap->young_generation()->increase_used(obj->size());
+        heap->young_generation()->increase_used(humongous_bytes);
       }
     }
     if (r->is_humongous_continuation() || (r->new_top() == r->bottom())) {
@@ -1117,6 +1079,8 @@ void ShenandoahFullGC::phase2_calculate_target_addresses(ShenandoahHeapRegionSet
     heap->workers()->run_task(&task);
 
     if (heap->mode()->is_generational()) {
+      log_debug(gc)("Usage after compacting regular objects is young: " SIZE_FORMAT ", old: " SIZE_FORMAT,
+                    task.young_used(), task.old_used());
       heap->young_generation()->increase_used(task.young_used());
       heap->old_generation()->increase_used(task.old_used());
     }
@@ -1470,6 +1434,10 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     ShenandoahPostCompactClosure post_compact;
     heap->heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
+    if (heap->mode()->is_generational()) {
+      log_debug(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
+                    post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
+    }
 
     heap->collection_set()->clear();
     heap->free_set()->rebuild();

@@ -30,10 +30,12 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.inline.hpp"
 #include "memory/resourceArea.hpp"
@@ -345,6 +347,8 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion* r) {
     _used += r->used();
+    log_debug(gc)("ShenandoahCalculatRegionStatsClosure added " SIZE_FORMAT " for %s Region " SIZE_FORMAT ", yielding: " SIZE_FORMAT,
+                  r->used(), r->is_humongous()? "humongous": "regular", r->index(), _used);
     _garbage += r->garbage();
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
   }
@@ -723,6 +727,14 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     ShenandoahCalculateRegionStatsClosure cl;
     _heap->heap_region_iterate(&cl);
+
+    log_debug(gc)("Safepoint verification: total usage hereby calculated as: " SIZE_FORMAT, cl.used());
+    log_debug(gc)("                            previous tabulation of usage: " SIZE_FORMAT, _heap->used());
+    if (_heap->mode()->is_generational()) {
+      log_debug(gc)("                                          BTW: old usage: " SIZE_FORMAT, _heap->old_generation()->used());
+      log_debug(gc)("                                             young usage: " SIZE_FORMAT, _heap->young_generation()->used());
+    }
+
     size_t heap_used = _heap->used();
     guarantee(cl.used() == heap_used,
               "%s: heap used size must be consistent: heap-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
@@ -769,6 +781,12 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     ShenandoahCalculateRegionStatsClosure cl;
     generation->heap_region_iterate(&cl);
+
+    log_debug(gc)("Safepoint verification: generation %s usage hereby calculated as: " SIZE_FORMAT,
+                  generation->name(), cl.used());
+    log_debug(gc)("                                    previous tabulation of usage: " SIZE_FORMAT, generation->used());
+
+
     size_t generation_used = generation->used();
     guarantee(cl.used() == generation_used,
               "%s: generation (%s) used size must be consistent: generation-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
