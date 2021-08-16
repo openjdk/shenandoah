@@ -306,7 +306,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
 template<StringDedupMode STRING_DEDUP>
 void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
                               ShenandoahMarkingContext* const mark_context,
-                              StringDedup::Requests* const req
+                              StringDedup::Requests* const req,
                               bool weak, oop obj) {
   bool skip_live = false;
   bool marked;

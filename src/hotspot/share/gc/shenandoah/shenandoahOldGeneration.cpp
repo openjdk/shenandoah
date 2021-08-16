@@ -59,6 +59,7 @@ class ShenandoahProcessOldSATB : public SATBBufferClosure {
   ShenandoahObjToScanQueue* _queue;
   ShenandoahHeap* _heap;
   ShenandoahMarkingContext* const _mark_context;
+  StringDedup::Requests _stringdedup_requests;
 
  public:
   size_t _trashed_oops;
@@ -85,7 +86,7 @@ class ShenandoahProcessOldSATB : public SATBBufferClosure {
       ShenandoahHeapRegion* region = _heap->heap_region_containing(*p);
       if (region->is_old()) {
         if (!region->is_trash()) {
-          ShenandoahMark::mark_through_ref<oop, OLD, STRING_DEDUP>(p, _queue, NULL, _mark_context, false);
+          ShenandoahMark::mark_through_ref<oop, OLD, STRING_DEDUP>(p, _queue, NULL, _mark_context, &_stringdedup_requests, false);
         } else {
           ++_trashed_oops;
         }

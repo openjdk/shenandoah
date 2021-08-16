@@ -83,7 +83,8 @@ private:
 
   template<StringDedupMode STRING_DEDUP>
   static void mark_ref(ShenandoahObjToScanQueue* q,
-                       ShenandoahMarkingContext* const mark_context, bool weak,
+                       ShenandoahMarkingContext* const mark_context,
+                       StringDedup::Requests* const req, bool weak,
                        oop obj);
 
 protected:
