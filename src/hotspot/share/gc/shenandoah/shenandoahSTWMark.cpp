@@ -37,28 +37,33 @@
 #include "gc/shenandoah/shenandoahSTWMark.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 
+template<GenerationMode GENERATION>
 class ShenandoahInitMarkRootsClosure : public OopClosure {
-private:
+ private:
   ShenandoahObjToScanQueue* const _queue;
   ShenandoahMarkingContext* const _mark_context;
 
   template <class T>
-  inline void do_oop_work(T* p);
-public:
+    inline void do_oop_work(T* p);
+
+ public:
   ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q);
 
   void do_oop(narrowOop* p) { do_oop_work(p); }
   void do_oop(oop* p)       { do_oop_work(p); }
 };
 
-ShenandoahInitMarkRootsClosure::ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q) :
-  _queue(q),
-  _mark_context(ShenandoahHeap::heap()->marking_context()) {
+template<GenerationMode GENERATION>
+ShenandoahInitMarkRootsClosure<GENERATION>::ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q) :
+_queue(q),
+_mark_context(ShenandoahHeap::heap()->marking_context()) {
 }
 
+template <GenerationMode GENERATION>
 template <class T>
-void ShenandoahInitMarkRootsClosure::do_oop_work(T* p) {
-  ShenandoahMark::mark_through_ref<T, NO_DEDUP>(p, _queue, _mark_context, false);
+void ShenandoahInitMarkRootsClosure<GENERATION>::do_oop_work(T* p) {
+  // Only called from STW mark, should not be used to bootstrap old generation marking.
+  ShenandoahMark::mark_through_ref<T, GENERATION, NO_DEDUP>(p, _queue, nullptr, _mark_context, false);
 }
 
 class ShenandoahSTWMarkTask : public AbstractGangTask {

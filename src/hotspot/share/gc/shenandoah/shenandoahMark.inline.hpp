@@ -39,19 +39,6 @@
 #include "runtime/prefetch.inline.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-template<GenerationMode GENERATION>
-ShenandoahInitMarkRootsClosure<GENERATION>::ShenandoahInitMarkRootsClosure(ShenandoahObjToScanQueue* q) :
-  _queue(q),
-  _mark_context(ShenandoahHeap::heap()->marking_context()) {
-}
-
-template <GenerationMode GENERATION>
-template <class T>
-void ShenandoahInitMarkRootsClosure<GENERATION>::do_oop_work(T* p) {
-  // Only called from STW mark, should not be used to bootstrap old generation marking.
-  ShenandoahMark::mark_through_ref<T, GENERATION, NO_DEDUP>(p, _queue, nullptr, _mark_context, false);
-}
-
 template <class T>
 void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, ShenandoahMarkTask* task) {
   oop obj = task->obj();
