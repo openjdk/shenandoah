@@ -323,10 +323,7 @@ void ShenandoahGeneration::decrement_affiliated_region_count() {
 void ShenandoahGeneration::clear_used() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
-  size_t prev_in_use;
-  do {
-    prev_in_use = _used;
-  } while (Atomic::cmpxchg(&_used, prev_in_use, (size_t) 0) != prev_in_use);
+  Atomic::store(&_used, (size_t)0);
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
@@ -342,7 +339,7 @@ size_t ShenandoahGeneration::used_regions_size() const {
   return _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes();
 }
 
-size_t ShenandoahGeneration::available () const {
+size_t ShenandoahGeneration::available() const {
   size_t in_use = used();
   size_t soft_capacity = soft_max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;

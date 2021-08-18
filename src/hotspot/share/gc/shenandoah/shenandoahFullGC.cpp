@@ -82,11 +82,11 @@ public:
     ShenandoahSetRememberedCardsToDirtyClosure dirty_cards_for_interesting_pointers;
 
     while (r != NULL) {
-      if (r->is_old()) {
+      if (r->is_old() && r->is_active()) {
         HeapWord* obj_addr = r->bottom();
         if (r->is_humongous_start()) {
           // First, clear the remembered set
-          oop obj = oop(obj_addr);
+          oop obj = cast_to_oop(obj_addr);
           size_t size = obj->size();
           HeapWord* end_object = r->bottom() + size;
 
@@ -111,7 +111,7 @@ public:
           // Then iterate over all objects, registering object and DIRTYing relevant remembered set cards
           HeapWord* t = r->top();
           while (obj_addr < t) {
-            oop obj = oop(obj_addr);
+            oop obj = cast_to_oop(obj_addr);
             size_t size = obj->size();
             scanner->register_object_wo_lock(obj_addr);
             obj->oop_iterate(&dirty_cards_for_interesting_pointers);
@@ -119,7 +119,7 @@ public:
           }
         } // else, ignore humongous continuation region
       }
-      // else, this is a FREE or YOUNG region and I can ignore it.
+      // else, this region is FREE or YOUNG or inactive and we can ignore it.
       r = _regions.next();
     }
   }
@@ -533,7 +533,7 @@ public:
       assert(_old_compact_point + obj_size <= _old_to_region->end(), "must fit");
       shenandoah_assert_not_forwarded(NULL, p);
       _preserved_marks->push_if_necessary(p, p->mark());
-      p->forward_to(oop(_old_compact_point));
+      p->forward_to(cast_to_oop(_old_compact_point));
       _old_compact_point += obj_size;
     } else {
       assert(_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION,
@@ -571,7 +571,7 @@ public:
       assert(_young_compact_point + obj_size <= _young_to_region->end(), "must fit");
       shenandoah_assert_not_forwarded(NULL, p);
       _preserved_marks->push_if_necessary(p, p->mark());
-      p->forward_to(oop(_young_compact_point));
+      p->forward_to(cast_to_oop(_young_compact_point));
       _young_compact_point += obj_size;
     }
   }
@@ -796,7 +796,7 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
     ShenandoahHeapRegion *r = heap->get_region(c - 1);
 
     if (r->is_humongous_start() && heap->mode()->is_generational()) {
-      oop obj = oop(r->bottom());
+      oop obj = cast_to_oop(r->bottom());
       size_t humongous_bytes = obj->size() * HeapWordSize;
       log_debug(gc)("Adjusting used for humongous %s object by " SIZE_FORMAT, r->is_old()? "OLD": "YOUNG", humongous_bytes);
       if (r->is_old()) {
@@ -1435,7 +1435,7 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     heap->heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
     if (heap->mode()->is_generational()) {
-      log_debug(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
+      log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
                     post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
     }
 

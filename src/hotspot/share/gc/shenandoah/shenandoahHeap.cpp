@@ -1257,7 +1257,7 @@ public:
     // TODO; Retiring a PLAB disables it so it cannot support future allocations.  This is overkill.  For old-gen
     // regions, the important thing is to make the memory parsable by the remembered-set scanning code that drives
     // the update-refs processing that follows.  After the updating of old-gen references is done, it is ok to carve
-    // this remnan object into smaller pieces during the subsequent evacuation pass, as long as the PLAB is made parsable
+    // this remnant object into smaller pieces during the subsequent evacuation pass, as long as the PLAB is made parsable
     // again before the next update-refs phase.
     if (plab->top() != nullptr) {
       ShenandoahHeapRegion* r = ShenandoahHeap::heap()->heap_region_containing(plab->top());
@@ -2677,7 +2677,7 @@ void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, Shenand
 
   HeapWord* obj_addr = from;
   if (r->is_humongous_start()) {
-    oop obj = oop(obj_addr);
+    oop obj = cast_to_oop(obj_addr);
     if (!ctx || ctx->is_marked(obj)) {
       size_t card_index = scanner->card_index_for_addr(obj_addr);
       // For humongous objects, the typical object is an array, so the following checks may be overkill
@@ -2696,7 +2696,7 @@ void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, Shenand
     }
   } else if (!r->is_humongous()) {
     while (obj_addr < top) {
-      oop obj = oop(obj_addr);
+      oop obj = cast_to_oop(obj_addr);
       // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
       if (!ctx || ctx->is_marked(obj)) {
         size_t card_index = scanner->card_index_for_addr(obj_addr);
