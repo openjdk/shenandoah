@@ -223,6 +223,8 @@ if (is_reference_type(type)) {
         // Use the saved dst in the disjoint case
         dst = r11;
       }
+    } else {
+      tmp = rscratch1;
     }
 #else
     if (disjoint) {
