@@ -98,7 +98,7 @@
           range(0,100)                                                      \
                                                                             \
   product(uintx, ShenandoahMinFreeThreshold, 10, EXPERIMENTAL,              \
-          "Percentage of heap occupancy below which most heuristics "       \
+          "Percentage of free heap memory below which most heuristics "     \
           "trigger collection independent of other triggers. Provides "     \
           "a safety margin for many heuristics. In percents of (soft) "     \
           "max heap size.")                                                 \

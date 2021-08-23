@@ -114,8 +114,7 @@ public:
             oop obj = cast_to_oop(obj_addr);
             size_t size = obj->size();
             scanner->register_object_wo_lock(obj_addr);
-            obj->oop_iterate(&dirty_cards_for_interesting_pointers);
-            obj_addr += size;
+            obj_addr += obj->oop_iterate_size(&dirty_cards_for_interesting_pointers);
           }
         } // else, ignore humongous continuation region
       }
@@ -301,8 +300,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     BiasedLocking::restore_marks();
     _preserved_marks->reclaim();
 
-    if (heap->mode()->is_generational())
-    {
+    if (heap->mode()->is_generational()) {
       ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_reconstruct_remembered_set);
       ShenandoahReconstructRememberedSetTask task;
       heap->workers()->run_task(&task);
