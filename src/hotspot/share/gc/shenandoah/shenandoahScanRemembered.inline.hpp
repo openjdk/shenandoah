@@ -515,7 +515,12 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
     size_t prev_offset = offset;
     do {
       HeapWord* obj_addr = base_addr + offset;
-      oop obj = oop(base_addr + offset);
+      ShenandoahHeapRegion* r = heap->heap_region_containing(obj_addr);
+      if (obj_addr >= r->top()) {
+        // Don't read past allocated objects
+	break;
+      }
+      oop obj = cast_to_oop(base_addr + offset);
       prev_offset = offset;
       offset += obj->size();
     } while (offset < CardTable::card_size_in_words);
