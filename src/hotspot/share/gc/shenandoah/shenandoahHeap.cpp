@@ -2591,7 +2591,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
   ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
   ShenandoahMarkingContext* ctx;
 
-  if (doing_mixed_evacuations()) {
+  if (doing_mixed_evacuations() || active_generation()->generation_mode() == GLOBAL) {
     ctx = mark_context;
   } else {
     ctx = nullptr;
