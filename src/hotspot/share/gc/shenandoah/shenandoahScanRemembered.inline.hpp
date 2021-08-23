@@ -518,7 +518,8 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
       ShenandoahHeapRegion* r = heap->heap_region_containing(obj_addr);
       if (obj_addr >= r->top()) {
         // Don't read past allocated objects
-	break;
+        offset = prev_offset;
+        break;
       }
       oop obj = cast_to_oop(base_addr + offset);
       prev_offset = offset;
