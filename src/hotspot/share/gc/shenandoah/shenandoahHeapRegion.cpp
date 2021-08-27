@@ -47,7 +47,6 @@
 #include "runtime/safepoint.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-#undef KELVIN_VERBOSE
 
 size_t ShenandoahHeapRegion::RegionCount = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytes = 0;
@@ -851,25 +850,12 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
                   ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT "\n",
                   index(), affiliation_name(_affiliation), affiliation_name(new_affiliation),
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
-
-#ifdef KELVIN_VERBOSE
-    printf("Setting affiliation of Region " SIZE_FORMAT " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT
-           ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT "\n",
-           index(), affiliation_name(_affiliation), affiliation_name(new_affiliation),
-           p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(this->get_update_watermark()), p2i(ctx->top_bitmap(this)));
-    fflush(stdout);
-#endif
   }
 
 #ifdef ASSERT
   {
     // During full gc, heap->complete_marking_context() is not valid, may equal nullptr.
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
-#ifdef KELVIN_VERBOSE
-    printf("While setting affiliation, ctx is " PTR_FORMAT "\n", p2i(ctx));
-    fflush(stdout);
-#endif
-
     size_t idx = this->index();
     HeapWord* top_bitmap = ctx->top_bitmap(this);
 
