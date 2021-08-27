@@ -212,7 +212,7 @@ bool ShenandoahAdaptiveOldHeuristics::should_start_gc() {
   log_debug(gc)("should_start_old_gc? available: " SIZE_FORMAT ", soft_max_capacity: " SIZE_FORMAT ", max_capacity: " SIZE_FORMAT,
                 available, capacity, max_capacity);
   log_debug(gc)("  allocated: " SIZE_FORMAT, allocated);
-  
+
   // Make sure the code below treats available without the soft tail.
   size_t soft_tail = max_capacity - capacity;
   available = (available > soft_tail) ? (available - soft_tail) : 0;

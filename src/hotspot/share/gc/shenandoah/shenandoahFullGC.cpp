@@ -393,7 +393,7 @@ public:
     // want to compact all live regions to the start of the heap, which sometimes
     // means moving them into the fully empty regions.
     if (r->is_empty()) return true;
-    
+
     // Can move the region, and this is not the humongous region. Humongous
     // moves are special cased here, because their moves are handled separately.
     return r->is_stw_move_allowed() && !r->is_humongous();
@@ -674,13 +674,13 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
   if (from_region == NULL) {
     return;
   }
-  
+
   // Sliding compaction. Walk all regions in the slice, and compact them.
   // Remember empty regions and reuse them as needed.
   ResourceMark rm;
-  
+
   GrowableArray<ShenandoahHeapRegion*> empty_regions((int)_heap->num_regions());
-  
+
   if (_heap->mode()->is_generational()) {
     ShenandoahHeapRegion* old_to_region = (from_region->is_old())? from_region: nullptr;
     ShenandoahHeapRegion* young_to_region = (from_region->is_young())? from_region: nullptr;
@@ -695,7 +695,7 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
       if (from_region->has_live()) {
         _heap->marked_object_iterate(from_region, &cl);
       }
-      
+
       // Compacted the region to somewhere else? From-region is empty then.
       if (!cl.is_compact_same_region()) {
         empty_regions.append(from_region);
@@ -703,7 +703,7 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
       from_region = it.next();
     }
     cl.finish();
-    
+
     // Mark all remaining regions as empty
     for (int pos = cl.empty_regions_pos(); pos < empty_regions.length(); ++pos) {
       ShenandoahHeapRegion* r = empty_regions.at(pos);
@@ -717,7 +717,7 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
       if (from_region->has_live()) {
         _heap->marked_object_iterate(from_region, &cl);
       }
-      
+
       // Compacted the region to somewhere else? From-region is empty then.
       if (!cl.is_compact_same_region()) {
         empty_regions.append(from_region);
@@ -725,7 +725,7 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
       from_region = it.next();
     }
     cl.finish_region();
-    
+
     // Mark all remaining regions as empty
     for (int pos = cl.empty_regions_pos(); pos < empty_regions.length(); ++pos) {
       ShenandoahHeapRegion* r = empty_regions.at(pos);
