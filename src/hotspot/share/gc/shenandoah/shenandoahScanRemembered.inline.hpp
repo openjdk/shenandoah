@@ -557,11 +557,11 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
     HeapWord* end_of_interest = base_addr + max_offset;
     do {
       HeapWord* obj_addr = base_addr + offset;
-      oop obj = oop(base_addr + offset);
+      oop obj = cast_to_oop(base_addr + offset);
       prev_offset = offset;
       offset = ctx->get_next_marked_addr(base_addr + offset, end_of_interest) - base_addr;
     } while (offset < max_offset);
-    oop last_obj = oop(base_addr + prev_offset);
+    oop last_obj = cast_to_oop(base_addr + prev_offset);
     if (prev_offset + last_obj->size() >= max_offset) {
       if (_scc->get_last_start(index) != prev_offset) {
         return false;
