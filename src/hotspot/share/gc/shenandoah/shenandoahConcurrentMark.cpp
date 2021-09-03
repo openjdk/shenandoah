@@ -88,9 +88,11 @@ public:
     ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
     ShenandoahReferenceProcessor* rp = heap->active_generation()->ref_processor();
     assert(rp != NULL, "need reference processor");
+    StringDedup::Requests requests;
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
                    true /*cancellable*/,
-                   ShenandoahStringDedup::is_enabled() ? ENQUEUE_DEDUP : NO_DEDUP);
+                   ShenandoahStringDedup::is_enabled() ? ENQUEUE_DEDUP : NO_DEDUP,
+                   &requests);
   }
 };
 
@@ -136,6 +138,7 @@ public:
     ShenandoahHeap* heap = ShenandoahHeap::heap();
 
     ShenandoahParallelWorkerSession worker_session(worker_id);
+    StringDedup::Requests requests;
     ShenandoahReferenceProcessor* rp = heap->active_generation()->ref_processor();
 
     // First drain remaining SATB buffers.
@@ -148,14 +151,15 @@ public:
       while (satb_mq_set.apply_closure_to_completed_buffer(&cl)) {}
       assert(!heap->has_forwarded_objects(), "Not expected");
 
-      ShenandoahMarkRefsClosure<GENERATION, NO_DEDUP> mark_cl(q, rp, old);
+      ShenandoahMarkRefsClosure<GENERATION> mark_cl(q, rp, old);
       ShenandoahSATBAndRemarkThreadsClosure tc(satb_mq_set,
                                                ShenandoahIUBarrier ? &mark_cl : NULL);
       Threads::threads_do(&tc);
     }
     _cm->mark_loop(GENERATION, worker_id, _terminator, rp,
                    false /*not cancellable*/,
-                   _dedup_string ? ENQUEUE_DEDUP : NO_DEDUP);
+                   _dedup_string ? ENQUEUE_DEDUP : NO_DEDUP,
+                   &requests);
     assert(_cm->task_queues()->is_empty(), "Should be empty");
   }
 };
@@ -200,11 +204,8 @@ template<GenerationMode GENERATION>
 void ShenandoahMarkConcurrentRootsTask<GENERATION>::work(uint worker_id) {
   ShenandoahConcurrentWorkerSession worker_session(worker_id);
   ShenandoahObjToScanQueue* q = _queue_set->queue(worker_id);
-
-  // Cannot enable string deduplication during root scanning. Otherwise,
-  // may result lock inversion between stack watermark and string dedup queue lock.
   ShenandoahObjToScanQueue* old = _old_queue_set == NULL ? NULL : _old_queue_set->queue(worker_id);
-  ShenandoahMarkRefsClosure<GENERATION, NO_DEDUP> cl(q, _rp, old);
+  ShenandoahMarkRefsClosure<GENERATION> cl(q, _rp, old);
   _root_scanner.roots_do(&cl, worker_id);
 }
 

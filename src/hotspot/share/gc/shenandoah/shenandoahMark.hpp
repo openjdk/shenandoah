@@ -44,8 +44,8 @@ protected:
   ShenandoahMark(ShenandoahGeneration* generation);
 
 public:
-  template<class T, GenerationMode GENERATION, StringDedupMode STRING_DEDUP>
-  static inline void mark_through_ref(T* p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, StringDedup::Requests* const req, bool weak);
+  template<class T, GenerationMode GENERATION>
+  static inline void mark_through_ref(T* p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak);
 
   // Helpers
   inline ShenandoahObjToScanQueueSet* task_queues() const;
@@ -60,8 +60,8 @@ public:
 
 // ---------- Marking loop and tasks
 private:
-  template <class T>
-  inline void do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, ShenandoahMarkTask* task);
+  template <class T, StringDedupMode STRING_DEDUP>
+  inline void do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task);
 
   template <class T>
   inline void do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, oop array, bool weak);
@@ -71,26 +71,28 @@ private:
 
   inline void count_liveness(ShenandoahLiveData* live_data, oop obj);
 
-  template <class T, GenerationMode GENERATION, bool CANCELLABLE>
-  void mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *t);
+  template <class T, GenerationMode GENERATION, bool CANCELLABLE, StringDedupMode STRING_DEDUP>
+  void mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *t, StringDedup::Requests* const req);
 
   template <GenerationMode GENERATION, bool CANCELLABLE, StringDedupMode STRING_DEDUP>
-  void mark_loop_prework(uint worker_id, TaskTerminator *terminator, ShenandoahReferenceProcessor *rp, bool update_refs);
+  void mark_loop_prework(uint worker_id, TaskTerminator *terminator, ShenandoahReferenceProcessor *rp, StringDedup::Requests* const req, bool update_refs);
 
   template <GenerationMode GENERATION>
   static bool in_generation(oop obj);
 
-  template<StringDedupMode STRING_DEDUP>
   static void mark_ref(ShenandoahObjToScanQueue* q,
                        ShenandoahMarkingContext* const mark_context,
-                       StringDedup::Requests* const req, bool weak,
-                       oop obj);
+                       bool weak, oop obj);
 
+  template <StringDedupMode STRING_DEDUP>
+  inline void dedup_string(oop obj, StringDedup::Requests* const req);
 protected:
-  void mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
-                 bool cancellable, StringDedupMode dedup_mode);
   template<bool CANCELLABLE, StringDedupMode STRING_DEDUP>
-  void mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp);
+  void mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
+                 StringDedup::Requests* const req);
+
+  void mark_loop(GenerationMode generation, uint worker_id, TaskTerminator* terminator, ShenandoahReferenceProcessor *rp,
+                 bool cancellable, StringDedupMode dedup_mode, StringDedup::Requests* const req);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHMARK_HPP

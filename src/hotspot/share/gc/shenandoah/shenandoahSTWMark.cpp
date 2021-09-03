@@ -63,7 +63,7 @@ template <GenerationMode GENERATION>
 template <class T>
 void ShenandoahInitMarkRootsClosure<GENERATION>::do_oop_work(T* p) {
   // Only called from STW mark, should not be used to bootstrap old generation marking.
-  ShenandoahMark::mark_through_ref<T, GENERATION, NO_DEDUP>(p, _queue, nullptr, _mark_context, nullptr, false);
+  ShenandoahMark::mark_through_ref<T, GENERATION>(p, _queue, nullptr, _mark_context, false);
 }
 
 class ShenandoahSTWMarkTask : public AbstractGangTask {
@@ -150,10 +150,11 @@ void ShenandoahSTWMark::finish_mark(uint worker_id) {
   ShenandoahPhaseTimings::Phase phase = _full_gc ? ShenandoahPhaseTimings::full_gc_mark : ShenandoahPhaseTimings::degen_gc_stw_mark;
   ShenandoahWorkerTimingsTracker timer(phase, ShenandoahPhaseTimings::ParallelMark, worker_id);
   ShenandoahReferenceProcessor* rp = ShenandoahHeap::heap()->active_generation()->ref_processor();
+  StringDedup::Requests requests;
 
   mark_loop(_generation->generation_mode(),
             worker_id, &_terminator, rp,
             false /* not cancellable */,
-            ShenandoahStringDedup::is_enabled() ? ALWAYS_DEDUP : NO_DEDUP);
+            ShenandoahStringDedup::is_enabled() ? ALWAYS_DEDUP : NO_DEDUP, &requests);
 }
 
