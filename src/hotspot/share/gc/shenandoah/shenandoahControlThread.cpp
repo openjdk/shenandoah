@@ -390,27 +390,28 @@ void ShenandoahControlThread::run_service() {
 // and explicit GC requests are handled by the controller thread and always
 // run a global cycle (which is concurrent by default, but may be overridden
 // by command line options). Old cycles always degenerate to a global cycle.
-// Young cycles are degenerated to complete the young cycle.
+// Young cycles are degenerated to complete the young cycle.  Young
+// and old degen may upgrade to Full GC.  Full GC may also be
+// triggered directly by a System.gc() invocation.
 //
 //
-//      +-------------+----------+  Idle  +--------------+
-//      |             |              +                   |
-//      |             |              |                   |
-//      |             |              |                   |
-//      |             |              |                   |
-//      |             v              v                   v
-//      |
-//      |           Young  <---+ Resume Old  <----+ Bootstrap Old
-//      |             +            +     +               +
-//      |             |            |     |               |
-//      |             v            |     |               v
-//      v        Young Degen       |     |           Young Degen
-//                                 |     |
-//   Global  <--------------------+      |
-//      +                                |
-//      |                                v
-//      |
-//      +--------------------->  Global Degen
+//      +-----+ Idle  +-----------+---------------+-----------+
+//      |         |               |               |           |
+//      |         |               |               |           |
+//      |         |      +------- | ------------+ |           |
+//      |         |     /         |              \|           |
+//      |         v    +          v               v           |
+//      |    Resume Old <--+ Bootstrap Old +--> Young         |
+//      |     +  +                +               +           |
+//      |     |  |                 \              |           |
+//      |     |  |                  +-----------+ |           |
+//      |     |  |                               \|           |
+//      |     |  |                                v           |
+//      v     |  |                            Young Degen     |
+//   Global <-+  |                                +           |
+//      +        |                                |           |
+//      |        v                                v           |
+//      +--->  Global Degen +------------------> Full <-------+
 //
 void ShenandoahControlThread::service_concurrent_normal_cycle(
   const ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
