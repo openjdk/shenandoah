@@ -149,6 +149,7 @@ void ShenandoahControlThread::run_service() {
       } else {
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_full();
+        generation = GLOBAL;
         set_gc_mode(stw_full);
       }
     } else if (explicit_gc_requested) {
@@ -251,7 +252,10 @@ void ShenandoahControlThread::run_service() {
             break;
           }
           case stw_degenerated: {
-            service_stw_degenerated_cycle(cause, degen_point);
+            if (!service_stw_degenerated_cycle(cause, degen_point)) {
+              // The degenerated GC was upgraded to a Full GC
+              generation = GLOBAL;
+            }
             break;
           }
           case stw_full: {
@@ -308,7 +312,7 @@ void ShenandoahControlThread::run_service() {
       // Clear metaspace oom flag, if current cycle unloaded classes
       if (heap->unload_classes()) {
         // HEY! Should we do this if the cycle was cancelled/degenerated?
-        assert(generation != YOUNG, "should not unload classes in young cycle");
+        assert(generation == GLOBAL, "Only unload classes during GLOBAL cycle");
         global_heuristics->clear_metaspace_oom();
       }
 
@@ -585,7 +589,14 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
-    _degen_generation = generation;
+    if (generation->generation_mode() == OLD) {
+      // Concurrent old-gen collection degenerates to global collection.
+      _degen_generation = heap->global_generation();
+    } else {
+      // Concurrent young-gen collection degenerates to young
+      // collection.  Same for global collections.
+      _degen_generation = generation;
+    }
   }
 }
 
@@ -642,7 +653,7 @@ void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
   heap->shenandoah_policy()->record_success_full();
 }
 
-void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point) {
+bool ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point) {
   assert (point != ShenandoahGC::_degenerated_unset, "Degenerated point should be set");
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
@@ -662,6 +673,7 @@ void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
 
   _degen_generation->heuristics()->record_success_degenerated();
   heap->shenandoah_policy()->record_success_degenerated();
+  return !gc.upgraded_to_full();
 }
 
 void ShenandoahControlThread::service_uncommit(double shrink_before, size_t shrink_until) {
