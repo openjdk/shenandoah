@@ -2182,12 +2182,7 @@ private:
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
         } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
           if (_heap->active_generation()->generation_mode() == GLOBAL) {
-            // This code is only relevant to GLOBAL GC.  With OLD GC, all coalescing and filling is done before any relevant
-            // evacuations.
-
-            // This is an old region in a global cycle.  Make sure that the next cycle does not iterate over dead objects
-            // which haven't had their references updated.  This is not a promotion.
-            r->global_oop_iterate_and_fill_dead(&cl);
+            _heap->marked_object_oop_iterate(r, &cl, update_watermark);
           } else {
             // Old region in a young cycle or mixed cycle.
             if (ShenandoahUseSimpleCardScanning) {
