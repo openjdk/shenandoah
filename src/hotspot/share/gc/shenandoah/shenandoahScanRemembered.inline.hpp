@@ -481,18 +481,14 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
 
   // Verify that I can find this object within its enclosing card by scanning forward from first_start.
   while (base_addr + offset < address) {
-    oop obj = oop(base_addr + offset);
+    oop obj = cast_to_oop(base_addr + offset);
     if (!ctx || ctx->is_marked(obj)) {
       offset += obj->size();
     } else {
       // If this object is not live, don't trust its size(); all objects above tams are live.
-      ShenandoahHeapRegion* r = heap->heap_region_containing(base_addr + offset);
+      ShenandoahHeapRegion* r = heap->heap_region_containing(obj);
       HeapWord* tams = ctx->top_at_mark_start(r);
-      if (base_addr + offset >= tams) {
-        offset += obj->size();
-      } else {
-        offset = ctx->get_next_marked_addr(base_addr + offset, tams) - base_addr;
-      }
+      offset = ctx->get_next_marked_addr(base_addr + offset, tams) - base_addr;
     }
   }
   if (base_addr + offset != address){
@@ -544,25 +540,22 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
       }
     }
   } else {
-    // This is a mixed evacuation: rely on mark bits to identify which objects need to be properly registered
-
+    // This is a mixed evacuation or a global collect: rely on mark bits to identify which objects need to be properly registered
+    assert(!ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress(), "Cannot rely on mark context here.");
     // If the object reaching or spanning the end of this card's memory is marked, then last_offset for this card
     // should represent this object.  Otherwise, last_offset is a don't care.
+    ShenandoahHeapRegion* region = heap->heap_region_containing(base_addr + offset);
+    HeapWord* tams = ctx->top_at_mark_start(region);
     do {
       prev_offset = offset;
       oop obj = cast_to_oop(base_addr + offset);
-      ShenandoahHeapRegion* region = heap->heap_region_containing(obj);
-      HeapWord* tams = ctx->top_at_mark_start(region);
       if (ctx->is_marked(obj)) {
         offset += obj->size();
       } else {
         offset = ctx->get_next_marked_addr(base_addr + offset, tams) - base_addr;
-        if (offset == 0) {
-          //  no objects marked in this card
-          break;
-        }
+        // offset will be zero if no objects are marked in this card.
       }
-    } while (offset < max_offset);
+    } while (offset > 0 && offset < max_offset);
     oop last_obj = cast_to_oop(base_addr + prev_offset);
     if (prev_offset + last_obj->size() >= max_offset) {
       if (_scc->get_last_start(index) != prev_offset) {

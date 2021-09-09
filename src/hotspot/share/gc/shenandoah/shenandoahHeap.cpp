@@ -2614,7 +2614,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
     ShenandoahHeapRegion* r = iterator.next();
     if (r == nullptr)
       break;
-    if (r->is_old()) {
+    if (r->is_old() && r->is_active()) {
       HeapWord* obj_addr = r->bottom();
       if (r->is_humongous_start()) {
         oop obj = oop(obj_addr);
@@ -2633,10 +2633,11 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
                                           "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
         }
       } else if (!r->is_humongous()) {
-        HeapWord* t = r->top();
-        while (obj_addr < t) {
-          oop obj = oop(obj_addr);
-          // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
+        HeapWord* top = r->top();
+
+        while (obj_addr < top) {
+          oop obj = cast_to_oop(obj_addr);
+          // ctx->is_marked() returns true if mark bit set (TAMS not relevant during init mark)
           if (!ctx || ctx->is_marked(obj)) {
             // For regular objects (not object arrays), if the card holding the start of the object is dirty,
             // we do not need to verify that cards spanning interesting pointers within this object are dirty.
@@ -2650,14 +2651,9 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
             }
             obj_addr += obj->size();
           } else {
-            // This object is not live so we don't verify dirty cards contained therein
-            ShenandoahHeapRegion* r = heap_region_containing(obj_addr);
-            HeapWord* tams = ctx->top_at_mark_start(r);
-            if (obj_addr >= tams) {
-              obj_addr += obj->size();
-            } else {
-              obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-            }
+            // This object is not live so we don'top verify dirty cards contained therein
+            assert(ctx->top_at_mark_start(r) == top, "Expect tams == top at start of mark.");
+            obj_addr = ctx->get_next_marked_addr(obj_addr, top);
           }
         }
       } // else, we ignore humongous continuation region
@@ -2709,13 +2705,8 @@ void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, Shenand
         obj_addr += obj->size();
       } else {
         // This object is not live so we don't verify dirty cards contained therein
-        ShenandoahHeapRegion* r = heap_region_containing(obj_addr);
         HeapWord* tams = ctx->top_at_mark_start(r);
-        if (obj_addr >= tams) {
-          obj_addr += obj->size();
-        } else {
-          obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-        }
+        obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
       }
     }
   }
