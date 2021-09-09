@@ -2642,7 +2642,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
             }
             obj_addr += obj->size();
           } else {
-            // This object is not live so we don'top verify dirty cards contained therein
+            // This object is not live so we don't verify dirty cards contained therein
             assert(ctx->top_at_mark_start(r) == top, "Expect tams == top at start of mark.");
             obj_addr = ctx->get_next_marked_addr(obj_addr, top);
           }
