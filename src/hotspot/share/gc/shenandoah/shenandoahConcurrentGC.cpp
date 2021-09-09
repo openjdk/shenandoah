@@ -99,7 +99,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
   {
     ShenandoahBreakpointMarkScope breakpoint_mark_scope;
-   
+
     // Concurrent remembered set scanning
     if (_generation->generation_mode() == YOUNG) {
       _generation->scan_remembered_set();
