@@ -51,8 +51,6 @@ public:
   }
 
   void work(uint worker_id) {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-
     for (uint region_idx = worker_id; region_idx < _coalesce_and_fill_region_count; region_idx += _nworkers) {
       ShenandoahHeapRegion* r = _coalesce_and_fill_region_array[region_idx];
       if (!r->is_humongous())
@@ -120,8 +118,17 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // Continue concurrent mark, do not reset regions, do not mark roots, do not collect $200.
   _allow_preemption.set();
   entry_mark();
-  _allow_preemption.unset();
-  if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
+  if (!_allow_preemption.try_unset()) {
+    // The regulator thread has unset the preemption guard. That thread will shortly cancel
+    // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
+    while (!heap->cancelled_gc()) {
+      SpinPause();
+    }
+  }
+
+  if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
+    return false;
+  }
 
   // Complete marking under STW
   vmop_entry_final_mark();
@@ -134,7 +141,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
-    heap->set_concurrent_weak_root_in_progress(false);
   }
 
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
@@ -146,11 +152,12 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     heap->free_set()->log_status();
   }
 
+  // TODO: Old marking doesn't support class unloading yet
   // Perform concurrent class unloading
-  if (heap->unload_classes() &&
-      heap->is_concurrent_weak_root_in_progress()) {
-    entry_class_unloading();
-  }
+  // if (heap->unload_classes() &&
+  //     heap->is_concurrent_weak_root_in_progress()) {
+  //   entry_class_unloading();
+  // }
 
   // Coalesce and fill objects _after_ weak root processing and class unloading.
   // Weak root and reference processing makes assertions about unmarked referents
@@ -165,7 +172,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
 
   assert(!heap->is_concurrent_strong_root_in_progress(), "No evacuations during old gc.");
 
-  entry_rendezvous_roots();
+  vmop_entry_final_roots();
   return true;
 }
 
