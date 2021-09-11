@@ -395,21 +395,21 @@ void ShenandoahControlThread::run_service() {
 // triggered directly by a System.gc() invocation.
 //
 //
-//      +-----+ Idle  +--------+----------------------+
-//      |         +            |                      |
-//      |         |            |                      |
-//      |         v            |                      |
-//      |   Bootstrap Old +--- | -----------+         |
-//      |         +            |            |         |
-//      |         |            |            |         |
-//      |         v            v            v         |
-//      |    Resume Old <--+ Young +--> Young Degen   |
-//      |     +  +                          +         |
-//      v     |  |                          |         |
-//   Global <-+  |                          |         |
-//      +        |                          |         |
-//      |        v                          v         |
-//      +--->  Global Degen +------------> Full <-----+
+//      +-----+ Idle +-----+-----------+---------------------+
+//      |         +        |           |                     |
+//      |         |        |           |                     |
+//      |         |        v           |                     |
+//      |         |  Bootstrap Old +-- | ------------+       |
+//      |         |   +                |             |       |
+//      |         |   |                |             |       |
+//      |         v   v                v             v       |
+//      |    Resume Old <----------+ Young +--> Young Degen  |
+//      |     +  +                                   +       |
+//      v     |  |                                   |       |
+//   Global <-+  |                                   |       |
+//      +        |                                   |       |
+//      |        v                                   v       |
+//      +--->  Global Degen +--------------------> Full <----+
 //
 void ShenandoahControlThread::service_concurrent_normal_cycle(
   const ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
