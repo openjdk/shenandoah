@@ -1078,6 +1078,9 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
         pacer()->unpace_for_alloc(pacer_epoch, requested - actual);
       }
     } else {
+      if (req.is_old()) {
+        old_generation()->increase_allocated(actual_bytes);
+      }
       increase_used(actual_bytes);
     }
   }
