@@ -700,7 +700,7 @@ void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {
   if (!waste) {
     increase_used(bytes);
   }
-  increase_allocated(bytes);
+
   if (ShenandoahPacing) {
     control_thread()->pacing_notify_alloc(words);
     if (waste) {
@@ -1019,8 +1019,10 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
   }
 
   if (result != NULL) {
+    ShenandoahGeneration* alloc_generation = generation_for(req.affiliation());
     size_t requested = req.size();
     size_t actual = req.actual_size();
+    size_t actual_bytes = actual * HeapWordSize;
 
     assert (req.is_lab_alloc() || (requested == actual),
             "Only LAB allocations are elastic: %s, requested = " SIZE_FORMAT ", actual = " SIZE_FORMAT,
@@ -1028,6 +1030,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 
     if (req.is_mutator_alloc()) {
       notify_mutator_alloc_words(actual, false);
+      alloc_generation->increase_allocated(actual_bytes);
 
       // If we requested more than we were granted, give the rest back to pacer.
       // This only matters if we are in the same pacing epoch: do not try to unpace
@@ -1036,7 +1039,10 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
         pacer()->unpace_for_alloc(pacer_epoch, requested - actual);
       }
     } else {
-      increase_used(actual*HeapWordSize);
+      if (req.is_old()) {
+        old_generation()->increase_allocated(actual_bytes);
+      }
+      increase_used(actual_bytes);
     }
   }
 
@@ -2027,6 +2033,14 @@ size_t ShenandoahHeap::bytes_allocated_since_gc_start() {
 }
 
 void ShenandoahHeap::reset_bytes_allocated_since_gc_start() {
+  // TODO: Should we only reset allocated counter for the collected generation?
+  if (mode()->is_generational()) {
+    young_generation()->reset_bytes_allocated_since_gc_start();
+    old_generation()->reset_bytes_allocated_since_gc_start();
+  }
+
+  global_generation()->reset_bytes_allocated_since_gc_start();
+
   Atomic::store(&_bytes_allocated_since_gc_start, (size_t)0);
 }
 
@@ -2761,4 +2775,17 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
                                  "Remembered set violation at init-update-references");
     }
   }
+}
+
+ShenandoahGeneration* ShenandoahHeap::generation_for(ShenandoahRegionAffiliation affiliation) const {
+  if (!mode()->is_generational()) {
+    return global_generation();
+  } else if (affiliation == YOUNG_GENERATION) {
+    return young_generation();
+  } else if (affiliation == OLD_GENERATION) {
+    return old_generation();
+  }
+
+  ShouldNotReachHere();
+  return nullptr;
 }

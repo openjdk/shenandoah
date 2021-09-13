@@ -461,6 +461,7 @@ public:
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
   ShenandoahGeneration*      old_generation()    const { return _old_generation;    }
+  ShenandoahGeneration*      generation_for(ShenandoahRegionAffiliation affiliation) const;
 
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
   ShenandoahMode*            mode()              const { return _gc_mode;           }
