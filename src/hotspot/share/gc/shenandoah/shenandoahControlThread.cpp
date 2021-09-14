@@ -588,14 +588,10 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
-    if (generation->generation_mode() == OLD) {
-      // Concurrent old-gen collection degenerates to global collection.
-      _degen_generation = heap->global_generation();
-    } else {
-      // Concurrent young-gen collection degenerates to young
-      // collection.  Same for global collections.
-      _degen_generation = generation;
-    }
+    assert(generation->generation_mode() != OLD, "Old GC takes a different control path");
+    // Concurrent young-gen collection degenerates to young
+    // collection.  Same for global collections.
+    _degen_generation = generation;
   }
 }
 
