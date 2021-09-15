@@ -311,7 +311,6 @@ void ShenandoahControlThread::run_service() {
 
       // Clear metaspace oom flag, if current cycle unloaded classes
       if (heap->unload_classes()) {
-        // HEY! Should we do this if the cycle was cancelled/degenerated?
         assert(generation == GLOBAL, "Only unload classes during GLOBAL cycle");
         global_heuristics->clear_metaspace_oom();
       }
