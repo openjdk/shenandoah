@@ -103,13 +103,6 @@ void ShenandoahGeneration::confirm_heuristics_mode() {
   }
 }
 
-ShenandoahOldHeuristics* ShenandoahGeneration::initialize_old_heuristics(ShenandoahMode* gc_mode) {
-  ShenandoahOldHeuristics* old_heuristics = gc_mode->initialize_old_heuristics(this);
-  _heuristics = old_heuristics;
-  confirm_heuristics_mode();
-  return old_heuristics;
-}
-
 ShenandoahHeuristics* ShenandoahGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
   _heuristics = gc_mode->initialize_heuristics(this);
   confirm_heuristics_mode();

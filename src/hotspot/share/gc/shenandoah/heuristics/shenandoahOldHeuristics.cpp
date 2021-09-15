@@ -27,14 +27,15 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "utilities/quickSort.hpp"
 
-ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation) :
+ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
     ShenandoahHeuristics(generation),
     _old_collection_candidates(0),
     _next_old_collection_candidate(0),
     _hidden_old_collection_candidates(0),
     _hidden_next_old_collection_candidate(0),
     _old_coalesce_and_fill_candidates(0),
-    _first_coalesce_and_fill_candidate(0)
+    _first_coalesce_and_fill_candidate(0),
+    _trigger_heuristic(trigger_heuristic)
 {
 }
 
@@ -242,7 +243,8 @@ void ShenandoahOldHeuristics::start_old_evacuations() {
   _old_collection_candidates = _hidden_old_collection_candidates;
   _next_old_collection_candidate = _hidden_next_old_collection_candidate;
 
-  _hidden_old_collection_candidates = 0;}
+  _hidden_old_collection_candidates = 0;
+}
 
 
 uint ShenandoahOldHeuristics::unprocessed_old_collection_candidates() {
@@ -280,7 +282,7 @@ bool ShenandoahOldHeuristics::should_defer_gc() {
     // Cannot start a new old-gen GC until previous one has finished.
     //
     // Future refinement: under certain circumstances, we might be more sophisticated about this choice.
-    // For example, we could choose to abandon the prevoius old collection before it has completed evacuations,
+    // For example, we could choose to abandon the previous old collection before it has completed evacuations,
     // but this would require that we coalesce and fill all garbage within unevacuated collection-set regions.
     return true;
   }
@@ -294,5 +296,76 @@ void ShenandoahOldHeuristics::abandon_collection_candidates() {
   _hidden_next_old_collection_candidate = 0;
   _old_coalesce_and_fill_candidates = 0;
   _first_coalesce_and_fill_candidate = 0;
+}
+
+void ShenandoahOldHeuristics::record_cycle_start() {
+  _trigger_heuristic->record_cycle_start();
+}
+
+void ShenandoahOldHeuristics::record_cycle_end() {
+  _trigger_heuristic->record_cycle_end();
+}
+
+bool ShenandoahOldHeuristics::should_start_gc() {
+  if (should_defer_gc()) {
+    return false;
+  }
+  return _trigger_heuristic->should_start_gc();
+}
+
+bool ShenandoahOldHeuristics::should_degenerate_cycle() {
+  return _trigger_heuristic->should_degenerate_cycle();
+}
+
+void ShenandoahOldHeuristics::record_success_concurrent() {
+  _trigger_heuristic->record_success_concurrent();
+}
+
+void ShenandoahOldHeuristics::record_success_degenerated() {
+  _trigger_heuristic->record_success_degenerated();
+}
+
+void ShenandoahOldHeuristics::record_success_full() {
+  _trigger_heuristic->record_success_full();
+}
+
+void ShenandoahOldHeuristics::record_allocation_failure_gc() {
+  _trigger_heuristic->record_allocation_failure_gc();
+}
+
+void ShenandoahOldHeuristics::record_requested_gc() {
+  _trigger_heuristic->record_requested_gc();
+}
+
+bool ShenandoahOldHeuristics::can_unload_classes() {
+  return _trigger_heuristic->can_unload_classes();
+}
+
+bool ShenandoahOldHeuristics::can_unload_classes_normal() {
+  return _trigger_heuristic->can_unload_classes_normal();
+}
+
+bool ShenandoahOldHeuristics::should_unload_classes() {
+  return _trigger_heuristic->should_unload_classes();
+}
+
+const char* ShenandoahOldHeuristics::name() {
+  static char name[128];
+  jio_snprintf(name, sizeof(name), "%s (OLD)", _trigger_heuristic->name());
+  return name;
+}
+
+bool ShenandoahOldHeuristics::is_diagnostic() {
+  return false;
+}
+
+bool ShenandoahOldHeuristics::is_experimental() {
+  return true;
+}
+
+void ShenandoahOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
+                                                                    ShenandoahHeuristics::RegionData* data,
+                                                                    size_t data_size, size_t free) {
+  ShouldNotReachHere();
 }
 

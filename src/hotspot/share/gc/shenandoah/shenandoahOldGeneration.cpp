@@ -22,9 +22,14 @@
  *
  */
 
+
 #include "precompiled.hpp"
 
 #include "gc/shared/strongRootsScope.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAggressiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahCompactHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahStaticHeuristics.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
@@ -197,4 +202,22 @@ bool ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     heap->free_set()->rebuild();
   }
   return false;
+}
+
+ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
+  assert(ShenandoahGCHeuristics != NULL, "ShenandoahGCHeuristics should not equal NULL");
+  if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
+    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahAggressiveHeuristics(this));
+  } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
+    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahStaticHeuristics(this));
+  } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
+    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahAdaptiveHeuristics(this));
+  } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
+    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahCompactHeuristics(this));
+  } else {
+    vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
+    ShouldNotReachHere();
+    return NULL;
+  }
+  return _heuristics;
 }
