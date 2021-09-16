@@ -503,7 +503,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _initial_size(0),
   _used(0),
   _committed(0),
-  _bytes_allocated_since_gc_start(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
   _workers(NULL),
   _safepoint_workers(NULL),
@@ -689,10 +688,6 @@ void ShenandoahHeap::set_used(size_t bytes) {
 void ShenandoahHeap::decrease_used(size_t bytes) {
   assert(used() >= bytes, "never decrease heap size by more than we've left");
   Atomic::sub(&_used, bytes, memory_order_relaxed);
-}
-
-void ShenandoahHeap::increase_allocated(size_t bytes) {
-  Atomic::add(&_bytes_allocated_since_gc_start, bytes, memory_order_relaxed);
 }
 
 void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {
@@ -2022,20 +2017,13 @@ address ShenandoahHeap::gc_state_addr() {
   return (address) ShenandoahHeap::heap()->_gc_state.addr_of();
 }
 
-size_t ShenandoahHeap::bytes_allocated_since_gc_start() {
-  return Atomic::load(&_bytes_allocated_since_gc_start);
-}
-
 void ShenandoahHeap::reset_bytes_allocated_since_gc_start() {
-  // TODO: Should we only reset allocated counter for the collected generation?
   if (mode()->is_generational()) {
     young_generation()->reset_bytes_allocated_since_gc_start();
     old_generation()->reset_bytes_allocated_since_gc_start();
   }
 
   global_generation()->reset_bytes_allocated_since_gc_start();
-
-  Atomic::store(&_bytes_allocated_since_gc_start, (size_t)0);
 }
 
 void ShenandoahHeap::set_degenerated_gc_in_progress(bool in_progress) {
