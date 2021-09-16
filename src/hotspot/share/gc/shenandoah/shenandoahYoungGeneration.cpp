@@ -50,6 +50,7 @@ void ShenandoahYoungGeneration::set_concurrent_mark_in_progress(bool in_progress
   }
 }
 
+#ifdef KELVIN_DEPRECATE
 class ShenandoahPromoteTenuredRegionsTask : public AbstractGangTask {
 private:
   ShenandoahRegionIterator* _regions;
@@ -85,6 +86,7 @@ void ShenandoahYoungGeneration::promote_tenured_regions() {
   ShenandoahHeap::heap()->workers()->run_task(&task);
   log_info(gc)("Promoted " SIZE_FORMAT " regions.", task._promoted);
 }
+#endif
 
 bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {
   // TODO: why not test for equals YOUNG_GENERATION?  As written, returns true for regions that are FREE

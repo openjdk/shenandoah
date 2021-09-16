@@ -1161,12 +1161,16 @@ private:
     ShenandoahHeapRegion* r;
     while ((r =_cs->claim_next()) != NULL) {
       assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
-      _sh->marked_object_iterate(r, &cl);
 
-      if (ShenandoahPacing) {
-        _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
+      if (r->is_humongous_start()) {
+        r->promote_humongous();
+      } else {
+        _sh->marked_object_iterate(r, &cl);
+
+        if (ShenandoahPacing) {
+          _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
+        }
       }
-
       if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
         break;
       }
@@ -2364,12 +2368,14 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     _free_set->rebuild();
   }
 
+#ifdef KELVIN_DEPRECATE  
   // HEY! this code and rebuild free set used to be in op_final_updaterefs
   if (mode()->is_generational() && is_gc_generation_young() && ShenandoahPromoteTenuredRegions) {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::final_update_refs_promote_tenured_regions);
     ShenandoahHeapLocker locker(lock());
     young_generation()->promote_tenured_regions();
   }
+#endif
 }
 
 void ShenandoahHeap::print_extended_on(outputStream *st) const {

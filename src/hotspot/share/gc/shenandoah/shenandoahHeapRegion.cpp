@@ -511,6 +511,7 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
   }
 }
 
+#ifdef KELVIN_DEPRECATE
 // This function does not set card dirty bits.  The decision of which cards to dirty is best
 // made in the caller's context.
 void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
@@ -559,6 +560,7 @@ void ShenandoahHeapRegion::fill_dead_and_register_for_promotion() {
 
   // Remembered set scanning stops at top() so no need to fill beyond it.
 }
+#endif
 
 void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
   assert(is_humongous(), "only humongous region here");
@@ -916,6 +918,54 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   _affiliation = new_affiliation;
 }
 
+size_t ShenandoahHeapRegion::promote_humongous() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahMarkingContext* marking_context = heap->marking_context();
+  assert(heap->active_generation()->is_mark_complete(), "sanity");
+  assert(affiliation() == YOUNG_GENERATION, "Only young regions can be promoted");
+
+  ShenandoahGeneration* old_generation = heap->old_generation();
+  ShenandoahGeneration* young_generation = heap->young_generation();
+
+  assert(is_humongous_start(), "should not promote humongous object continuation in isolation");
+
+  oop obj = cast_to_oop(bottom());
+  assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
+
+  // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
+  heap->card_scan()->register_object_wo_lock(bottom());
+  size_t index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+  
+  // For this region and each humongous continuation region spanned by this humongous object, change
+  // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
+  // in the last humongous region that is not spanned by obj is currently not used.
+  for (size_t i = index(); i < index_limit; i++) {
+    ShenandoahHeapRegion* r = heap->get_region(i);
+    log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
+                  r->index(), (size_t) r->bottom(), (size_t) r->top());
+    if (r->top() < r->end()) {
+      ShenandoahHeap::fill_with_object(r->top(), (r->end() - r->top()) / HeapWordSize);
+      heap->card_scan()->register_object_wo_lock(r->top());
+      heap->card_scan()->mark_range_as_clean(top(), r->end() - r->top());
+    }
+    // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
+    r->set_affiliation(OLD_GENERATION);
+    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
+                  i, (size_t) r->bottom(), (size_t) r->top());
+    old_generation->increase_used(r->used());
+    young_generation->decrease_used(r->used());
+  }
+  if (obj->is_typeArray()) {
+    // Primitive arrays don't need to be scanned.  See above TODO question about requiring
+    // region promotion at safepoint.
+    heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
+  } else {
+    heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
+  }
+  return index_limit - index();
+}
+
+#ifdef KELVIN_DEPRECATE
 size_t ShenandoahHeapRegion::promote(bool promoting_all) {
   // TODO: Not sure why region promotion must be performed at safepoint.  Reconsider this requirement.
   assert(SafepointSynchronize::is_at_safepoint(), "must be at a safepoint");
@@ -1007,3 +1057,4 @@ size_t ShenandoahHeapRegion::promote(bool promoting_all) {
     return 1;
   }
 }
+#endif
