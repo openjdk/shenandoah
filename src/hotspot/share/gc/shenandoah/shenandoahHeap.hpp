@@ -673,6 +673,7 @@ private:
   ShenandoahEvacOOMHandler _oom_evac_handler;
 
   inline oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahRegionAffiliation target_gen);
+  void handle_old_evacuation(HeapWord* obj, size_t words, bool promotion);
 
 public:
   static address in_cset_fast_test_addr();
