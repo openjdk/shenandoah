@@ -808,6 +808,22 @@ void ShenandoahHeap::op_uncommit(double shrink_before, size_t shrink_until) {
   }
 }
 
+void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool promotion) {
+  // Only register the copy of the object that won the evacuation race.
+  card_scan()->register_object_wo_lock(obj);
+
+  // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
+  // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
+  // do this in batch, in a background GC thread than to try to carefully dirty only cards
+  // that hold interesting pointers right now.
+  card_scan()->mark_range_as_dirty(obj, words);
+
+  if (promotion) {
+    // This evacuation was a promotion, track this as allocation against old gen
+    old_generation()->increase_allocated(words * HeapWordSize);
+  }
+}
+
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
   // New object should fit the GCLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
@@ -1040,9 +1056,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
         pacer()->unpace_for_alloc(pacer_epoch, requested - actual);
       }
     } else {
-      if (req.is_old()) {
-        old_generation()->increase_allocated(actual_bytes);
-      }
       increase_used(actual_bytes);
     }
   }
@@ -1052,28 +1065,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
   ShenandoahHeapLocker locker(lock());
-  HeapWord* result = _free_set->allocate(req, in_new_region);
-  if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-    // Register the newly allocated object while we're holding the global lock since there's no synchronization
-    // built in to the implementation of register_object().  There are potential races when multiple independent
-    // threads are allocating objects, some of which might span the same card region.  For example, consider
-    // a card table's memory region within which three objects are being allocated by three different threads:
-    //
-    // objects being "concurrently" allocated:
-    //    [-----a------][-----b-----][--------------c------------------]
-    //            [---- card table memory range --------------]
-    //
-    // Before any objects are allocated, this card's memory range holds no objects.  Note that:
-    //   allocation of object a wants to set the has-object, first-start, and last-start attributes of the preceding card region.
-    //   allocation of object b wants to set the has-object, first-start, and last-start attributes of this card region.
-    //   allocation of object c also wants to set the has-object, first-start, and last-start attributes of this card region.
-    //
-    // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as last-start
-    // representing object b while first-start represents object c.  This is why we need to require all register_object()
-    // invocations to be "mutually exclusive" with respect to each card's memory range.
-    ShenandoahHeap::heap()->card_scan()->register_object(result);
-  }
-  return result;
+  return _free_set->allocate(req, in_new_region);
 }
 
 HeapWord* ShenandoahHeap::mem_allocate(size_t size,
