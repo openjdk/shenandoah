@@ -205,17 +205,17 @@ bool ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
 }
 
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
-  assert(ShenandoahGCHeuristics != NULL, "ShenandoahGCHeuristics should not equal NULL");
-  if (strcmp(ShenandoahGCHeuristics, "aggressive") == 0) {
+  assert(ShenandoahOldGCHeuristics != NULL, "ShenandoahOldGCHeuristics should not equal NULL");
+  if (strcmp(ShenandoahOldGCHeuristics, "aggressive") == 0) {
     _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahAggressiveHeuristics(this));
-  } else if (strcmp(ShenandoahGCHeuristics, "static") == 0) {
+  } else if (strcmp(ShenandoahOldGCHeuristics, "static") == 0) {
     _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahStaticHeuristics(this));
-  } else if (strcmp(ShenandoahGCHeuristics, "adaptive") == 0) {
+  } else if (strcmp(ShenandoahOldGCHeuristics, "adaptive") == 0) {
     _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahAdaptiveHeuristics(this));
-  } else if (strcmp(ShenandoahGCHeuristics, "compact") == 0) {
+  } else if (strcmp(ShenandoahOldGCHeuristics, "compact") == 0) {
     _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahCompactHeuristics(this));
   } else {
-    vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option");
+    vm_exit_during_initialization("Unknown -XX:ShenandoahOldGCHeuristics option");
     ShouldNotReachHere();
     return NULL;
   }
