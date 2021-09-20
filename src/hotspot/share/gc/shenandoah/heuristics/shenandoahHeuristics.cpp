@@ -149,10 +149,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // Count only the start. Continuations would be counted on "trash" path
         immediate_regions++;
         immediate_garbage += garbage;
-      } else if (region->age() >= InitialTenuringThreshold) {
-        // Select this region for the collection set so it, along with its continous regions, can be promoted during
-        // concurrent evacuation
-        collection_set->add_region(region);
       }
     } else if (region->is_trash()) {
       // Count in just trashed collection set, during coalesced CM-with-UR

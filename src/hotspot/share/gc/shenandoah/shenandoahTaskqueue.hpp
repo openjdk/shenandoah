@@ -320,7 +320,7 @@ public:
   T*   claim_next();
 
   // reserve queues that not for parallel claiming
-  void reserve(uint n) {
+   void reserve(uint n) {
     assert(n <= size(), "Sanity");
     _claimed_index = (jint)n;
     debug_only(_reserved = n;)

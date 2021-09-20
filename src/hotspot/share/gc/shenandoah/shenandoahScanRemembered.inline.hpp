@@ -790,6 +790,10 @@ ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *re
     end_of_range = region->top();
   }
 
+  log_debug(gc)("Remembered set scan processing Region " SIZE_FORMAT ", from ", PTR_FORMAT " to " PTR_FORMAT ", using %s table",
+                region->index(), p2i(region->bottom()), p2i(end_of_range),
+                use_write_table? "read/write (updating)": "read (marking)");
+  
   // end_of_range may point to the middle of a cluster because region->top() may be different than region->end().
   // We want to assure that our process_clusters() request spans all relevant clusters.  Note that each cluster
   // processed will avoid processing beyond end_of_range.
@@ -798,8 +802,10 @@ ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *re
   unsigned int cluster_size = CardTable::card_size_in_words * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   size_t num_clusters = (size_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
 
-  // Remembered set scanner
-  process_clusters(start_cluster_no, num_clusters, end_of_range, cl, use_write_table);
+  if (!region->is_humongous_continuation()) {
+    // Remembered set scanner
+    process_clusters(start_cluster_no, num_clusters, end_of_range, cl, use_write_table);
+  }
 }
 
 template<typename RememberedSet>
@@ -810,11 +816,13 @@ ShenandoahScanRemembered<RememberedSet>::cluster_for_addr(HeapWordImpl **addr) {
   return result;
 }
 
+// This is used only for debug verification so don't worry about making the scan parallel.
 template<typename RememberedSet>
 inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
+    assert(region->is_cset()? heap->is_update_refs_in_progress(): true, "region in cset implies updating references");
     if (region->is_old() && region->is_active() && !region->is_cset()) {
       HeapWord* start_of_range = region->bottom();
       HeapWord* end_of_range = region->top();

@@ -84,19 +84,15 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
   assert(Thread::current()->is_VM_thread(), "Must be VMThread");
   assert(!is_in(r), "Already in collection set");
+  assert(!r->is_humongous(), "Only add regular regions to the collection set");
+
   _cset_map[r->index()] = 1;
   _region_count++;
-  _used += r->used();
   _has_old_regions |= r->is_old();
-
-  if (!r->is_humongous_start()) {
-    _garbage += r->garbage();
-    // Update the region status too. State transition would be checked internally.
-    r->make_cset();
-  }
-  // we add humongous_start regions to the collection set so they can be processed (remembered set constructed)
-  // during concurrent evacuation.  However, their garbage is not going to be reclaimed, so we don't tally that,
-  // and we don't change the region state to cset for these regions.
+  _garbage += r->garbage();
+  _used += r->used();
+  // Update the region status too. State transition would be checked internally.
+  r->make_cset();
 }
 
 void ShenandoahCollectionSet::clear() {

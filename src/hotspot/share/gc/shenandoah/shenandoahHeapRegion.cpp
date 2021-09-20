@@ -923,31 +923,30 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   assert(heap->active_generation()->is_mark_complete(), "sanity");
   assert(affiliation() == YOUNG_GENERATION, "Only young regions can be promoted");
+  assert(is_humongous_start(), "Should not promote humongous object continuation in isolation");
+  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
 
   ShenandoahGeneration* old_generation = heap->old_generation();
   ShenandoahGeneration* young_generation = heap->young_generation();
 
-  assert(is_humongous_start(), "should not promote humongous object continuation in isolation");
-
   oop obj = cast_to_oop(bottom());
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
+  size_t spanned_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+  size_t index_limit = index() + spanned_regions;
+
+  // Since this region may have served previously as OLD, it may hold obsolete object range info.
+  heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
   heap->card_scan()->register_object_wo_lock(bottom());
-  size_t index_limit = index() + ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
   
   // For this region and each humongous continuation region spanned by this humongous object, change
   // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
   // in the last humongous region that is not spanned by obj is currently not used.
   for (size_t i = index(); i < index_limit; i++) {
     ShenandoahHeapRegion* r = heap->get_region(i);
-    log_debug(gc)("promoting region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
+    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
                   r->index(), (size_t) r->bottom(), (size_t) r->top());
-    if (r->top() < r->end()) {
-      ShenandoahHeap::fill_with_object(r->top(), (r->end() - r->top()) / HeapWordSize);
-      heap->card_scan()->register_object_wo_lock(r->top());
-      heap->card_scan()->mark_range_as_clean(top(), r->end() - r->top());
-    }
     // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
     r->set_affiliation(OLD_GENERATION);
     log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,

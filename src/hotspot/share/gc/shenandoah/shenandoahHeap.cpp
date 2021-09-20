@@ -1162,14 +1162,10 @@ private:
     while ((r =_cs->claim_next()) != NULL) {
       assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
 
-      if (r->is_humongous_start()) {
-        r->promote_humongous();
-      } else {
-        _sh->marked_object_iterate(r, &cl);
+      _sh->marked_object_iterate(r, &cl);
 
-        if (ShenandoahPacing) {
-          _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
-        }
+      if (ShenandoahPacing) {
+        _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
       }
       if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
         break;
@@ -1178,9 +1174,74 @@ private:
   }
 };
 
+// Unlike ShenandoahEvacuationTask, this iterates over all regions rather than just the collection set.
+// This is needed in order to promote humongous start regions if age() >= tenure threshold.
+class ShenandoahGenerationalEvacuationTask : public AbstractGangTask {
+private:
+  ShenandoahHeap* const _sh;
+  ShenandoahRegionIterator *_regions;
+  bool _concurrent;
+public:
+  ShenandoahGenerationalEvacuationTask(ShenandoahHeap* sh,
+                                       ShenandoahRegionIterator* iterator,
+                                       bool concurrent) :
+    AbstractGangTask("Shenandoah Evacuation"),
+    _sh(sh),
+    _regions(iterator),
+    _concurrent(concurrent)
+  {}
+
+  void work(uint worker_id) {
+    if (_concurrent) {
+      ShenandoahConcurrentWorkerSession worker_session(worker_id);
+      ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
+      ShenandoahEvacOOMScope oom_evac_scope;
+      do_work();
+    } else {
+      ShenandoahParallelWorkerSession worker_session(worker_id);
+      ShenandoahEvacOOMScope oom_evac_scope;
+      do_work();
+    }
+  }
+
+private:
+  void do_work() {
+    ShenandoahConcurrentEvacuateRegionObjectClosure cl(_sh);
+    ShenandoahHeapRegion* r;
+    while ((r = _regions->next()) != nullptr) {
+      if (r->is_active()) {
+        assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
+
+        if (r->is_cset()) {
+          _sh->marked_object_iterate(r, &cl);
+
+          if (ShenandoahPacing) {
+            _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
+          }
+        }
+        else  if (r->is_humongous_start() && (r->age() > InitialTenuringThreshold)) {
+          // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
+          // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
+          // triggers the load-reference barrier (LRB) to copy on reference fetch.
+          r->promote_humongous();
+        } // else, region is humongous_continuation or is not selected for evacuation
+      } // else, region is in free set
+      if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
+        break;
+      }
+    }
+  }
+};
+
 void ShenandoahHeap::evacuate_collection_set(bool concurrent) {
-  ShenandoahEvacuationTask task(this, _collection_set, concurrent);
-  workers()->run_task(&task);
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    ShenandoahRegionIterator regions;
+    ShenandoahGenerationalEvacuationTask task(this, &regions, concurrent);
+    workers()->run_task(&task);
+  } else {
+    ShenandoahEvacuationTask task(this, _collection_set, concurrent);
+    workers()->run_task(&task);
+  }
 }
 
 void ShenandoahHeap::trash_cset_regions() {
