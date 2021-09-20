@@ -63,6 +63,7 @@ private:
   uint _old_coalesce_and_fill_candidates;
   uint _first_coalesce_and_fill_candidate;
 
+  // This can be the 'static' or 'adaptive' heuristic.
   ShenandoahHeuristics* _trigger_heuristic;
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.

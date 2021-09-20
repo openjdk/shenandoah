@@ -96,6 +96,11 @@
           "collector accepts. In percents of heap region size.")            \
           range(0,100)                                                      \
                                                                             \
+  product(uintx, ShenandoahOldGarbageThreshold, 25, EXPERIMENTAL,           \
+          "How much garbage an old region has to contain before it would "  \
+          "be taken for collection.")                                       \
+          range(0,100)                                                      \
+                                                                            \
   product(uintx, ShenandoahInitFreeThreshold, 70, EXPERIMENTAL,             \
           "How much heap should be free before some heuristics trigger the "\
           "initial (learning) cycles. Affects cycle frequency on startup "  \
@@ -254,6 +259,12 @@
           "will make evacuations more resilient when evacuation "           \
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
+                                                                            \
+  product(double, ShenandoahOldEvacReserve, 5.0, EXPERIMENTAL,              \
+          "How much of old generation to withhold from evacuations. "       \
+           "Larger values will result in fewer live objects being "         \
+           "evacuated in the old generation.")                              \
+          range(1,100)                                                      \
                                                                             \
   product(bool, ShenandoahPacing, true, EXPERIMENTAL,                       \
           "Pace application allocations to give GC chance to start "        \
