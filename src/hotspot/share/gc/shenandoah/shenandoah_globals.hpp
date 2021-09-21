@@ -175,6 +175,11 @@
           "time from active application. Time is in milliseconds. "         \
           "Setting this to 0 disables the feature.")                        \
                                                                             \
+  product(uintx, ShenandoahGuaranteedOldGCInterval, 10*60*1000,  EXPERIMENTAL,  \
+          "Run a collection of the old generation at least this often. "    \
+          "Heuristics may trigger collections more frequently. Time is in " \
+          "milliseconds. Setting this to 0 disables the feature.")          \
+                                                                            \
   product(bool, ShenandoahAlwaysClearSoftRefs, false, EXPERIMENTAL,         \
           "Unconditionally clear soft references, instead of using any "    \
           "other cleanup policy. This minimizes footprint at expense of"    \
