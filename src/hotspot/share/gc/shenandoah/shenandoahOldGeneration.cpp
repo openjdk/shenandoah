@@ -206,17 +206,19 @@ bool ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
 
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
   assert(ShenandoahOldGCHeuristics != NULL, "ShenandoahOldGCHeuristics should not equal NULL");
+  ShenandoahHeuristics* trigger;
   if (strcmp(ShenandoahOldGCHeuristics, "static") == 0) {
-    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahStaticHeuristics(this));
+    trigger = new ShenandoahStaticHeuristics(this);
   } else if (strcmp(ShenandoahOldGCHeuristics, "adaptive") == 0) {
-    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahAdaptiveHeuristics(this));
+    trigger = new ShenandoahAdaptiveHeuristics(this);
   } else if (strcmp(ShenandoahOldGCHeuristics, "compact") == 0) {
-    _heuristics = new ShenandoahOldHeuristics(this, new ShenandoahCompactHeuristics(this));
+    trigger = new ShenandoahCompactHeuristics(this);
   } else {
     vm_exit_during_initialization("Unknown -XX:ShenandoahOldGCHeuristics option (must be one of: static, adaptive, compact)");
     ShouldNotReachHere();
     return NULL;
   }
-  _heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
+  trigger->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
+  _heuristics = new ShenandoahOldHeuristics(this, trigger);
   return _heuristics;
 }
