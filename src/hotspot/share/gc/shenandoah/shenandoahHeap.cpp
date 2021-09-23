@@ -2433,15 +2433,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     ShenandoahHeapLocker locker(lock());
     _free_set->rebuild();
   }
-
-#ifdef KELVIN_DEPRECATE  
-  // HEY! this code and rebuild free set used to be in op_final_updaterefs
-  if (mode()->is_generational() && is_gc_generation_young() && ShenandoahPromoteTenuredRegions) {
-    ShenandoahGCPhase phase(ShenandoahPhaseTimings::final_update_refs_promote_tenured_regions);
-    ShenandoahHeapLocker locker(lock());
-    young_generation()->promote_tenured_regions();
-  }
-#endif
 }
 
 void ShenandoahHeap::print_extended_on(outputStream *st) const {

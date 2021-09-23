@@ -422,15 +422,6 @@ public:
   // Sets all remembered set cards to dirty.  Returns the number of regions spanned by the associated humongous object.
   size_t promote_humongous();
 
-#ifdef KELVIN_DEPRECATE
-  // Adjusts remembered set information by setting all cards to clean if promoting all, setting
-  // all cards to dirty otherwise.
-  //
-  // Returns the number of regions promoted, which is generally one, but may be greater than 1 if
-  // this is humongous region with multiple continuations.
-  size_t promote(bool promoting_all);
-#endif
-
 private:
   void do_commit();
   void do_uncommit();
