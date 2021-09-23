@@ -659,10 +659,6 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
               if (obj->is_objArray()) {
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-                printf("process_clusters doing object array of length %d starting at " PTR_FORMAT "\n", len, p2i(obj));
-#endif
                 array->oop_iterate_range(cl, 0, len);
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
@@ -728,10 +724,6 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
             if (obj->is_objArray()) {
               objArrayOop array = objArrayOop(obj);
               int len = array->length();
-#ifdef KELVIN_VERBOSE
-              printf("process_clusters doing object array of length %d starting at " PTR_FORMAT
-                     " because reaches next or spans dirty\n", len, p2i(obj));
-#endif
               array->oop_iterate_range(cl, 0, len);
             } else if (obj->is_instance()) {
               obj->oop_iterate(cl);
@@ -801,12 +793,6 @@ ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *re
   log_debug(gc)("Remembered set scan processing Region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", using %s table",
                 region->index(), p2i(region->bottom()), p2i(end_of_range),
                 use_write_table? "read/write (updating)": "read (marking)");
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-  printf("Remembered set scan processing Region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", using %s table\n",
-         region->index(), p2i(region->bottom()), p2i(end_of_range),
-         use_write_table? "read/write (updating)": "read (marking)");
-#endif
   // end_of_range may point to the middle of a cluster because region->top() may be different than region->end().
   // We want to assure that our process_clusters() request spans all relevant clusters.  Note that each cluster
   // processed will avoid processing beyond end_of_range.
@@ -818,11 +804,6 @@ ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *re
   if (!region->is_humongous_continuation()) {
     // Remembered set scanner
     process_clusters(start_cluster_no, num_clusters, end_of_range, cl, use_write_table);
-  } else {
-#ifdef KELVIN_VERBOSE
-    printf("Remembered set scan processing Region " SIZE_FORMAT ", does nothing because humongous continuation\n",
-           region->index());
-#endif
   }
 }
 

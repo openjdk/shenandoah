@@ -936,10 +936,6 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   size_t index_limit = index() + spanned_regions;
 
   log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-  printf("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT "\n", index(), spanned_regions);
-#endif
 
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
@@ -953,10 +949,6 @@ size_t ShenandoahHeapRegion::promote_humongous() {
     ShenandoahHeapRegion* r = heap->get_region(i);
     log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
                   r->index(), p2i(r->bottom()), p2i(r->top()));
-#ifdef KELVIN_VERBOSE
-    printf("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT "\n",
-           r->index(), p2i(r->bottom()), p2i(r->top()));
-#endif
     // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
     r->set_affiliation(OLD_GENERATION);
     old_generation->increase_used(r->used());
@@ -967,18 +959,10 @@ size_t ShenandoahHeapRegion::promote_humongous() {
     // region promotion at safepoint.
     log_debug(gc)("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
                   index(), p2i(bottom()), p2i(bottom() + obj->size()));
-#ifdef KELVIN_VERBOSE
-    printf("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT "\n",
-                  index(), p2i(bottom()), p2i(bottom() + obj->size()));
-#endif
     heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
   } else {
     log_debug(gc)("Dirty cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
                   index(), p2i(bottom()), p2i(bottom() + obj->size()));
-#ifdef KELVIN_VERBOSE
-    printf("Dirty cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT "\n",
-           index(), p2i(bottom()), p2i(bottom() + obj->size()));
-#endif
     heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
   }
   return index_limit - index();

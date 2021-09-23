@@ -1213,13 +1213,6 @@ private:
                     r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
                     r->is_active()? "active": "inactive",
                     r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular");
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      printf("GenerationalEvacuationTask do_work(), looking at %s region " SIZE_FORMAT ", (age: %d) [%s, %s]\n",
-                    r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
-                    r->is_active()? "active": "inactive",
-                    r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular");
-#endif
       if (r->is_young() && r->is_active()) {
 
         if (r->is_cset()) {
@@ -2265,9 +2258,6 @@ private:
       assert (update_watermark >= r->bottom(), "sanity");
 
       log_debug(gc)("ShenandoahUpdateHeapRefsTask::do_work(%u) looking at region " SIZE_FORMAT, worker_id, r->index());
-#ifdef KELVIN_VERBOSE
-      printf("ShenandoahUpdateHeapRefsTask::do_work(%u) looking at region " SIZE_FORMAT "\n", worker_id, r->index());
-#endif
       if (r->is_active() && !r->is_cset()) {
         if (!_heap->mode()->is_generational() || (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION)) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
