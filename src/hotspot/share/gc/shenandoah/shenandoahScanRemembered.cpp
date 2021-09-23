@@ -106,6 +106,10 @@ void ShenandoahScanRememberedTask::work(uint worker_id) {
   _rp->set_mark_closure(worker_id, &cl);
   ShenandoahHeapRegion* region = _regions->next();
   while (region != NULL) {
+    log_debug(gc)("ShenandoahScanRememberedTask::work(%u), looking at region " SIZE_FORMAT, worker_id, region->index());
+#ifdef KELVIN_VERBOSE
+    printf("ShenandoahScanRememberedTask::work(%u), looking at region " SIZE_FORMAT "\n", worker_id, region->index());
+#endif
     if (region->affiliation() == OLD_GENERATION) {
       scanner->process_region(region, &cl);
     }

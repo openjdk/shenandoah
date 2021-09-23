@@ -922,8 +922,8 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   assert(heap->active_generation()->is_mark_complete(), "sanity");
-  assert(affiliation() == YOUNG_GENERATION, "Only young regions can be promoted");
-  assert(is_humongous_start(), "Should not promote humongous object continuation in isolation");
+  assert(is_young(), "Only young regions can be promoted");
+  assert(is_humongous_start(), "Should not promote humongous continuation in isolation");
   assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
 
   ShenandoahGeneration* old_generation = heap->old_generation();
@@ -935,6 +935,12 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   size_t spanned_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
   size_t index_limit = index() + spanned_regions;
 
+  log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  printf("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT "\n", index(), spanned_regions);
+#endif
+
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
@@ -945,20 +951,34 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   // in the last humongous region that is not spanned by obj is currently not used.
   for (size_t i = index(); i < index_limit; i++) {
     ShenandoahHeapRegion* r = heap->get_region(i);
-    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " SIZE_FORMAT " to " SIZE_FORMAT,
-                  r->index(), (size_t) r->bottom(), (size_t) r->top());
+    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
+                  r->index(), p2i(r->bottom()), p2i(r->top()));
+#ifdef KELVIN_VERBOSE
+    printf("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT "\n",
+           r->index(), p2i(r->bottom()), p2i(r->top()));
+#endif
     // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
     r->set_affiliation(OLD_GENERATION);
-    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", dirtying cards from " SIZE_FORMAT " to " SIZE_FORMAT,
-                  i, (size_t) r->bottom(), (size_t) r->top());
     old_generation->increase_used(r->used());
     young_generation->decrease_used(r->used());
   }
   if (obj->is_typeArray()) {
     // Primitive arrays don't need to be scanned.  See above TODO question about requiring
     // region promotion at safepoint.
+    log_debug(gc)("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
+                  index(), p2i(bottom()), p2i(bottom() + obj->size()));
+#ifdef KELVIN_VERBOSE
+    printf("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT "\n",
+                  index(), p2i(bottom()), p2i(bottom() + obj->size()));
+#endif
     heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
   } else {
+    log_debug(gc)("Dirty cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
+                  index(), p2i(bottom()), p2i(bottom() + obj->size()));
+#ifdef KELVIN_VERBOSE
+    printf("Dirty cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT "\n",
+           index(), p2i(bottom()), p2i(bottom() + obj->size()));
+#endif
     heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
   }
   return index_limit - index();

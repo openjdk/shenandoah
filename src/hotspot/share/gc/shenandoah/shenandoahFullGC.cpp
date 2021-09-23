@@ -90,23 +90,52 @@ public:
           size_t size = obj->size();
           HeapWord* end_object = r->bottom() + size;
 
-          // First, clear the remembered set
-          scanner->reset_remset(r->bottom(), size);
+          // First, clear the remembered set for all spanned humongous regions
+          size_t num_regions = (size + ShenandoahHeapRegion::region_size_words() - 1) / ShenandoahHeapRegion::region_size_words();
+          size_t region_span = num_regions * ShenandoahHeapRegion::region_size_words();
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+          printf("Reconstructing remembered set for humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT "\n",
+                 r->index(), num_regions);
+          fflush(stdout);
+#endif
+#ifdef KELVIN_VERBOSE
+          printf("  reset_remset from " PTR_FORMAT ", spanning " SIZE_FORMAT "\n", p2i(r->bottom()), region_span);
+          fflush(stdout);
+#endif
+          scanner->reset_remset(r->bottom(), region_span);
           size_t region_index = r->index();
           ShenandoahHeapRegion* humongous_region = heap->get_region(region_index);
-          do {
+          while (num_regions-- != 0) {
+#ifdef KELVIN_VERBOSE
+            printf("  reset_object_range from " PTR_FORMAT "to " PTR_FORMAT " for region " SIZE_FORMAT "\n",
+                   p2i(humongous_region->bottom()), p2i(humongous_region->end()), region_index);
+            fflush(stdout);
+#endif
             scanner->reset_object_range(humongous_region->bottom(), humongous_region->end());
             region_index++;
             humongous_region = heap->get_region(region_index);
-          } while (humongous_region->bottom() < end_object);
+          }
 
           // Then register the humongous object and DIRTY relevant remembered set cards
+#ifdef KELVIN_VERBOSE
+          printf("  register_object_wo_lock @ " PTR_FORMAT "\n", p2i(obj_addr));
+          fflush(stdout);
+#endif
           scanner->register_object_wo_lock(obj_addr);
+#ifdef KELVIN_VERBOSE
+          printf("  oop_iterate for object @ " PTR_FORMAT " to find interesting poitners\n", p2i(obj_addr));
+          fflush(stdout);
+#endif
           obj->oop_iterate(&dirty_cards_for_interesting_pointers);
         } else if (!r->is_humongous()) {
           // First, clear the remembered set
           scanner->reset_remset(r->bottom(), ShenandoahHeapRegion::region_size_words());
           scanner->reset_object_range(r->bottom(), r->end());
+#ifdef KELVIN_VERBOSE
+          printf("Reconstructing remembered set for regular region " SIZE_FORMAT "\n", r->index());
+          fflush(stdout);
+#endif
 
           // Then iterate over all objects, registering object and DIRTYing relevant remembered set cards
           HeapWord* t = r->top();
