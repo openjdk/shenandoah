@@ -1206,22 +1206,21 @@ private:
                     r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
                     r->is_active()? "active": "inactive",
                     r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular");
-      if (r->is_young() && r->is_active()) {
-
-        if (r->is_cset()) {
-          assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
-          _sh->marked_object_iterate(r, &cl);
-          if (ShenandoahPacing) {
-            _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
-          }
+      if (r->is_cset()) {
+        assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
+        _sh->marked_object_iterate(r, &cl);
+        if (ShenandoahPacing) {
+          _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
-        else  if (r->is_humongous_start() && (r->age() > InitialTenuringThreshold)) {
-          // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
-          // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
-          // triggers the load-reference barrier (LRB) to copy on reference fetch.
-          r->promote_humongous();
-        } // else, region is humongous_continuation or is not selected for evacuation
-      } // else, region is in free set
+      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() > InitialTenuringThreshold)) {
+        // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
+        // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
+        // triggers the load-reference barrier (LRB) to copy on reference fetch.
+        r->promote_humongous();
+      } 
+      // else, region is free, or OLD, or not in collection set, or humongous_continuation,
+      // or is young humongous_start that is too young to be promoted
+
       if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
         break;
       }
