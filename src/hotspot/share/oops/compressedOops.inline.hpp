@@ -129,9 +129,18 @@ inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v) {
   return decode_not_null(v, base());
 }
 
+
 inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v, address narrow_base) {
   assert(!is_null(v), "narrow klass value can never be zero");
   Klass* result = decode_raw(v, narrow_base);
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  if (!check_alignment(result)) {
+    extern void kelvin_breakpoint(void *);
+    printf("decoded raw KlassPointer, result not aligned: " PTR_FORMAT "\n", p2i(result));
+    kelvin_breakpoint(result);
+  }
+#endif
   assert(check_alignment(result), "address not aligned: " INTPTR_FORMAT, p2i((void*) result));
   return result;
 }

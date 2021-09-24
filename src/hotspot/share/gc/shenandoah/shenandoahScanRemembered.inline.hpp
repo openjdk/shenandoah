@@ -821,7 +821,6 @@ inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure*
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    assert(region->is_cset()? heap->is_update_refs_in_progress(): true, "region in cset implies updating references");
     if (region->is_old() && region->is_active() && !region->is_cset()) {
       HeapWord* start_of_range = region->bottom();
       HeapWord* end_of_range = region->top();

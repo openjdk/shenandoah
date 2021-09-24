@@ -38,6 +38,13 @@
 NarrowPtrStruct CompressedOops::_narrow_oop = { NULL, 0, true };
 MemRegion       CompressedOops::_heap_address_range;
 
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+void kelvin_breakpoint(void *result) {
+  printf("made it to kelvin_breakpoint\n");
+}
+#endif
+
 // Choose the heap base address and oop encoding mode
 // when compressed oops are used:
 // Unscaled  - Use 32-bits oops without encoding when
