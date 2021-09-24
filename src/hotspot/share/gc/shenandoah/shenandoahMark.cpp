@@ -142,6 +142,13 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
   ShenandoahObjToScanQueue* q;
   ShenandoahMarkTask t;
 
+#define KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  printf("%u: mark_loop_work(), GENERATION: %s, stride: %lu\n",
+         worker_id, (GENERATION == YOUNG)? "YOUNG": (GENERATION == OLD)? "OLD": "GLOBAL", stride);
+  fflush(stdout);
+#endif
+
   assert(heap->active_generation()->generation_mode() == GENERATION, "Sanity");
   heap->active_generation()->ref_processor()->set_mark_closure(worker_id, cl);
 
@@ -156,26 +163,52 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
          "Need to reserve proper number of queues: reserved: %u, active: %u", queues->get_reserved(), heap->workers()->active_workers());
 
   q = queues->claim_next();
+#ifdef KELVIN_VERBOSE
+  printf("%u: Queue is %s\n", worker_id, (q != NULL)? "non-null": "null");
+  fflush(stdout);
+#endif
   while (q != NULL) {
     if (CANCELLABLE && heap->check_cancelled_gc_and_yield()) {
       return;
     }
 
+#ifdef KELVIN_VERBOSE
+    printf("%u: not cancelled!\n", worker_id);
+    fflush(stdout);
+#endif
     for (uint i = 0; i < stride; i++) {
       if (q->pop(t)) {
         do_task<T, STRING_DEDUP>(q, cl, live_data, req, &t);
       } else {
         assert(q->is_empty(), "Must be empty");
         q = queues->claim_next();
+#ifdef KELVIN_VERBOSE
+        printf("%u: Replaced empty queue with %s queue\n", worker_id, (q != NULL)? "non-null": "null");
+        fflush(stdout);
+#endif
         break;
       }
     }
   }
   q = get_queue(worker_id);
+#ifdef KELVIN_VERBOSE
+  printf("%u: got worker_id queue which is " PTR_FORMAT "\n", worker_id, p2i(q));
+  fflush(stdout);
+#endif
   ShenandoahObjToScanQueue* old = get_old_queue(worker_id);
+
+#ifdef KELVIN_VERBOSE
+  printf("%u: got old worker_id queue which is " PTR_FORMAT "\n", worker_id, p2i(q));
+  fflush(stdout);
+#endif
 
   ShenandoahSATBBufferClosure<GENERATION> drain_satb(q, old);
   SATBMarkQueueSet& satb_mq_set = ShenandoahBarrierSet::satb_mark_queue_set();
+
+#ifdef KELVIN_VERBOSE
+  printf("%u: back from drain_satb()\n", worker_id);
+  fflush(stdout);
+#endif
 
   /*
    * Normal marking loop:
@@ -184,8 +217,16 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
     if (CANCELLABLE && heap->check_cancelled_gc_and_yield()) {
       return;
     }
+#ifdef KELVIN_VERBOSE
+    printf("%u: not cancelled?\n", worker_id);
+    fflush(stdout);
+#endif
 
     while (satb_mq_set.completed_buffers_num() > 0) {
+#ifdef KELVIN_VERBOSE
+      printf("%u: applying closure to completed buffer\n", worker_id);
+      fflush(stdout);
+#endif
       satb_mq_set.apply_closure_to_completed_buffer(&drain_satb);
     }
 
@@ -201,11 +242,20 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
     }
 
     if (work == 0) {
+#ifdef KELVIN_VERBOSE
+      printf("%u: no more work, trying to terminate\n", worker_id);
+      fflush(stdout);
+#endif
       // No work encountered in current stride, try to terminate.
       // Need to leave the STS here otherwise it might block safepoints.
       ShenandoahSuspendibleThreadSetLeaver stsl(CANCELLABLE && ShenandoahSuspendibleWorkers);
       ShenandoahTerminatorTerminator tt(heap);
       if (terminator->offer_termination(&tt)) return;
     }
+#ifdef KELVIN_VERBOSE
+    printf("%u: work is never done: %u\n", worker_id, work);
+    fflush(stdout);
+#endif
+
   }
 }
