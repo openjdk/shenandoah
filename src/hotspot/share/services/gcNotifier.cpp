@@ -151,8 +151,8 @@ static Handle createGcInfo(GCMemoryManager *gcManager, GCStatInfo *gcStatInfo,TR
   JavaCallArguments constructor_args(16);
   constructor_args.push_oop(getGcInfoBuilder(gcManager,THREAD));
   constructor_args.push_long(gcStatInfo->gc_index());
-  constructor_args.push_long(Management::ticks_to_ms(gcStatInfo->start_time()));
-  constructor_args.push_long(Management::ticks_to_ms(gcStatInfo->end_time()));
+  constructor_args.push_long(Management::ticks_to_ns(gcStatInfo->start_time()));
+  constructor_args.push_long(Management::ticks_to_ns(gcStatInfo->end_time()));
   constructor_args.push_oop(usage_before_gc_ah);
   constructor_args.push_oop(usage_after_gc_ah);
   constructor_args.push_oop(extra_array);
