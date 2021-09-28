@@ -129,7 +129,6 @@ inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v) {
   return decode_not_null(v, base());
 }
 
-
 inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v, address narrow_base) {
   assert(!is_null(v), "narrow klass value can never be zero");
   Klass* result = decode_raw(v, narrow_base);
