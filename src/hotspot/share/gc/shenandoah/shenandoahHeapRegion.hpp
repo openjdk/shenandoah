@@ -430,12 +430,6 @@ private:
   // objects, but do not need to register the live objects as they are already registered.
   void global_oop_iterate_objects_and_fill_dead(OopIterateClosure* cl);
 
-#ifdef KELVIN_DEBUG
-  // Process the contents of a region when it is being promoted en masse by registering each marked object, coalescing
-  // contiguous ranges of unmarked objects into registered dead objects.  Do not touch card marks.
-  void fill_dead_and_register_for_promotion();
-#endif
-
   inline void internal_increase_live_data(size_t s);
 
   void set_state(RegionState to);

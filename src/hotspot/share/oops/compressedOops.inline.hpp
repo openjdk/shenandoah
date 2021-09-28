@@ -133,17 +133,6 @@ inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v) {
 inline Klass* CompressedKlassPointers::decode_not_null(narrowKlass v, address narrow_base) {
   assert(!is_null(v), "narrow klass value can never be zero");
   Klass* result = decode_raw(v, narrow_base);
-#define KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  if (!check_alignment(result)) {
-    extern void kelvin_breakpoint(void *);
-    printf("decoded raw KlassPointer, result fetched raw as 0x%x, not aligned: " PTR_FORMAT "\n", v, p2i(result));
-    printf("  shift() is %u, narrow_base is " PTR_FORMAT ", KlassAlignmentInBytes: " SIZE_FORMAT "\n",
-           shift(), p2i(narrow_base), (size_t) KlassAlignmentInBytes);
-    printf("  size of Klass is " SIZE_FORMAT "\n", sizeof(Klass));
-    kelvin_breakpoint(result);
-  }
-#endif
   assert(check_alignment(result), "address not aligned: " INTPTR_FORMAT, p2i((void*) result));
   return result;
 }
