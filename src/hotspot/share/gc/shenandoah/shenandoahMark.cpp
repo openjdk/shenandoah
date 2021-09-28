@@ -142,7 +142,7 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
   ShenandoahObjToScanQueue* q;
   ShenandoahMarkTask t;
 
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
   printf("%u: mark_loop_work(), GENERATION: %s, stride: %lu\n",
          worker_id, (GENERATION == YOUNG)? "YOUNG": (GENERATION == OLD)? "OLD": "GLOBAL", stride);
