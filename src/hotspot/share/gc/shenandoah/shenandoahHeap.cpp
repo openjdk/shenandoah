@@ -1217,7 +1217,7 @@ private:
         // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
         // triggers the load-reference barrier (LRB) to copy on reference fetch.
         r->promote_humongous();
-      } 
+      }
       // else, region is free, or OLD, or not in collection set, or humongous_continuation,
       // or is young humongous_start that is too young to be promoted
 

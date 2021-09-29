@@ -130,7 +130,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
             // Avoid floating-point math with integer multiply and shift.
             garbage = (garbage * ShenandoahTenuredRegionUsageBias) >> ShenandoahTenuredRegionUsageBiasLogBase2;
           }
-        } 
+        }
         candidates[cand_idx]._garbage = garbage;
         cand_idx++;
       }

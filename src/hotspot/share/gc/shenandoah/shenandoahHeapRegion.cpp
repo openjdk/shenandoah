@@ -890,7 +890,7 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
   heap->card_scan()->register_object_wo_lock(bottom());
-  
+
   // For this region and each humongous continuation region spanned by this humongous object, change
   // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
   // in the last humongous region that is not spanned by obj is currently not used.
