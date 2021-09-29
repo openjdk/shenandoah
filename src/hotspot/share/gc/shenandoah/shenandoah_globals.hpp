@@ -388,7 +388,12 @@
                                                                             \
   product(bool, ShenandoahAllowOldMarkingPreemption, true, DIAGNOSTIC,      \
           "Allow young generation collections to suspend concurrent"        \
-          " marking in the old generation.")
+          " marking in the old generation.")                                \
+                                                                            \
+  product(uintx, ShenandoahAgingCyclePeriod, 1, EXPERIMENTAL,               \
+          "With generational mode, increment the age of objects and"        \
+          "regions each time this many young-gen GC cycles are completed.")
+
 // end of GC_SHENANDOAH_FLAGS
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP

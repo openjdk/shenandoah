@@ -316,7 +316,10 @@ public:
     WEAK_ROOTS_BITPOS  = 4,
 
     // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5
+    OLD_MARKING_BITPOS = 5,
+
+    // Is this a cycle for incrementing object and region ages?
+    AGING_CYCLE_BITPOS = 6
   };
 
   enum GCState {
@@ -326,7 +329,8 @@ public:
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
-    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
+    AGING_CYCLE   = 1 << AGING_CYCLE_BITPOS
   };
 
 private:
@@ -354,6 +358,7 @@ public:
   void set_has_forwarded_objects(bool cond);
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
+  void set_aging_cycle(bool cond);
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -370,6 +375,7 @@ public:
   inline bool is_stw_gc_in_progress() const;
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
+  inline bool is_aging_cycle() const;
 
 private:
   void manage_satb_barrier(bool active);
