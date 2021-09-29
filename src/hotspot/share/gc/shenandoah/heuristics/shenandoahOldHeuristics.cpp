@@ -206,6 +206,10 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
   }
 
+  // TODO: Consider not running mixed collects if we recovered some threshold percentage of memory from immediate garbage.
+  // This would be similar to young and global collections shortcutting evacuation, though we'd probably want a separate
+  // threshold for the old generation.
+
   // Prioritize regions to select garbage-first regions
   QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_garbage, false);
 
@@ -215,8 +219,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // TODO: allow ShenandoahOldGarbageThreshold to be determined adaptively, by heuristics.
 
   const size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold / 100;
-
+  size_t candidates_garbage = 0;
   for (size_t i = 0; i < cand_idx; i++) {
+    candidates_garbage += candidates[i]._garbage;
     if (candidates[i]._garbage < garbage_threshold) {
       // Candidates are sorted in decreasing order of garbage, so no regions after this will be above the threshold
       _hidden_next_old_collection_candidate = 0;
@@ -240,8 +245,13 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
-  log_info(gc)("Old-gen mark evac (" UINT32_FORMAT " RR, " UINT32_FORMAT " CF)",
-               _hidden_old_collection_candidates, _old_coalesce_and_fill_candidates);
+  size_t collectable_garbage = immediate_garbage + candidates_garbage;
+  log_info(gc)("Old-gen mark evac (" UINT32_FORMAT " RR, " UINT32_FORMAT " CF), "
+               "Collectable Garbage: " SIZE_FORMAT "%s, "
+               "Immediate Garbage: " SIZE_FORMAT "%s",
+               _hidden_old_collection_candidates, _old_coalesce_and_fill_candidates,
+               byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
+               byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage));
 }
 
 void ShenandoahOldHeuristics::start_old_evacuations() {
