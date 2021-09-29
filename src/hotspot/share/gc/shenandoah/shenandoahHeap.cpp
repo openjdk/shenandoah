@@ -824,6 +824,10 @@ void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool pro
   }
 }
 
+void ShenandoahHeap::handle_promotion_failure() {
+  old_heuristics()->handle_promotion_failure();
+}
+
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
   // New object should fit the GCLAB size
   size_t min_size = MAX2(size, PLAB::min_size());

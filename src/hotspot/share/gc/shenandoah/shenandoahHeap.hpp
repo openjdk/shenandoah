@@ -671,6 +671,7 @@ private:
 
   inline oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahRegionAffiliation target_gen);
   void handle_old_evacuation(HeapWord* obj, size_t words, bool promotion);
+  void handle_promotion_failure();
 
 public:
   static address in_cset_fast_test_addr();

@@ -389,7 +389,8 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
   if (copy == NULL) {
     if (target_gen == OLD_GENERATION && from_region->affiliation() == YOUNG_GENERATION) {
-      // TODO: Inform old generation heuristic of promotion failure
+      assert(mode()->is_generational(), "Should only be here in generational mode.");
+      handle_promotion_failure();
       return NULL;
     }
 
