@@ -127,6 +127,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         if (heap->mode()->is_generational() && (region->age() >= InitialTenuringThreshold)) {
           // Bias selection of regions that have reached tenure age
           for (int i = region->age() - InitialTenuringThreshold; i >= 0; i--) {
+            // Avoid floating-point math with integer multiply and shift.
             garbage = (garbage * ShenandoahTenuredRegionUsageBias) >> ShenandoahTenuredRegionUsageBiasLogBase2;
           }
         } 
