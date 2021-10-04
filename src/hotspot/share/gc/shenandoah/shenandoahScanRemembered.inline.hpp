@@ -589,6 +589,9 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   process_clusters(first_cluster, count, end_of_range, cl, false);
 }
 
+// Process all objects starting within count clusters beginning with first_cluster for which the start address is
+// less than end_of_range.  For any such object, process the complete object, even if its end reaches beyond
+// end_of_range.
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void
@@ -797,6 +800,8 @@ ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *re
   // We want to assure that our process_clusters() request spans all relevant clusters.  Note that each cluster
   // processed will avoid processing beyond end_of_range.
 
+  // Note that any object that starts between start_of_range and end_of_range, including humongous objects, will
+  // be fully processed by process_clusters, even though the object may reach beyond end_of_range.
   size_t num_heapwords = end_of_range - start_of_range;
   unsigned int cluster_size = CardTable::card_size_in_words * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   size_t num_clusters = (size_t) ((num_heapwords - 1 + cluster_size) / cluster_size);
