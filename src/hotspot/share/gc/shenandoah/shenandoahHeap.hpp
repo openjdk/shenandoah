@@ -317,9 +317,6 @@ public:
 
     // Old regions are under marking, still need SATB barriers.
     OLD_MARKING_BITPOS = 5,
-
-    // Is this a cycle for incrementing object and region ages?
-    AGING_CYCLE_BITPOS = 6
   };
 
   enum GCState {
@@ -329,8 +326,7 @@ public:
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
-    OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
-    AGING_CYCLE   = 1 << AGING_CYCLE_BITPOS
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
   };
 
 private:
@@ -502,6 +498,7 @@ public:
 // ---------- Class Unloading
 //
 private:
+  ShenandoahSharedFlag  _is_aging_cycle;
   ShenandoahSharedFlag _unload_classes;
   ShenandoahUnload     _unloader;
 
