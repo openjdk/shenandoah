@@ -226,11 +226,6 @@ void ShenandoahConcurrentGC::vmop_entry_final_updaterefs() {
   heap->try_inject_alloc_failure();
   VM_ShenandoahFinalUpdateRefs op(this);
   VMThread::execute(&op);
-
-  shenandoah_assert_safepoint();
-  // Aging_cycle is only relevant during evacuation cycle for individual objects and during final mark for
-  // entire regions.  Both of these relevant operations occur before final update refs.
-  heap->set_aging_cycle(false);
 }
 
 void ShenandoahConcurrentGC::vmop_entry_final_roots() {
@@ -1039,6 +1034,10 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
 
   heap->set_update_refs_in_progress(false);
   heap->set_has_forwarded_objects(false);
+
+  // Aging_cycle is only relevant during evacuation cycle for individual objects and during final mark for
+  // entire regions.  Both of these relevant operations occur before final update refs.
+  heap->set_aging_cycle(false);
 
   if (ShenandoahVerify) {
     heap->verifier()->verify_after_updaterefs();
