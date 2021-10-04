@@ -544,7 +544,7 @@ inline bool ShenandoahHeap::is_concurrent_weak_root_in_progress() const {
 }
 
 inline bool ShenandoahHeap::is_aging_cycle() const {
-  return _gc_state.is_set(AGING_CYCLE);
+  return _is_aging_cycle.is_set();
 }
 
 template<class T>

@@ -1912,7 +1912,7 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
 }
 
 void ShenandoahHeap::set_aging_cycle(bool in_progress) {
-  set_gc_state_mask(AGING_CYCLE, in_progress);
+  _is_aging_cycle.set_cond(in_progress);
 }
 
 void ShenandoahHeap::manage_satb_barrier(bool active) {
