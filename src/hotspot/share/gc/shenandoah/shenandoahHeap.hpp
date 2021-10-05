@@ -313,7 +313,7 @@ public:
     WEAK_ROOTS_BITPOS  = 4,
 
     // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5,
+    OLD_MARKING_BITPOS = 5
   };
 
   enum GCState {
