@@ -40,25 +40,38 @@ private:
   uint _nworkers;
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   uint _coalesce_and_fill_region_count;
+  ShenandoahConcurrentGC* _old_gc;
+  volatile bool _is_preempted;
 
 public:
-  ShenandoahConcurrentCoalesceAndFillTask(uint nworkers,
-                                          ShenandoahHeapRegion** coalesce_and_fill_region_array, uint region_count) :
+  ShenandoahConcurrentCoalesceAndFillTask(uint nworkers, ShenandoahHeapRegion** coalesce_and_fill_region_array,
+                                          uint region_count, ShenandoahConcurrentGC* old_gc) :
     AbstractGangTask("Shenandoah Concurrent Coalesce and Fill"),
     _nworkers(nworkers),
     _coalesce_and_fill_region_array(coalesce_and_fill_region_array),
-    _coalesce_and_fill_region_count(region_count) {
+    _coalesce_and_fill_region_count(region_count),
+    _old_gc(old_gc),
+    _is_preempted(false) {
   }
 
   void work(uint worker_id) {
     for (uint region_idx = worker_id; region_idx < _coalesce_and_fill_region_count; region_idx += _nworkers) {
       ShenandoahHeapRegion* r = _coalesce_and_fill_region_array[region_idx];
-      if (!r->is_humongous())
-        r->oop_fill_and_coalesce();
-      else {
+      if (!r->is_humongous()) {
+        if (!r->oop_fill_and_coalesce()) {
+          // Coalesce and fill has been preempted
+          Atomic::store(&_is_preempted, true);
+          return;
+        }
+      } else {
         // there's only one object in this region and it's not garbage, so no need to coalesce or fill
       }
     }
+  }
+
+  // Value returned from is_completed() is only valid after all worker thread have terminated.
+  bool is_completed() {
+    return !Atomic::load(&_is_preempted);
   }
 };
 
@@ -127,6 +140,10 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   }
 
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
+#define KELVIN_verbose
+#ifdef KELVIN_VERBOSE
+    printf("concurrent old-gen marking was preempted, so gc.collect() is returning false\n");
+#endif
     return false;
   }
 
@@ -138,6 +155,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   assert(!heap->is_evacuation_in_progress(), "Old gen evacuations are not supported");
 
   // Process weak roots that might still point to regions that would be broken by cleanup
+
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
@@ -165,7 +183,31 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // a case in the LRB that permits access to from-space objects for the purpose
   // of class unloading that is unlikely to function correctly if the object has
   // been filled.
-  entry_coalesce_and_fill();
+
+  _allow_preemption.set();
+  if (heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
+    if (!entry_coalesce_and_fill()) {
+#ifdef KELVIN_VERBOSE
+      printf("entry_coalesce_and_fill() was preempted\n");
+      fflush(stdout);
+#endif
+      // If old-gen denerates instead of resuming, we'll just start up an out-of-cycle degenerated GC.
+      // This should be a rare event.  Normally, we'll resume the coalesce-and-fill effort after the
+      // preempting young-gen GC finishes.
+      check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle);
+      return false;
+    }
+  }
+  if (!_allow_preemption.try_unset()) {
+    // The regulator thread has unset the preemption guard. That thread will shortly cancel
+    // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
+    while (!heap->cancelled_gc()) {
+      SpinPause();
+    }
+  }
+  if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) {
+    return false;
+  }
 
   // Prepare for old evacuations (actual evacuations will happen on subsequent young collects).
   entry_old_evacuations();
@@ -181,30 +223,39 @@ void ShenandoahOldGC::entry_coalesce_and_fill_message(char *buf, size_t len) con
   jio_snprintf(buf, len, "Coalescing and filling (%s)", _generation->name());
 }
 
-void ShenandoahOldGC::op_coalesce_and_fill() {
+bool ShenandoahOldGC::op_coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
   WorkGang* workers = heap->workers();
   uint nworkers = workers->active_workers();
 
   assert(_generation->generation_mode() == OLD, "Only old-GC does coalesce and fill");
-
-  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
+  log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
+#define KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  printf("Starting (or resuming) coalesce-and-fill of old heap regions\n");
+#endif
   uint coalesce_and_fill_regions_count = old_heuristics->old_coalesce_and_fill_candidates();
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
-  ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
-
-
-  // TODO:  We need to implement preemption of coalesce and fill.  If young-gen wants to run while we're working on this,
-  // we should preempt this code and then resume it after young-gen has finished.  This requires that we "remember" the state
-  // of each worker thread so it can be resumed where it left off.  Note that some worker threads may have processed more regions
-  // than others at the time of preemption.
+  ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count, this);
 
   workers->run_task(&task);
+  if (task.is_completed()) {
+    // Remember that we're done with coalesce-and-fill.
+    heap->set_concurrent_prep_for_mixed_evacuation_in_progress(false);
+    return true;
+  } else {
+#ifdef KELVIN_VERBOSE
+    printf("Suspending coalesce-and-fill of old heap regions");
+#endif
+    log_debug(gc)("Suspending coalesce-and-fill of old heap regions");
+    // Otherwise, we got preempted before the work was done.
+    return false;
+  }
 }
 
-void ShenandoahOldGC::entry_coalesce_and_fill() {
+bool ShenandoahOldGC::entry_coalesce_and_fill() {
   char msg[1024];
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
@@ -217,5 +268,5 @@ void ShenandoahOldGC::entry_coalesce_and_fill() {
                               ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
                               "concurrent coalesce and fill");
 
-  op_coalesce_and_fill();
+  return op_coalesce_and_fill();
 }

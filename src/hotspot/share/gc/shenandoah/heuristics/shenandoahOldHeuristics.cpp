@@ -171,6 +171,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     total_garbage += garbage;
 
     if (region->is_regular()) {
+      region->reset_coalesce_and_fill_boundary();
       if (!region->has_live()) {
         region->make_trash_immediate();
       } else {
@@ -213,6 +214,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       _hidden_old_collection_candidates = (uint)i;
       _first_coalesce_and_fill_candidate = (uint)i;
       _old_coalesce_and_fill_candidates = (uint)(cand_idx - i);
+      heap->set_concurrent_prep_for_mixed_evacuation_in_progress(true);
 
       // Note that we do not coalesce and fill occupied humongous regions
       // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions

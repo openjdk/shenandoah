@@ -171,6 +171,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
     r->set_affiliation(req.affiliation());
     r->set_update_watermark(r->bottom());
+
+    // Any OLD region allocated during concurrent coalesce-and-fill does not need to be coalesced and filled.
+    // This code is only necessary if req.affiliation() is old, but harmless if not.
+    r->finish_coalesce_and_fill(); 
     ctx->capture_top_at_mark_start(r);
 
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");

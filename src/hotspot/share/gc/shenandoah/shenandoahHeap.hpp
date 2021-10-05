@@ -152,6 +152,7 @@ private:
   ShenandoahGeneration* _gc_generation;
   ShenandoahOldHeuristics* _old_heuristics;
   bool _mixed_evac;             // true iff most recent evac included at least one old-gen HeapRegion
+  bool _prep_for_mixed_evac_in_progress; // true iff we are concurrently coalescing and filling old-gen HeapRegions
 
 public:
   ShenandoahHeapLock* lock() {
@@ -316,7 +317,7 @@ public:
     WEAK_ROOTS_BITPOS  = 4,
 
     // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5
+    OLD_MARKING_BITPOS = 5,
   };
 
   enum GCState {
@@ -326,7 +327,7 @@ public:
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
-    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
   };
 
 private:
@@ -354,6 +355,8 @@ public:
   void set_has_forwarded_objects(bool cond);
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
+  void set_concurrent_prep_for_mixed_evacuation_in_progress(bool cond);
+  bool is_concurrent_prep_for_mixed_evacuation_in_progress();
 
   inline bool is_stable() const;
   inline bool is_idle() const;
