@@ -36,7 +36,7 @@
 #include "utilities/defaultStream.hpp"
 
 ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
-  _last_sample_millis(0)
+  _last_sample_millis(0), _log_file(nullptr)
 {
   if (UsePerfData && ShenandoahRegionSampling) {
     EXCEPTION_MARK;
@@ -73,9 +73,8 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
     }
 
     if (ShenandoahLogRegionSampling) {
-      const char* name = ShenandoahRegionSamplingFile ? ShenandoahRegionSamplingFile : "./shenandoahSnapshots_pid%p.log";
-      _log_file = new ShenandoahLogFileOutput(name, _timestamp->get_value());
-      _log_file->initialize(NULL, tty);
+      _log_file = new ShenandoahLogFileOutput(ShenandoahRegionSamplingFile, _timestamp->get_value());
+      _log_file->initialize(tty);
     }
   }
 }

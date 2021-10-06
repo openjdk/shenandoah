@@ -89,12 +89,10 @@ bool ShenandoahLogFileOutput::flush() {
   return result;
 }
 
-void ShenandoahLogFileOutput::initialize(const char* options, outputStream* errstream) {
+void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
   _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
   if (_stream == NULL) {
-    errstream->print_cr("Error opening log file '%s': %s",
-                        _file_name, os::strerror(errno));
-
+    errstream->print_cr("Error opening log file '%s': %s", _file_name, os::strerror(errno));
     _file_name = make_file_name("./shenandoahSnapshots_pid%p.log", _pid_str, _vm_start_time_str);
     _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
     errstream->print_cr("Writing to default log file: %s", _file_name);
