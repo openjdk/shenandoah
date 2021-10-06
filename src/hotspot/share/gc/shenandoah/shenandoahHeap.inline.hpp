@@ -315,7 +315,7 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size)
 }
 
 inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
-  assert(thread == Thread::current(), "Why would this be a different thread?");
+  assert(thread == Thread::current(), "Expected thread parameter to be current thread.");
   if (ShenandoahThreadLocalData::is_oom_during_evac(thread)) {
     // This thread went through the OOM during evac protocol and it is safe to return
     // the forward pointer. It must not attempt to evacuate any more.
