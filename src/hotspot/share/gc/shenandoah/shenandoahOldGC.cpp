@@ -128,54 +128,61 @@ void ShenandoahOldGC::op_final_mark() {
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-  // Continue concurrent mark, do not reset regions, do not mark roots, do not collect $200.
-  _allow_preemption.set();
-  entry_mark();
-  if (!_allow_preemption.try_unset()) {
-    // The regulator thread has unset the preemption guard. That thread will shortly cancel
-    // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
-    while (!heap->cancelled_gc()) {
-      SpinPause();
-    }
-  }
-
-  if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
-#define KELVIN_verbose
+#define KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
-    printf("concurrent old-gen marking was preempted, so gc.collect() is returning false\n");
+  printf("Starting or resuming ShenandoahOldGC::collect(), cause: %s\n", GCCause::to_string(cause));
 #endif
-    return false;
+
+  if (!heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
+    // Skip over the initial phases of old collect if we're resuming mixed evacuation preparation.
+
+    // Continue concurrent mark, do not reset regions, do not mark roots, do not collect $200.
+    _allow_preemption.set();
+    entry_mark();
+    if (!_allow_preemption.try_unset()) {
+      // The regulator thread has unset the preemption guard. That thread will shortly cancel
+      // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
+      while (!heap->cancelled_gc()) {
+        SpinPause();
+      }
+    }
+
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
+#ifdef KELVIN_VERBOSE
+      printf("concurrent old-gen marking was preempted, so gc.collect() is returning false\n");
+#endif
+      return false;
+    }
+
+    // Complete marking under STW
+    vmop_entry_final_mark();
+
+    // We aren't dealing with old generation evacuation yet. Our heuristic
+    // should not have built a cset in final mark.
+    assert(!heap->is_evacuation_in_progress(), "Old gen evacuations are not supported");
+
+    // Process weak roots that might still point to regions that would be broken by cleanup
+    if (heap->is_concurrent_weak_root_in_progress()) {
+      entry_weak_refs();
+      entry_weak_roots();
+    }
+
+    // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
+    // the space. This would be the last action if there is nothing to evacuate.
+    entry_cleanup_early();
+
+    {
+      ShenandoahHeapLocker locker(heap->lock());
+      heap->free_set()->log_status();
+    }
+
+    // TODO: Old marking doesn't support class unloading yet
+    // Perform concurrent class unloading
+    // if (heap->unload_classes() &&
+    //     heap->is_concurrent_weak_root_in_progress()) {
+    //   entry_class_unloading();
+    // }
   }
-
-  // Complete marking under STW
-  vmop_entry_final_mark();
-
-  // We aren't dealing with old generation evacuation yet. Our heuristic
-  // should not have built a cset in final mark.
-  assert(!heap->is_evacuation_in_progress(), "Old gen evacuations are not supported");
-
-  // Process weak roots that might still point to regions that would be broken by cleanup
-
-  if (heap->is_concurrent_weak_root_in_progress()) {
-    entry_weak_refs();
-    entry_weak_roots();
-  }
-
-  // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
-  // the space. This would be the last action if there is nothing to evacuate.
-  entry_cleanup_early();
-
-  {
-    ShenandoahHeapLocker locker(heap->lock());
-    heap->free_set()->log_status();
-  }
-
-  // TODO: Old marking doesn't support class unloading yet
-  // Perform concurrent class unloading
-  // if (heap->unload_classes() &&
-  //     heap->is_concurrent_weak_root_in_progress()) {
-  //   entry_class_unloading();
-  // }
 
   // Coalesce and fill objects _after_ weak root processing and class unloading.
   // Weak root and reference processing makes assertions about unmarked referents

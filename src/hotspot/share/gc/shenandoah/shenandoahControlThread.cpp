@@ -205,9 +205,9 @@ void ShenandoahControlThread::run_service() {
         } else {
           heap->set_unload_classes(false);
         }
-      } else if (heap->is_concurrent_old_mark_in_progress()) {
-        // Nobody asked us to do anything, but we have an old generation mark
-        // in progress, so resume working on that.
+      } else if (heap->is_concurrent_old_mark_in_progress() || heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
+        // Nobody asked us to do anything, but we have an old-generation mark or old-generation preparation for
+        // mixed evacuation in progress, so resume working on that.
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = OLD;
         set_gc_mode(marking_old);
