@@ -88,20 +88,16 @@ void ShenandoahHeapRegionCounters::update() {
   if (ShenandoahRegionSampling) {
     jlong current = nanos_to_millis(os::javaTimeNanos());
     jlong last = _last_sample_millis;
-    if (current - last > ShenandoahRegionSamplingRate &&
-        Atomic::cmpxchg(&_last_sample_millis, last, current) == last) {
+    if (current - last > ShenandoahRegionSamplingRate && Atomic::cmpxchg(&_last_sample_millis, last, current) == last) {
 
       ShenandoahHeap* heap = ShenandoahHeap::heap();
-
       _status->set_value(encode_heap_status(heap));
-
       _timestamp->set_value(os::elapsed_counter());
-
-      size_t num_regions = heap->num_regions();
 
       {
         ShenandoahHeapLocker locker(heap->lock());
         size_t rs = ShenandoahHeapRegion::region_size_bytes();
+        size_t num_regions = heap->num_regions();
         for (uint i = 0; i < num_regions; i++) {
           ShenandoahHeapRegion* r = heap->get_region(i);
           jlong data = 0;
