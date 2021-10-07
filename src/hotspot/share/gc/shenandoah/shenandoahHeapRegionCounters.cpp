@@ -183,4 +183,3 @@ jlong ShenandoahHeapRegionCounters::encode_heap_status(ShenandoahHeap* heap) {
 
   return status;
 }
-

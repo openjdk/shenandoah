@@ -214,4 +214,3 @@ char* ShenandoahLogFileOutput::make_file_name(const char* file_name,
   result[result_len] = '\0';
   return result;
 }
-
