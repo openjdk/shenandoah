@@ -278,7 +278,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
       printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
       fflush(stdout);
 #endif
-      // If old-gen denerates instead of resuming, we'll just start up an out-of-cycle degenerated GC.
+      // If old-gen degenerates instead of resuming, we'll just start up an out-of-cycle degenerated GC.
       // This should be a rare event.  Normally, we'll resume the coalesce-and-fill effort after the
       // preempting young-gen GC finishes.
       check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle);
