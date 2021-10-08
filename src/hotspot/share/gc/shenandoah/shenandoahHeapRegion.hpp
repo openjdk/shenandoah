@@ -377,8 +377,8 @@ public:
     _coalesce_and_fill_boundary = _end;
   }
 
-  inline void suspend_coalesce_and_fill(HeapWord* next_free_segment) {
-    _coalesce_and_fill_boundary = next_free_segment;
+  inline void suspend_coalesce_and_fill(HeapWord* next_focus) {
+    _coalesce_and_fill_boundary = next_focus;
   }
 
   inline HeapWord* resume_coalesce_and_fill() {

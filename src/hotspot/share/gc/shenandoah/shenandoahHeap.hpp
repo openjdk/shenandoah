@@ -356,7 +356,6 @@ public:
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
   void set_concurrent_prep_for_mixed_evacuation_in_progress(bool cond);
-  bool is_concurrent_prep_for_mixed_evacuation_in_progress();
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -373,6 +372,7 @@ public:
   inline bool is_stw_gc_in_progress() const;
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
+  bool is_concurrent_prep_for_mixed_evacuation_in_progress();
 
 private:
   void manage_satb_barrier(bool active);

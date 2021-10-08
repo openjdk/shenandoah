@@ -1818,9 +1818,8 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
 }
 
 void ShenandoahHeap::set_concurrent_prep_for_mixed_evacuation_in_progress(bool in_progress) {
-  // unlike other set-gc-state functions, this may happen outside
-  // safepoint.
-  _prep_for_mixed_evac_in_progress = true;
+  // Unlike other set-gc-state functions, this may happen outside safepoint.
+  _prep_for_mixed_evac_in_progress = in_progress;
 }
 
 bool ShenandoahHeap::is_concurrent_prep_for_mixed_evacuation_in_progress() {

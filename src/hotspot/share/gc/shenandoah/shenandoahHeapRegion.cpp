@@ -428,11 +428,20 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 // oop_iterate without closure, return true if completed without cancellation
 bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
-  const size_t preemption_stride = 32; // Consider yielding to cancel/preemption request after this many coalesce operations
+  // Consider yielding to cancel/preemption request after this many coalesce operations (skip marked, or coalesce free).
+  const size_t preemption_stride = 128;
+
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  printf("SHR::oop_fill_and_coalesce() for region " SIZE_FORMAT " at addr " PTR_FORMAT "\n", index(), p2i(obj_addr));
+#endif
 
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
   if (!is_active()) {
     finish_coalesce_and_fill();
+#ifdef KELVIN_VERBOSE
+    printf("SHR::oop_fill_and_coalesce() for region " SIZE_FORMAT " is finished\n", index());
+#endif
     return true;
   }
 
@@ -465,6 +474,9 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
     }
     if (!ops_before_preempt_check--) {
       if (heap->cancelled_gc()) {
+#ifdef KELVIN_VERBOSE
+  printf("SHR::oop_fill_and_coalesce() suspending for region " SIZE_FORMAT " at addr " PTR_FORMAT "\n", index(), p2i(obj_addr));
+#endif
         suspend_coalesce_and_fill(obj_addr);
         return false;
       }
@@ -473,6 +485,9 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   }
   // Mark that this region has been coalesced and filled
   finish_coalesce_and_fill();
+#ifdef KELVIN_VERBOSE
+    printf("SHR::oop_fill_and_coalesce() for region " SIZE_FORMAT " is finished\n", index());
+#endif
   return true;
 }
 

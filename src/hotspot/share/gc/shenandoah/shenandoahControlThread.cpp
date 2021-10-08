@@ -206,12 +206,18 @@ void ShenandoahControlThread::run_service() {
           heap->set_unload_classes(false);
         }
       } else if (heap->is_concurrent_old_mark_in_progress() || heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+        printf("Endeavor to resume marking_old (%s%s)\n",
+               (heap->is_concurrent_old_mark_in_progress()? "marking": ""),
+               (heap->is_concurrent_prep_for_mixed_evacuation_in_progress()? "preparing":""));
+#endif
         // Nobody asked us to do anything, but we have an old-generation mark or old-generation preparation for
         // mixed evacuation in progress, so resume working on that.
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = OLD;
         set_gc_mode(marking_old);
-      }
+      } 
 
       // Don't want to spin in this loop and start a cycle every time, so
       // clear requested gc cause. This creates a race with callers of the
@@ -498,7 +504,10 @@ bool ShenandoahControlThread::check_soft_max_changed() const {
 }
 
 void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause) {
-  assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress(), "Old mark should be in progress");
+
+  assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress() ||
+         ShenandoahHeap::heap()->is_concurrent_prep_for_mixed_evacuation_in_progress(),
+         "Old mark or mixed-evac prep should be in progress");
   log_debug(gc)("Resuming old generation with " UINT32_FORMAT " marking tasks queued.", generation->task_queues()->tasks());
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -507,11 +516,16 @@ void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   ShenandoahGCSession session(cause, generation);
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-
-  // We can only really tolerate being cancelled during concurrent
-  // marking. This flag here (passed by reference) is used to control
-  // precisely where the regulator is allowed to cancel a GC.
+#ifdef KELVIN_VERBOSE
+  printf("resume_concurrent_old_cycle() set up tcs\n");
+#endif
+  // We can only tolerate being cancelled during concurrent marking or during preparation for mixed
+  // evacuation. This flag here (passed by reference) is used to control precisely where the regulator
+  // is allowed to cancel a GC.
   ShenandoahOldGC gc(generation, _allow_old_preemption);
+#ifdef KELVIN_VERBOSE
+  printf("resume_concurrent_old_cycle() instantiated gc\n");
+#endif
   if (gc.collect(cause)) {
     // Old collection is complete, the young generation no longer needs this
     // reference to the old concurrent mark so clean it up.
@@ -583,6 +597,10 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
     // Cycle is complete
     generation->heuristics()->record_success_concurrent();
     heap->shenandoah_policy()->record_success_concurrent();
+#ifdef KELVIN_VERBOSE
+    printf("service_concurrent_cycle considers itself done!\n");
+    fflush(stdout);
+#endif
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());

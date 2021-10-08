@@ -77,7 +77,8 @@ class ShenandoahGlobalCoalesceAndFill : public ShenandoahHeapRegionClosure {
   virtual void heap_region_do(ShenandoahHeapRegion* region) override {
     // old region is not in the collection set and was not immediately trashed
     if (region->is_old() && region->is_active() && !region->is_humongous()) {
-      region->oop_fill_and_coalesce();
+      bool result = region->oop_fill_and_coalesce();
+      assert(result = true, "Do not preempt or cancel fill and coalesce during GLOBAL gc");
     }
   }
 

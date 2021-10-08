@@ -158,7 +158,7 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
   q = queues->claim_next();
   while (q != NULL) {
     if (CANCELLABLE && heap->check_cancelled_gc_and_yield()) {
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
       if (GENERATION == OLD) {
         printf("ShenandoahMark<OLD>::mark_loop_work() q processing is being preempted\n");
