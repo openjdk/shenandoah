@@ -68,6 +68,10 @@ void ShenandoahDegenGC::entry_degenerated() {
   EventMark em("%s", msg);
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
+  // In case degenerated GC preempted evacuation or update-refs, clear the aging cycle now.  No harm in clearing it
+  // redundantly if it is already clear.  We don't age during degenerated cycles.
+  heap->set_aging_cycle(false);
+
   ShenandoahWorkerScope scope(heap->workers(),
                               ShenandoahWorkerPolicy::calc_workers_for_stw_degenerated(),
                               "stw degenerated gc");
@@ -133,6 +137,10 @@ void ShenandoahDegenGC::op_degenerated() {
       op_prepare_evacuation();
 
       op_cleanup_early();
+
+      if (heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
+        op_global_coalesce_and_fill();
+      }
 
     case _degenerated_evac:
       // If heuristics thinks we should do the cycle, this flag would be set,
@@ -280,6 +288,10 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
 
 void ShenandoahDegenGC::op_cleanup_early() {
   ShenandoahHeap::heap()->recycle_trash();
+}
+
+void ShenandoahDegenGC::op_global_coalesce_and_fill() {
+  ShenandoahHeap::heap()->coalesce_and_fill_old_regions();
 }
 
 void ShenandoahDegenGC::op_evacuate() {

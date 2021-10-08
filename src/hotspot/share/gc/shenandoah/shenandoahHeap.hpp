@@ -150,7 +150,6 @@ class ShenandoahHeap : public CollectedHeap {
 private:
   ShenandoahHeapLock _lock;
   ShenandoahGeneration* _gc_generation;
-  ShenandoahOldHeuristics* _old_heuristics;
   bool _mixed_evac;             // true iff most recent evac included at least one old-gen HeapRegion
   bool _prep_for_mixed_evac_in_progress; // true iff we are concurrently coalescing and filling old-gen HeapRegions
 
@@ -172,9 +171,7 @@ public:
     _mixed_evac = mixed_evac;
   }
 
-  ShenandoahOldHeuristics* old_heuristics() {
-    return _old_heuristics;
-  }
+  ShenandoahOldHeuristics* old_heuristics();
 
   bool doing_mixed_evacuations();
 
@@ -356,6 +353,7 @@ public:
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
   void set_concurrent_prep_for_mixed_evacuation_in_progress(bool cond);
+  void set_aging_cycle(bool cond);
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -373,6 +371,7 @@ public:
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
   bool is_concurrent_prep_for_mixed_evacuation_in_progress();
+  inline bool is_aging_cycle() const;
 
 private:
   void manage_satb_barrier(bool active);
@@ -499,6 +498,7 @@ public:
 // ---------- Class Unloading
 //
 private:
+  ShenandoahSharedFlag  _is_aging_cycle;
   ShenandoahSharedFlag _unload_classes;
   ShenandoahUnload     _unloader;
 
@@ -674,9 +674,12 @@ public:
 private:
   ShenandoahCollectionSet* _collection_set;
   ShenandoahEvacOOMHandler _oom_evac_handler;
+  ShenandoahSharedFlag _old_gen_oom_evac;
 
   inline oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahRegionAffiliation target_gen);
   void handle_old_evacuation(HeapWord* obj, size_t words, bool promotion);
+  void handle_old_evacuation_failure();
+  void handle_promotion_failure();
 
 public:
   static address in_cset_fast_test_addr();
@@ -697,6 +700,8 @@ public:
   inline void enter_evacuation(Thread* t);
   inline void leave_evacuation(Thread* t);
 
+  inline bool clear_old_evacuation_failure();
+
 // ---------- Generational support
 //
 private:
@@ -710,6 +715,7 @@ public:
   void mark_card_as_dirty(void* location);
   void retire_plab(PLAB* plab);
   void cancel_mixed_collections();
+  void coalesce_and_fill_old_regions();
 
 // ---------- Helper functions
 //

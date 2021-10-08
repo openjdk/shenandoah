@@ -485,9 +485,11 @@ void ShenandoahHeap::initialize_heuristics() {
                     _gc_mode->name()));
   }
 
-  _old_heuristics = _old_generation->initialize_old_heuristics(_gc_mode);
   _global_generation->initialize_heuristics(_gc_mode);
-  _young_generation->initialize_heuristics(_gc_mode);
+  if (mode()->is_generational()) {
+    _young_generation->initialize_heuristics(_gc_mode);
+    _old_generation->initialize_heuristics(_gc_mode);
+  }
 }
 
 #ifdef _MSC_VER
@@ -498,7 +500,6 @@ void ShenandoahHeap::initialize_heuristics() {
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(NULL),
-  _old_heuristics(nullptr),
   _mixed_evac(false),
   _prep_for_mixed_evac_in_progress(false),
   _initial_size(0),
@@ -626,8 +627,13 @@ void ShenandoahHeap::post_initialize() {
   JFR_ONLY(ShenandoahJFRSupport::register_jfr_type_serializers());
 }
 
+
+ShenandoahOldHeuristics* ShenandoahHeap::old_heuristics() {
+  return (ShenandoahOldHeuristics*) _old_generation->heuristics();
+}
+
 bool ShenandoahHeap::doing_mixed_evacuations() {
-  return (_old_heuristics->unprocessed_old_collection_candidates() > 0);
+  return old_heuristics()->unprocessed_old_collection_candidates() > 0;
 }
 
 bool ShenandoahHeap::is_gc_generation_young() const {
@@ -819,6 +825,16 @@ void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool pro
   }
 }
 
+void ShenandoahHeap::handle_old_evacuation_failure() {
+  if (_old_gen_oom_evac.try_set()) {
+    log_info(gc)("Old gen evac failure.");
+  }
+}
+
+void ShenandoahHeap::handle_promotion_failure() {
+  old_heuristics()->handle_promotion_failure();
+}
+
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
   // New object should fit the GCLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
@@ -922,22 +938,44 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
 }
 
 void ShenandoahHeap::retire_plab(PLAB* plab) {
-  size_t waste = plab->waste();
-  HeapWord* top = plab->top();
-  plab->retire();
-  if (top != NULL && plab->waste() > waste) {
-    // If retiring the plab created a filler object, then we
-    // need to register it with our card scanner so it can
-    // safely walk the region backing the plab.
-    log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
-                  plab->waste() - waste, p2i(top));
-    card_scan()->register_object_wo_lock(top);
+  if (!mode()->is_generational()) {
+    plab->retire();
+  } else {
+    size_t waste = plab->waste();
+    HeapWord* top = plab->top();
+    plab->retire();
+    if (top != NULL && plab->waste() > waste && is_in_old(top)) {
+      // If retiring the plab created a filler object, then we
+      // need to register it with our card scanner so it can
+      // safely walk the region backing the plab.
+      log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
+                    plab->waste() - waste, p2i(top));
+      card_scan()->register_object_wo_lock(top);
+    }
   }
 }
 
 void ShenandoahHeap::cancel_mixed_collections() {
   assert(_old_generation != NULL, "Should only have mixed collections in generation mode.");
-  _old_heuristics->abandon_collection_candidates();
+  old_heuristics()->abandon_collection_candidates();
+}
+
+void ShenandoahHeap::coalesce_and_fill_old_regions() {
+  class ShenandoahGlobalCoalesceAndFill : public ShenandoahHeapRegionClosure {
+   public:
+    virtual void heap_region_do(ShenandoahHeapRegion* region) override {
+      // old region is not in the collection set and was not immediately trashed
+      if (region->is_old() && region->is_active() && !region->is_humongous()) {
+        region->oop_fill_and_coalesce();
+      }
+    }
+
+    virtual bool is_thread_safe() override {
+      return true;
+    }
+  };
+  ShenandoahGlobalCoalesceAndFill coalesce;
+  parallel_heap_region_iterate(&coalesce);
 }
 
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
@@ -1155,11 +1193,72 @@ private:
     ShenandoahHeapRegion* r;
     while ((r =_cs->claim_next()) != NULL) {
       assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
+
       _sh->marked_object_iterate(r, &cl);
 
       if (ShenandoahPacing) {
         _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
       }
+      if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
+        break;
+      }
+    }
+  }
+};
+
+// Unlike ShenandoahEvacuationTask, this iterates over all regions rather than just the collection set.
+// This is needed in order to promote humongous start regions if age() >= tenure threshold.
+class ShenandoahGenerationalEvacuationTask : public AbstractGangTask {
+private:
+  ShenandoahHeap* const _sh;
+  ShenandoahRegionIterator *_regions;
+  bool _concurrent;
+public:
+  ShenandoahGenerationalEvacuationTask(ShenandoahHeap* sh,
+                                       ShenandoahRegionIterator* iterator,
+                                       bool concurrent) :
+    AbstractGangTask("Shenandoah Evacuation"),
+    _sh(sh),
+    _regions(iterator),
+    _concurrent(concurrent)
+  {}
+
+  void work(uint worker_id) {
+    if (_concurrent) {
+      ShenandoahConcurrentWorkerSession worker_session(worker_id);
+      ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
+      ShenandoahEvacOOMScope oom_evac_scope;
+      do_work();
+    } else {
+      ShenandoahParallelWorkerSession worker_session(worker_id);
+      ShenandoahEvacOOMScope oom_evac_scope;
+      do_work();
+    }
+  }
+
+private:
+  void do_work() {
+    ShenandoahConcurrentEvacuateRegionObjectClosure cl(_sh);
+    ShenandoahHeapRegion* r;
+    while ((r = _regions->next()) != nullptr) {
+      log_debug(gc)("GenerationalEvacuationTask do_work(), looking at %s region " SIZE_FORMAT ", (age: %d) [%s, %s]",
+                    r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
+                    r->is_active()? "active": "inactive",
+                    r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular");
+      if (r->is_cset()) {
+        assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
+        _sh->marked_object_iterate(r, &cl);
+        if (ShenandoahPacing) {
+          _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
+        }
+      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() > InitialTenuringThreshold)) {
+        // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
+        // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
+        // triggers the load-reference barrier (LRB) to copy on reference fetch.
+        r->promote_humongous();
+      }
+      // else, region is free, or OLD, or not in collection set, or humongous_continuation,
+      // or is young humongous_start that is too young to be promoted
 
       if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
         break;
@@ -1169,8 +1268,14 @@ private:
 };
 
 void ShenandoahHeap::evacuate_collection_set(bool concurrent) {
-  ShenandoahEvacuationTask task(this, _collection_set, concurrent);
-  workers()->run_task(&task);
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    ShenandoahRegionIterator regions;
+    ShenandoahGenerationalEvacuationTask task(this, &regions, concurrent);
+    workers()->run_task(&task);
+  } else {
+    ShenandoahEvacuationTask task(this, _collection_set, concurrent);
+    workers()->run_task(&task);
+  }
 }
 
 void ShenandoahHeap::trash_cset_regions() {
@@ -1242,7 +1347,7 @@ public:
   void do_thread(Thread* thread) {
     PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
     assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
-    gclab->retire();
+    ShenandoahHeap::heap()->retire_plab(gclab);
     if (_resize && ShenandoahThreadLocalData::gclab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_gclab_size(thread, 0);
     }
@@ -1824,6 +1929,9 @@ void ShenandoahHeap::set_concurrent_prep_for_mixed_evacuation_in_progress(bool i
 
 bool ShenandoahHeap::is_concurrent_prep_for_mixed_evacuation_in_progress() {
   return _prep_for_mixed_evac_in_progress;
+
+void ShenandoahHeap::set_aging_cycle(bool in_progress) {
+  _is_aging_cycle.set_cond(in_progress);
 }
 
 void ShenandoahHeap::manage_satb_barrier(bool active) {
@@ -2192,6 +2300,8 @@ private:
     while (r != NULL) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
+
+      log_debug(gc)("ShenandoahUpdateHeapRefsTask::do_work(%u) looking at region " SIZE_FORMAT, worker_id, r->index());
       if (r->is_active() && !r->is_cset()) {
         if (!_heap->mode()->is_generational() || (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION)) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
@@ -2366,13 +2476,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                             ShenandoahPhaseTimings::degen_gc_final_update_refs_rebuild_freeset);
     ShenandoahHeapLocker locker(lock());
     _free_set->rebuild();
-  }
-
-  // HEY! this code and rebuild free set used to be in op_final_updaterefs
-  if (mode()->is_generational() && is_gc_generation_young() && ShenandoahPromoteTenuredRegions) {
-    ShenandoahGCPhase phase(ShenandoahPhaseTimings::final_update_refs_promote_tenured_regions);
-    ShenandoahHeapLocker locker(lock());
-    young_generation()->promote_tenured_regions();
   }
 }
 

@@ -92,6 +92,7 @@ void ShenandoahControlThread::run_service() {
   GCCause::Cause default_cause = GCCause::_shenandoah_concurrent_gc;
 
   double last_shrink_time = os::elapsedTime();
+  uint age_period = 0;
 
   // Shrink period avoids constantly polling regions for shrinking.
   // Having a period 10x lower than the delay would mean we hit the
@@ -142,8 +143,10 @@ void ShenandoahControlThread::run_service() {
 
       ShenandoahHeuristics* heuristics = _degen_generation->heuristics();
       generation = _degen_generation->generation_mode();
+      bool old_gen_evacuation_failed = heap->clear_old_evacuation_failure();
 
-      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle()) {
+      // Do not bother with degenerated cycle if old generation evacuation failed.
+      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle() && !old_gen_evacuation_failed) {
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_degenerated(degen_point);
         set_gc_mode(stw_degenerated);
@@ -253,9 +256,14 @@ void ShenandoahControlThread::run_service() {
         heap->free_set()->log_status();
       }
 
+      heap->set_aging_cycle(false);
       {
         switch (_mode) {
           case concurrent_normal: {
+            if ((generation == YOUNG) && (age_period-- == 0)) {
+              heap->set_aging_cycle(true);
+              age_period = ShenandoahAgingCyclePeriod - 1;
+            }
             service_concurrent_normal_cycle(heap, generation, cause);
             break;
           }
@@ -376,7 +384,8 @@ void ShenandoahControlThread::run_service() {
       last_shrink_time = current;
     }
 
-    {
+    // Don't wait around if there was an allocation failure - start the next cycle immediately.
+    if (!is_alloc_failure_gc()) {
       // The timed wait is necessary because this thread has a responsibility to send
       // 'alloc_words' to the pacer when it does not perform a GC.
       MonitorLocker lock(&_control_lock, Mutex::_no_safepoint_check_flag);

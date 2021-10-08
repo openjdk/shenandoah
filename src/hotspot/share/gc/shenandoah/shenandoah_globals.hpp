@@ -77,6 +77,12 @@
           " compact - run GC more frequently and with deeper targets to "   \
           "free up more memory.")                                           \
                                                                             \
+  product(ccstr, ShenandoahOldGCHeuristics, "adaptive",                     \
+          "Similar to ShenandoahGCHeuristics, but applied to the old "      \
+          "generation. This configuration is only used to trigger old "     \
+          "collections and does not change how regions are selected "       \
+          "for collection.")                                                \
+                                                                            \
   product(uintx, ShenandoahUnloadClassesFrequency, 1, EXPERIMENTAL,         \
           "Unload the classes every Nth cycle. Normally affects concurrent "\
           "GC cycles, as degenerated and full GCs would try to unload "     \
@@ -88,6 +94,11 @@
           "may select the region for collection even if it has little "     \
           "garbage. This also affects how much internal fragmentation the " \
           "collector accepts. In percents of heap region size.")            \
+          range(0,100)                                                      \
+                                                                            \
+  product(uintx, ShenandoahOldGarbageThreshold, 25, EXPERIMENTAL,           \
+          "How much garbage an old region has to contain before it would "  \
+          "be taken for collection.")                                       \
           range(0,100)                                                      \
                                                                             \
   product(uintx, ShenandoahInitFreeThreshold, 70, EXPERIMENTAL,             \
@@ -164,6 +175,11 @@
           "time from active application. Time is in milliseconds. "         \
           "Setting this to 0 disables the feature.")                        \
                                                                             \
+  product(uintx, ShenandoahGuaranteedOldGCInterval, 10*60*1000,  EXPERIMENTAL,  \
+          "Run a collection of the old generation at least this often. "    \
+          "Heuristics may trigger collections more frequently. Time is in " \
+          "milliseconds. Setting this to 0 disables the feature.")          \
+                                                                            \
   product(bool, ShenandoahAlwaysClearSoftRefs, false, EXPERIMENTAL,         \
           "Unconditionally clear soft references, instead of using any "    \
           "other cleanup policy. This minimizes footprint at expense of"    \
@@ -190,6 +206,15 @@
           "Sampling rate for heap region sampling. In milliseconds between "\
           "the samples. Higher values provide more fidelity, at expense "   \
           "of more sampling overhead.")                                     \
+                                                                            \
+  product(bool, ShenandoahLogRegionSampling, false,                         \
+          "Save region sampling stream to ShenandoahRegionSamplingFile")    \
+                                                                            \
+  product(ccstr, ShenandoahRegionSamplingFile,                              \
+          "./shenandoahSnapshots_pid%p.log",                                \
+          "If ShenandoahLogRegionSampling is on, save sampling data stream "\
+          "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
+          "(%p replaced with pid)")                                         \
                                                                             \
   product(uintx, ShenandoahControlIntervalMin, 1, EXPERIMENTAL,             \
           "The minimum sleep interval for the control loop that drives "    \
@@ -248,6 +273,12 @@
           "will make evacuations more resilient when evacuation "           \
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
+                                                                            \
+  product(double, ShenandoahOldEvacReserve, 5.0, EXPERIMENTAL,              \
+          "How much of old generation to withhold from evacuations. "       \
+           "Larger values will result in fewer live objects being "         \
+           "evacuated in the old generation.")                              \
+          range(1,100)                                                      \
                                                                             \
   product(bool, ShenandoahPacing, true, EXPERIMENTAL,                       \
           "Pace application allocations to give GC chance to start "        \
@@ -378,6 +409,23 @@
           "Testing: use simplified, very inefficient but much less complex" \
           " card table scanning.")                                          \
                                                                             \
+  product(uintx, ShenandoahTenuredRegionUsageBias, 192, EXPERIMENTAL,       \
+          "The collection set is comprised of heap regions that contain "   \
+          "the greatest amount of garbage.  "                               \
+          "For purposes of selecting regions to be included in the "        \
+          "collection set, regions that have reached the tenure age will "  \
+          "be treated as if their contained garbage is the actual "         \
+          "contained garbage multiplied by "                                \
+          "(ShenandoahTenuredRegionUsageBias / 128 (e.g. 150% for the "     \
+          "default value) as many times as the region's age meets or "      \
+          "exceeds the tenure age.  For example, if tenure age is 7, "      \
+          "the region age is 9, ShenandoahTenuredRegionUsageBias is "       \
+          "192, and the region is 12.5% garbage, this region "              \
+          "will by treated as if its garbage content is "                   \
+          "1/8 * 27/8 = 42.2% when comparing this region to untenured "     \
+          "regions.")                                                       \
+          range(128, 256)                                                   \
+                                                                            \
   product(bool, ShenandoahPromoteTenuredObjects, true, DIAGNOSTIC,          \
           "Turn on/off evacuating individual tenured young objects "        \
           " to the old generation.")                                        \
@@ -388,7 +436,14 @@
                                                                             \
   product(bool, ShenandoahAllowOldMarkingPreemption, true, DIAGNOSTIC,      \
           "Allow young generation collections to suspend concurrent"        \
-          " marking in the old generation.")
-// end of GC_SHENANDOAH_FLAGS
+          " marking in the old generation.")                                \
+                                                                            \
+  product(uintx, ShenandoahAgingCyclePeriod, 1, EXPERIMENTAL,               \
+          "With generational mode, increment the age of objects and"        \
+          "regions each time this many young-gen GC cycles are completed.")
+ // end of GC_SHENANDOAH_FLAGS
+
+// 2^ShenandoahTenuredRegionUsageBiasLogBase2 is 128
+#define ShenandoahTenuredRegionUsageBiasLogBase2 7
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP

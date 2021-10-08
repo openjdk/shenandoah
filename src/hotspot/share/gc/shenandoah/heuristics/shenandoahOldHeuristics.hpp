@@ -33,7 +33,7 @@
 
 class ShenandoahOldHeuristics : public ShenandoahHeuristics {
 
-protected:
+private:
 
   // if (_generation->generation_mode() == OLD) _old_collection_candidates
   //  represent the number of regions selected for collection following the
@@ -63,11 +63,21 @@ protected:
   uint _old_coalesce_and_fill_candidates;
   uint _first_coalesce_and_fill_candidate;
 
+  // This can be the 'static' or 'adaptive' heuristic.
+  ShenandoahHeuristics* _trigger_heuristic;
+
+  // Flag is set when promotion failure is detected (by gc thread), cleared when old generation collection begins (by control thread)
+  volatile bool _promotion_failed;
+
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
 
+ protected:
+  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
+                                                     size_t free) override;
+
 public:
-  ShenandoahOldHeuristics(ShenandoahGeneration* generation);
+  ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic);
 
   // Return true iff chosen collection set includes at least one old-gen HeapRegion.
   virtual bool choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics);
@@ -100,11 +110,44 @@ public:
   // end of the array.
   void get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
 
-  bool should_defer_gc();
-
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being
   // held by this heuristic for supplying mixed collections.
   void abandon_collection_candidates();
+
+  // Notify the heuristic of promotion failures. The promotion attempt will be skipped and the object will
+  // be evacuated into the young generation. The collection should complete normally, but we want to schedule
+  // an old collection as soon as possible.
+  void handle_promotion_failure();
+
+  virtual void record_cycle_start() override;
+
+  virtual void record_cycle_end() override;
+
+  virtual bool should_start_gc() override;
+
+  virtual bool should_degenerate_cycle() override;
+
+  virtual void record_success_concurrent() override;
+
+  virtual void record_success_degenerated() override;
+
+  virtual void record_success_full() override;
+
+  virtual void record_allocation_failure_gc() override;
+
+  virtual void record_requested_gc() override;
+
+  virtual bool can_unload_classes() override;
+
+  virtual bool can_unload_classes_normal() override;
+
+  virtual bool should_unload_classes() override;
+
+  virtual const char* name() override;
+
+  virtual bool is_diagnostic() override;
+
+  virtual bool is_experimental() override;
 
 };
 
