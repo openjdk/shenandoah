@@ -57,17 +57,10 @@ public:
   void work(uint worker_id) {
     for (uint region_idx = worker_id; region_idx < _coalesce_and_fill_region_count; region_idx += _nworkers) {
       ShenandoahHeapRegion* r = _coalesce_and_fill_region_array[region_idx];
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      printf("CFTask worker %u of %u looking at region %lu fetched from index %u\n", worker_id, _nworkers, r->index(), region_idx);
-#endif
       if (!r->is_humongous()) {
         if (!r->oop_fill_and_coalesce()) {
           // Coalesce and fill has been preempted
           Atomic::store(&_is_preempted, true);
-#ifdef KELVIN_VERBOSE
-          printf("Abandoning CalesceAndFillTask::work() because worker %d was preempted at region_idx %d\n", worker_id, region_idx);
-#endif
           return;
         }
       } else {
@@ -135,23 +128,8 @@ void ShenandoahOldGC::op_final_mark() {
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-  printf("Starting or resuming ShenandoahOldGC::collect(), cause: %s\n", GCCause::to_string(cause));
-  printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-#endif
-
   if (!heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
     // Skip over the initial phases of old collect if we're resuming mixed evacuation preparation.
-
-#ifdef KELVIN_VERBOSE
-    printf("ShenandoahOldGC::collect() is_concurrent_prep_for_mixed_evacuation is not true\n");
-    printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-    printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-    fflush(stdout);
-#endif
-
     // Continue concurrent mark, do not reset regions, do not mark roots, do not collect $200.
     _allow_preemption.set();
     entry_mark();
@@ -164,22 +142,11 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     }
 
     if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
-#ifdef KELVIN_VERBOSE
-      printf("ShenandoahOldGC::collect() old-gen marking was preempted, so gc.collect() is returning false\n");
-      printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-      printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-#endif
       return false;
     }
 
     // Complete marking under STW
     vmop_entry_final_mark();
-
-#ifdef KELVIN_VERBOSE
-      printf("ShenandoahOldGC::collect() finished final_mark\n");
-      printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-      printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-#endif
 
     // We aren't dealing with old generation evacuation yet. Our heuristic
     // should not have built a cset in final mark.
@@ -191,21 +158,9 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
       entry_weak_roots();
     }
 
-#ifdef KELVIN_VERBOSE
-    printf("ShenandoahOldGC::collect() did weak refs and weak roots\n");
-    printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-    printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-#endif
-
     // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
     // the space. This would be the last action if there is nothing to evacuate.
     entry_cleanup_early();
-
-#ifdef KELVIN_VERBOSE
-    printf("ShenandoahOldGC::collect() did entry cleanup early\n");
-    printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-    printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-#endif
 
     {
       ShenandoahHeapLocker locker(heap->lock());
@@ -221,13 +176,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     // }
 
     heap->set_concurrent_prep_for_mixed_evacuation_in_progress(true);
-#ifdef KELVIN_VERBOSE
-    printf("ShenandoahOldGC::collect() starting prep for mixed evac with %d regions to be coalesced and filled\n",
-           heap->old_heuristics()->old_coalesce_and_fill_candidates());
-    printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-    printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-    fflush(stdout);
-#endif
   }
 
   // Coalesce and fill objects _after_ weak root processing and class unloading.
@@ -240,44 +188,18 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   _allow_preemption.set();
 
   if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) {
-#ifdef KELVIN_VERBOSE
-  printf("ShenandoahOldGC::collect() has abandoned all hope because check_cancellation_and_abort()!\n");
-  printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  fflush(stdout);
-#endif
     return false;
   }
 
   // Prepare for old evacuations (actual evacuations will happen on subsequent young collects).
   entry_old_evacuations();
 
-#ifdef KELVIN_VERBOSE
-  printf("ShenandoahOldGC::collect() is back from entry_old_evacuations\n");
-  printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  fflush(stdout);
-#endif
-
   assert(!heap->is_concurrent_strong_root_in_progress(), "No evacuations during old gc.");
 
   vmop_entry_final_roots();
 
-#ifdef KELVIN_VERBOSE
-  printf("ShenandoahOldGC::collect() is done with vmop_entry_final_roots()\n");
-  printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  fflush(stdout);
-#endif
-
   if (heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
     if (!entry_coalesce_and_fill()) {
-#ifdef KELVIN_VERBOSE
-      printf("ShenandoahOldGC::collect() entry_coalesce_and_fill() was preempted\n");
-      printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-      printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-      fflush(stdout);
-#endif
       // If old-gen degenerates instead of resuming, we'll just start up an out-of-cycle degenerated GC.
       // This should be a rare event.  Normally, we'll resume the coalesce-and-fill effort after the
       // preempting young-gen GC finishes.
@@ -285,10 +207,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
       return false;
     }
   }
-#ifdef KELVIN_VERBOSE
-  printf("ShenandoahOldGC::collect() is done with coalesce_and_fill\n");
-  fflush(stdout);
-#endif
   if (!_allow_preemption.try_unset()) {
     // The regulator thread has unset the preemption guard. That thread will shortly cancel
     // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
@@ -296,12 +214,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
       SpinPause();
     }
   }
-#ifdef KELVIN_VERBOSE
-  printf("ShenandoahOldGC::collect() has unset allow_preemption\n");
-  printf("  is_concurrent_weak_root_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  printf("           is_evacuationn_in_progress? %s\n", heap->is_concurrent_weak_root_in_progress()? "Yes": "No");
-  fflush(stdout);
-#endif
   return true;
 }
 
@@ -319,26 +231,16 @@ bool ShenandoahOldGC::op_coalesce_and_fill() {
   assert(_generation->generation_mode() == OLD, "Only old-GC does coalesce and fill");
   log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
   uint coalesce_and_fill_regions_count = old_heuristics->old_coalesce_and_fill_candidates();
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-  printf("Starting (or resuming) coalesce-and-fill of old heap regions, count is: %d\n", coalesce_and_fill_regions_count);
-#endif
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count, this);
 
   workers->run_task(&task);
   if (task.is_completed()) {
-#ifdef KELVIN_VERBOSE
-    printf("Finished with coalesce-and-fill of old heap regions\n");
-#endif
     // Remember that we're done with coalesce-and-fill.
     heap->set_concurrent_prep_for_mixed_evacuation_in_progress(false);
     return true;
   } else {
-#ifdef KELVIN_VERBOSE
-    printf("Suspending coalesce-and-fill of old heap regions\n");
-#endif
     log_debug(gc)("Suspending coalesce-and-fill of old heap regions");
     // Otherwise, we got preempted before the work was done.
     return false;
