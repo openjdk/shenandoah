@@ -176,8 +176,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // all objects allocated within this region are above TAMS (and thus are implicitly marked).  In case this is an
     // OLD region and concurrent preparation for mixed evacuations visits this region before the start of the next
     // old-gen concurrent mark (i.e. this region is allocated following the start of old-gen concurrent mark but before
-    // concurrent preparation for mixed evacuations are completed), we mark this region as not requiring any
-    // coalesce-and-fill processing.y/ This code is only necessary if req.affiliation() is OLD, but harmless if not.
+    // concurrent preparations for mixed evacuations are completed), we mark this region as not requiring any
+    // coalesce-and-fill processing.  This code is only necessary if req.affiliation() is OLD, but harmless if not.
     r->finish_coalesce_and_fill();
     ctx->capture_top_at_mark_start(r);
 
