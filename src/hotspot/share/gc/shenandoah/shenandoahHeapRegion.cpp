@@ -464,7 +464,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }
-    if (!ops_before_preempt_check--) {
+    if (ops_before_preempt_check-- == 0) {
       if (heap->cancelled_gc()) {
         suspend_coalesce_and_fill(obj_addr);
         return false;
