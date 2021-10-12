@@ -214,7 +214,7 @@ void ShenandoahControlThread::run_service() {
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = OLD;
         set_gc_mode(marking_old);
-      } 
+      }
 
       // Don't want to spin in this loop and start a cycle every time, so
       // clear requested gc cause. This creates a race with callers of the
