@@ -63,7 +63,8 @@ void ShenandoahDegenGC::vmop_degenerated() {
 }
 
 void ShenandoahDegenGC::entry_degenerated() {
-  const char* msg = degen_event_message(_degen_point);
+  char msg[1024];
+  degen_event_message(_degen_point, msg, sizeof(msg));
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::degen_gc, true /* log_heap_usage */);
   EventMark em("%s", msg);
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -119,7 +120,7 @@ void ShenandoahDegenGC::op_degenerated() {
 
       // Note that we can only do this for "outside-cycle" degens, otherwise we would risk
       // changing the cycle parameters mid-cycle during concurrent -> degenerated handover.
-      heap->set_unload_classes(_generation->heuristics()->can_unload_classes());
+      heap->set_unload_classes((!heap->mode()->is_generational() || _generation->generation_mode() == GLOBAL) && _generation->heuristics()->can_unload_classes());
 
       op_reset();
 
@@ -354,21 +355,25 @@ void ShenandoahDegenGC::op_degenerated_futile() {
   full_gc.op_full(GCCause::_shenandoah_upgrade_to_full_gc);
 }
 
-const char* ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point) const {
+void ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point, char* buf, size_t len) const {
   switch (point) {
     case _degenerated_unset:
-      return "Pause Degenerated GC (<UNSET>)";
+      jio_snprintf(buf, len, "Pause Degenerated %s GC (<UNSET>)", _generation->name());
+      break;
     case _degenerated_outside_cycle:
-      return "Pause Degenerated GC (Outside of Cycle)";
+      jio_snprintf(buf, len, "Pause Degenerated %s GC (Outside of Cycle)", _generation->name());
+      break;
     case _degenerated_mark:
-      return "Pause Degenerated GC (Mark)";
+      jio_snprintf(buf, len, "Pause Degenerated %s GC (Mark)", _generation->name());
+      break;
     case _degenerated_evac:
-      return "Pause Degenerated GC (Evacuation)";
+      jio_snprintf(buf, len, "Pause Degenerated %s GC (Evacuation)", _generation->name());
+      break;
     case _degenerated_updaterefs:
-      return "Pause Degenerated GC (Update Refs)";
+      jio_snprintf(buf, len, "Pause Degenerated %s GC (Update Refs)", _generation->name());
+      break;
     default:
       ShouldNotReachHere();
-      return "ERROR";
   }
 }
 

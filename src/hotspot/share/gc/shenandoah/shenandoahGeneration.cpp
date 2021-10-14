@@ -309,7 +309,6 @@ void ShenandoahGeneration::scan_remembered_set() {
   uint nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 
-  ShenandoahConcurrentPhase gc_phase("Concurrent remembered set scanning", ShenandoahPhaseTimings::init_scan_rset);
   ShenandoahReferenceProcessor* rp = ref_processor();
   ShenandoahRegionIterator regions;
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &regions);

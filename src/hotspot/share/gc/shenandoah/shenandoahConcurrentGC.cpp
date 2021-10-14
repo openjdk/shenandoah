@@ -107,6 +107,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     // Concurrent remembered set scanning
     if (_generation->generation_mode() == YOUNG) {
+      ShenandoahConcurrentPhase gc_phase("Concurrent remembered set scanning", ShenandoahPhaseTimings::init_scan_rset);
       _generation->scan_remembered_set();
     }
 
