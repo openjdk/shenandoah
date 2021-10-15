@@ -161,6 +161,7 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 // location of the card table.  So the interim implementation of swap_remembered_set will copy the write-table
 // onto the read-table and will then clear the write-table.
 void ShenandoahGeneration::swap_remembered_set() {
+  // Must be sure that marking is complete before we swap remembered set.
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();

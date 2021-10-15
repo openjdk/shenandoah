@@ -115,6 +115,7 @@ void ShenandoahSTWMark::mark() {
   {
     // Mark
     if (_generation->generation_mode() == YOUNG) {
+      // But only scan the remembered set for young generation.
       _generation->scan_remembered_set();
     }
 

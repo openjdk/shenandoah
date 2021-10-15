@@ -113,7 +113,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     // Concurrent mark roots
     entry_mark_roots();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_roots)) return false;
 
     // Continue concurrent mark
     entry_mark();
