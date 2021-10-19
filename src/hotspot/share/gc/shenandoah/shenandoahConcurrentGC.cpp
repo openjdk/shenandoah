@@ -107,12 +107,13 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     // Concurrent remembered set scanning
     if (_generation->generation_mode() == YOUNG) {
+      ShenandoahConcurrentPhase gc_phase("Concurrent remembered set scanning", ShenandoahPhaseTimings::init_scan_rset);
       _generation->scan_remembered_set();
     }
 
     // Concurrent mark roots
     entry_mark_roots();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_roots)) return false;
 
     // Continue concurrent mark
     entry_mark();
@@ -156,7 +157,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_strong_roots();
   }
 
-  if (heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
+  if (!heap->cancelled_gc() && heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
     entry_global_coalesce_and_fill();
   }
 

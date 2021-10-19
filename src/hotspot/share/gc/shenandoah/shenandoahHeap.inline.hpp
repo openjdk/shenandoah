@@ -461,9 +461,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       // we have to keep the fwdptr initialized and pointing to our (stale) copy.
       fill_with_object(copy, size);
       shenandoah_assert_correct(NULL, copy_val);
-      if (mode()->is_generational() && target_gen == OLD_GENERATION) {
-        card_scan()->register_object(copy);
-      }
+      // For non-LAB allocations, the object has already been registered
     }
     shenandoah_assert_correct(NULL, result);
     return result;
@@ -573,8 +571,6 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
   assert(! region->is_humongous_continuation(), "no humongous continuation regions here");
 
   ShenandoahMarkingContext* const ctx = marking_context();
-  // HEY! All callers (at the time of this writing) have already asserted the mark context is complete.
-  // assert(ctx->is_complete(), "sanity");
 
   HeapWord* tams = ctx->top_at_mark_start(region);
 
