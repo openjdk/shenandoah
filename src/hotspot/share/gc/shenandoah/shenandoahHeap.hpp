@@ -154,6 +154,9 @@ private:
   bool _prep_for_mixed_evac_in_progress; // true iff we are concurrently coalescing and filling old-gen HeapRegions
 
 public:
+  // kelvin to remove this instrumentation after debugging done
+  bool _ready_to_register = false;
+
   ShenandoahHeapLock* lock() {
     return &_lock;
   }

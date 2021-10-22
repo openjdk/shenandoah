@@ -886,17 +886,36 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
 
 // Establish a new PLAB and allocate size HeapWords within it.
 HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  printf("allocate_from_plab_slow(), size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT "\n", size, PLAB::min_size());
+  fflush(stdout);
+#endif
   // New object should fit the PLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
 
+#ifdef KELVIN_VERBOSE
+  printf(" min_size: " SIZE_FORMAT ", previous plab_size: " SIZE_FORMAT "\n", min_size, ShenandoahThreadLocalData::plab_size(thread));
+  fflush(stdout);
+#endif
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
   size_t new_size = ShenandoahThreadLocalData::plab_size(thread) * 2;
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
+  size_t unalignment = new_size % CardTable::card_size_in_words;
+  if (unalignment != 0) {
+    new_size = new_size - unalignment + CardTable::card_size_in_words;
+  }
+
+#ifdef KELVIN_VERBOSE
+  printf(" unalignment: " SIZE_FORMAT ", new_size: " SIZE_FORMAT "\n", unalignment, new_size);
+  fflush(stdout);
+#endif
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
-  // heuristics should catch up with them.
+  // heuristics should catch up with them.  Note that the requested new_size may
+  // not be honored, but we remember that this is the preferred size.
   ShenandoahThreadLocalData::set_plab_size(thread, new_size);
 
   if (new_size < size) {
@@ -1014,6 +1033,15 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
   HeapWord* res = allocate_memory(req);
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  if ((((uintptr_t) res) % CardTable::card_size != 0) || (req.actual_size() % CardTable::card_size_in_words != 0)) {
+    printf("ojo: Badly aligned plab buffer allocated at " PTR_FORMAT ", of length: " PTR_FORMAT ", min_size: " PTR_FORMAT
+           ", word-size: " PTR_FORMAT "\n",
+           p2i(res), req.actual_size(), min_size, word_size);
+    fflush(stdout);
+  }
+#endif
   if (res != NULL) {
     *actual_size = req.actual_size();
   } else {
@@ -1103,7 +1131,13 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
   ShenandoahHeapLocker locker(lock());
+#ifdef KELVIN_VERBOSE
+  _ready_to_register = true;
+#endif
   HeapWord* result = _free_set->allocate(req, in_new_region);
+#ifdef KELVIN_VERBOSE
+  _ready_to_register = false;
+#endif
   if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
     // Register the newly allocated object while we're holding the global lock since there's no synchronization
     // built in to the implementation of register_object().  There are potential races when multiple independent
@@ -1122,6 +1156,11 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as last-start
     // representing object b while first-start represents object c.  This is why we need to require all register_object()
     // invocations to be "mutually exclusive" with respect to each card's memory range.
+#ifdef KELVIN_VERBOSE
+    printf("allocate_memory_under_lock() is registering object of size " SIZE_FORMAT " words @ " PTR_FORMAT "\n",
+           req.actual_size(), p2i(result));
+    fflush(stdout);
+#endif
     ShenandoahHeap::heap()->card_scan()->register_object(result);
   }
   return result;

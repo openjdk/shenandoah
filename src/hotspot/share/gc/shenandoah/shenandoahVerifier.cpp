@@ -774,6 +774,14 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
     _heap->heap_region_iterate(&cl);
 
     size_t heap_used = _heap->used();
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+    if (cl.used() != heap_used) {
+      printf("See the exact difference between cl.used(): " SIZE_FORMAT " and _heap->used(): " SIZE_FORMAT "\n",
+             cl.used(), heap_used);
+      fflush(stdout);
+    }
+#endif
     guarantee(cl.used() == heap_used,
               "%s: heap used size must be consistent: heap-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
               label,
