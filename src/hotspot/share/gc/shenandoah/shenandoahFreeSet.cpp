@@ -206,29 +206,15 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size_t usable_free = (free / CardTable::card_size) << CardTable::card_shift;
       free /= HeapWordSize;
       usable_free /= HeapWordSize;
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      printf("Allocating elastic plab of " SIZE_FORMAT " words, free: " SIZE_FORMAT " words, usable_free: " SIZE_FORMAT " words\n",
-             size, free, usable_free);
-      fflush(stdout);
-#endif
       if (size > usable_free) {
         size = usable_free;
       }
       if (size >= req.min_size()) {
         result = r->allocateAligned(size, req, CardTable::card_size);
         assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, usable_free, size);
-#ifdef KELVIN_VERBOSE
-        printf("  allocated aligned result of actual size " SIZE_FORMAT " @ " PTR_FORMAT "\n", size, p2i(result));
-        fflush(stdout);
-#endif
         if (free > usable_free) {
           // Account for the alignment padding
           size_t padding = (free - usable_free) * HeapWordSize;
-#ifdef KELVIN_VERBOSE
-          printf("  accounting for padding bytes: " SIZE_FORMAT "\n", padding);
-          fflush(stdout);
-#endif
           increase_used(padding);
           if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
             _heap->young_generation()->increase_used(padding);
@@ -239,12 +225,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
           _heap->increase_used(padding);
         }
       }
-#ifdef KELVIN_VERBOSE
-      else {
-        printf("  insufficient free to allocate aligned\n");
-        fflush(stdout);
-      }
-#endif
     } else {
       size_t free = align_down(r->free() >> LogHeapWordSize, MinObjAlignment);
       if (size > free) {
@@ -269,10 +249,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
       // Account for the alignment padding
       size_t padding = (free - usable_free) * HeapWordSize;
-#ifdef KELVIN_VERBOSE
-      printf("  accounting for padding bytes: " SIZE_FORMAT "\n", padding);
-      fflush(stdout);
-#endif
       increase_used(padding);
       if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
         _heap->young_generation()->increase_used(padding);
@@ -282,19 +258,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // For verification consistency, we need to report this padding to _heap
       _heap->increase_used(padding);
     }
-#ifdef KELVIN_VERBOSE
-    else {
-      printf("  insufficient free to allocate aligned\n");
-      fflush(stdout);
-    }
-#endif
   } else {
-#ifdef KELVIN_VERBOSE
-    if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-      printf("Doing a non-PLAB promotion for object of size " SIZE_FORMAT "\n", size);
-      fflush(stdout);
-    }
-#endif
     result = r->allocate(size, req);
   }
 

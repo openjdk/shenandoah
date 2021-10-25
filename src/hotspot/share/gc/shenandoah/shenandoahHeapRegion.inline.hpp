@@ -45,28 +45,11 @@ HeapWord* ShenandoahHeapRegion::allocateAligned(size_t size, ShenandoahAllocRequ
   size_t unalignment_bytes = addr_as_int % alignment_in_bytes;
   size_t unalignment_words = unalignment_bytes / HeapWordSize;
   if (pointer_delta(end(), obj + unalignment_words) >= size) {
- 
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-    printf("allocateAligned() for size " SIZE_FORMAT ", top: " PTR_FORMAT ", unalignment_words: " SIZE_FORMAT ", available: " SIZE_FORMAT "\n",
-           size, p2i(top()), unalignment_words, pointer_delta(end(), obj));
-    printf("  alignment_in_bytes: " SIZE_FORMAT "\n", alignment_in_bytes);
-    fflush(stdout);
-#endif
-
     if (unalignment_words > 0) {
       size_t pad_words = (alignment_in_bytes / HeapWordSize) - unalignment_words;
-#ifdef KELVIN_VERBOSE
-      printf("  Filling " SIZE_FORMAT " words @ " PTR_FORMAT "\n", pad_words, p2i(obj));
-      fflush(stdout);
-#endif
       ShenandoahHeap::fill_with_object(obj, pad_words);
       ShenandoahHeap::heap()->card_scan()->register_object(obj);
       obj += pad_words;
-#ifdef KELVIN_VERBOSE
-      printf("  obj adjusted to " PTR_FORMAT "\n", p2i(obj));
-      fflush(stdout);
-#endif
     }
 
     make_regular_allocation(req.affiliation());
@@ -74,10 +57,6 @@ HeapWord* ShenandoahHeapRegion::allocateAligned(size_t size, ShenandoahAllocRequ
 
     HeapWord* new_top = obj + size;
     set_top(new_top);
-#ifdef KELVIN_VERBOSE
-      printf("  top adjusted to " PTR_FORMAT "\n", p2i(new_top));
-      fflush(stdout);
-#endif
     assert(is_object_aligned(new_top), "new top breaks alignment: " PTR_FORMAT, p2i(new_top));
     assert(((uintptr_t) obj) % (alignment_in_bytes) == 0, "obj is not aligned: " PTR_FORMAT, p2i(obj));
 
@@ -98,16 +77,6 @@ HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest req
 
     HeapWord* new_top = obj + size;
     set_top(new_top);
-#ifdef KELVIN_VERBOSE
-    if (affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-      printf("Region " SIZE_FORMAT " allocates size " SIZE_FORMAT " @" PTR_FORMAT ", new_top: " PTR_FORMAT "\n",
-             index(), size, p2i(obj), p2i(new_top));
-      if (!ShenandoahHeap::heap()->_ready_to_register) {
-        extern void kelvin_breakpoint_2(HeapWord*, size_t, HeapWord*);
-        kelvin_breakpoint_2(obj, size, new_top);
-      }
-    }
-#endif
 
     assert(is_object_aligned(new_top), "new top breaks alignment: " PTR_FORMAT, p2i(new_top));
     assert(is_object_aligned(obj),     "obj is not aligned: "       PTR_FORMAT, p2i(obj));

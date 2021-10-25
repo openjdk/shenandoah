@@ -456,13 +456,6 @@ public:
 
   void finish_old_region() {
     if (_old_to_region != nullptr) {
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      printf("FullGC compacting into Old Region " SIZE_FORMAT ", used: " PTR_FORMAT ", unused: " PTR_FORMAT " tabulated by worker %u\n",
-             _old_to_region->index(), (_old_compact_point - _old_to_region->bottom()) * HeapWordSize,
-             (_old_to_region->end() - _old_compact_point) * HeapWordSize,
-             _worker_id);
-#endif
       log_debug(gc)("Planned compaction into Old Region " SIZE_FORMAT ", used: " SIZE_FORMAT " tabulated by worker %u",
                     _old_to_region->index(), _old_compact_point - _old_to_region->bottom(), _worker_id);
       _old_to_region->set_new_top(_old_compact_point);

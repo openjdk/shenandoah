@@ -60,16 +60,6 @@ size_t ShenandoahHeapRegion::HumongousThresholdWords = 0;
 size_t ShenandoahHeapRegion::MaxTLABSizeBytes = 0;
 size_t ShenandoahHeapRegion::MaxTLABSizeWords = 0;
 
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-void kelvin_breakpoint_2(HeapWord* obj, size_t size, HeapWord* new_top) {
-  printf("allocate (w/o lock) creating object of size " SIZE_FORMAT " @" PTR_FORMAT ", new_top: " PTR_FORMAT "\n",
-         size, p2i(obj), p2i(new_top));
-  printf(" Not registering object!\n");
-  assert(false, "Where is this called from?");
-}
-#endif
-
 ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool committed) :
   _index(index),
   _bottom(start),
