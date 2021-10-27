@@ -25,8 +25,8 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP
 
-#include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
+
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
@@ -34,7 +34,7 @@
 // If next available memory is not aligned on address that is multiple of alignment, fill the empty space
 // so that returned object is aligned on an address that is a multiple of alignment_in_words.  Requested
 // size is in words.
-HeapWord* ShenandoahHeapRegion::allocateAligned(size_t size, ShenandoahAllocRequest req, size_t alignment_in_bytes) {
+HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest req, size_t alignment_in_bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
   

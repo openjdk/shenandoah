@@ -210,17 +210,14 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         size = usable_free;
       }
       if (size >= req.min_size()) {
-        result = r->allocateAligned(size, req, CardTable::card_size);
+        result = r->allocate_aligned(size, req, CardTable::card_size);
         assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, usable_free, size);
         if (free > usable_free) {
           // Account for the alignment padding
           size_t padding = (free - usable_free) * HeapWordSize;
           increase_used(padding);
-          if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-            _heap->young_generation()->increase_used(padding);
-          } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-            _heap->old_generation()->increase_used(padding);
-          }
+          assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
+          _heap->old_generation()->increase_used(padding);
           // For verification consistency, we need to report this padding to _heap
           _heap->increase_used(padding);
         }
@@ -240,21 +237,17 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     size_t usable_free = (free / CardTable::card_size) << CardTable::card_shift;
     free /= HeapWordSize;
     usable_free /= HeapWordSize;
-
     if (size <= usable_free) {
       assert(size % CardTable::card_size_in_words == 0, "PLAB size must be multiple of remembered set card size");
 
-      result = r->allocateAligned(size, req, CardTable::card_size);
+      result = r->allocate_aligned(size, req, CardTable::card_size);
       assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, usable_free, size);
 
       // Account for the alignment padding
       size_t padding = (free - usable_free) * HeapWordSize;
       increase_used(padding);
-      if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-        _heap->young_generation()->increase_used(padding);
-      } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-        _heap->old_generation()->increase_used(padding);
-      }
+      assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
+      _heap->old_generation()->increase_used(padding);
       // For verification consistency, we need to report this padding to _heap
       _heap->increase_used(padding);
     }
@@ -263,7 +256,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   }
 
   if (result != NULL) {
-  
     // Record actual allocation size
     req.set_actual_size(size);
 
