@@ -37,10 +37,9 @@
 HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest req, size_t alignment_in_bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
-  
+
   HeapWord* obj = top();
   uintptr_t addr_as_int = (uintptr_t) obj;
-  
 
   size_t unalignment_bytes = addr_as_int % alignment_in_bytes;
   size_t unalignment_words = unalignment_bytes / HeapWordSize;
