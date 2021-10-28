@@ -182,12 +182,12 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     total_garbage += garbage;
 
     if (region->is_regular()) {
-      region->reset_coalesce_and_fill_boundary();
       if (!region->has_live()) {
         region->make_trash_immediate();
         immediate_regions++;
         immediate_garbage += garbage;
       } else {
+        region->begin_preemptible_coalesce_and_fill();
         candidates[cand_idx]._region = region;
         candidates[cand_idx]._garbage = garbage;
         cand_idx++;

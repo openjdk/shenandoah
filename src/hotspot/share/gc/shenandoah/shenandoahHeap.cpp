@@ -976,7 +976,7 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
         // and cannot be preempted by young collects. We want to be sure the entire
         // region is coalesced here and does not resume from a previously interrupted
         // or completed coalescing.
-        region->reset_coalesce_and_fill_boundary();
+        region->begin_preemptible_coalesce_and_fill();
         region->oop_fill_and_coalesce();
       }
     }
