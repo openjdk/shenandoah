@@ -894,6 +894,11 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
+  size_t unalignment = new_size % CardTable::card_size_in_words;
+  if (unalignment != 0) {
+    new_size = new_size - unalignment + CardTable::card_size_in_words;
+  }
+
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
   // heuristics should catch up with them.  Note that the requested new_size may
@@ -1103,6 +1108,10 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
+  if (mode()->is_generational() && req.affiliation() == YOUNG_GENERATION && young_generation()->used() + req.size() >= young_generation()->max_capacity()) {
+    return nullptr;
+  }
+
   ShenandoahHeapLocker locker(lock());
   HeapWord* result = _free_set->allocate(req, in_new_region);
   if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
