@@ -399,7 +399,7 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
   if (max_offset > CardTable::card_size_in_words) {
     max_offset = CardTable::card_size_in_words;
   }
-  size_t prev_offset;
+  size_t prev_offset = offset;
   if (!ctx) {
     do {
       oop obj = cast_to_oop(base_addr + offset);
@@ -439,9 +439,9 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
     ShenandoahHeapRegion* region = heap->heap_region_containing(base_addr + offset);
     HeapWord* tams = ctx->top_at_mark_start(region);
     do {
-      prev_offset = offset;
       oop obj = cast_to_oop(base_addr + offset);
       if (ctx->is_marked(obj)) {
+        prev_offset = offset;
         offset += obj->size();
       } else {
         offset = ctx->get_next_marked_addr(base_addr + offset, tams) - base_addr;
