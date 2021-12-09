@@ -91,7 +91,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
   size_t max_cset    = (ShenandoahHeap::heap()->get_young_evac_reserve() / ShenandoahEvacWaste);
   size_t capacity    = ShenandoahHeap::heap()->young_generation()->soft_max_capacity();
-  size_t free_target = (capacity / 100 * ShenandoahMinFreeThreshold) + max_cset;
+  size_t free_target = (capacity / 100) * ShenandoahMinFreeThreshold + max_cset;
   size_t min_garbage = (free_target > actual_free ? (free_target - actual_free) : 0);
 
   log_info(gc, ergo)("Adaptive CSet Selection. Target Free: " SIZE_FORMAT "%s, Actual Free: "
@@ -114,6 +114,10 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     size_t new_garbage = cur_garbage + r->garbage();
 
     if (new_cset > max_cset) {
+#ifdef KELVIN_VERBOSE
+      printf("adaptive-cset-construction finished, new_cset (" SIZE_FORMAT ") > max_cset for candidate region with live: " SIZE_FORMAT "\n",
+             new_cset, r->get_live_data_bytes());
+#endif
       break;
     }
 
@@ -123,6 +127,15 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       collected_region_count++;
       cur_cset = new_cset;
       cur_garbage = new_garbage;
+    } else {
+      // Since candidates are sorted by decreasing amounts of region garbage, once new_garbage >= min_garbage and
+      // r->garbage() <= garbage_threshold there's no value in iterating further
+#ifdef KELVIN_VERBOSE
+      printf("adaptive-cset-construction ignoring region with garbage: " SIZE_FORMAT ", against threshold: " SIZE_FORMAT "\n",
+             r->garbage(), garbage_threshold);
+      printf("  assert: once I'm below threshold, it just gets worse from here on out, so I should just break out of loop\n");
+#endif
+      break;
     }
   }
   cset->set_young_region_count(collected_region_count);
@@ -224,7 +237,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   size_t min_threshold = capacity / 100 * ShenandoahMinFreeThreshold;
 
-#ifdef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE_SILENCED
   // ShenandoahMinFreeThreshold is a percentage:  35 means 35%.  If available is ever below this amount of memory, then
   // we should immediately start GC.  However, we do not endeavor to assure that we have this much working buffer available
   // within the generation as of when we end the GC effort.
@@ -316,7 +329,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
   //     the calculation of avg_cycle_time below.
 
-#ifdef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE_SILENCED
   // Seems to me that ShenandoahAllocSpikeFactor and _gc_time_penalties might be absolute quantities rather than
   // percentages of capacity.
 

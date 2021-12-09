@@ -242,7 +242,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       // is not available to be allocated during evacuation.  To be safe, we assure that all memory required for evacuation
       // is available within "virgin" heap regions.
 
-      const size_t available_young_regions = young_generation->free_regions();
+      const size_t available_young_regions = free_regions + immediate_regions;
       const size_t available_old_regions = old_generation->free_regions();
       size_t already_reserved_old_bytes = heap->get_old_evac_reserve() + heap->get_promotion_reserve();
       size_t regions_reserved_for_evac_and_promotion = (already_reserved_old_bytes + region_size_bytes - 1) / region_size_bytes;
@@ -333,7 +333,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     potential_evac_supplement = potential_supplement_regions * region_size_bytes;
 
 #ifdef KELVIN_VERBOSE
-    printf("  potential_evac_supplement adjusted by borrowing: " SIZE_FORMAT "\n", potential_evac_supplement);
+    printf("  potential_evac_supplement adjusted by young-evac borrowing: " SIZE_FORMAT "\n", potential_evac_supplement);
     printf("    young_evacuation_reserve: " SIZE_FORMAT ", young_evac_regions: " SIZE_FORMAT ", available young: " SIZE_FORMAT "\n",
            young_evacuation_reserve, young_evac_regions, available_young_regions);
     printf("    borrowed_evac_regions: " SIZE_FORMAT ", potential_supplement_regions: " SIZE_FORMAT "\n",
