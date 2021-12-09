@@ -29,9 +29,12 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "utilities/quickSort.hpp"
+
+#undef KELVIN_VERBOSE
 
 // These constants are used to adjust the margin of error for the moving
 // average of the allocation rate and cycle time. The units are standard
@@ -66,6 +69,8 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                                                                          RegionData* data, size_t size,
                                                                          size_t actual_free) {
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
+  size_t live_bytes_in_collection_set = 0;
+  size_t collected_region_count = 0;
 
   // The logic for cset selection in adaptive is as follows:
   //
@@ -84,8 +89,8 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // we hit max_cset. When max_cset is hit, we terminate the cset selection. Note that in this scheme,
   // ShenandoahGarbageThreshold is the soft threshold which would be ignored until min_garbage is hit.
 
-  size_t capacity    = _generation->soft_max_capacity();
-  size_t max_cset    = (size_t)((1.0 * capacity / 100 * ShenandoahEvacReserve) / ShenandoahEvacWaste);
+  size_t max_cset    = (ShenandoahHeap::heap()->get_young_evac_reserve() / ShenandoahEvacWaste);
+  size_t capacity    = ShenandoahHeap::heap()->young_generation()->soft_max_capacity();
   size_t free_target = (capacity / 100 * ShenandoahMinFreeThreshold) + max_cset;
   size_t min_garbage = (free_target > actual_free ? (free_target - actual_free) : 0);
 
@@ -114,10 +119,14 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
     if ((new_garbage < min_garbage) || (r->garbage() > garbage_threshold)) {
       cset->add_region(r);
+      live_bytes_in_collection_set += r->get_live_data_bytes();
+      collected_region_count++;
       cur_cset = new_cset;
       cur_garbage = new_garbage;
     }
   }
+  cset->set_young_region_count(collected_region_count);
+  cset->reserve_young_bytes_for_evacuation(live_bytes_in_collection_set);
 }
 
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {
@@ -215,8 +224,14 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   size_t min_threshold = capacity / 100 * ShenandoahMinFreeThreshold;
 
-  log_debug(gc)("  available adjusted to: " SIZE_FORMAT ", min_threshold: " SIZE_FORMAT ", ShenandoahMinFreeThreshold: " SIZE_FORMAT,
-                available, min_threshold, ShenandoahMinFreeThreshold);
+#ifdef KELVIN_VERBOSE
+  // ShenandoahMinFreeThreshold is a percentage:  35 means 35%.  If available is ever below this amount of memory, then
+  // we should immediately start GC.  However, we do not endeavor to assure that we have this much working buffer available
+  // within the generation as of when we end the GC effort.
+  log_info(gc)("  available adjusted to: " SIZE_FORMAT ", min_threshold: " SIZE_FORMAT
+               ", ShenandoahMinFreeThreshold: " SIZE_FORMAT "%%",
+               available, min_threshold, ShenandoahMinFreeThreshold);
+#endif
 
   if (available < min_threshold) {
     log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
@@ -244,8 +259,71 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //   2. Accumulated penalties from Degenerated and Full GC
   size_t allocation_headroom = available;
 
+  // ShenandoahAllocSpikeFactor is the percentage of capacity that we endeavor to assure to be free at the end of the GC
+  // cycle.
+  // TODO: Correct the representation of this quantity
+  //       (and dive deeper into _gc_time_penalties as this may also need to be corrected)
+  //
+  //       Allocation spikes are a characteristic of both the application ahd the JVM configuration.  On the JVM command line,
+  //       the application developer may want to supply a hint of the nature of spikes that are inherent in the application
+  //       workload, and this information would normally be independent of heap size (not a percentage thereof).  On the
+  //       other hand, some allocation spikes are correlated with JVM configuration.  For example, there are allocation
+  //       spikes at the starts of concurrent marking and evacuation to refresh all local allocation buffers.  The nature
+  //       of these spikes is determined by LAB min and max sizes and numbers of threads, but also on frequency of GC passes,
+  //       and on "periodic" behavior of these threads  If GC frequency is much higher than the periodic trigger for mutator
+  //       threads, then many of the mutator threads may be able to "sit out" of most GC passes.  Though the thread's stack
+  //       must be scanned, the thread does not need to refresh its LABs if it sits idle throughout the duration of the GC
+  //       pass.  The best prediction for this aspect of spikes in allocation patterns is probably recent past history.
+  //
+  //  Rationale:
+  //    The idea is that there is an average allocation rate and there are occassional abnormal bursts (or spikes) of
+  //    allocations that exceed the average allocation rate.  What do these spikes look like?
+  //
+  //    1. At certain phase changes, we may discard large amounts of data and replace it with large numbers of newly
+  //       allocated objects.  This "spike" looks more like a phase change.  We were in steady state at M bytes/sec
+  //       allocation rate and now we're in a "reinitialization phase" that looks like N bytes/sec.  We need the "spike"
+  //       accomodation to give us enough runway to recalibrate our "average allocation rate".
+  //
+  //   2. The typical workload changes.  "Suddenly", our typical workload of N TPS increases to N+delta TPS.  This means
+  //       our average allocation rate needs to be adjusted.  Once again, we need the "spike" accomodation to give us
+  //       enough runway to recalibrate our "average allocation rate".
+  //
+  //    3. Though there is an "average" allocation rate, a given workload's demand for allocation may be very bursty.  We
+  //       allocate a bunch of LABs during the 5 ms that follow completion of a GC, then we perform no more allocations for
+  //       the next 150 ms.  It seems we want the "spike" to represent the maximum divergence from average within the
+  //       period of time between consecutive evaluation of the should_start_gc() service.  Here's the thinking:
+  //
+  //       a) Between now and the next time I ask whether should_start_gc(), we might experience a spike representing
+  //          the anticipated burst of allocations.  If that would put us over budget, then we should start GC immediately.
+  //       b) Between now and the anticipated depletion of allocation pool, there may be two or more bursts of allocations.
+  //          If there are more than one of these bursts, we can "approximate" that these will be separated by spans of
+  //          time with very little or no allocations so the "average" allocation rate should be a suitable approximation
+  //          of how this will behave.
+  //
+  //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
+  //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
+  //    computations an independent effort.
+
   size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
   size_t penalties      = capacity / 100 * _gc_time_penalties;
+
+  // TODO: Account for inherent delays in responding to GC triggers
+  //  1. It has been observed that delays of 200 ms or greater are common between the moment we return true from should_start_gc()
+  //     and the moment at which we begin execution of the concurrent reset phase.  Add this time into the calculation of
+  //     avg_cycle_time below.  (What is "this time"?  Perhaps we should remember recent history of this delay for the
+  //     running workload and use the maximum delay recently seen for "this time".)
+  //  2. The frequency of inquiries to should_start_gc() is adaptive, ranging between ShenandoahControlIntervalMin and
+  //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
+  //     the calculation of avg_cycle_time below.
+
+#ifdef KELVIN_VERBOSE
+  // Seems to me that ShenandoahAllocSpikeFactor and _gc_time_penalties might be absolute quantities rather than
+  // percentages of capacity.
+
+  log_info(gc)("  spike_headroom: " SIZE_FORMAT " (ShenandoahAllocSpikeFactor: " SIZE_FORMAT "), gc penalties: "
+               SIZE_FORMAT " (_gc_time_penalties: " SIZE_FORMAT ")",
+               spike_headroom, ShenandoahAllocSpikeFactor, penalties, _gc_time_penalties);
+#endif
 
   allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
   allocation_headroom -= MIN2(allocation_headroom, penalties);

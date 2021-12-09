@@ -25,6 +25,9 @@
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "utilities/quickSort.hpp"
 
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
@@ -43,9 +46,13 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generatio
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   if (unprocessed_old_collection_candidates() == 0) {
     // no candidates for inclusion in collection set.
+    collection_set->set_old_region_count(0);
+    collection_set->reserve_old_bytes_for_evacuation(0);
+
     return false;
   }
 
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   uint included_old_regions = 0;
   size_t evacuated_old_bytes = 0;
 
@@ -55,25 +62,31 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // by heuristics and should adjust dynamically based on most current execution behavior.  In the
   // interim, we offer command-line options to set the values of these configuration parameters.
 
-  // max_old_evacuation_bytes represents an "arbitrary" bound on how much evacuation effort is dedicated
+  // max_old_evacuation_bytes represents a bound on how much evacuation effort is dedicated
   // to old-gen regions.
-  const size_t max_old_evacuation_bytes = (size_t) ((double)_generation->soft_max_capacity() / 100 * ShenandoahOldEvacReserve);
+  size_t max_old_evacuation_bytes = (heap->old_generation()->soft_max_capacity() * ShenandoahOldEvacReserve) / 100;
+  const size_t young_evacuation_bytes = (heap->young_generation()->soft_max_capacity() * ShenandoahEvacReserve) / 100;
+  const size_t ratio_bound_on_old_evac_bytes = (young_evacuation_bytes * ShenandoahOldEvacRatioPer128) / 128;
+  if (max_old_evacuation_bytes > ratio_bound_on_old_evac_bytes) {
+    max_old_evacuation_bytes = ratio_bound_on_old_evac_bytes;
+  }
+  size_t old_available = heap->old_generation()->available();
+  if (max_old_evacuation_bytes > old_available) {
+    max_old_evacuation_bytes = old_available;
+  }
 
   // promotion_budget_bytes represents an "arbitrary" bound on how many bytes can be consumed by young-gen
   // objects promoted into old-gen memory.  We need to avoid a scenario under which promotion of objects
   // depletes old-gen available memory to the point that there is insufficient memory to hold old-gen objects
   // that need to be evacuated from within the old-gen collection set.
   //
-  // TODO We should probably enforce this, but there is no enforcement currently.  Key idea: if there is not
-  // sufficient memory within old-gen to hold an object that wants to be promoted, defer promotion until a
-  // subsequent evacuation pass.  Since enforcement may be expensive, requiring frequent synchronization
-  // between mutator and GC threads, here's an alternative "greedy" mitigation strategy: Set the parameter's
-  // value so overflow is "very rare".  In the case that we experience overflow, evacuate what we can from
-  // within the old collection set, but don't evacuate everything.  At the end of evacuation, any collection
-  // set region that was not fully evacuated cannot be recycled.  It becomes a prime candidate for the next
-  // collection set selection.  Here, we'd rather fall back to this contingent behavior than force a full STW
-  // collection.
-  const size_t promotion_budget_bytes = (ShenandoahHeapRegion::region_size_bytes() / 2);
+  // TODO: Enforcement of this budget is implemented with this patch.
+  //
+  // Key idea: if there is not sufficient memory within old-gen to hold an object that wants to be promoted, defer
+  // promotion until a subsequent evacuation pass.  Enforcement is provided at the time PLABs and shared allocations
+  // in old-gen memory are requested.
+
+  const size_t promotion_budget_bytes = heap->get_promotion_reserve();
 
   // old_evacuation_budget is an upper bound on the amount of live memory that can be evacuated.
   //
@@ -83,26 +96,9 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.  See remaining_old_evacuation_budget below.
 
-  // Allow no more evacuation than exists free-space within old-gen memory
-  size_t old_evacuation_budget = ((_generation->available() > promotion_budget_bytes)
-                                  ? _generation->available() - promotion_budget_bytes: 0);
+  size_t old_evacuation_budget = (size_t) (max_old_evacuation_bytes / ShenandoahEvacWaste);
 
-  // But if the amount of available free space in old-gen memory exceeds the pacing bound on how much old-gen
-  // memory can be evacuated during each evacuation pass, then cut the old-gen evacuation further.  The pacing
-  // bound is designed to assure that old-gen evacuations to not excessively slow the evacuation pass in order
-  // to assure that young-gen GC cadence is not disrupted.
-
-  // excess_free_capacity represents availability of memory to hold evacuations beyond what is required to hold
-  // planned evacuations.  It may go negative if we choose to collect regions with large amounts of free memory.
-  long long excess_free_capacity;
-  if (old_evacuation_budget > max_old_evacuation_bytes) {
-    excess_free_capacity = old_evacuation_budget - max_old_evacuation_bytes;
-    old_evacuation_budget = max_old_evacuation_bytes;
-  } else
-    excess_free_capacity = 0;
-
-  log_info(gc)("Choose old regions for mixed collection: excess capacity: " SIZE_FORMAT "%s, evacuation budget: " SIZE_FORMAT "%s",
-                byte_size_in_proper_unit((size_t) excess_free_capacity), proper_unit_for_byte_size(excess_free_capacity),
+  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s",
                 byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget));
 
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
@@ -120,31 +116,22 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 
     // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by
     // the size of r's free memory.
-    excess_free_capacity -= r->free();
-    // If subtracting r->free from excess_free_capacity() makes it go negative, that means we are going to have
-    // to decrease the evacuation budget.
-    if (excess_free_capacity < 0) {
-      if (remaining_old_evacuation_budget < (size_t) -excess_free_capacity) {
-        // By setting adjusted_remaining_old_evacuation_budget to 0, we prevent further additions to the old-gen
-        // collection set, unless the region has zero live data bytes.
-        adjusted_remaining_old_evacuation_budget = 0;
-      } else {
-        // Adding negative excess_free_capacity decreases the adjusted_remaining_old_evacuation_budget
-        adjusted_remaining_old_evacuation_budget = remaining_old_evacuation_budget + excess_free_capacity;
-      }
-    } else {
-      adjusted_remaining_old_evacuation_budget = remaining_old_evacuation_budget;
-    }
 
-    if (r->get_live_data_bytes() > adjusted_remaining_old_evacuation_budget) {
+    if (r->get_live_data_bytes() + r->free() <= remaining_old_evacuation_budget) {
+      // Decrement remaining evacuation budget by bytes that will be copied and by the decrease in available space to hold
+      // bytes that will be copied.
+      remaining_old_evacuation_budget -= r->get_live_data_bytes() + r->free();
+      collection_set->add_region(r);
+      included_old_regions++;
+      evacuated_old_bytes += r->get_live_data_bytes();
+
+    } else {
       break;
     }
-    collection_set->add_region(r);
-    included_old_regions++;
-    evacuated_old_bytes += r->get_live_data_bytes();
-    consume_old_collection_candidate();
-    remaining_old_evacuation_budget = adjusted_remaining_old_evacuation_budget - r->get_live_data_bytes();
   }
+  collection_set->reserve_old_bytes_for_evacuation(evacuated_old_bytes);
+  collection_set->set_old_region_count(included_old_regions);
+
 
   if (included_old_regions > 0) {
     log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, " SIZE_FORMAT " %s)",
@@ -154,7 +141,10 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 }
 
 // Both arguments are don't cares for old-gen collections
-bool ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
+bool ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set,
+                                                    ShenandoahOldHeuristics* old_heuristics) {
+  assert((collection_set == nullptr) && (old_heuristics == nullptr),
+         "Expect null arguments in ShenandoahOldHeuristics::choose_collection_set()");
   // Old-gen doesn't actually choose a collection set to be evacuated by its own gang of worker tasks.
   // Instead, it computes the set of regions to be evacuated by subsequent young-gen evacuation passes.
   prepare_for_old_collections();

@@ -48,12 +48,22 @@ ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahGenerat
 void ShenandoahAggressiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                                            RegionData* data, size_t size,
                                                                            size_t free) {
+  assert(!ShenandoahHeap::heap()->mode()->is_generational(), "AggressiveHeuristics not appropriate in generational mode");
+
+  // Note that there's no bound on collection set size.  If we try to collect too much memory, we'll get an alloc
+  // failure during collection and we'll degenerate.
+  size_t region_count = 0;
+  size_t live_bytes_in_collection_set = 0;
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;
     if (r->garbage() > 0) {
+      region_count++;
       cset->add_region(r);
+      live_bytes_in_collection_set += r->get_live_data_bytes();
     }
   }
+  cset->set_young_region_count(region_count);
+  cset->reserve_young_bytes_for_evacuation(live_bytes_in_collection_set);
 }
 
 bool ShenandoahAggressiveHeuristics::should_start_gc() {

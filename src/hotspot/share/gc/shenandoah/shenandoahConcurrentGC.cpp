@@ -31,6 +31,8 @@
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
@@ -200,6 +202,34 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   } else {
     vmop_entry_final_roots();
   }
+  size_t old_available, young_available;
+  {
+    ShenandoahYoungGeneration* young_gen = heap->young_generation();
+    ShenandoahGeneration* old_gen = heap->old_generation();
+    ShenandoahHeapLocker locker(heap->lock());
+
+    size_t old_usage_before_evac = heap->capture_old_usage(0);
+    size_t old_usage_now = old_gen->used();
+    size_t promoted_bytes = old_usage_now - old_usage_before_evac;
+    heap->set_previous_promotion(promoted_bytes);
+
+    young_gen->unadjust_available();
+    old_gen->unadjust_available();
+    young_gen->increase_used(heap->get_young_evac_expended());
+    old_gen->increase_used(heap->get_old_evac_expended());
+
+    young_available = young_gen->adjusted_available();
+    old_available = old_gen->adjusted_available();
+
+
+    heap->set_alloc_supplement_reserve(0);
+    heap->set_young_evac_reserve(0);
+    heap->set_old_evac_reserve(0);
+    heap->set_promotion_reserve(0);
+  }
+  log_info(gc, ergo)("At end of concurrent GC, old_available: " SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                     byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                     byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
 
   return true;
 }
@@ -631,7 +661,36 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Notify JVMTI that the tagmap table will need cleaning.
     JvmtiTagMap::set_needs_cleaning();
 
+    // The collection set is chosen by prepare_regions_and_collection_set().
+    //
+    // TODO: Under severe memory overload conditions that can be checked here, we may want to limit
+    // the inclusion of old-gen candidates within the collection set.  This would allow us to prioritize efforts on
+    // evacuating young-gen,  This remediation is most appropriate when old-gen availability is very high (so there
+    // are negligible negative impacts from delaying completion of old-gen evacuation) and when young-gen collections
+    // are "under duress" (as signalled by very low availability of memory within young-gen, indicating that/ young-gen
+    // collections are not triggering frequently enough).
     bool mixed_evac = _generation->prepare_regions_and_collection_set(true /*concurrent*/);
+
+    // Upon return from prepare_regions_and_collection_set(), certain parameters have been established to govern the
+    // evacuation efforts that are about to begin.  In particular:
+    //
+    // heap->get_promotion_reserve() represents the amount of memory within old-gen's available memory that has
+    //   been set aside to hold objects promoted from young-gen memory.  This represents an estimated percentage
+    //   of the live young-gen memory within the collection set.  If there is more data ready to be promoted than
+    //   can fit within this reserve, the promotion of some objects will be deferred until a subsequent evacuation
+    //   pass.
+    //
+    // heap->get_old_evac_reserve() represents the amount of memory within old-gen's available memory that has been
+    //  set aside to hold objects evacuated from the old-gen collection set.
+    //
+    // heap->get_young_evac_reserve() represents the amount of memory within young-gen's available memory that has
+    //  been set aside to hold objects evacuated from the young-gen collection set.  Conservatively, this value
+    //  equals the entire amount of live young-gen memory within the collection set, even though some of this memory
+    //  will likely be promoted.
+    //
+    // heap->get_alloc_supplement_reserve() represents the amount of old-gen memory that can be allocated during evacuation
+    // and update-refs phases of gc.  The young evacuation reserve has already been removed from this quantity.
+
     heap->set_mixed_evac(mixed_evac);
 
     // Has to be done after cset selection
@@ -658,6 +717,19 @@ void ShenandoahConcurrentGC::op_final_mark() {
 
       // Notify JVMTI that oops are changed.
       JvmtiTagMap::set_needs_rehashing();
+
+      if (heap->mode()->is_generational()) {
+        // Calculate the temporary evacuation allowance supplement to young-gen memory capacity.
+        size_t young_available = heap->young_generation()->adjust_available(heap->get_alloc_supplement_reserve());
+        size_t old_available = heap->old_generation()->adjust_available(-(heap->get_alloc_supplement_reserve() +
+                                                                          heap->get_young_evac_reserve() +
+                                                                          heap->get_old_evac_reserve()));
+
+        log_info(gc, ergo)("After generational memory budget adjustments, old avaiable: " SIZE_FORMAT
+                           "%s, young_available: " SIZE_FORMAT "%s",
+                           byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                           byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+      }
 
       if (ShenandoahPacing) {
         heap->pacer()->setup_for_evac();

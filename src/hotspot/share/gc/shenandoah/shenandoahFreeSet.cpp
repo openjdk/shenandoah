@@ -71,7 +71,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliati
     if (is_collector_free(idx)) {
       ShenandoahHeapRegion* r = _heap->get_region(idx);
       if (r->affiliation() == affiliation) {
-        HeapWord* result = try_allocate_in(r, req, in_new_region);
+        HeapWord* result = try_allocate_in(r, req, in_new_region, false);
         if (result != NULL) {
           return result;
         }
@@ -94,14 +94,17 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   // Free set maintains mutator and collector views, and normally they allocate in their views only,
   // unless we special cases for stealing and mixed allocations.
 
+  // Overwrite with non-zero (non-NULL) values only if necessary for allocation bookkeeping.
+
+  bool allocating_gclab = false;
   switch (req.type()) {
     case ShenandoahAllocRequest::_alloc_tlab:
     case ShenandoahAllocRequest::_alloc_shared: {
-
       // Try to allocate in the mutator view
       for (size_t idx = _mutator_leftmost; idx <= _mutator_rightmost; idx++) {
         if (is_mutator_free(idx)) {
-          HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
+          // try_allocate_in() increases used if the allocation is successful.
+          HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region, false);
           if (result != NULL) {
             return result;
           }
@@ -112,7 +115,13 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       break;
     }
     case ShenandoahAllocRequest::_alloc_gclab:
+      // GCLABs are for evacuation so we must be in evacuation phase.  If this allocation is successful, increment
+      // the relevant evac_expended rather than used value.
+      allocating_gclab = true;
+
     case ShenandoahAllocRequest::_alloc_plab:
+      // PLABs always reside in old-gen and are only allocated during evacuation phase.  
+
     case ShenandoahAllocRequest::_alloc_shared_gc: {
       // First try to fit into a region that is already in use in the same generation.
       HeapWord* result = allocate_with_affiliation(req.affiliation(), req, in_new_region);
@@ -137,7 +146,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           ShenandoahHeapRegion* r = _heap->get_region(idx);
           if (can_allocate_from(r)) {
             flip_to_gc(r);
-            HeapWord *result = try_allocate_in(r, req, in_new_region);
+            HeapWord *result = try_allocate_in(r, req, in_new_region, allocating_gclab);
             if (result != NULL) {
               return result;
             }
@@ -156,7 +165,8 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return NULL;
 }
 
-HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
+HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region,
+                                             bool is_gclab) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
 
   if (_heap->is_concurrent_weak_root_in_progress() &&
@@ -198,7 +208,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   HeapWord* result = NULL;
   size_t size = req.size();
 
-  // req.size() is in words, free() is in bytes.
+  // req.size() is in words, r->free() is in bytes.
   if (ShenandoahElasticTLAB && req.is_lab_alloc()) {
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
       // Need to assure that plabs are aligned on multiple of card region.
@@ -222,6 +232,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         }
       }
     } else {
+      // This is a GCLAB or a TLAB allocation
       size_t free = align_down(r->free() >> LogHeapWordSize, MinObjAlignment);
       if (size > free) {
         size = free;
@@ -273,9 +284,17 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
 
     if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-      _heap->young_generation()->increase_used(size * HeapWordSize);
+      if (is_gclab) {
+        _heap->expend_young_evac(size * HeapWordSize);
+      } else {
+        _heap->young_generation()->increase_used(size * HeapWordSize);
+      }
     } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-      _heap->old_generation()->increase_used(size * HeapWordSize);
+      if (is_gclab) {
+        _heap->expend_old_evac(size * HeapWordSize);
+      } else {
+        _heap->old_generation()->increase_used(size * HeapWordSize);
+      }
     }
   }
 
@@ -551,7 +570,7 @@ void ShenandoahFreeSet::rebuild() {
   }
 
   // Evac reserve: reserve trailing space for evacuations
-  size_t to_reserve = _heap->max_capacity() / 100 * ShenandoahEvacReserve;
+  size_t to_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
   size_t reserved = 0;
 
   for (size_t idx = _heap->num_regions() - 1; idx > 0; idx--) {
@@ -667,6 +686,7 @@ HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_
   shenandoah_assert_heaplocked();
   assert_bounds();
 
+  // Allocation request is known to satisfy all memory budgeting constraints.
   if (req.size() > ShenandoahHeapRegion::humongous_threshold_words()) {
     switch (req.type()) {
       case ShenandoahAllocRequest::_alloc_shared:

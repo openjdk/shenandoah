@@ -502,6 +502,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_generation(NULL),
   _mixed_evac(false),
   _prep_for_mixed_evac_in_progress(false),
+  _evacuation_allowance(0),
   _initial_size(0),
   _used(0),
   _committed(0),
@@ -512,6 +513,14 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _num_regions(0),
   _regions(NULL),
   _update_refs_iterator(this),
+  _alloc_supplement_reserve(0),
+  _promotion_reserve(0),
+  _old_evac_reserve(0),
+  _old_evac_expended(0),
+  _young_evac_reserve(0),
+  _young_evac_expended(0),
+  _captured_old_usage(0),
+  _previous_promotion(0),
   _cancel_requested_time(0),
   _young_generation(NULL),
   _global_generation(NULL),
@@ -1110,11 +1119,31 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
-  if (mode()->is_generational() && req.affiliation() == YOUNG_GENERATION && young_generation()->used() + req.size() >= young_generation()->max_capacity()) {
-    return nullptr;
+  ShenandoahHeapLocker locker(lock());
+  if (mode()->is_generational()) {
+    if (req.affiliation() == YOUNG_GENERATION) {
+      if (req.type() == ShenandoahAllocRequest::_alloc_gclab) {
+        if (req.size() + get_young_evac_expended() > get_young_evac_reserve()) {
+          return nullptr;
+        }
+      } else if (req.size() >= young_generation()->adjusted_available()) {
+        // We know this is not a GCLAB.  This must be a TLAB or a shared allocation.  Reject the allocation request if
+        // exceeds established capacity limits.
+        return nullptr;
+      }
+    } else {                    // reg.qffiliation() == OLD_GENERATION
+      if (req.type() ==  ShenandoahAllocRequest::_alloc_gclab) {
+        if (req.size() + get_old_evac_expended() > get_old_evac_reserve()) {
+          return nullptr;
+        }
+      } else if (req.size() >= old_generation()->adjusted_available()) {
+        // We know this is not a GCLAB.  This must be a PLAB or a shared allocation for promotion.  Reject the promotion
+        // request if it exeeds capacity limits.
+        return nullptr;
+      }
+    }
   }
 
-  ShenandoahHeapLocker locker(lock());
   HeapWord* result = _free_set->allocate(req, in_new_region);
   if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
     // Register the newly allocated object while we're holding the global lock since there's no synchronization

@@ -31,11 +31,15 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
+
+#undef KELVIN_VERBOSE
 
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   if (a._garbage > b._garbage)
@@ -175,16 +179,192 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       if (old_heuristics->prime_collection_set(collection_set)) {
         result = true;
       }
+
+      size_t bytes_reserved_for_old_evacuation = collection_set->get_old_bytes_reserved_for_evacuation();
+#ifdef KELVIN_VERBOSE
+      printf("  primed collection set contains old bytes: " SIZE_FORMAT "\n", bytes_reserved_for_old_evacuation);
+#endif
+      if (bytes_reserved_for_old_evacuation * ShenandoahEvacWaste < heap->get_old_evac_reserve()) {
+        size_t old_evac_reserve = (size_t) (bytes_reserved_for_old_evacuation * ShenandoahEvacWaste);
+        heap->set_old_evac_reserve(old_evac_reserve);
+#ifdef KELVIN_VERBOSE
+        printf("  old_evac_reserve scaled by ShenandoahEvacWaste to: " SIZE_FORMAT "\n", old_evac_reserve);
+#endif
+      }
     }
     // else, this is global collection and doesn't need to prime_collection_set
+
+    ShenandoahYoungGeneration* young_generation = heap->young_generation();
+    size_t young_evacuation_reserve = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
+#ifdef KELVIN_VERBOSE
+    printf("  young_evac_reserve initialized to (ShenandoahEvacReserve): " SIZE_FORMAT "\n", young_evacuation_reserve);
+#endif
+    size_t young_available = young_generation->available();
+    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+
+    size_t regions_available_to_loan = 0;
+    size_t preapproved_evac_reserve_loan = 0;
+
+    if (heap->mode()->is_generational()) {
+      //  Now that we've primed the collection set, we can figure out how much memory to reserve for evacuation
+      //  of young-gen objects.
+      //
+      //  YoungEvacuationReserve for young generation: how much memory are we reserving to hold the results
+      //     of evacuating young collection set regions?  This is typically smaller than the total amount
+      //     of available memory, and is also smaller than the total amount of marked live memory within
+      //     young-gen.  This value is the minimum of:
+      //       1. young_gen->available() + (old_gen->available - (OldEvacuationReserve + PromotionReserve))
+      //       2. young_gen->capacity() * ShenandoahEvacReserve
+      //
+      //     Note that any region added to the collection set will be completely evacuated and its memory will
+      //     be completely recycled at the end of GC.  The recycled memory will be at least as great as the
+      //     memory borrowed from old-gen.  Enforce that the amount borrowed from old-gen for YoungEvacuationReserve
+      //     is an integral number of entire heap regions.
+      //
+      young_evacuation_reserve -= heap->get_old_evac_reserve();
+#ifdef KELVIN_VERBOSE
+    printf("  young_evac_reserve scaled by old_evac_reserve: " SIZE_FORMAT "\n", young_evacuation_reserve);
+#endif
+
+      size_t old_region_borrow_count = 0;
+
+      // Though we cannot know the evacuation_supplement until after we have computed the collection set, we do
+      // know that every young-gen region added to the collection set will have a net positive impact on available
+      // memory within young-gen, since each contributes a positive amount of garbage to available.  Thus, even
+      // without knowing the exact composition of the collection set, we can allow young_evacuation_reserve to
+      // exceed young_available if there are empty regions available within old-gen to hold the results of evacuation.
+
+      ShenandoahGeneration* old_generation = heap->old_generation();
+      ShenandoahYoungGeneration* young_generation = heap->young_generation();
+
+      // Not all of what is currently available within young-gen can be reserved to hold the results of young-gen
+      // evacuation.  This is because memory available within any heap region that is placed into the collection set
+      // is not available to be allocated during evacuation.  To be safe, we assure that all memory required for evacuation
+      // is available within "virgin" heap regions.
+
+      const size_t available_young_regions = young_generation->free_regions();
+      const size_t available_old_regions = old_generation->free_regions();
+      size_t already_reserved_old_bytes = heap->get_old_evac_reserve() + heap->get_promotion_reserve();
+      size_t regions_reserved_for_evac_and_promotion = (already_reserved_old_bytes + region_size_bytes - 1) / region_size_bytes;
+      regions_available_to_loan = available_old_regions - regions_reserved_for_evac_and_promotion;
+
+      if (available_young_regions * region_size_bytes < young_evacuation_reserve) {
+        // Try to borrow old-gen regions in order to avoid shrinking young_evacuation_reserve
+        size_t loan_request = young_evacuation_reserve - available_young_regions * region_size_bytes;
+        size_t loaned_region_request = (loan_request + region_size_bytes - 1) / region_size_bytes;
+        if (loaned_region_request > regions_available_to_loan) {
+          // Scale back young_evacuation_reserve to consume all available young and old regions.  After the
+          // collection set is chosen, we may get some of this memory back for pacing allocations during evacuation
+          // and update refs.
+          loaned_region_request = regions_available_to_loan;
+          young_evacuation_reserve = (available_young_regions + loaned_region_request) * region_size_bytes;
+        } else {
+          // No need to scale back young_evacuation_reserve.
+        }
+        preapproved_evac_reserve_loan = loaned_region_request * region_size_bytes;
+      } else {
+        // No need scale back young_evacuation_reserve and no need to borrow from old-gen.  We may even have some
+        // available_young_regions to support allocation pacing.
+      }
+
+#ifdef KELVIN_VERBOSE
+        printf("  young_evac_reserve scaled by borrowed available: " SIZE_FORMAT "\n", young_evacuation_reserve);
+        printf("   available_young_regions; " SIZE_FORMAT ", old_regions_still_available_to_loan: " SIZE_FORMAT "\n",
+               available_young_regions, regions_available_to_loan);
+        printf("   preapproved_evac_reserve_loan; " SIZE_FORMAT ", available to loan: " SIZE_FORMAT "\n",
+               preapproved_evac_reserve_loan, regions_available_to_loan);
+        fflush(stdout);
+#endif
+
+    } else if (young_evacuation_reserve > young_available) {
+      // In non-generational mode, there's no old-gen memory to borrow from
+      young_evacuation_reserve = young_available;
+#ifdef KELVIN_VERBOSE
+      printf("  non-generational young_evac_reserve scaled by young_available: " SIZE_FORMAT "\n", young_evacuation_reserve);
+#endif
+    }
+
+    heap->set_young_evac_reserve(young_evacuation_reserve);
+    heap->reset_young_evac_expended();
 
     // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
     // of the heuristics subclasses.
     choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
+    size_t young_evacuated_bytes = collection_set->get_young_bytes_reserved_for_evacuation();;
+#ifdef KELVIN_VERBOSE
+    printf("  collection set chosen, young evacuation bytes: " SIZE_FORMAT "\n", young_evacuated_bytes);
+#endif
+    if (young_evacuated_bytes * ShenandoahEvacWaste < young_evacuation_reserve) {
+      young_evacuation_reserve = (size_t) (young_evacuated_bytes * ShenandoahEvacWaste);
+#ifdef KELVIN_VERBOSE
+      printf("  young_evac_reserve scaled by ShenandoahEvacWaste: " SIZE_FORMAT "\n", young_evacuation_reserve);
+      printf("    collection set evacuation bytes: " SIZE_FORMAT "\n", young_evacuated_bytes);
+#endif
+      heap->set_young_evac_reserve((size_t) young_evacuation_reserve);
+    }
+
+    // Now compute the evacuation supplement, which is extra memory borrowed from old-gen that can be allocated
+    // by mutators while GC is working on evacuation and update-refs.
+
+    // During evacuation and update refs, we will be able to allocate any memory that is currently available
+    // plus any memory that can be borrowed on the collateral of the current collection set, reserving a certain
+    // percentage of the anticipated replenishment from collection set memory to be allocated during the subsequent
+    // concurrent marking effort.  This is how much I can repay.
+    size_t potential_supplement_regions = collection_set->get_young_region_count();
+
+    // Though I can repay potential_supplement_regions, I can't borrow them unless they are available in old-gen.
+    if (potential_supplement_regions > regions_available_to_loan) {
+      potential_supplement_regions = regions_available_to_loan;
+    }
+
+    size_t potential_evac_supplement = potential_supplement_regions * region_size_bytes;
+
+#ifdef KELVIN_VERBOSE
+    printf("  potential_evac_supplement initialzed for " SIZE_FORMAT " regions: " SIZE_FORMAT "\n",
+           potential_supplement_regions, potential_evac_supplement);
+    fflush(stdout);
+#endif
+
+    // How much of the potential_supplement_regions will be consumed by young_evacuation_reserve?
+    const size_t available_young_regions = young_generation->free_regions();
+    size_t young_evac_regions = (young_evacuation_reserve + region_size_bytes - 1) / region_size_bytes;
+    size_t borrowed_evac_regions = (young_evac_regions > available_young_regions)? young_evac_regions - available_young_regions: 0;
+    potential_supplement_regions -= borrowed_evac_regions;
+    potential_evac_supplement = potential_supplement_regions * region_size_bytes;
+
+#ifdef KELVIN_VERBOSE
+    printf("  potential_evac_supplement adjusted by borrowing: " SIZE_FORMAT "\n", potential_evac_supplement);
+    printf("    young_evacuation_reserve: " SIZE_FORMAT ", young_evac_regions: " SIZE_FORMAT ", available young: " SIZE_FORMAT "\n",
+           young_evacuation_reserve, young_evac_regions, available_young_regions);
+    printf("    borrowed_evac_regions: " SIZE_FORMAT ", potential_supplement_regions: " SIZE_FORMAT "\n",
+           borrowed_evac_regions, potential_supplement_regions);
+#endif
+
+    // Leave some allocation runway for subsequent concurrent mark phase.
+    potential_evac_supplement = (potential_evac_supplement * ShenandoahBorrowPer128) / 128;
+#ifdef KELVIN_VERBOSE
+    printf("  potential_evac_supplement scaled by ShenandoahBorrowPer128: " SIZE_FORMAT "\n", potential_evac_supplement);
+#endif
+
+    heap->set_alloc_supplement_reserve(potential_evac_supplement);
+
+    size_t promotion_budget = heap->get_promotion_reserve();
+    size_t old_evac_budget = heap->get_old_evac_reserve();
+    size_t alloc_budget_evac_and_update = potential_evac_supplement + young_available;
+
+    log_info(gc, ergo)("Memory reserved for evacuation and update-refs includes promotion budget: " SIZE_FORMAT
+                       "%s, young evacuation budget: " SIZE_FORMAT "%s, old evacuation budget: " SIZE_FORMAT
+                       "%s, allocation budget: " SIZE_FORMAT "%s, including supplement: " SIZE_FORMAT "%s",
+                       byte_size_in_proper_unit(promotion_budget), proper_unit_for_byte_size(promotion_budget),
+                       byte_size_in_proper_unit(young_evacuation_reserve), proper_unit_for_byte_size(young_evacuation_reserve),
+                       byte_size_in_proper_unit(old_evac_budget), proper_unit_for_byte_size(old_evac_budget),
+                       byte_size_in_proper_unit(alloc_budget_evac_and_update),
+                       proper_unit_for_byte_size(alloc_budget_evac_and_update),
+                       byte_size_in_proper_unit(potential_evac_supplement), proper_unit_for_byte_size(potential_evac_supplement));
   }
+  // else, we're going to skip evacuation and update refs because we reclaimed sufficient amounts of immediate garbage.
 
   size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
-
   size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
 

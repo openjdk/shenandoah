@@ -48,7 +48,7 @@ private:
   bool is_mutator_free(size_t idx) const;
   bool is_collector_free(size_t idx) const;
 
-  HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
+  HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region, bool is_gclab);
   HeapWord* allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
 
   // While holding the heap lock, allocate memory for a single object which is to be entirely contained
@@ -69,9 +69,6 @@ private:
   void increase_used(size_t amount);
   void clear_internal();
 
-  size_t collector_count() const { return _collector_free_bitmap.count_one_bits(); }
-  size_t mutator_count()   const { return _mutator_free_bitmap.count_one_bits();   }
-
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   bool can_allocate_from(ShenandoahHeapRegion *r);
@@ -80,6 +77,12 @@ private:
 
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
+
+  // How many regions dedicated to GC allocations (for evacuation or promotion) are currently free?
+  size_t collector_count() const { return _collector_free_bitmap.count_one_bits(); }
+
+  // How many regions dedicated to mutator allocations are currently free?
+  size_t mutator_count()   const { return _mutator_free_bitmap.count_one_bits();   }
 
   void clear();
   void rebuild();

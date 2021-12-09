@@ -561,6 +561,87 @@ inline bool ShenandoahHeap::is_aging_cycle() const {
   return _is_aging_cycle.is_set();
 }
 
+inline size_t ShenandoahHeap::set_promotion_reserve(size_t new_val) {
+  size_t orig = _promotion_reserve;
+  _promotion_reserve = new_val;
+  return orig;
+}
+
+inline size_t ShenandoahHeap::get_promotion_reserve() const {
+  return _promotion_reserve;
+}
+
+// returns previous value
+size_t ShenandoahHeap::capture_old_usage(size_t old_usage) {
+  size_t previous_value = _captured_old_usage;
+  _captured_old_usage = old_usage;
+  return previous_value;
+}
+
+void ShenandoahHeap::set_previous_promotion(size_t promoted_bytes) {
+  _previous_promotion = promoted_bytes;
+}
+
+size_t ShenandoahHeap::get_previous_promotion() const {
+  return _previous_promotion;
+}
+
+inline size_t ShenandoahHeap::set_old_evac_reserve(size_t new_val) {
+  size_t orig = _old_evac_reserve;
+  _old_evac_reserve = new_val;
+  return orig;
+}
+
+inline size_t ShenandoahHeap::get_old_evac_reserve() const {
+  return _old_evac_reserve;
+}
+
+inline void ShenandoahHeap::reset_old_evac_expended() {
+  _old_evac_expended = 0;
+}
+
+inline size_t ShenandoahHeap::expend_old_evac(size_t increment) {
+  _old_evac_expended += increment;
+  return _old_evac_expended;
+}
+
+inline size_t ShenandoahHeap::get_old_evac_expended() const {
+  return _old_evac_expended;
+}
+
+inline size_t ShenandoahHeap::set_young_evac_reserve(size_t new_val) {
+  size_t orig = _young_evac_reserve;
+  _young_evac_reserve = new_val;
+  return orig;
+}
+
+inline size_t ShenandoahHeap::get_young_evac_reserve() const {
+  return _young_evac_reserve;
+}
+
+inline void ShenandoahHeap::reset_young_evac_expended() {
+  _young_evac_expended = 0;
+}
+
+inline size_t ShenandoahHeap::expend_young_evac(size_t increment) {
+  _young_evac_expended += increment;
+  return _young_evac_expended;
+}
+
+inline size_t ShenandoahHeap::get_young_evac_expended() const {
+  return _young_evac_expended;
+}
+
+inline intptr_t ShenandoahHeap::set_alloc_supplement_reserve(intptr_t new_val) {
+  intptr_t orig = _alloc_supplement_reserve;
+  _alloc_supplement_reserve = new_val;
+  return orig;
+}
+
+inline intptr_t ShenandoahHeap::get_alloc_supplement_reserve() const {
+  return _alloc_supplement_reserve;
+}
+
 template<class T>
 inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, T* cl) {
   marked_object_iterate(region, cl, region->top());
