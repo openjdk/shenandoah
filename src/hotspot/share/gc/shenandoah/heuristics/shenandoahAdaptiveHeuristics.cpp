@@ -89,54 +89,97 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // we hit max_cset. When max_cset is hit, we terminate the cset selection. Note that in this scheme,
   // ShenandoahGarbageThreshold is the soft threshold which would be ignored until min_garbage is hit.
 
+  // KELVIN OJO:
+  // max_cset is constrained by reserved_for_young_evac.  the computations are more complex than the following.
+
   size_t max_cset    = (ShenandoahHeap::heap()->get_young_evac_reserve() / ShenandoahEvacWaste);
   size_t capacity    = ShenandoahHeap::heap()->young_generation()->soft_max_capacity();
-  size_t free_target = (capacity / 100) * ShenandoahMinFreeThreshold + max_cset;
-  size_t min_garbage = (free_target > actual_free ? (free_target - actual_free) : 0);
 
+  // As currently implemented, we are not enforcing that new_garbage > min_garbage
+  // size_t free_target = (capacity / 100) * ShenandoahMinFreeThreshold + max_cset;
+  // size_t min_garbage = (free_target > actual_free ? (free_target - actual_free) : 0);
+
+#ifdef DEPRECATED_CODE
   log_info(gc, ergo)("Adaptive CSet Selection. Target Free: " SIZE_FORMAT "%s, Actual Free: "
                      SIZE_FORMAT "%s, Max CSet: " SIZE_FORMAT "%s, Min Garbage: " SIZE_FORMAT "%s",
                      byte_size_in_proper_unit(free_target), proper_unit_for_byte_size(free_target),
                      byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free),
                      byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                      byte_size_in_proper_unit(min_garbage), proper_unit_for_byte_size(min_garbage));
+#else
+  log_info(gc, ergo)("Adaptive CSet Selection. Max CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
+                     byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
+                     byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
+#endif
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
 
   size_t cur_cset = 0;
-  size_t cur_garbage = 0;
+  // size_t cur_garbage = 0;
+
+  // In generational mode, the sort order within the data array is not strictly descending amounts of garbage.  In
+  // particular, regions that have reached tenure age will be sorted into this array before younger regions that contain
+  // more garbage.  This represents one of the reasons why we keep looking at regions even after we decide, for example,
+  // to exclude one of the regions because it might require evacuation of too much live data.
 
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;
+    size_t biased_garbage = data[idx]._garbage;
 
     size_t new_cset    = cur_cset + r->get_live_data_bytes();
-    size_t new_garbage = cur_garbage + r->garbage();
 
-    if (new_cset > max_cset) {
+    // As currently implemented, we are not enforcing that new_garbage > min_garbage
+    // size_t new_garbage = cur_garbage + r->garbage();
+
+    // Note that live data bytes within a region is not the same as heap_region_size - garbage.  This is because
+    // each region contains a combination of used memory (which is garbage plus live) and unused memory, which has not
+    // yet been allocated.  It may be the case that the region on this iteration has too much live data to be added to
+    // the collection set while one or more regions seen on subsequent iterations of this loop can be added to the collection
+    // set because they have smaller live memory, even though they also have smaller garbage (and necessarily a larger
+    // amount of unallocated memory).
+
+    // BANDAID: In an earlier version of this code, this was written:
+    //   if ((new_cset <= max_cset) && ((new_garbage < min_garbage) || (r->garbage() > garbage_threshold)))
+    // The problem with the original code is that in some cases the collection set would include hundreds of regions,
+    // each with less than 100 bytes of garbage.  Evacuating these regions is counterproductive.
+
+    // TODO: Think about changing the description and defaults for ShenandoahGarbageThreshold and ShenandoahMinFreeThreshold.
+    // If "customers" want to evacuate regions with smaller amounts of garbage contained therein, they should specify a lower
+    // value of ShenandoahGarbageThreshold.  As implemented currently, we may experience back-to-back collections if there is
+    // not enough memory to be reclaimed.  Let's not let pursuit of min_garbage drive us to make poor decisions.  Maybe we
+    // want yet another global parameter to allow a region to be placed into the collection set if
+    // (((new_garbage < min_garbage) && (r->garbage() > ShenandoahSmallerGarbageThreshold)) || (r->garbage() > garbage_threshold))
+
+    if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
 #ifdef KELVIN_VERBOSE
-      printf("adaptive-cset-construction finished, new_cset (" SIZE_FORMAT ") > max_cset for candidate region with live: " SIZE_FORMAT "\n",
-             new_cset, r->get_live_data_bytes());
+      printf("CSET includes region " SIZE_FORMAT " (age: %u, garbage: " SIZE_FORMAT " (biased: " SIZE_FORMAT "), live: " SIZE_FORMAT ")\n",
+             r->index(), r->age(), r->garbage(), biased_garbage, r->get_live_data_bytes());
 #endif
-      break;
-    }
-
-    if ((new_garbage < min_garbage) || (r->garbage() > garbage_threshold)) {
       cset->add_region(r);
       live_bytes_in_collection_set += r->get_live_data_bytes();
       collected_region_count++;
       cur_cset = new_cset;
-      cur_garbage = new_garbage;
-    } else {
-      // Since candidates are sorted by decreasing amounts of region garbage, once new_garbage >= min_garbage and
-      // r->garbage() <= garbage_threshold there's no value in iterating further
+      // cur_garbage = new_garbage;
+    } else if (biased_garbage == 0) {
 #ifdef KELVIN_VERBOSE
-      printf("adaptive-cset-construction ignoring region with garbage: " SIZE_FORMAT ", against threshold: " SIZE_FORMAT "\n",
-             r->garbage(), garbage_threshold);
-      printf("  assert: once I'm below threshold, it just gets worse from here on out, so I should just break out of loop\n");
+      printf("CSET ignores region " SIZE_FORMAT " and all subsequent regions (age: %u, garbage: 0, live: " SIZE_FORMAT ")\n",
+             r->index(), r->age(), r->get_live_data_bytes());
+      for (size_t j = idx+1; j < size; j++) {
+        r = data[j]._region;
+        printf("data[" SIZE_FORMAT "]._garbage: " SIZE_FORMAT ", region " SIZE_FORMAT
+               " (age: %u, garbage: 0, live: " SIZE_FORMAT ")\n",
+               j, data[j]._garbage, r->index(), r->age(), r->get_live_data_bytes());
+      }
+
 #endif
       break;
-    }
+    } else {
+#ifdef KELVIN_VERBOSE
+      printf("CSET ignores region " SIZE_FORMAT " (age: %u, garbage: " SIZE_FORMAT " out of threshold: " SIZE_FORMAT ", live: " SIZE_FORMAT ")\n",
+             r->index(), r->age(), r->garbage(), garbage_threshold, r->get_live_data_bytes());
+#endif
+   }
   }
   cset->set_young_region_count(collected_region_count);
   cset->reserve_young_bytes_for_evacuation(live_bytes_in_collection_set);
@@ -342,11 +385,39 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   allocation_headroom -= MIN2(allocation_headroom, penalties);
 
   double avg_cycle_time = _gc_time_history->davg() + (_margin_of_error_sd * _gc_time_history->dsd());
+
+  size_t last_live_memory = get_last_live_memory();
+  size_t penultimate_live_memory = get_penultimate_live_memory();
+  double original_cycle_time = avg_cycle_time;
+  if ((penultimate_live_memory < last_live_memory) && (penultimate_live_memory != 0)) {
+    // If the live-memory size is growing, our estimates of cycle time are based on lighter workload, so adjust.
+    // TODO: Be more precise about how to scale when live memory is growing.  Existing code is a very rough approximation
+    // tuned with very limited workload observations.
+    avg_cycle_time = (avg_cycle_time * 2 * last_live_memory) / penultimate_live_memory;
+  } else {
+    int degen_cycles = degenerated_cycles_in_a_row();
+    if (degen_cycles > 0) {
+      // If we've degenerated recently, we might be waiting too long between triggers so adjust trigger forward.
+      // TODO: Be more precise about how to scale when we've experienced recent degenerated GC.  Existing code is a very
+      // rough approximation tuned with very limited workload observations.
+      avg_cycle_time += degen_cycles * avg_cycle_time;
+    }
+  }
+
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
   log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
     _generation->name(), avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
 
   if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
+    if (avg_cycle_time > original_cycle_time) {
+      log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention",
+                    _generation->name(), original_cycle_time, avg_cycle_time);
+#ifdef KELVIN_VERBOSE
+      printf("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention\n",
+                    _generation->name(), original_cycle_time, avg_cycle_time);
+#endif
+    }
+
     log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
                  _generation->name(), avg_cycle_time * 1000,
                  byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),

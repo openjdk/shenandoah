@@ -63,7 +63,7 @@ class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
   ShenandoahMarkingContext* const _ctx;
  public:
   ShenandoahResetBitmapTask() :
-    _heap(ShenandoahHeap::heap()),
+     _heap(ShenandoahHeap::heap()),
     _ctx(_heap->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* region) {
@@ -503,8 +503,19 @@ size_t ShenandoahGeneration::used_regions() const {
   return _affiliated_region_count;
 }
 
-size_t ShenandoahGeneration::free_regions() const {
-  return soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes() - _affiliated_region_count;
+size_t ShenandoahGeneration::free_unaffiliated_regions() const {
+  size_t result = soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes();
+  if (_affiliated_region_count > result) {
+    result = 0;                 // If old-gen is loaning regions to young-gen, affiliated regions may exceed capacity temporarily.
+  } else {
+    result -= _affiliated_region_count;
+  }
+#ifdef KELVIN_VERBOSE
+  printf("ShenGen::free_unaffiliated_regions(): capacity: " SIZE_FORMAT ", total regions: " SIZE_FORMAT ", affiliated regions: " SIZE_FORMAT
+         ", result: " SIZE_FORMAT "\n",
+         soft_max_capacity(), soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes(), _affiliated_region_count, result);
+#endif
+  return result;
 }
 
 size_t ShenandoahGeneration::used_regions_size() const {

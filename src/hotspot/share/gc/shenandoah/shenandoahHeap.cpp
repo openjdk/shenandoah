@@ -837,6 +837,10 @@ void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool pro
 }
 
 void ShenandoahHeap::handle_old_evacuation_failure() {
+#undef KELVIN_VERBOSE_INLINE
+#ifdef KELVIN_VERBOSE_INLINE
+  printf("SH:hoef()\n");
+#endif
   if (_old_gen_oom_evac.try_set()) {
     log_info(gc)("Old gen evac failure.");
   }
@@ -1029,6 +1033,10 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t word_size,
                                             size_t* actual_size) {
+  // OJO!  NEED TO MAKE SURE THERE IS ENOUGH RESERVE WITHIN OLD-GEN TO
+  // ALLOW CONTINUED PROMOTIONS.  OTHERWISE SET THREAD-LOCAL FLAG TO
+  // PROHIBIT PROMOTION BY THIS THREAD.
+
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
   HeapWord* res = allocate_memory(req);
   if (res != NULL) {
@@ -2466,15 +2474,39 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
 
 class ShenandoahFinalUpdateRefsUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
 private:
+  ShenandoahMarkingContext* _ctx;
   ShenandoahHeapLock* const _lock;
+  bool _is_generational;
 
 public:
-  ShenandoahFinalUpdateRefsUpdateRegionStateClosure() : _lock(ShenandoahHeap::heap()->lock()) {}
+  ShenandoahFinalUpdateRefsUpdateRegionStateClosure(
+    ShenandoahMarkingContext* ctx) : _ctx(ctx), _lock(ShenandoahHeap::heap()->lock()),
+                                     _is_generational(ShenandoahHeap::heap()->mode()->is_generational()) { }
 
   void heap_region_do(ShenandoahHeapRegion* r) {
+
+    // Maintenance of region age must follow evacuation in order to account for evacuation allocations within survivor
+    // regions.  We consult region age during the subsequent evacuation to determine whether certain objects need to
+    // be promoted.
+    if (_is_generational && r->is_young()) {
+      HeapWord *tams = _ctx->top_at_mark_start(r);
+      HeapWord *top = r->top();
+
+      // Allocations move the watermark when top moves.  However compacting
+      // objects will sometimes lower top beneath the watermark, after which,
+      // attempts to read the watermark will assert out (watermark should not be
+      // higher than top).
+      if (top > tams) {
+        // There have been allocations in this region since the start of the cycle.
+        // Any objects new to this region must not assimilate elevated age.
+        r->reset_age();
+      } else if (ShenandoahHeap::heap()->is_aging_cycle()) {
+        r->increment_age();
+      }
+    }
+
     // Drop unnecessary "pinned" state from regions that does not have CP marks
     // anymore, as this would allow trashing them.
-
     if (r->is_active()) {
       if (r->is_pinned()) {
         if (r->pin_count() == 0) {
@@ -2501,7 +2533,7 @@ void ShenandoahHeap::update_heap_region_states(bool concurrent) {
     ShenandoahGCPhase phase(concurrent ?
                             ShenandoahPhaseTimings::final_update_refs_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_refs_update_region_states);
-    ShenandoahFinalUpdateRefsUpdateRegionStateClosure cl;
+    ShenandoahFinalUpdateRefsUpdateRegionStateClosure cl (young_generation()->complete_marking_context());
     parallel_heap_region_iterate(&cl);
 
     assert_pinned_region_status();

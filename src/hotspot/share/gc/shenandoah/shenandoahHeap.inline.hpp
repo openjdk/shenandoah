@@ -291,6 +291,15 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
     return NULL;
   }
   HeapWord* obj = gclab->allocate(size);
+#undef KELVIN_VERBOSE_INLINE
+#ifdef KELVIN_VERBOSE_INLINE
+  if (obj != NULL) {
+    ShenandoahHeapRegion* r = heap_region_containing(obj);
+    if (r->age() > 0) {
+      printf("Oops!  allocate_from_gclab vacuating to young region " SIZE_FORMAT " with non-zero age %u\n", r->index(), r->age());
+    }
+  }
+#endif
   if (obj != NULL) {
     return obj;
   }
@@ -338,11 +347,12 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
     if (mark.has_displaced_mark_helper()) {
       // We don't want to deal with MT here just to ensure we read the right mark word.
       // Skip the potential promotion attempt for this one.
-    } else if (mark.age() >= InitialTenuringThreshold) {
+    } else if (r->age() + mark.age() >= InitialTenuringThreshold) {
       oop result = try_evacuate_object(p, thread, r, OLD_GENERATION);
       if (result != NULL) {
         return result;
       }
+      // If we failed to promote this aged object, we'll fall through to code below and evacuat to young-gen.
     }
   }
   return try_evacuate_object(p, thread, r, target_gen);
@@ -380,6 +390,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       }
     }
     if (copy == NULL) {
+      // If we failed to allocated in LAB, we'll try a shared allocation.
       ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
       copy = allocate_memory(req);
       alloc_from_lab = false;
@@ -391,6 +402,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   if (copy == NULL) {
     if (target_gen == OLD_GENERATION) {
       assert(mode()->is_generational(), "Should only be here in generational mode.");
+
+      // OJO: AROUND HERE IS WHERE KELVIN NEEDS TO ACCOUNT FOR CONSUMPTION OF OLD EVACUATION AND PROMOTION BUDGETS
+
       if (from_region->is_young()) {
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
         handle_promotion_failure();
@@ -420,6 +434,10 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     // Successfully evacuated. Our copy is now the public one!
     if (mode()->is_generational()) {
       if (target_gen == OLD_GENERATION) {
+#ifdef KELVIN_VERBOSE_INLINE
+        printf("SH::teo(" PTR_FORMAT ") R:" SIZE_FORMAT " W:" SIZE_FORMAT " %s\n",
+               p2i(p), from_region->index(), size, from_region->is_young()? "P":"E");
+#endif
         handle_old_evacuation(copy, size, from_region->is_young());
       } else if (target_gen == YOUNG_GENERATION) {
         if (is_aging_cycle()) {

@@ -74,11 +74,11 @@ protected:
   virtual size_t max_capacity() const      { return _max_capacity; }
   virtual size_t used_regions() const;
   virtual size_t used_regions_size() const;
-  virtual size_t free_regions() const;
+  virtual size_t free_unaffiliated_regions() const;
   virtual size_t used() const { return _used; }
   virtual size_t available() const;
 
-  // During evacuation and update-refs, some memory memory may be shifted between generations.  In particular, memory
+  // During evacuation and update-refs, some memory may be shifted between generations.  In particular, memory
   // may be loaned by old-gen to young-gen based on the promise the loan will be promptly repaid from the memory reclaimed
   // when the current collection set is recycled.  The capacity adjustment also takes into consideration memory that is
   // set aside within each generation to hold the results of evacuation, but not promotion, into that region.  Promotions

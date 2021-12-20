@@ -165,6 +165,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return NULL;
 }
 
+// is_gclab denotes this is for evacuation, not promotion.
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region,
                                              bool is_gclab) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
@@ -290,6 +291,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         _heap->young_generation()->increase_used(size * HeapWordSize);
       }
     } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      assert(!is_gclab, "old-gen allocations use PLAB or shared allocation");
+      
+      // KELVIN OJO: THIS NEEDS WORK: should deal with plab budgets here.
+
       if (is_gclab) {
         _heap->expend_old_evac(size * HeapWordSize);
       } else {

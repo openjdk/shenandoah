@@ -60,6 +60,8 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
   _gc_times_learned(0),
   _gc_time_penalties(0),
   _gc_time_history(new TruncatedSeq(10, ShenandoahAdaptiveDecayFactor)),
+  _live_memory_last_cycle(0),
+  _live_memory_penultimate_cycle(0),
   _metaspace_oom()
 {
   // No unloading during concurrent mark? Communicate that to heuristics
@@ -103,9 +105,11 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   size_t free = 0;
   size_t free_regions = 0;
+  size_t live_memory = 0;
 
   ShenandoahMarkingContext* const ctx = _generation->complete_marking_context();
 
+  size_t remnant_available = 0;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
     if (!in_generation(region)) {
@@ -127,13 +131,13 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       } else {
         assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
 
+        live_memory += region->get_live_data_bytes();
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
         if (heap->mode()->is_generational() && (region->age() >= InitialTenuringThreshold)) {
           // Bias selection of regions that have reached tenure age
           for (int i = region->age() - InitialTenuringThreshold; i >= 0; i--) {
-            // Avoid floating-point math with integer multiply and shift.
-            garbage = (garbage * ShenandoahTenuredRegionUsageBias) >> ShenandoahTenuredRegionUsageBiasLogBase2;
+            garbage = (garbage + ShenandoahTenuredRegionUsageBias) * ShenandoahTenuredRegionUsageBias;
           }
         }
         candidates[cand_idx]._garbage = garbage;
@@ -155,13 +159,24 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // Count only the start. Continuations would be counted on "trash" path
         immediate_regions++;
         immediate_garbage += garbage;
+      } else {
+        live_memory += region->get_live_data_bytes();
       }
     } else if (region->is_trash()) {
       // Count in just trashed collection set, during coalesced CM-with-UR
       immediate_regions++;
       immediate_garbage += garbage;
+    } else {                      // region->is_humongous_cont() and !region->is_trash()
+      live_memory += region->get_live_data_bytes();
     }
   }
+
+  save_last_live_memory(live_memory);
+
+#ifdef KELVIN_VERBOSE
+  printf("choose_collection_set finds live memory is " SIZE_FORMAT "\n", live_memory);
+  printf(" old_generation->used(): " SIZE_FORMAT "\n", heap->old_generation()->used());
+#endif
 
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
   // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
@@ -199,8 +214,25 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 #ifdef KELVIN_VERBOSE
     printf("  young_evac_reserve initialized to (ShenandoahEvacReserve): " SIZE_FORMAT "\n", young_evacuation_reserve);
 #endif
-    size_t young_available = young_generation->available();
+
+    // At this point, young_generation->available() does not know about recently discovered immediate garbage.
+    // What memory it does think to be available is not entirely trustworthy because any available memory associated
+    // with a region that is placed into the collection set becomes unavailable when the region is chosen
+    // for the collection set.  We'll compute an approximation of young available.  If young_available is zero,
+    // we'll need to borrow from old-gen in order to evacuate.  If there's nothing to borrow, we're going to
+    // degenerate to full GC.
+
+    // TODO: younng_available can include available (between top() and end()) within each young region that is not
+    // part of the collection set.  Making this memory available to the young_evacuation_reserve allows a larger
+    // young collection set to be chosen when available memory is under extreme pressure.  Implementing this "improvement"
+    // is tricky, because the incremental construction of the collection set actually changes the amount of memory
+    // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
+    // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
+    // GC is evacuating and updating references.
+    
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+    size_t free_affiliated_regions = immediate_regions + free_regions;
+    size_t young_available = (free_affiliated_regions + young_generation->free_unaffiliated_regions()) * region_size_bytes;
 
     size_t regions_available_to_loan = 0;
     size_t preapproved_evac_reserve_loan = 0;
@@ -242,8 +274,8 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       // is not available to be allocated during evacuation.  To be safe, we assure that all memory required for evacuation
       // is available within "virgin" heap regions.
 
-      const size_t available_young_regions = free_regions + immediate_regions;
-      const size_t available_old_regions = old_generation->free_regions();
+      const size_t available_young_regions = free_regions + immediate_regions + young_generation->free_unaffiliated_regions();
+      const size_t available_old_regions = old_generation->free_unaffiliated_regions();
       size_t already_reserved_old_bytes = heap->get_old_evac_reserve() + heap->get_promotion_reserve();
       size_t regions_reserved_for_evac_and_promotion = (already_reserved_old_bytes + region_size_bytes - 1) / region_size_bytes;
       regions_available_to_loan = available_old_regions - regions_reserved_for_evac_and_promotion;
@@ -317,24 +349,27 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       potential_supplement_regions = regions_available_to_loan;
     }
 
-    size_t potential_evac_supplement = potential_supplement_regions * region_size_bytes;
+    size_t potential_evac_supplement;
 
 #ifdef KELVIN_VERBOSE
-    printf("  potential_evac_supplement initialzed for " SIZE_FORMAT " regions: " SIZE_FORMAT "\n",
-           potential_supplement_regions, potential_evac_supplement);
+    printf("  potential_evac_supplement initialized for " SIZE_FORMAT " regions: " SIZE_FORMAT "\n",
+           potential_supplement_regions,  potential_supplement_regions * region_size_bytes);
     fflush(stdout);
 #endif
 
-    // How much of the potential_supplement_regions will be consumed by young_evacuation_reserve?
-    const size_t available_young_regions = young_generation->free_regions();
+    // How much of the potential_supplement_regions will be consumed by young_evacuation_reserve: borrowed_evac_regions.
+    const size_t available_unaffiliated_young_regions = young_generation->free_unaffiliated_regions();
+    const size_t available_affiliated_regions = free_regions + immediate_regions;
+    const size_t available_young_regions = available_unaffiliated_young_regions + available_affiliated_regions;
     size_t young_evac_regions = (young_evacuation_reserve + region_size_bytes - 1) / region_size_bytes;
     size_t borrowed_evac_regions = (young_evac_regions > available_young_regions)? young_evac_regions - available_young_regions: 0;
+
     potential_supplement_regions -= borrowed_evac_regions;
     potential_evac_supplement = potential_supplement_regions * region_size_bytes;
 
 #ifdef KELVIN_VERBOSE
     printf("  potential_evac_supplement adjusted by young-evac borrowing: " SIZE_FORMAT "\n", potential_evac_supplement);
-    printf("    young_evacuation_reserve: " SIZE_FORMAT ", young_evac_regions: " SIZE_FORMAT ", available young: " SIZE_FORMAT "\n",
+    printf("    young_evacuation_reserve: " SIZE_FORMAT ", young_evac_regions: " SIZE_FORMAT ", available young regions: " SIZE_FORMAT "\n",
            young_evacuation_reserve, young_evac_regions, available_young_regions);
     printf("    borrowed_evac_regions: " SIZE_FORMAT ", potential_supplement_regions: " SIZE_FORMAT "\n",
            borrowed_evac_regions, potential_supplement_regions);
@@ -352,9 +387,13 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     size_t old_evac_budget = heap->get_old_evac_reserve();
     size_t alloc_budget_evac_and_update = potential_evac_supplement + young_available;
 
+    // TODO: young_available, which feeds into alloc_budget_evac_and_update is lacking memory available within
+    // existing young-gen regions that were not selected for the collection set.  Add this in and adjust the
+    // log message (where it says "empty-region allocation budget").
+
     log_info(gc, ergo)("Memory reserved for evacuation and update-refs includes promotion budget: " SIZE_FORMAT
                        "%s, young evacuation budget: " SIZE_FORMAT "%s, old evacuation budget: " SIZE_FORMAT
-                       "%s, allocation budget: " SIZE_FORMAT "%s, including supplement: " SIZE_FORMAT "%s",
+                       "%s, empty-region allocation budget: " SIZE_FORMAT "%s, including supplement: " SIZE_FORMAT "%s",
                        byte_size_in_proper_unit(promotion_budget), proper_unit_for_byte_size(promotion_budget),
                        byte_size_in_proper_unit(young_evacuation_reserve), proper_unit_for_byte_size(young_evacuation_reserve),
                        byte_size_in_proper_unit(old_evac_budget), proper_unit_for_byte_size(old_evac_budget),
@@ -507,3 +546,15 @@ bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
           || (_generation->generation_mode() == OLD && region->affiliation() == OLD_GENERATION));
 }
 
+void ShenandoahHeuristics::save_last_live_memory(size_t live_memory) {
+  _live_memory_penultimate_cycle = _live_memory_last_cycle;
+  _live_memory_last_cycle = live_memory;
+}
+
+size_t ShenandoahHeuristics::get_last_live_memory() {
+  return _live_memory_last_cycle;
+}
+
+size_t ShenandoahHeuristics::get_penultimate_live_memory() {
+  return _live_memory_penultimate_cycle;
+}
