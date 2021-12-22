@@ -380,17 +380,17 @@ private:
   // effort.  If this happens, the requesting thread blocks until some other thread manages to evacuate the offending object.
   // Only after "all" threads fail to evacuate an object do we consider the evacuation effort to have failed.
 
-  intptr_t _alloc_supplement_reserve;  // Supplemental memory reserved for young allocations during evac and update refs
-  size_t _promotion_reserve;           // How much memory is reserved within old-gen to hold the results of promotion?
+  intptr_t _alloc_supplement_reserve;  // Bytes reserved for young allocations during evac and update refs
+  size_t _promotion_reserve;           // Bytes reserved within old-gen to hold the results of promotion
 
 
-  size_t _old_evac_reserve;            // Memory reserved within old-gen to hold evacuated objects from old-gen collection set
-  size_t _old_evac_expended;           // How much old-gen memory has been expended on old-gen evacuations?
+  size_t _old_evac_reserve;            // Bytes reserved within old-gen to hold evacuated objects from old-gen collection set
+  size_t _old_evac_expended;           // Bytes of old-gen memory expended on old-gen evacuations?
 
-  size_t _young_evac_reserve;          // Memory reserved within young-gen to hold evacuated objects from young-gen collection set
-  size_t _young_evac_expended;         // How much old-gen memory has been expended on young-gen evacuations?
+  size_t _young_evac_reserve;          // Bytes reserved within young-gen to hold evacuated objects from young-gen collection set
+  size_t _young_evac_expended;         // Bytes old-gen memory has been expended on young-gen evacuations?
 
-  size_t _captured_old_usage;          // What was old usage when last captured?
+  size_t _captured_old_usage;          // What was old usage (bytes) when last captured?
 
   size_t _previous_promotion;          // Bytes promoted during previous evacuation
 
@@ -682,18 +682,18 @@ public:
 // ---------- Allocation support
 //
 private:
-  HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region);
+  HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region, bool is_promotion);
 
   inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);
   HeapWord* allocate_from_gclab_slow(Thread* thread, size_t size);
   HeapWord* allocate_new_gclab(size_t min_size, size_t word_size, size_t* actual_size);
 
-  inline HeapWord* allocate_from_plab(Thread* thread, size_t size);
-  HeapWord* allocate_from_plab_slow(Thread* thread, size_t size);
+  inline HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);
+  HeapWord* allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion);
   HeapWord* allocate_new_plab(size_t min_size, size_t word_size, size_t* actual_size);
 
 public:
-  HeapWord* allocate_memory(ShenandoahAllocRequest& request);
+  HeapWord* allocate_memory(ShenandoahAllocRequest& request, bool is_promotion);
   HeapWord* mem_allocate(size_t size, bool* what);
   MetaWord* satisfy_failed_metadata_allocation(ClassLoaderData* loader_data,
                                                size_t size,

@@ -296,7 +296,7 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
   if (obj != NULL) {
     ShenandoahHeapRegion* r = heap_region_containing(obj);
     if (r->age() > 0) {
-      printf("Oops!  allocate_from_gclab vacuating to young region " SIZE_FORMAT " with non-zero age %u\n", r->index(), r->age());
+      printf("Oops!  allocate_from_gclab evacuating to young region " SIZE_FORMAT " with non-zero age %u\n", r->index(), r->age());
     }
   }
 #endif
@@ -306,11 +306,13 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
   return allocate_from_gclab_slow(thread, size);
 }
 
-inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size) {
+inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size, bool is_promotion) {
   assert(UseTLAB, "TLABs should be enabled");
 
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-  if (plab == NULL) {
+  if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
+    return NULL;
+  } else if (plab == NULL) {
     assert(!thread->is_Java_thread() && !thread->is_Worker_thread(),
            "Performance: thread should have PLAB: %s", thread->name());
     // No PLABs in this thread, fallback to shared allocation
@@ -318,7 +320,7 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size)
   }
   HeapWord* obj = plab->allocate(size);
   if (obj == NULL) {
-    obj = allocate_from_plab_slow(thread, size);
+    obj = allocate_from_plab_slow(thread, size, is_promotion);
   }
   return obj;
 }
@@ -360,10 +362,12 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
 // try_evacuate_object registers the object and dirties the associated remembered set information when evacuating
 // to OLD_GENERATION.
-inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahRegionAffiliation target_gen) {
+inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region,
+                                               ShenandoahRegionAffiliation target_gen) {
   bool alloc_from_lab = true;
   HeapWord* copy = NULL;
   size_t size = p->size();
+  bool is_promotion = (target_gen == OLD_GENERATION) && from_region->is_young();
 
 #ifdef ASSERT
   if (ShenandoahOOMDuringEvacALot &&
@@ -379,7 +383,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         }
         case OLD_GENERATION: {
            if (ShenandoahUsePLAB) {
-             copy = allocate_from_plab(thread, size);
+             copy = allocate_from_plab(thread, size, is_promotion);;
            }
            break;
         }
@@ -392,7 +396,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     if (copy == NULL) {
       // If we failed to allocated in LAB, we'll try a shared allocation.
       ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
-      copy = allocate_memory(req);
+      copy = allocate_memory(req, is_promotion);
       alloc_from_lab = false;
     }
 #ifdef ASSERT

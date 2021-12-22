@@ -900,7 +900,7 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
 }
 
 // Establish a new PLAB and allocate size HeapWords within it.
-HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
+HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion) {
   // New object should fit the PLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
 
@@ -934,7 +934,10 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size) {
   retire_plab(plab);
 
   size_t actual_size = 0;
+  // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
+  // less than the remaining evacuation need.
   HeapWord* plab_buf = allocate_new_plab(min_size, new_size, &actual_size);
+
   if (plab_buf == NULL) {
     return NULL;
   }
@@ -962,6 +965,10 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
   if (!mode()->is_generational()) {
     plab->retire();
   } else {
+    Thread* thread = Thread::current();
+    size_t evacuated = ShenandoahThreadLocalData::get_plab_evacuated(thread);
+    // We don't enforce limits on get_plab_promoted(thread).  Promotion uses any memory not required for evacuation.
+    expend_old_evac(evacuated);
     size_t waste = plab->waste();
     HeapWord* top = plab->top();
     plab->retire();
@@ -1008,7 +1015,7 @@ HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
                                             size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_tlab(min_size, requested_size);
-  HeapWord* res = allocate_memory(req);
+  HeapWord* res = allocate_memory(req, false);
   if (res != NULL) {
     *actual_size = req.actual_size();
   } else {
@@ -1021,7 +1028,7 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
                                              size_t word_size,
                                              size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_gclab(min_size, word_size);
-  HeapWord* res = allocate_memory(req);
+  HeapWord* res = allocate_memory(req, false);
   if (res != NULL) {
     *actual_size = req.actual_size();
   } else {
@@ -1038,7 +1045,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   // PROHIBIT PROMOTION BY THIS THREAD.
 
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
-  HeapWord* res = allocate_memory(req);
+  HeapWord* res = allocate_memory(req, false);
   if (res != NULL) {
     *actual_size = req.actual_size();
   } else {
@@ -1047,7 +1054,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   return res;
 }
 
-HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
+HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_promotion) {
   intptr_t pacer_epoch = 0;
   bool in_new_region = false;
   HeapWord* result = NULL;
@@ -1059,7 +1066,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     }
 
     if (!ShenandoahAllocFailureALot || !should_inject_alloc_failure()) {
-      result = allocate_memory_under_lock(req, in_new_region);
+      result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
     // Allocation failed, block until control thread reacted, then retry allocation.
@@ -1077,18 +1084,18 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     while (result == NULL && _progress_last_gc.is_set()) {
       tries++;
       control_thread()->handle_alloc_failure(req);
-      result = allocate_memory_under_lock(req, in_new_region);
+      result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
     while (result == NULL && tries <= ShenandoahFullGCThreshold) {
       tries++;
       control_thread()->handle_alloc_failure(req);
-      result = allocate_memory_under_lock(req, in_new_region);
+      result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
   } else {
     assert(req.is_gc_alloc(), "Can only accept GC allocs here");
-    result = allocate_memory_under_lock(req, in_new_region);
+    result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     // Do not call handle_alloc_failure() here, because we cannot block.
     // The allocation failure would be handled by the LRB slowpath with handle_alloc_failure_evac().
   }
@@ -1126,7 +1133,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
   return result;
 }
 
-HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
+HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region, bool is_promotion) {
   ShenandoahHeapLocker locker(lock());
   if (mode()->is_generational()) {
     if (req.affiliation() == YOUNG_GENERATION) {
@@ -1139,15 +1146,39 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         // exceeds established capacity limits.
         return nullptr;
       }
-    } else {                    // reg.qffiliation() == OLD_GENERATION
-      if (req.type() ==  ShenandoahAllocRequest::_alloc_gclab) {
-        if (req.size() + get_old_evac_expended() > get_old_evac_reserve()) {
-          return nullptr;
+    } else {                    // reg.affiliation() == OLD_GENERATION
+      assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
+
+
+      if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+        // We've already retired this thread's previously exhausted PLAB and have accounted for how that PLAB's
+        // memory was allotted.
+        Thread* thread = Thread::current();
+        ShenandoahThreadLocalData::reset_plab_evacuated(thread);
+        ShenandoahThreadLocalData::reset_plab_promoted(thread);
+
+        // Conservatively, assume this entire PLAB will be used for promotion.  Act as if we need to serve the
+        // rest of evacuation need from as-yet unallocated old-gen memory.
+        size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
+        size_t evac_available = old_generation()->adjusted_available() - req.size();;
+        if (remaining_evac_need >= evac_available) {
+          // Disable promotions within this thread because the entirety of this PLAB must be available to hold
+          // old-gen evacuations.
+          ShenandoahThreadLocalData::disable_plab_promotions(thread);
+        } else {
+          ShenandoahThreadLocalData::enable_plab_promotions(thread);
         }
-      } else if (req.size() >= old_generation()->adjusted_available()) {
-        // We know this is not a GCLAB.  This must be a PLAB or a shared allocation for promotion.  Reject the promotion
-        // request if it exeeds capacity limits.
-        return nullptr;
+      } else if (is_promotion) {
+        // This is a shared alloc for promotion
+        size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
+        size_t evac_available = old_generation()->adjusted_available() - req.size();;
+        if (remaining_evac_need >= evac_available) {
+          return nullptr;       // We need to reserve the remaining memory for evacuation so defer the promotion
+        }
+        // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
+      } else {
+        // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
+        expend_old_evac(req.size() * HeapWordSize);
       }
     }
   }
@@ -1179,7 +1210,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
 HeapWord* ShenandoahHeap::mem_allocate(size_t size,
                                         bool*  gc_overhead_limit_was_exceeded) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared(size);
-  return allocate_memory(req);
+  return allocate_memory(req, false);
 }
 
 MetaWord* ShenandoahHeap::satisfy_failed_metadata_allocation(ClassLoaderData* loader_data,
@@ -1422,7 +1453,7 @@ public:
   void do_thread(Thread* thread) {
     PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
     assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
-    ShenandoahHeap::heap()->retire_plab(gclab);
+    gclab->retire();
     if (_resize && ShenandoahThreadLocalData::gclab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_gclab_size(thread, 0);
     }

@@ -216,11 +216,9 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     young_gen->unadjust_available();
     old_gen->unadjust_available();
     young_gen->increase_used(heap->get_young_evac_expended());
-    old_gen->increase_used(heap->get_old_evac_expended());
 
     young_available = young_gen->adjusted_available();
     old_available = old_gen->adjusted_available();
-
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
@@ -719,11 +717,12 @@ void ShenandoahConcurrentGC::op_final_mark() {
       JvmtiTagMap::set_needs_rehashing();
 
       if (heap->mode()->is_generational()) {
-        // Calculate the temporary evacuation allowance supplement to young-gen memory capacity.
+        // Calculate the temporary evacuation allowance supplement to young-gen memory capacity (for allocations
+        // and young-gen evacuations).
         size_t young_available = heap->young_generation()->adjust_available(heap->get_alloc_supplement_reserve());
-        size_t old_available = heap->old_generation()->adjust_available(-(heap->get_alloc_supplement_reserve() +
-                                                                          heap->get_young_evac_reserve() +
-                                                                          heap->get_old_evac_reserve()));
+        // old_available is memory that can hold promotions and evacuations.  Subtract out the memory that is being
+        // loaned for young-gen allocations or evacuations.
+        size_t old_available = heap->old_generation()->adjust_available(-heap->get_alloc_supplement_reserve());
 
         log_info(gc, ergo)("After generational memory budget adjustments, old avaiable: " SIZE_FORMAT
                            "%s, young_available: " SIZE_FORMAT "%s",
