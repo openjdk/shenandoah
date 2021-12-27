@@ -51,6 +51,8 @@
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 
+#undef KELVIN_VERBOSE
+
 // Breakpoint support
 class ShenandoahBreakpointGCScope : public StackObj {
 public:
@@ -213,12 +215,23 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     size_t promoted_bytes = old_usage_now - old_usage_before_evac;
     heap->set_previous_promotion(promoted_bytes);
 
+#ifdef KELVIN_VERBOSE
+    printf("At end of concurrent GC, unadjusting old_gen and young_gen available\n");
+    printf("Before unadjustment: old_available: " SIZE_FORMAT ", young_available: " SIZE_FORMAT "\n",
+           old_gen->adjusted_available(), young_gen->adjusted_available());
+    printf("young_evac_expended accumulating into young_gen->used: " SIZE_FORMAT "\n",
+           heap->get_young_evac_expended());
+#endif
     young_gen->unadjust_available();
     old_gen->unadjust_available();
     young_gen->increase_used(heap->get_young_evac_expended());
 
     young_available = young_gen->adjusted_available();
     old_available = old_gen->adjusted_available();
+#ifdef KELVIN_VERBOSE
+    printf("After unadjustment: old_available: " SIZE_FORMAT ", young_available: " SIZE_FORMAT "\n",
+           old_gen->adjusted_available(), young_gen->adjusted_available());
+#endif
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);

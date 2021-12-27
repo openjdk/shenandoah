@@ -35,6 +35,8 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
+#undef KELVIN_VERBOSE
+
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
   _mutator_free_bitmap(max_regions, mtGC),
@@ -64,14 +66,14 @@ bool ShenandoahFreeSet::is_collector_free(size_t idx) const {
   return _collector_free_bitmap.at(idx);
 }
 
-HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region) {
+HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region, bool is_gclab) {
   for (size_t c = _collector_rightmost + 1; c > _collector_leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
     if (is_collector_free(idx)) {
       ShenandoahHeapRegion* r = _heap->get_region(idx);
       if (r->affiliation() == affiliation) {
-        HeapWord* result = try_allocate_in(r, req, in_new_region, false);
+        HeapWord* result = try_allocate_in(r, req, in_new_region, is_gclab);
         if (result != NULL) {
           return result;
         }
@@ -124,12 +126,12 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
     case ShenandoahAllocRequest::_alloc_shared_gc: {
       // First try to fit into a region that is already in use in the same generation.
-      HeapWord* result = allocate_with_affiliation(req.affiliation(), req, in_new_region);
+      HeapWord* result = allocate_with_affiliation(req.affiliation(), req, in_new_region, allocating_gclab);
       if (result != NULL) {
         return result;
       }
       // Then try a free region that is dedicated to GC allocations.
-      result = allocate_with_affiliation(FREE, req, in_new_region);
+      result = allocate_with_affiliation(FREE, req, in_new_region, allocating_gclab);
       if (result != NULL) {
         return result;
       }
@@ -165,7 +167,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return NULL;
 }
 
-// is_gclab denotes this is for evacuation, not promotion.
+// is_gclab denotes this is for evacuation, not promotion.  PLAB allocations do not count as is_gclab.
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region,
                                              bool is_gclab) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
@@ -286,20 +288,17 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
     if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
       if (is_gclab) {
+#ifdef KELVIN_VERBOSE
+        printf("Expending young_evac at GCLAB allocation by " SIZE_FORMAT "\n", size * HeapWordSize);
+#endif
         _heap->expend_young_evac(size * HeapWordSize);
       } else {
         _heap->young_generation()->increase_used(size * HeapWordSize);
       }
     } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
       assert(!is_gclab, "old-gen allocations use PLAB or shared allocation");
-      
-      // KELVIN OJO: THIS NEEDS WORK: should deal with plab budgets here.
-
-      if (is_gclab) {
-        _heap->expend_old_evac(size * HeapWordSize);
-      } else {
-        _heap->old_generation()->increase_used(size * HeapWordSize);
-      }
+      _heap->old_generation()->increase_used(size * HeapWordSize);
+      // for plabs, we'll expend old_evac and promotion when we retire the plab
     }
   }
 

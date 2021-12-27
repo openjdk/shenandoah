@@ -89,9 +89,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // we hit max_cset. When max_cset is hit, we terminate the cset selection. Note that in this scheme,
   // ShenandoahGarbageThreshold is the soft threshold which would be ignored until min_garbage is hit.
 
-  // KELVIN OJO:
-  // max_cset is constrained by reserved_for_young_evac.  the computations are more complex than the following.
-
   size_t max_cset    = (ShenandoahHeap::heap()->get_young_evac_reserve() / ShenandoahEvacWaste);
   size_t capacity    = ShenandoahHeap::heap()->young_generation()->soft_max_capacity();
 

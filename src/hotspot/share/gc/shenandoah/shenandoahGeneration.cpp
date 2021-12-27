@@ -347,6 +347,10 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
       heap->set_old_evac_reserve(old_evacuation_reserve);
       heap->reset_old_evac_expended();
+#ifdef KELVIN_VERBOSE
+      printf(" resetting old_evac_expended, setting old_evac reserved: " SIZE_FORMAT "\n",
+             old_evacuation_reserve);
+#endif
 
       // Compute YoungEvacuationReserve after we prime the collection set with old-gen candidates.  This depends
       // on how much memory old-gen wants to evacuate.  This is done within _heuristics->choose_collection_set().

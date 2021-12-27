@@ -406,9 +406,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   if (copy == NULL) {
     if (target_gen == OLD_GENERATION) {
       assert(mode()->is_generational(), "Should only be here in generational mode.");
-
-      // OJO: AROUND HERE IS WHERE KELVIN NEEDS TO ACCOUNT FOR CONSUMPTION OF OLD EVACUATION AND PROMOTION BUDGETS
-
       if (from_region->is_young()) {
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
         handle_promotion_failure();

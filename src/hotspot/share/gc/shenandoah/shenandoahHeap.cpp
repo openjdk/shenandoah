@@ -970,6 +970,10 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     // We don't enforce limits on get_plab_promoted(thread).  Promotion uses any memory not required for evacuation.
     expend_old_evac(evacuated);
     size_t waste = plab->waste();
+#ifdef KELVIN_VERBOSE
+    printf("plab.retire thread " SIZE_FORMAT ", evacuated: " SIZE_FORMAT ", promoted: " SIZE_FORMAT ", waste: " SIZE_FORMAT "\n"
+           thread->id(), evacuated, ShenandoahThreadLocalData::get_lab_promooted(thread), waste);
+#endif
     HeapWord* top = plab->top();
     plab->retire();
     if (top != NULL && plab->waste() > waste && is_in_old(top)) {
@@ -1040,11 +1044,9 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t word_size,
                                             size_t* actual_size) {
-  // OJO!  NEED TO MAKE SURE THERE IS ENOUGH RESERVE WITHIN OLD-GEN TO
-  // ALLOW CONTINUED PROMOTIONS.  OTHERWISE SET THREAD-LOCAL FLAG TO
-  // PROHIBIT PROMOTION BY THIS THREAD.
-
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
+  // Note that allocate_memory() sets a thread-local flag to prohibit further promotions by this thread
+  // if we are at risk of exceeding the old-gen evacuation budget.
   HeapWord* res = allocate_memory(req, false);
   if (res != NULL) {
     *actual_size = req.actual_size();
@@ -1139,11 +1141,22 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     if (req.affiliation() == YOUNG_GENERATION) {
       if (req.type() == ShenandoahAllocRequest::_alloc_gclab) {
         if (req.size() + get_young_evac_expended() > get_young_evac_reserve()) {
+          // This should only happen if evacuation waste is too low.  Rejecting one thread's request for GCLAB does not
+          // necessarily result in failure of the evacuation effort.  A different thread may be able to copy the requested
+          // object.
+#ifdef KELVIN_VERBOSE
+          printf("Reject GCLAB because req.size: " SIZE_FORMAT "  + expended: " SIZE_FORMAT " exceeds reserve: " SIZE_FORMAT "\n",
+                 req.size(), get_young_evac_expended(), get_young_evac_reserve);
+#endif
           return nullptr;
         }
       } else if (req.size() >= young_generation()->adjusted_available()) {
         // We know this is not a GCLAB.  This must be a TLAB or a shared allocation.  Reject the allocation request if
         // exceeds established capacity limits.
+#ifdef KELVIN_VERBOSE
+          printf("Reject other young alloc because req.size: " SIZE_FORMAT " exceeds adjusted avaiable: " SIZE_FORMAT "\n",
+                 req.size(), young_generation()->adjusetd_available());
+#endif
         return nullptr;
       }
     } else {                    // reg.affiliation() == OLD_GENERATION
@@ -1162,10 +1175,18 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
         size_t evac_available = old_generation()->adjusted_available() - req.size();;
         if (remaining_evac_need >= evac_available) {
+#ifdef KELVIN_VERBOSE
+          printf("Disabling promotions for thread " SIZE_FORMAT ": remaining_evac_need: " SIZE_FORMAT ", evac available: "
+                 SIZE_FORMAT "\n", thread->id(), remaining_evac_need, evac_available);
+#endif
           // Disable promotions within this thread because the entirety of this PLAB must be available to hold
           // old-gen evacuations.
           ShenandoahThreadLocalData::disable_plab_promotions(thread);
         } else {
+#ifdef KELVIN_VERBOSE
+          printf("Enabling promotions for thread " SIZE_FORMAT ": remaining_evac_need: " SIZE_FORMAT ", evac available: "
+                 SIZE_FORMAT "\n", thread->id(), remaining_evac_need, evac_available);
+#endif
           ShenandoahThreadLocalData::enable_plab_promotions(thread);
         }
       } else if (is_promotion) {
@@ -1173,11 +1194,19 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
         size_t evac_available = old_generation()->adjusted_available() - req.size();;
         if (remaining_evac_need >= evac_available) {
+#ifdef KELVIN_VERBOSE
+          printf("Rejecting shared promotion of size " SIZE_FORMAT " for thread " SIZE_FORMAT
+                 ": remaining_evac_need: " SIZE_FORMAT ", evac available: " SIZE_FORMAT "\n",
+                 req.size(), thread->id(), remaining_evac_need, evac_available);
+#endif
           return nullptr;       // We need to reserve the remaining memory for evacuation so defer the promotion
         }
         // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
       } else {
         // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
+#ifdef KELVIN_VERBOSE
+        printf("Expending old_evac for a shared allocation of size: " SIZE_FORMAT "\n", req.size() * HeapWordSize);
+#endif
         expend_old_evac(req.size() * HeapWordSize);
       }
     }
