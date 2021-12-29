@@ -322,6 +322,11 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   if (obj == NULL) {
     obj = allocate_from_plab_slow(thread, size, is_promotion);
   }
+  if (is_promotion) {
+    ShenandoahThreadLocalData::add_to_plab_promoted(thread, size * HeapWordSize);
+  } else {
+    ShenandoahThreadLocalData::add_to_plab_evacuated(thread, size * HeapWordSize);
+  }
   return obj;
 }
 
@@ -379,6 +384,13 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       switch (target_gen) {
         case YOUNG_GENERATION: {
            copy = allocate_from_gclab(thread, size);
+           if ((copy == nullptr) && (size < ShenandoahThreadLocalData::gclab_size(thread))) {
+             // GCLAB allocation failed because we are bumping up against the limit on evacuation reserve.  Try
+             // resetting the desired PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
+             ShenandoahThreadLocalData::set_gclab_size(thread, PLAB::min_size());
+             copy = allocate_from_gclab(thread, size);
+             // If we still get nullptr, we'll try a shared allocation below.
+           }
            break;
         }
         case OLD_GENERATION: {
@@ -393,10 +405,16 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         }
       }
     }
+
     if (copy == NULL) {
       // If we failed to allocated in LAB, we'll try a shared allocation.
       ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
       copy = allocate_memory(req, is_promotion);
+#undef KELVIN_VERBOSE_SEEME
+#ifdef KELVIN_VERBOSE_SEEME
+      printf("shared allocation @ " PTR_FORMAT " after LAB allocation failed, size: " SIZE_FORMAT ", is_promotion: %d\n",
+             p2i(copy), size, is_promotion);
+#endif
       alloc_from_lab = false;
     }
 #ifdef ASSERT
@@ -467,6 +485,11 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
          }
          case OLD_GENERATION: {
             ShenandoahThreadLocalData::plab(thread)->undo_allocation(copy, size);
+            if (is_promotion) {
+              ShenandoahThreadLocalData::subtract_from_plab_promoted(thread, size * HeapWordSize);
+            } else {
+              ShenandoahThreadLocalData::subtract_from_plab_evacuated(thread, size * HeapWordSize);
+            }
             break;
          }
          default: {

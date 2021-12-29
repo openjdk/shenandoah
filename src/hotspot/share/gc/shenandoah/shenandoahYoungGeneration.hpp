@@ -54,7 +54,14 @@ public:
 
   void reserve_task_queues(uint workers) override;
 
+<<<<<< HEAD
+=======
+  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
+
+ protected:
+>>>>>>> 4b1bbc36308 (Multiple improvements)
   bool is_concurrent_mark_in_progress() override;
+
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP

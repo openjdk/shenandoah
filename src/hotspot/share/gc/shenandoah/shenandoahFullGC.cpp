@@ -181,6 +181,17 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
   heap->set_gc_generation(heap->global_generation());
 
+  // There will be no concurrent allocations during full GC so reset these coordination variables.
+  heap->young_generation()->unadjust_available();
+  heap->old_generation()->unadjust_available();
+
+  heap->set_alloc_supplement_reserve(0);
+  heap->set_young_evac_reserve(0);
+  heap->reset_young_evac_expended();
+  heap->set_old_evac_reserve(0);
+  heap->reset_old_evac_expended();
+  heap->set_promotion_reserve(0);
+
   if (ShenandoahVerify) {
     heap->verifier()->verify_before_fullgc();
   }

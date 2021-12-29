@@ -75,6 +75,8 @@ private:
     _gclab_size(0),
     _plab(NULL),
     _plab_size(0),
+    _plab_evacuated(0),
+    _plab_promoted(0),
     _worker_id(INVALID_WORKER_ID),
     _disarmed_value(0),
     _paced_time(0) {
@@ -89,6 +91,7 @@ private:
       delete _gclab;
     }
     if (_plab != NULL) {
+      ShenandoahHeap::heap()->retire_plab(_plab);
       delete _plab;
     }
   }
@@ -186,6 +189,10 @@ public:
     data(thread)->_plab_evacuated += increment;
   }
 
+  static void subtract_from_plab_evacuated(Thread* thread, size_t increment) {
+    data(thread)->_plab_evacuated -= increment;
+  }
+
   static size_t get_plab_evacuated(Thread* thread) {
     return data(thread)->_plab_evacuated;
   }
@@ -196,6 +203,10 @@ public:
   
   static void add_to_plab_promoted(Thread* thread, size_t increment) {
     data(thread)->_plab_promoted += increment;
+  }
+  
+  static void subtract_from_plab_promoted(Thread* thread, size_t increment) {
+    data(thread)->_plab_promoted -= increment;
   }
   
   static size_t get_plab_promoted(Thread* thread) {

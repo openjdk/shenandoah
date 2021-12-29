@@ -225,6 +225,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     young_gen->unadjust_available();
     old_gen->unadjust_available();
     young_gen->increase_used(heap->get_young_evac_expended());
+    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
 
     young_available = young_gen->adjusted_available();
     old_available = old_gen->adjusted_available();
@@ -235,7 +236,9 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
+    heap->reset_young_evac_expended();
     heap->set_old_evac_reserve(0);
+    heap->reset_old_evac_expended();
     heap->set_promotion_reserve(0);
   }
   log_info(gc, ergo)("At end of concurrent GC, old_available: " SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",

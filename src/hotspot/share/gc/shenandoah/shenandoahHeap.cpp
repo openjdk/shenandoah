@@ -98,6 +98,8 @@
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
 
+#undef KELVIN_VERBOSE
+
 class ShenandoahPretouchHeapTask : public AbstractGangTask {
 private:
   ShenandoahRegionIterator _regions;
@@ -859,6 +861,9 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
+#ifdef KELVIN_VERBOSE
+  printf("allocate_from_gclab_slow(" PTR_FORMAT ", " SIZE_FORMAT "), gclab size: " SIZE_FORMAT "\n", p2i(thread), size, new_size);
+#endif
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
   // heuristics should catch up with them.
@@ -867,6 +872,9 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   if (new_size < size) {
     // New size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good GCLABs, when we encounter a large object.
+#ifdef KELVIN_VERBOSE
+    printf("  abandoning allocate_from_gclab_slow() because new_size < size\n");
+#endif
     return NULL;
   }
 
@@ -877,6 +885,9 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   size_t actual_size = 0;
   HeapWord* gclab_buf = allocate_new_gclab(min_size, new_size, &actual_size);
   if (gclab_buf == NULL) {
+#ifdef KELVIN_VERBOSE
+    printf("  abandoning allocate_from_gclab_slow() because new_gclab_buf is NULL\n");
+#endif
     return NULL;
   }
 
@@ -961,6 +972,10 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   return plab->allocate(size);
 }
 
+// TODO: It is probably most efficient to register all objects (both promotions and evacuations) that were allocated within
+// this plab at the time we retire the plab.  A tight registration loop will run within both code and data caches.  This change
+// would allow smaller and faster in-line implementation of alloc_from_plab().  Since plabs are aligned on card-table boundaries,
+// this object registration loop can be performed without acquiring a lock.
 void ShenandoahHeap::retire_plab(PLAB* plab) {
   if (!mode()->is_generational()) {
     plab->retire();
@@ -971,8 +986,8 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     expend_old_evac(evacuated);
     size_t waste = plab->waste();
 #ifdef KELVIN_VERBOSE
-    printf("plab.retire thread " SIZE_FORMAT ", evacuated: " SIZE_FORMAT ", promoted: " SIZE_FORMAT ", waste: " SIZE_FORMAT "\n"
-           thread->id(), evacuated, ShenandoahThreadLocalData::get_lab_promooted(thread), waste);
+    printf("plab.retire thread %s, evacuated: " SIZE_FORMAT ", promoted: " SIZE_FORMAT ", waste: " SIZE_FORMAT "\n",
+           thread->name(), evacuated, ShenandoahThreadLocalData::get_plab_promoted(thread), waste);
 #endif
     HeapWord* top = plab->top();
     plab->retire();
@@ -1056,6 +1071,8 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   return res;
 }
 
+// is_promotion is true iff this allocation is known for sure to hold the result of young-gen evacuation
+// to old-gen.  plab allocates arre not known as such, since they may hold old-gen evacuations.
 HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_promotion) {
   intptr_t pacer_epoch = 0;
   bool in_new_region = false;
@@ -1136,32 +1153,56 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region, bool is_promotion) {
+  size_t requested_bytes = req.size() * HeapWordSize;
+
   ShenandoahHeapLocker locker(lock());
+#ifdef KELVIN_VERBOSE
+  printf("alloc_mem_under_lock(req.byte_size: " SIZE_FORMAT ", is_gc_alloc: %s, is_promotion: %s\n",
+         req.size() * HeapWordSize, req.is_gc_alloc()? "Y": "N", is_promotion? "Y": "N");
+#endif
   if (mode()->is_generational()) {
     if (req.affiliation() == YOUNG_GENERATION) {
       if (req.type() == ShenandoahAllocRequest::_alloc_gclab) {
-        if (req.size() + get_young_evac_expended() > get_young_evac_reserve()) {
+        if (requested_bytes + get_young_evac_expended() > get_young_evac_reserve()) {
           // This should only happen if evacuation waste is too low.  Rejecting one thread's request for GCLAB does not
-          // necessarily result in failure of the evacuation effort.  A different thread may be able to copy the requested
-          // object.
+          // necessarily result in failure of the evacuation effort.  A different thread may be able to copy from-space object.
+
+          // TODO: Should we really fail here in the case that there is sufficient memory to allow us to allocate a gclab
+          // beyond the young_evac_reserve?  Seems it would be better to take away from mutator allocation budget if this
+          // prevents fall-back to full GC in order to recover from failed evacuation.
 #ifdef KELVIN_VERBOSE
-          printf("Reject GCLAB because req.size: " SIZE_FORMAT "  + expended: " SIZE_FORMAT " exceeds reserve: " SIZE_FORMAT "\n",
-                 req.size(), get_young_evac_expended(), get_young_evac_reserve);
+          printf(" alloc_mem_under_lock rejects GCLAB because requested bytes: " SIZE_FORMAT "  + expended: " SIZE_FORMAT " exceeds reserve: " SIZE_FORMAT "\n",
+                 requested_bytes, get_young_evac_expended(), get_young_evac_reserve());
 #endif
           return nullptr;
         }
-      } else if (req.size() >= young_generation()->adjusted_available()) {
+        // else, there is sufficient memory to allocate this GCLAB so do nothing here.
+      } else if (req.is_gc_alloc()) {
+        // This is a shared alloc for purposes of evacuation.
+        if (requested_bytes + get_young_evac_expended() > get_young_evac_reserve()) {
+          // TODO: Should we really fail here in the case that there is sufficient memory to allow us to allocate a gclab
+          // beyond the young_evac_reserve?  Seems it would be better to take away from mutator allocation budget if this
+          // prevents fall-back to full GC in order to recover from failed evacuation.
+#ifdef KELVIN_VERBOSE
+          printf(" alloc_mem_under_lock rejects shared evac allocation because requested bytes: " SIZE_FORMAT "  + expended: " SIZE_FORMAT " exceeds reserve: " SIZE_FORMAT "\n",
+                 requested_bytes, get_young_evac_expended(), get_young_evac_reserve());
+#endif
+
+          return nullptr;
+        } else {
+          // There is sufficient memory to allocate this shared evacuation object.
+        }
+      }  else if (requested_bytes >= young_generation()->adjusted_available()) {
         // We know this is not a GCLAB.  This must be a TLAB or a shared allocation.  Reject the allocation request if
         // exceeds established capacity limits.
 #ifdef KELVIN_VERBOSE
-          printf("Reject other young alloc because req.size: " SIZE_FORMAT " exceeds adjusted avaiable: " SIZE_FORMAT "\n",
-                 req.size(), young_generation()->adjusetd_available());
+          printf(" alloc_mem_under_lock rejects other young alloc because requested bytes: " SIZE_FORMAT " exceeds adjusted avaiable: " SIZE_FORMAT "\n",
+                 requested_bytes, young_generation()->adjusted_available());
 #endif
         return nullptr;
       }
     } else {                    // reg.affiliation() == OLD_GENERATION
       assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-
 
       if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
         // We've already retired this thread's previously exhausted PLAB and have accounted for how that PLAB's
@@ -1173,31 +1214,32 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         // Conservatively, assume this entire PLAB will be used for promotion.  Act as if we need to serve the
         // rest of evacuation need from as-yet unallocated old-gen memory.
         size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
-        size_t evac_available = old_generation()->adjusted_available() - req.size();;
+        size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
         if (remaining_evac_need >= evac_available) {
 #ifdef KELVIN_VERBOSE
-          printf("Disabling promotions for thread " SIZE_FORMAT ": remaining_evac_need: " SIZE_FORMAT ", evac available: "
-                 SIZE_FORMAT "\n", thread->id(), remaining_evac_need, evac_available);
+          printf(" alloc_mem_under_lock disables promotions for thread %s: remaining_evac_need: " SIZE_FORMAT ", evac available: "
+                 SIZE_FORMAT "\n", thread->name(), remaining_evac_need, evac_available);
 #endif
           // Disable promotions within this thread because the entirety of this PLAB must be available to hold
           // old-gen evacuations.
           ShenandoahThreadLocalData::disable_plab_promotions(thread);
         } else {
 #ifdef KELVIN_VERBOSE
-          printf("Enabling promotions for thread " SIZE_FORMAT ": remaining_evac_need: " SIZE_FORMAT ", evac available: "
-                 SIZE_FORMAT "\n", thread->id(), remaining_evac_need, evac_available);
+          printf(" alloc_mem_under_lock enables promotions for thread %s: remaining_evac_need: " SIZE_FORMAT ", evac available: "
+                 SIZE_FORMAT "\n", thread->name(), remaining_evac_need, evac_available);
 #endif
           ShenandoahThreadLocalData::enable_plab_promotions(thread);
         }
       } else if (is_promotion) {
         // This is a shared alloc for promotion
+        Thread* thread = Thread::current();
         size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
-        size_t evac_available = old_generation()->adjusted_available() - req.size();;
+        size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
         if (remaining_evac_need >= evac_available) {
 #ifdef KELVIN_VERBOSE
-          printf("Rejecting shared promotion of size " SIZE_FORMAT " for thread " SIZE_FORMAT
-                 ": remaining_evac_need: " SIZE_FORMAT ", evac available: " SIZE_FORMAT "\n",
-                 req.size(), thread->id(), remaining_evac_need, evac_available);
+          printf(" alloc_mem_under_lock rejects shared promotion of size " SIZE_FORMAT " for thread %s: remaining_evac_need: "
+                 SIZE_FORMAT ", evac available: " SIZE_FORMAT "\n",
+                 req.size(), thread->name(), remaining_evac_need, evac_available);
 #endif
           return nullptr;       // We need to reserve the remaining memory for evacuation so defer the promotion
         }
@@ -1205,33 +1247,34 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       } else {
         // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
 #ifdef KELVIN_VERBOSE
-        printf("Expending old_evac for a shared allocation of size: " SIZE_FORMAT "\n", req.size() * HeapWordSize);
+        printf(" alloc_mem_under_lock expends old_evac for a shared allocation of size: " SIZE_FORMAT "\n", requested_bytes);
 #endif
-        expend_old_evac(req.size() * HeapWordSize);
       }
     }
   }
 
   HeapWord* result = _free_set->allocate(req, in_new_region);
-  if (result != NULL && req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-    // Register the newly allocated object while we're holding the global lock since there's no synchronization
-    // built in to the implementation of register_object().  There are potential races when multiple independent
-    // threads are allocating objects, some of which might span the same card region.  For example, consider
-    // a card table's memory region within which three objects are being allocated by three different threads:
-    //
-    // objects being "concurrently" allocated:
-    //    [-----a------][-----b-----][--------------c------------------]
-    //            [---- card table memory range --------------]
-    //
-    // Before any objects are allocated, this card's memory range holds no objects.  Note that:
-    //   allocation of object a wants to set the has-object, first-start, and last-start attributes of the preceding card region.
-    //   allocation of object b wants to set the has-object, first-start, and last-start attributes of this card region.
-    //   allocation of object c also wants to set the has-object, first-start, and last-start attributes of this card region.
-    //
-    // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as last-start
-    // representing object b while first-start represents object c.  This is why we need to require all register_object()
-    // invocations to be "mutually exclusive" with respect to each card's memory range.
-    ShenandoahHeap::heap()->card_scan()->register_object(result);
+  if (result != NULL) {
+    if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      // Register the newly allocated object while we're holding the global lock since there's no synchronization
+      // built in to the implementation of register_object().  There are potential races when multiple independent
+      // threads are allocating objects, some of which might span the same card region.  For example, consider
+      // a card table's memory region within which three objects are being allocated by three different threads:
+      //
+      // objects being "concurrently" allocated:
+      //    [-----a------][-----b-----][--------------c------------------]
+      //            [---- card table memory range --------------]
+      //
+      // Before any objects are allocated, this card's memory range holds no objects.  Note that:
+      //   allocation of object a wants to set the has-object, first-start, and last-start attributes of the preceding card region.
+      //   allocation of object b wants to set the has-object, first-start, and last-start attributes of this card region.
+      //   allocation of object c also wants to set the has-object, first-start, and last-start attributes of this card region.
+      //
+      // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as last-start
+      // representing object b while first-start represents object c.  This is why we need to require all register_object()
+      // invocations to be "mutually exclusive" with respect to each card's memory range.
+      ShenandoahHeap::heap()->card_scan()->register_object(result);
+    }
   }
   return result;
 }

@@ -388,10 +388,48 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
   }
 
   static void validate_usage(const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
-    guarantee(stats.used() == generation->used(),
+    size_t generation_used;
+    if (generation->generation_mode() == YOUNG) {
+      // young_evac_expended is "usually zero".  If it is non-zero, this means we are doing evacuation or updating references
+      // and young-gen memory that holds the results of evacuation is being temporarily hidden from the usage accounting,
+      // so we add it back in here to make verification happy.
+      generation_used = generation->used() + ShenandoahHeap::heap()->get_young_evac_expended();
+    } else {
+      generation_used = generation->used();
+    }
+
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+    if (stats.used() != generation_used) {
+      printf("Verification failure: %s, young_evac_expended: " SIZE_FORMAT "\n",
+             label, ShenandoahHeap::heap()->get_young_evac_expended());
+      printf("  generation_used: " SIZE_FORMAT ", stats.used: " SIZE_FORMAT "\n",
+             generation->used(), stats.used());
+
+      size_t total_young_used = 0;
+      size_t total_old_used = 0;
+      for (size_t index = 0; index < ShenandoahHeapRegion::region_count(); index++) {
+        ShenandoahHeapRegion* r = ShenandoahHeap::heap()->get_region(index);
+        if (r->is_young()) {
+          total_young_used += r->used();
+        } else if (r->is_old()) {
+          total_old_used += r->used();
+        }
+        printf("Region " SIZE_FORMAT " (%s) bottom: " PTR_FORMAT ", top: " PTR_FORMAT ", live: " SIZE_FORMAT
+               ", garbage: " SIZE_FORMAT ", used: " SIZE_FORMAT "\n", index,
+               r->is_young()? "YOUNG": "OLD", p2i(r->bottom()), p2i(r->top()), r->get_live_data_bytes(), r->garbage(), r->used());
+        fflush(stdout);
+      }
+      printf("Total young used: " SIZE_FORMAT "\n", total_young_used);
+      printf("  Total old used: " SIZE_FORMAT "\n", total_old_used);
+      fflush(stdout);
+    }
+#endif
+
+    guarantee(stats.used() == generation_used,
               "%s: generation (%s) used size must be consistent: generation-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
               label, generation->name(),
-              byte_size_in_proper_unit(generation->used()), proper_unit_for_byte_size(generation->used()),
+              byte_size_in_proper_unit(generation_used), proper_unit_for_byte_size(generation_used),
               byte_size_in_proper_unit(stats.used()), proper_unit_for_byte_size(stats.used()));
   }
 };

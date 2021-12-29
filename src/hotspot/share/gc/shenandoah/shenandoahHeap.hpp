@@ -346,25 +346,22 @@ private:
   // two values are constant throughout each GC phases, we introduce a new service into ShenandoahGeneration.  This service
   // provides adjusted_available() based on an adjusted capacity.  At the start of evacuation, we adjust young capacity by
   // adding the amount to be borrowed from old-gen and subtracting the _young_evac_reserve, we adjust old capacity by
-  // subtracting the amount to be loaned to young-gen and subtracting the _old_evac_reserve.  At the end of update-refs, we
-  // unadjust the capacity of each generation, add _young_evac_expended to young-gen used, and _old_evac_expended to
-  // old-gen used.
+  // subtracting the amount to be loaned to young-gen.  At the end of update-refs, we unadjust the capacity of each generation,
+  // and add _young_evac_expended to young-gen used.
   //
   // We always use adjusted capacities to determine permission to allocate within young and to promote into old.  Note
   // that adjusted capacities equal traditional capacities except during evacuation and update refs.
   //
   // During evacuation, we assure that _young_evac_expended does not exceed _young_evac_reserve and that _old_evac_expended
-  // does not exceed _old_evac_reserve.  GCLAB allocations do not immediately affect used within the respective generations
-  // since the adjusted capacity within each generation already accounts for the entire evacuation reserve.  Each GCLAB
-  // allocations increments _young_evac_expended or _old_evac_expended rather than incrementing the affiliated generation's
-  // used value.
+  // does not exceed _old_evac_reserve.  GCLAB allocations do not immediately affect used within the young generation
+  // since the adjusted capacity already accounts for the entire evacuation reserve.  Each GCLAB allocations increments
+  // _young_evac_expended rather than incrementing the affiliated generation's used value.
   //
   // At the end of update references, we perform the following bookkeeping activities:
   //
   // 1. Unadjust the capacity within young-gen and old-gen
   // 2. Increase young_gen->used() by _young_evac_expended.  This represents memory consumed by evacutions from young-gen.
-  // 3. Increase old_gen->used() by _old_evac_expended.  This represents memory consumed by evacuations from old-gen.
-  // 4. Clear (reset to zero) _alloc_supplement_reserve, _young_evac_reserve, _old_evac_reserve, and _promotion_reserve
+  // 3. Clear (reset to zero) _alloc_supplement_reserve, _young_evac_reserve, _old_evac_reserve, and _promotion_reserve
   //
   // _young_evac_reserve and _old_evac_reserve are only non-zero during evacuation and update-references.
   //

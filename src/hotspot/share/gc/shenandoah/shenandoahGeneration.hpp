@@ -158,8 +158,6 @@ protected:
   void decrease_used(size_t bytes);
 
   virtual bool is_concurrent_mark_in_progress() = 0;
-
-private:
   void confirm_heuristics_mode();
 };
 
