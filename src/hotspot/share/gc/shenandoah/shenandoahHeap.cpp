@@ -948,7 +948,6 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
   // less than the remaining evacuation need.
   HeapWord* plab_buf = allocate_new_plab(min_size, new_size, &actual_size);
-
   if (plab_buf == NULL) {
     return NULL;
   }
@@ -969,6 +968,10 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 #endif // ASSERT
   }
   plab->set_buf(plab_buf, actual_size);
+
+  if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
+    return nullptr;
+  }
   return plab->allocate(size);
 }
 
@@ -986,8 +989,8 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     expend_old_evac(evacuated);
     size_t waste = plab->waste();
 #ifdef KELVIN_VERBOSE
-    printf("plab.retire thread %s, evacuated: " SIZE_FORMAT ", promoted: " SIZE_FORMAT ", waste: " SIZE_FORMAT "\n",
-           thread->name(), evacuated, ShenandoahThreadLocalData::get_plab_promoted(thread), waste);
+    printf("plab.retire thread " PTR_FORMAT ", evacuated: " SIZE_FORMAT ", promoted: " SIZE_FORMAT ", waste: " SIZE_FORMAT "\n",
+           p2i(thread), evacuated, ShenandoahThreadLocalData::get_plab_promoted(thread), waste);
 #endif
     HeapWord* top = plab->top();
     plab->retire();
@@ -1217,16 +1220,16 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
         if (remaining_evac_need >= evac_available) {
 #ifdef KELVIN_VERBOSE
-          printf(" alloc_mem_under_lock disables promotions for thread %s: remaining_evac_need: " SIZE_FORMAT ", evac available: "
-                 SIZE_FORMAT "\n", thread->name(), remaining_evac_need, evac_available);
+          printf(" alloc_mem_under_lock disables promotions for thread " PTR_FORMAT ": remaining_evac_need: " SIZE_FORMAT ", evac available: "
+                 SIZE_FORMAT "\n", p2i(thread), remaining_evac_need, evac_available);
 #endif
           // Disable promotions within this thread because the entirety of this PLAB must be available to hold
           // old-gen evacuations.
           ShenandoahThreadLocalData::disable_plab_promotions(thread);
         } else {
 #ifdef KELVIN_VERBOSE
-          printf(" alloc_mem_under_lock enables promotions for thread %s: remaining_evac_need: " SIZE_FORMAT ", evac available: "
-                 SIZE_FORMAT "\n", thread->name(), remaining_evac_need, evac_available);
+          printf(" alloc_mem_under_lock enables promotions for thread " PTR_FORMAT ": remaining_evac_need: " SIZE_FORMAT ", evac available: "
+                 SIZE_FORMAT "\n", p2i(thread), remaining_evac_need, evac_available);
 #endif
           ShenandoahThreadLocalData::enable_plab_promotions(thread);
         }
@@ -1237,9 +1240,9 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
         if (remaining_evac_need >= evac_available) {
 #ifdef KELVIN_VERBOSE
-          printf(" alloc_mem_under_lock rejects shared promotion of size " SIZE_FORMAT " for thread %s: remaining_evac_need: "
-                 SIZE_FORMAT ", evac available: " SIZE_FORMAT "\n",
-                 req.size(), thread->name(), remaining_evac_need, evac_available);
+          printf(" alloc_mem_under_lock rejects shared promotion of size " SIZE_FORMAT " for thread " PTR_FORMAT 
+                 ": remaining_evac_need: " SIZE_FORMAT ", evac available: " SIZE_FORMAT "\n",
+                 req.size(), p2i(thread), remaining_evac_need, evac_available);
 #endif
           return nullptr;       // We need to reserve the remaining memory for evacuation so defer the promotion
         }

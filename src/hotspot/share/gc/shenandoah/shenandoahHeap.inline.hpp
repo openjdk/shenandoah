@@ -385,8 +385,8 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         case YOUNG_GENERATION: {
            copy = allocate_from_gclab(thread, size);
            if ((copy == nullptr) && (size < ShenandoahThreadLocalData::gclab_size(thread))) {
-             // GCLAB allocation failed because we are bumping up against the limit on evacuation reserve.  Try
-             // resetting the desired PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
+             // GCLAB allocation failed because we are bumping up against the limit on young evacuation reserve.  Try resetting
+             // the desired GCLAB size and retry GCLAB allocation to avoid cascading of shared memory allocations.
              ShenandoahThreadLocalData::set_gclab_size(thread, PLAB::min_size());
              copy = allocate_from_gclab(thread, size);
              // If we still get nullptr, we'll try a shared allocation below.
@@ -396,6 +396,13 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         case OLD_GENERATION: {
            if (ShenandoahUsePLAB) {
              copy = allocate_from_plab(thread, size, is_promotion);;
+             if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread))) {
+               // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve.  Try resetting
+               // the desired PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
+               ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
+               copy = allocate_from_gclab(thread, size);
+               // If we still get nullptr, we'll try a shared allocation below.
+             }
            }
            break;
         }

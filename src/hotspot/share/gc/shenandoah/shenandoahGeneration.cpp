@@ -534,10 +534,18 @@ size_t ShenandoahGeneration::available() const {
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
   _adjusted_capacity = soft_max_capacity() + adjustment;
+#ifdef KELVIN_VERBOSE
+  printf("%s adjusting available by " SIZE_FORMAT " to new value " SIZE_FORMAT " from capacity: " SIZE_FORMAT "\n",
+         adjustment, _adjusted_capacity, soft_max_capacity());
+#endif
   return _adjusted_capacity;
 }
 
 size_t ShenandoahGeneration::unadjust_available() {
+#ifdef KELVIN_VERBOSE
+  printf("%s unadjusting available from " SIZE_FORMAT " to capacity " SIZE_FORMAT "\n",
+         _adjusted_capacity, soft_max_capacity());
+#endif
   _adjusted_capacity = soft_max_capacity();
   return _adjusted_capacity;
 }
