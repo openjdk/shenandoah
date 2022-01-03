@@ -70,9 +70,18 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   if (max_old_evacuation_bytes > ratio_bound_on_old_evac_bytes) {
     max_old_evacuation_bytes = ratio_bound_on_old_evac_bytes;
   }
+
+  // Usually, old-evacuation is limited by the CPU bounds on effort.  However, it can also be bounded by available
+  // memory within old-gen to hold the results of evacuation.  When we are bound by memory availability, we need
+  // to account below for the loss of available memory from within each region that is added to the old-gen collection
+  // set.
   size_t old_available = heap->old_generation()->available();
+  size_t excess_old_capacity_for_evacuation;
   if (max_old_evacuation_bytes > old_available) {
     max_old_evacuation_bytes = old_available;
+    excess_old_capacity_for_evacuation = 0;
+  } else {
+    excess_old_capacity_for_evacuation = old_available - max_old_evacuation_bytes;
   }
 
   // promotion_budget_bytes represents an "arbitrary" bound on how many bytes can be consumed by young-gen
@@ -102,6 +111,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
                 byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget));
 
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
+  size_t lost_evacuation_capacity = 0;
 
   // The number of old-gen regions that were selected as candidates for collection at the end of the most recent
   // old-gen concurrent marking phase and have not yet been collected is represented by
@@ -110,21 +120,32 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // Old collection candidates are sorted in order of decreasing garbage contained therein.
     ShenandoahHeapRegion* r = next_old_collection_candidate();
 
-    // Assuming region r is added to the collection set, what will be the remaining_old_evacuation_budget after
-    // accounting for the loss of region r's free() memory.
-    size_t adjusted_remaining_old_evacuation_budget;
 
     // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by
     // the size of r's free memory.
+    if ((r->get_live_data_bytes() <= remaining_old_evacuation_budget) && 
+        ((lost_evacuation_capacity + r->free() <= excess_old_capacity_for_evacuation)
+         || (r->get_live_data_bytes() + r->free() <= remaining_old_evacuation_budget))) {
 
-    if (r->get_live_data_bytes() + r->free() <= remaining_old_evacuation_budget) {
-      // Decrement remaining evacuation budget by bytes that will be copied and by the decrease in available space to hold
-      // bytes that will be copied.
-      remaining_old_evacuation_budget -= r->get_live_data_bytes() + r->free();
+      // Decrement remaining evacuation budget by bytes that will be copied.  If the cumulative loss of free memory from
+      // regions that are to be collected exceeds excess_old_capacity_for_evacuation,  decrease
+      // remaining_old_evacuation_budget by this loss as well.
+      lost_evacuation_capacity += r->free();
+      remaining_old_evacuation_budget -= r->get_live_data_bytes();
+      if (lost_evacuation_capacity > excess_old_capacity_for_evacuation) {
+        // This is slightly conservative because we really only need to remove from the remaining evacuation budget 
+        // the amount by which lost_evacution_capacity exceeds excess_old_capacity_for_evacuation, but this is relatively
+        // rare event and current thought is to be a bit conservative rather than mess up the math on code that is so
+        // difficult to test and maintain...
+
+        // Once we have crossed the threshold of lost_evacuation_capacity exceeding excess_old_capacity_for_evacuation,
+        // every subsequent iteration of this loop will further decrease remaining_old_evacuation_budget.
+        remaining_old_evacuation_budget -= r->free();
+      }
       collection_set->add_region(r);
       included_old_regions++;
       evacuated_old_bytes += r->get_live_data_bytes();
-
+      consume_old_collection_candidate();
     } else {
       break;
     }
