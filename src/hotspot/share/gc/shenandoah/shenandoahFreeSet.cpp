@@ -248,6 +248,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // Need to assure that plabs are aligned on multiple of card region.
       size_t free = r->free();
       size_t usable_free = (free / CardTable::card_size) << CardTable::card_shift;
+      if ((free != usable_free) && (free - usable_free < ShenandoahHeap::min_fill_size() * HeapWordSize)) {
+        // We'll have to add another card's memory to the padding
+        usable_free -= CardTable::card_size;
+      }
       free /= HeapWordSize;
       usable_free /= HeapWordSize;
       if (size > usable_free) {
@@ -281,6 +285,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     size_t usable_free = (free / CardTable::card_size) << CardTable::card_shift;
     free /= HeapWordSize;
     usable_free /= HeapWordSize;
+    if ((free != usable_free) && (free - usable_free < ShenandoahHeap::min_fill_size() * HeapWordSize)) {
+      // We'll have to add another card's memory to the padding
+      usable_free -= CardTable::card_size;
+    }
     if (size <= usable_free) {
       assert(size % CardTable::card_size_in_words == 0, "PLAB size must be multiple of remembered set card size");
 
@@ -492,7 +500,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   // While individual regions report their true use, all humongous regions are
   // marked used in the free set.
   increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
-
   if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
     _heap->young_generation()->increase_used(words_size * HeapWordSize);
   } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
