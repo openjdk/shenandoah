@@ -2189,6 +2189,9 @@ void ShenandoahHeap::cancel_gc(GCCause::Cause cause) {
     log_info(gc)("%s", msg.buffer());
     Events::log(Thread::current(), "%s", msg.buffer());
     _cancel_requested_time = os::elapsedTime();
+    if (cause == GCCause::_shenandoah_upgrade_to_full_gc) {
+      _upgraded_to_full = true;
+    }
   }
 }
 

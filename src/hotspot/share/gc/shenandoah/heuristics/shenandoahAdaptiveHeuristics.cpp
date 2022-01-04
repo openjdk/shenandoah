@@ -437,6 +437,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                  _generation->name(), avg_cycle_time * 1000,
                  byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+
                  _spike_threshold_sd);
     _last_trigger = SPIKE;
     return true;

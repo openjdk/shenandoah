@@ -391,6 +391,7 @@ private:
 
   size_t _previous_promotion;          // Bytes promoted during previous evacuation
 
+  bool _upgraded_to_full;
 
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
@@ -431,6 +432,9 @@ public:
   inline bool is_concurrent_weak_root_in_progress() const;
   bool is_concurrent_prep_for_mixed_evacuation_in_progress();
   inline bool is_aging_cycle() const;
+  inline bool upgraded_to_full() { return _upgraded_to_full; }
+  inline void start_conc_gc() { _upgraded_to_full = false; }
+  inline void record_upgrade_to_full() { _upgraded_to_full = true; }
 
   inline size_t capture_old_usage(size_t usage);
   inline void set_previous_promotion(size_t promoted_bytes);

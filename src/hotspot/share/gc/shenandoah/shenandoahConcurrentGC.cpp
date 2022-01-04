@@ -90,6 +90,7 @@ ShenandoahGC::ShenandoahDegenPoint ShenandoahConcurrentGC::degen_point() const {
 
 bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  heap->start_conc_gc();
   if (cause == GCCause::_wb_breakpoint) {
     ShenandoahBreakpoint::start_gc();
   }
