@@ -398,7 +398,7 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       generation_used = generation->used();
     }
 
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
     if (stats.used() != generation_used) {
       printf("Generation name: %s\n", generation->name());
@@ -814,7 +814,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     size_t heap_used = _heap->used();
 
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
     if (cl.used() != heap_used) {
       printf("Heap usage guarantee at risk\n");

@@ -71,7 +71,7 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
 ShenandoahGCSession::~ShenandoahGCSession() {
   
   _generation->heuristics()->record_cycle_end();
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
   printf("Destructing ShenandoahGCSession: upgraded to full? %s\n", _heap->upgraded_to_full()? "yes": "no");
 #endif
