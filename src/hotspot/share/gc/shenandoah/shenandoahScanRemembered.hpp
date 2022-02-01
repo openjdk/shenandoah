@@ -568,6 +568,7 @@ public:
   ~ShenandoahCardCluster() {
     if (object_starts != nullptr)
       free(object_starts);
+    object_starts = nullptr;
   }
 
   // There is one entry within the object_starts array for each card entry.
