@@ -123,7 +123,10 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
 
-  check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark);
+  if (_generation->is_concurrent_mark_in_progress() && check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
+    assert(!heap->is_concurrent_weak_root_in_progress(), "Weak roots should not be in progress when concurrent mark is in progress");
+    return false;
+  }
 
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
