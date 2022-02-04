@@ -39,8 +39,6 @@
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
 
-#undef KELVIN_VERBOSE
-
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   if (a._garbage > b._garbage)
     return -1;
@@ -173,11 +171,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   save_last_live_memory(live_memory);
 
-#ifdef KELVIN_VERBOSE
-  printf("choose_collection_set finds live memory is " SIZE_FORMAT "\n", live_memory);
-  printf(" old_generation->used(): " SIZE_FORMAT "\n", heap->old_generation()->used());
-#endif
-
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
   // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
 
@@ -196,24 +189,15 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       }
 
       size_t bytes_reserved_for_old_evacuation = collection_set->get_old_bytes_reserved_for_evacuation();
-#ifdef KELVIN_VERBOSE
-      printf("  primed collection set contains old bytes: " SIZE_FORMAT "\n", bytes_reserved_for_old_evacuation);
-#endif
       if (bytes_reserved_for_old_evacuation * ShenandoahEvacWaste < heap->get_old_evac_reserve()) {
         size_t old_evac_reserve = (size_t) (bytes_reserved_for_old_evacuation * ShenandoahEvacWaste);
         heap->set_old_evac_reserve(old_evac_reserve);
-#ifdef KELVIN_VERBOSE
-        printf("  old_evac_reserve scaled by ShenandoahEvacWaste to: " SIZE_FORMAT "\n", old_evac_reserve);
-#endif
       }
     }
     // else, this is global collection and doesn't need to prime_collection_set
 
     ShenandoahYoungGeneration* young_generation = heap->young_generation();
     size_t young_evacuation_reserve = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
-#ifdef KELVIN_VERBOSE
-    printf("  young_evac_reserve initialized to (ShenandoahEvacReserve): " SIZE_FORMAT "\n", young_evacuation_reserve);
-#endif
 
     // At this point, young_generation->available() does not know about recently discovered immediate garbage.
     // What memory it does think to be available is not entirely trustworthy because any available memory associated
@@ -254,9 +238,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       //     is an integral number of entire heap regions.
       //
       young_evacuation_reserve -= heap->get_old_evac_reserve();
-#ifdef KELVIN_VERBOSE
-    printf("  young_evac_reserve scaled by old_evac_reserve: " SIZE_FORMAT "\n", young_evacuation_reserve);
-#endif
 
       size_t old_region_borrow_count = 0;
 
@@ -299,21 +280,9 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // available_young_regions to support allocation pacing.
       }
 
-#ifdef KELVIN_VERBOSE
-        printf("  young_evac_reserve scaled by borrowed available: " SIZE_FORMAT "\n", young_evacuation_reserve);
-        printf("   available_young_regions; " SIZE_FORMAT ", old_regions_still_available_to_loan: " SIZE_FORMAT "\n",
-               available_young_regions, regions_available_to_loan);
-        printf("   preapproved_evac_reserve_loan; " SIZE_FORMAT ", available to loan: " SIZE_FORMAT "\n",
-               preapproved_evac_reserve_loan, regions_available_to_loan);
-        fflush(stdout);
-#endif
-
     } else if (young_evacuation_reserve > young_available) {
       // In non-generational mode, there's no old-gen memory to borrow from
       young_evacuation_reserve = young_available;
-#ifdef KELVIN_VERBOSE
-      printf("  non-generational young_evac_reserve scaled by young_available: " SIZE_FORMAT "\n", young_evacuation_reserve);
-#endif
     }
 
     heap->set_young_evac_reserve(young_evacuation_reserve);
@@ -323,15 +292,8 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     // of the heuristics subclasses.
     choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
     size_t young_evacuated_bytes = collection_set->get_young_bytes_reserved_for_evacuation();;
-#ifdef KELVIN_VERBOSE
-    printf("  collection set chosen, young evacuation bytes: " SIZE_FORMAT "\n", young_evacuated_bytes);
-#endif
     if (young_evacuated_bytes * ShenandoahEvacWaste < young_evacuation_reserve) {
       young_evacuation_reserve = (size_t) (young_evacuated_bytes * ShenandoahEvacWaste);
-#ifdef KELVIN_VERBOSE
-      printf("  young_evac_reserve scaled by ShenandoahEvacWaste: " SIZE_FORMAT "\n", young_evacuation_reserve);
-      printf("    collection set evacuation bytes: " SIZE_FORMAT "\n", young_evacuated_bytes);
-#endif
       heap->set_young_evac_reserve((size_t) young_evacuation_reserve);
     }
 
@@ -351,12 +313,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
     size_t potential_evac_supplement;
 
-#ifdef KELVIN_VERBOSE
-    printf("  potential_evac_supplement initialized for " SIZE_FORMAT " regions: " SIZE_FORMAT "\n",
-           potential_supplement_regions,  potential_supplement_regions * region_size_bytes);
-    fflush(stdout);
-#endif
-
     // How much of the potential_supplement_regions will be consumed by young_evacuation_reserve: borrowed_evac_regions.
     const size_t available_unaffiliated_young_regions = young_generation->free_unaffiliated_regions();
     const size_t available_affiliated_regions = free_regions + immediate_regions;
@@ -367,19 +323,8 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     potential_supplement_regions -= borrowed_evac_regions;
     potential_evac_supplement = potential_supplement_regions * region_size_bytes;
 
-#ifdef KELVIN_VERBOSE
-    printf("  potential_evac_supplement adjusted by young-evac borrowing: " SIZE_FORMAT "\n", potential_evac_supplement);
-    printf("    young_evacuation_reserve: " SIZE_FORMAT ", young_evac_regions: " SIZE_FORMAT ", available young regions: " SIZE_FORMAT "\n",
-           young_evacuation_reserve, young_evac_regions, available_young_regions);
-    printf("    borrowed_evac_regions: " SIZE_FORMAT ", potential_supplement_regions: " SIZE_FORMAT "\n",
-           borrowed_evac_regions, potential_supplement_regions);
-#endif
-
     // Leave some allocation runway for subsequent concurrent mark phase.
     potential_evac_supplement = (potential_evac_supplement * ShenandoahBorrowPer128) / 128;
-#ifdef KELVIN_VERBOSE
-    printf("  potential_evac_supplement scaled by ShenandoahBorrowPer128: " SIZE_FORMAT "\n", potential_evac_supplement);
-#endif
 
     heap->set_alloc_supplement_reserve(potential_evac_supplement);
 
@@ -444,10 +389,6 @@ bool ShenandoahHeuristics::should_start_gc() {
   if (_guaranteed_gc_interval > 0) {
     double last_time_ms = (os::elapsedTime() - _last_cycle_end) * 1000;
     if (last_time_ms > _guaranteed_gc_interval) {
-#ifdef KELVIN_VERBOSE
-      printf("Trigger (%s): Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)\n",
-                   _generation->name(), last_time_ms, _guaranteed_gc_interval);
-#endif
       log_info(gc)("Trigger (%s): Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)",
                    _generation->name(), last_time_ms, _guaranteed_gc_interval);
       return true;

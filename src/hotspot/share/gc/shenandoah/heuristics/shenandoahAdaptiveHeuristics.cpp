@@ -34,8 +34,6 @@
 #include "logging/logTag.hpp"
 #include "utilities/quickSort.hpp"
 
-#undef KELVIN_VERBOSE
-
 // These constants are used to adjust the margin of error for the moving
 // average of the allocation rate and cycle time. The units are standard
 // deviations.
@@ -149,33 +147,14 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     // (((new_garbage < min_garbage) && (r->garbage() > ShenandoahSmallerGarbageThreshold)) || (r->garbage() > garbage_threshold))
 
     if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
-#ifdef KELVIN_VERBOSE
-      printf("CSET includes region " SIZE_FORMAT " (age: %u, garbage: " SIZE_FORMAT " (biased: " SIZE_FORMAT "), live: " SIZE_FORMAT ")\n",
-             r->index(), r->age(), r->garbage(), biased_garbage, r->get_live_data_bytes());
-#endif
       cset->add_region(r);
       live_bytes_in_collection_set += r->get_live_data_bytes();
       collected_region_count++;
       cur_cset = new_cset;
       // cur_garbage = new_garbage;
     } else if (biased_garbage == 0) {
-#ifdef KELVIN_VERBOSE
-      printf("CSET ignores region " SIZE_FORMAT " and all subsequent regions (age: %u, garbage: 0, live: " SIZE_FORMAT ")\n",
-             r->index(), r->age(), r->get_live_data_bytes());
-      for (size_t j = idx+1; j < size; j++) {
-        r = data[j]._region;
-        printf("data[" SIZE_FORMAT "]._garbage: " SIZE_FORMAT ", region " SIZE_FORMAT
-               " (age: %u, garbage: 0, live: " SIZE_FORMAT ")\n",
-               j, data[j]._garbage, r->index(), r->age(), r->get_live_data_bytes());
-      }
-
-#endif
       break;
     } else {
-#ifdef KELVIN_VERBOSE
-      printf("CSET ignores region " SIZE_FORMAT " (age: %u, garbage: " SIZE_FORMAT " out of threshold: " SIZE_FORMAT ", live: " SIZE_FORMAT ")\n",
-             r->index(), r->age(), r->garbage(), garbage_threshold, r->get_live_data_bytes());
-#endif
    }
   }
   cset->set_young_region_count(collected_region_count);
@@ -277,15 +256,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   size_t min_threshold = capacity / 100 * ShenandoahMinFreeThreshold;
 
-#ifdef KELVIN_VERBOSE_SILENCED
-  // ShenandoahMinFreeThreshold is a percentage:  35 means 35%.  If available is ever below this amount of memory, then
-  // we should immediately start GC.  However, we do not endeavor to assure that we have this much working buffer available
-  // within the generation as of when we end the GC effort.
-  log_info(gc)("  available adjusted to: " SIZE_FORMAT ", min_threshold: " SIZE_FORMAT
-               ", ShenandoahMinFreeThreshold: " SIZE_FORMAT "%%",
-               available, min_threshold, ShenandoahMinFreeThreshold);
-#endif
-
   if (available < min_threshold) {
     log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
                  _generation->name(),
@@ -369,15 +339,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
   //     the calculation of avg_cycle_time below.
 
-#ifdef KELVIN_VERBOSE_SILENCED
-  // Seems to me that ShenandoahAllocSpikeFactor and _gc_time_penalties might be absolute quantities rather than
-  // percentages of capacity.
-
-  log_info(gc)("  spike_headroom: " SIZE_FORMAT " (ShenandoahAllocSpikeFactor: " SIZE_FORMAT "), gc penalties: "
-               SIZE_FORMAT " (_gc_time_penalties: " SIZE_FORMAT ")",
-               spike_headroom, ShenandoahAllocSpikeFactor, penalties, _gc_time_penalties);
-#endif
-
   allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
   allocation_headroom -= MIN2(allocation_headroom, penalties);
 
@@ -409,10 +370,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     if (avg_cycle_time > original_cycle_time) {
       log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention",
                     _generation->name(), original_cycle_time, avg_cycle_time);
-#ifdef KELVIN_VERBOSE
-      printf("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention\n",
-                    _generation->name(), original_cycle_time, avg_cycle_time);
-#endif
     }
 
     log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",

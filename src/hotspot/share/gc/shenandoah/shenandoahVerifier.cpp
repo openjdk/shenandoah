@@ -398,35 +398,6 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       generation_used = generation->used();
     }
 
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-    if (stats.used() != generation_used) {
-      printf("Generation name: %s\n", generation->name());
-      printf("Verification failure: %s, young_evac_expended: " SIZE_FORMAT "\n",
-             label, ShenandoahHeap::heap()->get_young_evac_expended());
-      printf("  generation->used(): " SIZE_FORMAT ", stats.used: " SIZE_FORMAT "\n",
-             generation->used(), stats.used());
-
-      size_t total_young_used = 0;
-      size_t total_old_used = 0;
-      for (size_t index = 0; index < ShenandoahHeapRegion::region_count(); index++) {
-        ShenandoahHeapRegion* r = ShenandoahHeap::heap()->get_region(index);
-        if (r->is_young()) {
-          total_young_used += r->used();
-        } else if (r->is_old()) {
-          total_old_used += r->used();
-        }
-        printf("Region " SIZE_FORMAT " (%s) bottom: " PTR_FORMAT ", top: " PTR_FORMAT ", live: " SIZE_FORMAT
-               ", garbage: " SIZE_FORMAT ", used: " SIZE_FORMAT "\n", index,
-               r->is_young()? "YOUNG": "OLD", p2i(r->bottom()), p2i(r->top()), r->get_live_data_bytes(), r->garbage(), r->used());
-        fflush(stdout);
-      }
-      printf("Total young used: " SIZE_FORMAT "\n", total_young_used);
-      printf("  Total old used: " SIZE_FORMAT "\n", total_old_used);
-      fflush(stdout);
-    }
-#endif
-
     guarantee(stats.used() == generation_used,
               "%s: generation (%s) used size must be consistent: generation-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
               label, generation->name(),
@@ -813,35 +784,6 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
     _heap->heap_region_iterate(&cl);
 
     size_t heap_used = _heap->used();
-
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-    if (cl.used() != heap_used) {
-      printf("Heap usage guarantee at risk\n");
-      printf("Verification failure: %s, young_evac_expended: " SIZE_FORMAT "\n",
-             label, ShenandoahHeap::heap()->get_young_evac_expended());
-      printf("  heap_used: " SIZE_FORMAT ", cl.used(): " SIZE_FORMAT "\n",
-             heap_used, cl.used());
-
-      size_t total_young_used = 0;
-      size_t total_old_used = 0;
-      for (size_t index = 0; index < ShenandoahHeapRegion::region_count(); index++) {
-        ShenandoahHeapRegion* r = ShenandoahHeap::heap()->get_region(index);
-        if (r->is_young()) {
-          total_young_used += r->used();
-        } else if (r->is_old()) {
-          total_old_used += r->used();
-        }
-        printf("Region " SIZE_FORMAT " (%s) bottom: " PTR_FORMAT ", top: " PTR_FORMAT ", live: " SIZE_FORMAT
-               ", garbage: " SIZE_FORMAT ", used: " SIZE_FORMAT "\n", index,
-               r->is_young()? "YOUNG": "OLD", p2i(r->bottom()), p2i(r->top()), r->get_live_data_bytes(), r->garbage(), r->used());
-        fflush(stdout);
-      }
-      printf("Total young used: " SIZE_FORMAT "\n", total_young_used);
-      printf("  Total old used: " SIZE_FORMAT "\n", total_old_used);
-      fflush(stdout);
-    }
-#endif
 
     guarantee(cl.used() == heap_used,
               "%s: heap used size must be consistent: heap-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",

@@ -36,8 +36,6 @@
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 
-#undef KELVIN_VERBOSE
-
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
  private:
   ShenandoahMarkingContext* const _ctx;
@@ -285,15 +283,9 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       ShenandoahYoungGeneration* young_generation = heap->young_generation();
       size_t promotion_reserve = old_generation->available();
 
-#ifdef KELVIN_VERBOSE
-      printf("Initial value of promotion_reserve based on old_gen available: " SIZE_FORMAT "\n", promotion_reserve);
-#endif
       size_t max_young_evacuation = (young_generation->soft_max_capacity() * ShenandoahOldEvacReserve) / 100;
       if (max_young_evacuation < promotion_reserve) {
         promotion_reserve = max_young_evacuation;
-#ifdef KELVIN_VERBOSE
-        printf("  promotion_reserve scaled by ShenandoahEvacReserve: " SIZE_FORMAT "\n", promotion_reserve);
-#endif
       }
       
       size_t previously_promoted = heap->get_previous_promotion();
@@ -303,15 +295,9 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         size_t proposed_reserve = young_generation->used() / (ShenandoahAgingCyclePeriod * InitialTenuringThreshold);
         if (promotion_reserve > proposed_reserve) {
           promotion_reserve = proposed_reserve;
-#ifdef KELVIN_VERBOSE
-          printf("  promotion_reserve scaled by young used / TenureAge: " SIZE_FORMAT "\n", promotion_reserve);
-#endif
         }
       } else if (previously_promoted * 2 < promotion_reserve) {
         promotion_reserve = previously_promoted * 2;
-#ifdef KELVIN_VERBOSE
-        printf("  promotion_reserve scaled by previously_promoted times two: " SIZE_FORMAT "\n", promotion_reserve);
-#endif
       }
 
       heap->set_promotion_reserve(promotion_reserve);
@@ -326,31 +312,17 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
       // Don't reserve for old_evac any more than the memory that is available in old_gen.  
       size_t old_evacuation_reserve = old_generation->available() - promotion_reserve;
-#ifdef KELVIN_VERBOSE
-      printf("  old_evac_reserve initially (old available - promotion reserve): " SIZE_FORMAT "\n", old_evacuation_reserve);
-#endif
 
       // Make sure old evacuation is no more than ShenandoahOldEvacRatio of the total evacuation budget.
       size_t max_total_evac = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
       size_t max_old_evac_portion = (max_total_evac * ShenandoahOldEvacRatioPer128) / 128;
-#ifdef KELVIN_VERBOSE
-      printf("  max_total_evac: " SIZE_FORMAT ", max_old_evac_portion: " SIZE_FORMAT "\n",
-             max_total_evac, max_old_evac_portion);
-#endif
 
       if (old_evacuation_reserve > max_old_evac_portion) {
         old_evacuation_reserve = max_old_evac_portion;
-#ifdef KELVIN_VERBOSE
-        printf("  old_evac_reserve scaled by ShenandoahOldEvacRatioPer128: " SIZE_FORMAT "\n", old_evacuation_reserve);
-#endif
       }
 
       heap->set_old_evac_reserve(old_evacuation_reserve);
       heap->reset_old_evac_expended();
-#ifdef KELVIN_VERBOSE
-      printf(" resetting old_evac_expended, setting old_evac reserved: " SIZE_FORMAT "\n",
-             old_evacuation_reserve);
-#endif
 
       // Compute YoungEvacuationReserve after we prime the collection set with old-gen candidates.  This depends
       // on how much memory old-gen wants to evacuate.  This is done within _heuristics->choose_collection_set().
@@ -514,11 +486,6 @@ size_t ShenandoahGeneration::free_unaffiliated_regions() const {
   } else {
     result -= _affiliated_region_count;
   }
-#ifdef KELVIN_VERBOSE
-  printf("ShenGen::free_unaffiliated_regions(): capacity: " SIZE_FORMAT ", total regions: " SIZE_FORMAT ", affiliated regions: " SIZE_FORMAT
-         ", result: " SIZE_FORMAT "\n",
-         soft_max_capacity(), soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes(), _affiliated_region_count, result);
-#endif
   return result;
 }
 
@@ -534,18 +501,10 @@ size_t ShenandoahGeneration::available() const {
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
   _adjusted_capacity = soft_max_capacity() + adjustment;
-#ifdef KELVIN_VERBOSE
-  printf("%s adjusting available by " SIZE_FORMAT " to new value " SIZE_FORMAT " from capacity: " SIZE_FORMAT "\n",
-         name(), adjustment, _adjusted_capacity, soft_max_capacity());
-#endif
   return _adjusted_capacity;
 }
 
 size_t ShenandoahGeneration::unadjust_available() {
-#ifdef KELVIN_VERBOSE
-  printf("%s unadjusting available from " SIZE_FORMAT " to capacity " SIZE_FORMAT "\n",
-         name(), _adjusted_capacity, soft_max_capacity());
-#endif
   _adjusted_capacity = soft_max_capacity();
   return _adjusted_capacity;
 }

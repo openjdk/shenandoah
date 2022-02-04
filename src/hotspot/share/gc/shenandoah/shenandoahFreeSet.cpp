@@ -35,8 +35,6 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
-#undef KELVIN_VERBOSE
-
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
   _mutator_free_bitmap(max_regions, mtGC),
@@ -167,37 +165,6 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return NULL;
 }
 
-#ifdef KELVIN_VERBOSE
-static void check_young_usage(ShenandoahHeap* heap, ShenandoahGeneration* young_gen) {
-  size_t total_young_used = 0;
-  for (size_t index = 0; index < ShenandoahHeapRegion::region_count(); index++) {
-    ShenandoahHeapRegion* r = heap->get_region(index);
-    if (r->is_young()) {
-      total_young_used += r->used();
-    }
-  }
-  size_t young_gen_used = young_gen->used() + heap->get_young_evac_expended();
-  if (total_young_used != young_gen_used) {
-    long delta;
-    if (total_young_used > young_gen_used) {
-      delta = total_young_used - young_gen_used;
-    } else {
-      delta = young_gen_used - total_young_used;
-      delta = -delta;
-    }
-    printf("check_young_usage conflict: total_young_used: " SIZE_FORMAT ", expended: " SIZE_FORMAT
-           ", gen->used: " SIZE_FORMAT ", delta: %ld\n",
-           total_young_used, heap->get_young_evac_expended(), young_gen->used(), delta);
-  } else {
-    printf("check_young_usage no conflict: total_young_used: " SIZE_FORMAT ", expended: " SIZE_FORMAT
-           ", gen->used: " SIZE_FORMAT "\n",
-           total_young_used, heap->get_young_evac_expended(), young_gen->used());
-  }
-  fflush(stdout);
-}
-#endif
-
-
 // is_gclab denotes this is for evacuation, not promotion.  PLAB allocations do not count as is_gclab.
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region,
                                              bool is_gclab) {
@@ -314,9 +281,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       // Mutator allocations always pull from young gen.
-#ifdef KELVIN_VERBOSE
-        printf("Expending young_gen->used at mutator TLAB or shared allocation by " SIZE_FORMAT "\n", size * HeapWordSize);
-#endif
       _heap->young_generation()->increase_used(size * HeapWordSize);
       increase_used(size * HeapWordSize);
     } else {
@@ -333,10 +297,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
       if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
         // This is either a GCLAB or it is a shared evacuation allocation.  In either case, we expend young evac.
-
-#ifdef KELVIN_VERBOSE
-        printf("Expending young_evac at GCLAB or shared allocation by " SIZE_FORMAT "\n", size * HeapWordSize);
-#endif
         // At end of update refs, we'll add expended young evac into young_gen->used.  We hide this usage
         // from current accounting because memory reserved for evacuation is not part of adjusted capacity.
         _heap->expend_young_evac(size * HeapWordSize);
@@ -348,10 +308,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
     }
   }
-#ifdef KELVIN_VERBOSE
-  // kelvin wonders why sometimes we do not check_young_usage
-  check_young_usage(_heap, _heap->young_generation());
-#endif
   if (result == NULL || has_no_alloc_capacity(r)) {
     // Region cannot afford this or future allocations. Retire it.
     //

@@ -291,15 +291,6 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
     return NULL;
   }
   HeapWord* obj = gclab->allocate(size);
-#undef KELVIN_VERBOSE_INLINE
-#ifdef KELVIN_VERBOSE_INLINE
-  if (obj != NULL) {
-    ShenandoahHeapRegion* r = heap_region_containing(obj);
-    if (r->age() > 0) {
-      printf("Oops!  allocate_from_gclab evacuating to young region " SIZE_FORMAT " with non-zero age %u\n", r->index(), r->age());
-    }
-  }
-#endif
   if (obj != NULL) {
     return obj;
   }
@@ -417,11 +408,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       // If we failed to allocated in LAB, we'll try a shared allocation.
       ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
       copy = allocate_memory(req, is_promotion);
-#undef KELVIN_VERBOSE_SEEME
-#ifdef KELVIN_VERBOSE_SEEME
-      printf("shared allocation @ " PTR_FORMAT " after LAB allocation failed, size: " SIZE_FORMAT ", is_promotion: %d\n",
-             p2i(copy), size, is_promotion);
-#endif
       alloc_from_lab = false;
     }
 #ifdef ASSERT
@@ -460,10 +446,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     // Successfully evacuated. Our copy is now the public one!
     if (mode()->is_generational()) {
       if (target_gen == OLD_GENERATION) {
-#ifdef KELVIN_VERBOSE_INLINE
-        printf("SH::teo(" PTR_FORMAT ") R:" SIZE_FORMAT " W:" SIZE_FORMAT " %s\n",
-               p2i(p), from_region->index(), size, from_region->is_young()? "P":"E");
-#endif
         handle_old_evacuation(copy, size, from_region->is_young());
       } else if (target_gen == YOUNG_GENERATION) {
         if (is_aging_cycle()) {

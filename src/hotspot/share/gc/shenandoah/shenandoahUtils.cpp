@@ -71,18 +71,11 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
 ShenandoahGCSession::~ShenandoahGCSession() {
   
   _generation->heuristics()->record_cycle_end();
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-  printf("Destructing ShenandoahGCSession: upgraded to full? %s\n", _heap->upgraded_to_full()? "yes": "no");
-#endif
   if (_heap->mode()->is_generational() &&
       ((_generation->generation_mode() == GLOBAL) || _heap->upgraded_to_full())) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
     _heap->young_generation()->heuristics()->record_cycle_end();
     _heap->old_generation()->heuristics()->record_cycle_end();
-#ifdef KELVIN_VERBOSE
-    printf("At end of GLOBAL GC, claiming credit for completion of young-gen and old-gen GC as well\n");
-#endif
   }
   _timer->register_gc_end();
   _heap->trace_heap_after_gc(_tracer);

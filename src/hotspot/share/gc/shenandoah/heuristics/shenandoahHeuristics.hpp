@@ -129,10 +129,6 @@ public:
   bool has_metaspace_oom() const  { return _metaspace_oom.is_set(); }
 
   void set_guaranteed_gc_interval(size_t guaranteed_gc_interval) {
-#undef KELVIN_VERBOSE_SPECIAL
-#ifdef KELVIN_VERBOSE_SPECIAL
-    printf("Setting guaranteed_gc_interval of " PTR_FORMAT " to " SIZE_FORMAT "\n", p2i(this), guaranteed_gc_interval);
-#endif
     _guaranteed_gc_interval = guaranteed_gc_interval;
   }
 

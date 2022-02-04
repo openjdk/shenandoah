@@ -229,22 +229,10 @@ void ShenandoahDegenGC::op_degenerated() {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
 
-#ifdef KELVIN_VERBOSE
-    printf("At end of degenerated GC, unadjusting old_gen and young_gen available\n");
-    printf("Before unadjustment: old_available: " SIZE_FORMAT ", young_available: " SIZE_FORMAT "\n",
-           heap->old_generation()->adjusted_available(), heap->young_generation()->adjusted_available());
-    printf("young_evac_expended accumulating into young_gen->used: " SIZE_FORMAT "\n",
-           heap->get_young_evac_expended());
-#endif
     heap->young_generation()->unadjust_available();
     heap->old_generation()->unadjust_available();
     heap->young_generation()->increase_used(heap->get_young_evac_expended());
     // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
-
-#ifdef KELVIN_VERBOSE
-    printf("After unadjustment: old_available: " SIZE_FORMAT ", young_available: " SIZE_FORMAT "\n",
-           heap->old_generation()->adjusted_available(), heap->young_generation()->adjusted_available());
-#endif
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
