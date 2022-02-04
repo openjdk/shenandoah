@@ -36,9 +36,6 @@
 #include "utilities/sizes.hpp"
 
 class ShenandoahThreadLocalData {
-public:
-  static const uint INVALID_WORKER_ID = uint(-1);
-
 private:
   char _gc_state;
   // Evacuation OOM state
@@ -71,7 +68,6 @@ private:
     _gclab_size(0),
     _plab(NULL),
     _plab_size(0),
-    _worker_id(INVALID_WORKER_ID),
     _disarmed_value(0),
     _paced_time(0) {
 
@@ -117,16 +113,6 @@ public:
 
   static char gc_state(Thread* thread) {
     return data(thread)->_gc_state;
-  }
-
-  static void set_worker_id(Thread* thread, uint id) {
-    assert(thread->is_Worker_thread(), "Must be a worker thread");
-    data(thread)->_worker_id = id;
-  }
-
-  static uint worker_id(Thread* thread) {
-    assert(thread->is_Worker_thread(), "Must be a worker thread");
-    return data(thread)->_worker_id;
   }
 
   static void initialize_gclab(Thread* thread) {

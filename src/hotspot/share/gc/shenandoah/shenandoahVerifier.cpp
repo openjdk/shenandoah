@@ -491,7 +491,7 @@ public:
   }
 };
 
-class ShenandoahVerifierReachableTask : public AbstractGangTask {
+class ShenandoahVerifierReachableTask : public WorkerTask {
 private:
   const char* _label;
   ShenandoahVerifier::VerifyOptions _options;
@@ -505,7 +505,7 @@ public:
                                   ShenandoahLivenessData* ld,
                                   const char* label,
                                   ShenandoahVerifier::VerifyOptions options) :
-    AbstractGangTask("Shenandoah Verifier Reachable Objects"),
+    WorkerTask("Shenandoah Verifier Reachable Objects"),
     _label(label),
     _options(options),
     _heap(ShenandoahHeap::heap()),
@@ -554,7 +554,7 @@ public:
   }
 };
 
-class ShenandoahVerifierMarkedRegionTask : public AbstractGangTask {
+class ShenandoahVerifierMarkedRegionTask : public WorkerTask {
 private:
   const char* _label;
   ShenandoahVerifier::VerifyOptions _options;
@@ -570,7 +570,7 @@ public:
                                      ShenandoahLivenessData* ld,
                                      const char* label,
                                      ShenandoahVerifier::VerifyOptions options) :
-          AbstractGangTask("Shenandoah Verifier Marked Objects"),
+          WorkerTask("Shenandoah Verifier Marked Objects"),
           _label(label),
           _options(options),
           _heap(ShenandoahHeap::heap()),
