@@ -507,7 +507,7 @@ public:
     size_t obj_size = p->size();
     uint from_region_age = _from_region->age();
     uint object_age = p->age();
-    
+
     bool promote_object = false;
     if ((_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) &&
         (from_region_age + object_age > InitialTenuringThreshold)) {

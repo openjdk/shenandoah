@@ -200,19 +200,19 @@ public:
   static void reset_plab_promoted(Thread* thread) {
     data(thread)->_plab_promoted = 0;
   }
-  
+
   static void add_to_plab_promoted(Thread* thread, size_t increment) {
     data(thread)->_plab_promoted += increment;
   }
-  
+
   static void subtract_from_plab_promoted(Thread* thread, size_t increment) {
     data(thread)->_plab_promoted -= increment;
   }
-  
+
   static size_t get_plab_promoted(Thread* thread) {
     return data(thread)->_plab_promoted;
   }
-  
+
   static void add_paced_time(Thread* thread, double v) {
     data(thread)->_paced_time += v;
   }

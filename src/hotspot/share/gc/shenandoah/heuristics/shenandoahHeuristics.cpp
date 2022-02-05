@@ -213,7 +213,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
     // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
     // GC is evacuating and updating references.
-    
+
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
     size_t free_affiliated_regions = immediate_regions + free_regions;
     size_t young_available = (free_affiliated_regions + young_generation->free_unaffiliated_regions()) * region_size_bytes;

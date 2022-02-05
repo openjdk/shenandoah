@@ -94,18 +94,9 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // size_t free_target = (capacity / 100) * ShenandoahMinFreeThreshold + max_cset;
   // size_t min_garbage = (free_target > actual_free ? (free_target - actual_free) : 0);
 
-#ifdef DEPRECATED_CODE
-  log_info(gc, ergo)("Adaptive CSet Selection. Target Free: " SIZE_FORMAT "%s, Actual Free: "
-                     SIZE_FORMAT "%s, Max CSet: " SIZE_FORMAT "%s, Min Garbage: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(free_target), proper_unit_for_byte_size(free_target),
-                     byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free),
-                     byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
-                     byte_size_in_proper_unit(min_garbage), proper_unit_for_byte_size(min_garbage));
-#else
   log_info(gc, ergo)("Adaptive CSet Selection. Max CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
                      byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                      byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
-#endif
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);

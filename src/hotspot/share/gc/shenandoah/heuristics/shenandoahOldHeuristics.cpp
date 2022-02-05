@@ -89,8 +89,6 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // depletes old-gen available memory to the point that there is insufficient memory to hold old-gen objects
   // that need to be evacuated from within the old-gen collection set.
   //
-  // TODO: Enforcement of this budget is implemented with this patch.
-  //
   // Key idea: if there is not sufficient memory within old-gen to hold an object that wants to be promoted, defer
   // promotion until a subsequent evacuation pass.  Enforcement is provided at the time PLABs and shared allocations
   // in old-gen memory are requested.
@@ -123,7 +121,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 
     // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by
     // the size of r's free memory.
-    if ((r->get_live_data_bytes() <= remaining_old_evacuation_budget) && 
+    if ((r->get_live_data_bytes() <= remaining_old_evacuation_budget) &&
         ((lost_evacuation_capacity + r->free() <= excess_old_capacity_for_evacuation)
          || (r->get_live_data_bytes() + r->free() <= remaining_old_evacuation_budget))) {
 
@@ -133,7 +131,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       lost_evacuation_capacity += r->free();
       remaining_old_evacuation_budget -= r->get_live_data_bytes();
       if (lost_evacuation_capacity > excess_old_capacity_for_evacuation) {
-        // This is slightly conservative because we really only need to remove from the remaining evacuation budget 
+        // This is slightly conservative because we really only need to remove from the remaining evacuation budget
         // the amount by which lost_evacution_capacity exceeds excess_old_capacity_for_evacuation, but this is relatively
         // rare event and current thought is to be a bit conservative rather than mess up the math on code that is so
         // difficult to test and maintain...
@@ -152,7 +150,6 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
   collection_set->reserve_old_bytes_for_evacuation(evacuated_old_bytes);
   collection_set->set_old_region_count(included_old_regions);
-
 
   if (included_old_regions > 0) {
     log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, " SIZE_FORMAT " %s)",

@@ -120,7 +120,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       allocating_gclab = true;
 
     case ShenandoahAllocRequest::_alloc_plab:
-      // PLABs always reside in old-gen and are only allocated during evacuation phase.  
+      // PLABs always reside in old-gen and are only allocated during evacuation phase.
 
     case ShenandoahAllocRequest::_alloc_shared_gc: {
       // First try to fit into a region that is already in use in the same generation.

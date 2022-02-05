@@ -287,7 +287,7 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       if (max_young_evacuation < promotion_reserve) {
         promotion_reserve = max_young_evacuation;
       }
-      
+
       size_t previously_promoted = heap->get_previous_promotion();
       if (previously_promoted == 0) {
         // Very conservatively, assume linear population decay (rather than more typical exponential) and assume all of
@@ -310,7 +310,7 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       //       1. old_gen->available() - PromotionReserve
       //       2. (young_gen->capacity() scaled by ShenandoahEvacReserve) scaled by ShenandoahOldEvacRatio
 
-      // Don't reserve for old_evac any more than the memory that is available in old_gen.  
+      // Don't reserve for old_evac any more than the memory that is available in old_gen.
       size_t old_evacuation_reserve = old_generation->available() - promotion_reserve;
 
       // Make sure old evacuation is no more than ShenandoahOldEvacRatio of the total evacuation budget.
