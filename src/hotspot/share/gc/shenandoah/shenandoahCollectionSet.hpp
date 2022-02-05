@@ -51,7 +51,7 @@ private:
   size_t                _evacuation_reserve; // How many bytes reserved in generation for evacuation replicas.  This does
                                              // not include bytes reserved for old-generation replicas.  The value is
                                              // conservative in that memory may be reserved for objects that will be promoted.
-  size_t		_young_bytes_to_evacuate;
+  size_t                _young_bytes_to_evacuate;
   size_t                _old_bytes_to_evacuate;
 
   size_t                _young_region_count;

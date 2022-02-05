@@ -44,7 +44,7 @@ private:
   // Evacuation OOM state
   uint8_t                 _oom_scope_nesting_level;
   bool                    _oom_during_evac;
-  bool	                  _plab_allows_promotion; // If false, no more promotion by this thread during this evacuation phase.
+  bool                    _plab_allows_promotion; // If false, no more promotion by this thread during this evacuation phase.
   SATBMarkQueue           _satb_mark_queue;
 
   // Thread-local allocation buffer for object evacuations.
