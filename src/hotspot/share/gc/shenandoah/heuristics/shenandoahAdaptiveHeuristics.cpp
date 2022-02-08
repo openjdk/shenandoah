@@ -67,8 +67,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                                                                          RegionData* data, size_t size,
                                                                          size_t actual_free) {
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
-  size_t live_bytes_in_collection_set = 0;
-  size_t collected_region_count = 0;
 
   // The logic for cset selection in adaptive is as follows:
   //
@@ -139,17 +137,12 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
     if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
       cset->add_region(r);
-      live_bytes_in_collection_set += r->get_live_data_bytes();
-      collected_region_count++;
       cur_cset = new_cset;
       // cur_garbage = new_garbage;
     } else if (biased_garbage == 0) {
       break;
-    } else {
-   }
+    }
   }
-  cset->set_young_region_count(collected_region_count);
-  cset->reserve_young_bytes_for_evacuation(live_bytes_in_collection_set);
 }
 
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {

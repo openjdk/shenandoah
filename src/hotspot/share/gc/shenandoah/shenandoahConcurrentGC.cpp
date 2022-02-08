@@ -201,7 +201,8 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // Update references freed up collection set, kick the cleanup to reclaim the space.
     entry_cleanup_complete();
   } else {
-    vmop_entry_final_roots();
+    // We chose not to evacuate because we found sufficient immediate garbage.
+    vmop_entry_final_roots(heap->is_aging_cycle());
   }
   size_t old_available, young_available;
   {
@@ -276,14 +277,14 @@ void ShenandoahConcurrentGC::vmop_entry_final_updaterefs() {
   VMThread::execute(&op);
 }
 
-void ShenandoahConcurrentGC::vmop_entry_final_roots() {
+void ShenandoahConcurrentGC::vmop_entry_final_roots(bool increment_region_ages) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->stw_collection_counters());
   ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::final_roots_gross);
 
   // This phase does not use workers, no need for setup
   heap->try_inject_alloc_failure();
-  VM_ShenandoahFinalRoots op(this);
+  VM_ShenandoahFinalRoots op(this, increment_region_ages);
   VMThread::execute(&op);
 }
 

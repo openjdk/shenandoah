@@ -308,14 +308,14 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       //     the goal is to maintain a consistent value for this parameter (when the candidate set is not
       //     empty).  This value is the minimum of:
       //       1. old_gen->available() - PromotionReserve
-      //       2. (young_gen->capacity() scaled by ShenandoahEvacReserve) scaled by ShenandoahOldEvacRatio
+      //       2. (young_gen->capacity() scaled by ShenandoahEvacReserve) scaled by ShenandoahOldEvacRatioPercent
 
       // Don't reserve for old_evac any more than the memory that is available in old_gen.
       size_t old_evacuation_reserve = old_generation->available() - promotion_reserve;
 
-      // Make sure old evacuation is no more than ShenandoahOldEvacRatio of the total evacuation budget.
+      // Make sure old evacuation is no more than ShenandoahOldEvacRatioPercent of the total evacuation budget.
       size_t max_total_evac = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
-      size_t max_old_evac_portion = (max_total_evac * ShenandoahOldEvacRatioPer128) / 128;
+      size_t max_old_evac_portion = (max_total_evac * ShenandoahOldEvacRatioPercent) / 100;
 
       if (old_evacuation_reserve > max_old_evac_portion) {
         old_evacuation_reserve = max_old_evac_portion;

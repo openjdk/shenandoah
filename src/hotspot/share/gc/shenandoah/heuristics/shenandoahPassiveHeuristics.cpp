@@ -62,7 +62,6 @@ void ShenandoahPassiveHeuristics::choose_collection_set_from_regiondata(Shenando
                      byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset));
 
   size_t threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
-  size_t region_count = 0;
 
   size_t live_cset = 0;
   for (size_t idx = 0; idx < size; idx++) {
@@ -70,10 +69,7 @@ void ShenandoahPassiveHeuristics::choose_collection_set_from_regiondata(Shenando
     size_t new_cset = live_cset + r->get_live_data_bytes();
     if (new_cset < max_cset && r->garbage() > threshold) {
       live_cset = new_cset;
-      region_count++;
       cset->add_region(r);
     }
   }
-  cset->set_young_region_count(region_count);
-  cset->reserve_young_bytes_for_evacuation(live_cset);
 }

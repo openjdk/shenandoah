@@ -102,7 +102,6 @@ protected:
   size_t _live_memory_last_cycle;
   size_t _live_memory_penultimate_cycle;
 
-
   // There may be many threads that contend to set this flag
   ShenandoahSharedFlag _metaspace_oom;
 

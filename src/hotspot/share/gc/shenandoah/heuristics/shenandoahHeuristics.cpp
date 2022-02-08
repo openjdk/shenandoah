@@ -324,7 +324,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     potential_evac_supplement = potential_supplement_regions * region_size_bytes;
 
     // Leave some allocation runway for subsequent concurrent mark phase.
-    potential_evac_supplement = (potential_evac_supplement * ShenandoahBorrowPer128) / 128;
+    potential_evac_supplement = (potential_evac_supplement * ShenandoahBorrowPercent) / 100;
 
     heap->set_alloc_supplement_reserve(potential_evac_supplement);
 

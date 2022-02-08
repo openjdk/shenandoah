@@ -302,19 +302,19 @@
           "regions included in the collecdtion set is the smaller "         \
           "of the quantities specified by this parameter and the "          \
           "size of ShenandoahEvacReserve as adjusted by the value of "      \
-          "ShenandoahOldEvacRatio.  In percents of total old-generation "   \
-          "heap size.")                                                     \
+          "ShenandoahOldEvacRatioPercent.  In percents of total "           \
+          "old-generation heap size.")                                      \
           range(1,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahOldEvacRatioPer128, 16, EXPERIMENTAL,            \
+  product(uintx, ShenandoahOldEvacRatioPercent, 12, EXPERIMENTAL,           \
           "The maximum proportion of evacuation from old-gen memory, as "   \
-          "a ratio with 128.  The default value 16 denotes that no more "   \
-          "than one eighth (16/128) of the collection set evacuation "      \
+          "a percent ratio.  The default value 12 denotes that no more "    \
+          "than one eighth (12%) of the collection set evacuation "         \
           "workload may be comprised of old-gen heap regions.  A larger "   \
           "value allows a smaller number of mixed evacuations to process "  \
           "the entire list of old-gen collection candidates at the cost "   \
           "of an increased disruption of the normal cadence of young-gen "  \
-          "collections.  A value of 128 allows a mixed evacuation to "      \
+          "collections.  A value of 100 allows a mixed evacuation to "      \
           "focus entirely on old-gen memory, allowing no young-gen "        \
           "regions to be collected, likely resulting in subsequent "        \
           "allocation failures because the allocation pool is not "         \
@@ -323,7 +323,7 @@
           "regions to be collected, likely resulting in subsequent "        \
           "promotion failures and triggering of stop-the-world full GC "    \
           "events.")                                                        \
-          range(0,128)                                                      \
+          range(0,100)                                                      \
                                                                             \
   product(bool, ShenandoahPacing, true, EXPERIMENTAL,                       \
           "Pace application allocations to give GC chance to start "        \
@@ -466,21 +466,19 @@
           " to untenured regions.")                                         \
           range(1,128)                                                      \
                                                                             \
-  product(uintx, ShenandoahBorrowPer128, 40, EXPERIMENTAL,                  \
+  product(uintx, ShenandoahBorrowPercent, 30, EXPERIMENTAL,                 \
           "During evacuation and reference updating in generational "       \
           "mode, new allocations are allowed to borrow from old-gen "       \
-          "memory up to ShenandoahBorrowPer128 / 128 amount of the "        \
+          "memory up to ShenandoahBorrowPercent / 100 amount of the "       \
           "young-generation content of the current collection set.  "       \
           "Any memory borrowed from old-gen during evacuation and "         \
           "update-references phases of GC will be repaid from the "         \
           "abundance of young-gen memory produced when the collection "     \
-          "set is recycled at the end of updating references.  Note "       \
-          "that the default value of 40 represents approximately 30% "      \
-          "of the young-gen memory within the collection set.  This "       \
-          "reserves roughly 70% of the to-be-reclaimed young "              \
-          "collection set memory to be allocated during the subsequent "    \
-          "concurrent mark phase of GC.")                                   \
-          range(0, 128)                                                     \
+          "set is recycled at the end of updating references.  The "        \
+          "default value of 30 reserves 70% of the to-be-reclaimed "        \
+          "young collection set memory to be allocated during the "         \
+          "subsequent concurrent mark phase of GC.")                        \
+          range(0, 100)                                                     \
                                                                             \
   product(bool, ShenandoahPromoteTenuredObjects, true, DIAGNOSTIC,          \
           "Turn on/off evacuating individual tenured young objects "        \

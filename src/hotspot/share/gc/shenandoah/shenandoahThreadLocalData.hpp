@@ -174,7 +174,7 @@ public:
   }
 
   static void disable_plab_promotions(Thread* thread) {
-    data(thread)->_plab_allows_promotion = true;
+    data(thread)->_plab_allows_promotion = false;
   }
 
   static bool allow_plab_promotions(Thread* thread) {

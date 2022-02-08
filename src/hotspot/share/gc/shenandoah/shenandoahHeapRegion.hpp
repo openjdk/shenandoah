@@ -438,6 +438,7 @@ public:
 
   uint age()           { return _age; }
   void increment_age() { _age++; }
+  void decrement_age() { if (_age-- == 0) { _age = 0; } }
   void reset_age()     { _age = 0; }
 
   // Sets all remembered set cards to dirty.  Returns the number of regions spanned by the associated humongous object.

@@ -102,10 +102,8 @@ public:
   inline size_t get_old_bytes_reserved_for_evacuation();
   inline void reserve_old_bytes_for_evacuation(size_t byte_count);
 
-  inline void set_old_region_count(size_t num_regions);
   inline size_t get_old_region_count();
 
-  inline void set_young_region_count(size_t num_regions);
   inline size_t get_young_region_count();
 
   bool has_old_regions() const { return _has_old_regions; }

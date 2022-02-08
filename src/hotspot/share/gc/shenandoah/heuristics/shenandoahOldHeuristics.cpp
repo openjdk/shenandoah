@@ -45,10 +45,6 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generatio
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   if (unprocessed_old_collection_candidates() == 0) {
-    // no candidates for inclusion in collection set.
-    collection_set->set_old_region_count(0);
-    collection_set->reserve_old_bytes_for_evacuation(0);
-
     return false;
   }
 
@@ -66,7 +62,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // to old-gen regions.
   size_t max_old_evacuation_bytes = (heap->old_generation()->soft_max_capacity() * ShenandoahOldEvacReserve) / 100;
   const size_t young_evacuation_bytes = (heap->young_generation()->soft_max_capacity() * ShenandoahEvacReserve) / 100;
-  const size_t ratio_bound_on_old_evac_bytes = (young_evacuation_bytes * ShenandoahOldEvacRatioPer128) / 128;
+  const size_t ratio_bound_on_old_evac_bytes = (young_evacuation_bytes * ShenandoahOldEvacRatioPercent) / 100;
   if (max_old_evacuation_bytes > ratio_bound_on_old_evac_bytes) {
     max_old_evacuation_bytes = ratio_bound_on_old_evac_bytes;
   }
@@ -148,8 +144,6 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       break;
     }
   }
-  collection_set->reserve_old_bytes_for_evacuation(evacuated_old_bytes);
-  collection_set->set_old_region_count(included_old_regions);
 
   if (included_old_regions > 0) {
     log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, " SIZE_FORMAT " %s)",

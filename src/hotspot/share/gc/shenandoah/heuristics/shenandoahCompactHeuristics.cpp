@@ -80,7 +80,6 @@ void ShenandoahCompactHeuristics::choose_collection_set_from_regiondata(Shenando
                                                                         size_t actual_free) {
   // Do not select too large CSet that would overflow the available free space
   size_t max_cset = actual_free * 3 / 4;
-  size_t region_count = 0;
 
   log_info(gc, ergo)("CSet Selection. Actual Free: " SIZE_FORMAT "%s, Max CSet: " SIZE_FORMAT "%s",
                      byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free),
@@ -94,10 +93,7 @@ void ShenandoahCompactHeuristics::choose_collection_set_from_regiondata(Shenando
     size_t new_cset = live_cset + r->get_live_data_bytes();
     if (new_cset < max_cset && r->garbage() > threshold) {
       live_cset = new_cset;
-      region_count++;
       cset->add_region(r);
     }
   }
-  cset->set_young_region_count(region_count);
-  cset->reserve_young_bytes_for_evacuation(live_cset);
 }

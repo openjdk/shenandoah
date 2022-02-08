@@ -61,6 +61,7 @@ size_t ShenandoahCollectionSet::get_immediate_trash() {
   return _immediate_trash;
 }
 
+#ifdef KELVIN_VERBOSE
 void ShenandoahCollectionSet::reserve_young_bytes_for_evacuation(size_t live_bytes) {
   _young_bytes_to_evacuate = live_bytes;
 }
@@ -68,6 +69,7 @@ void ShenandoahCollectionSet::reserve_young_bytes_for_evacuation(size_t live_byt
 void ShenandoahCollectionSet::reserve_old_bytes_for_evacuation(size_t live_bytes) {
   _old_bytes_to_evacuate = live_bytes;
 }
+#endif
 
 size_t ShenandoahCollectionSet::get_old_bytes_reserved_for_evacuation() {
   return _old_bytes_to_evacuate;
@@ -79,14 +81,6 @@ size_t ShenandoahCollectionSet::get_young_bytes_reserved_for_evacuation() {
 
 size_t ShenandoahCollectionSet::get_bytes_reserved_for_evacuation() {
   return _young_bytes_to_evacuate + _old_bytes_to_evacuate;
-}
-
-void ShenandoahCollectionSet::set_old_region_count(size_t num_regions) {
-  _old_region_count = num_regions;
-}
-
-void ShenandoahCollectionSet::set_young_region_count(size_t num_regions) {
-  _young_region_count = num_regions;
 }
 
 size_t ShenandoahCollectionSet::get_old_region_count() {

@@ -359,7 +359,8 @@ private:
   //
   // At the end of update references, we perform the following bookkeeping activities:
   //
-  // 1. Unadjust the capacity within young-gen and old-gen
+  // 1. Unadjust the capacity within young-gen and old-gen to undo the effects of borrowing memory from old-gen.  Note that
+  //    the entirety of the collection set is now available, so allocation capacity naturally increase at this time.
   // 2. Increase young_gen->used() by _young_evac_expended.  This represents memory consumed by evacutions from young-gen.
   // 3. Clear (reset to zero) _alloc_supplement_reserve, _young_evac_reserve, _old_evac_reserve, and _promotion_reserve
   //
@@ -382,10 +383,10 @@ private:
 
 
   size_t _old_evac_reserve;            // Bytes reserved within old-gen to hold evacuated objects from old-gen collection set
-  size_t _old_evac_expended;           // Bytes of old-gen memory expended on old-gen evacuations?
+  size_t _old_evac_expended;           // Bytes of old-gen memory expended on old-gen evacuations
 
   size_t _young_evac_reserve;          // Bytes reserved within young-gen to hold evacuated objects from young-gen collection set
-  size_t _young_evac_expended;         // Bytes old-gen memory has been expended on young-gen evacuations?
+  size_t _young_evac_expended;         // Bytes old-gen memory has been expended on young-gen evacuations
 
   size_t _captured_old_usage;          // What was old usage (bytes) when last captured?
 
