@@ -61,16 +61,6 @@ size_t ShenandoahCollectionSet::get_immediate_trash() {
   return _immediate_trash;
 }
 
-#ifdef KELVIN_VERBOSE
-void ShenandoahCollectionSet::reserve_young_bytes_for_evacuation(size_t live_bytes) {
-  _young_bytes_to_evacuate = live_bytes;
-}
-
-void ShenandoahCollectionSet::reserve_old_bytes_for_evacuation(size_t live_bytes) {
-  _old_bytes_to_evacuate = live_bytes;
-}
-#endif
-
 size_t ShenandoahCollectionSet::get_old_bytes_reserved_for_evacuation() {
   return _old_bytes_to_evacuate;
 }

@@ -88,11 +88,6 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
 
   _cset_map[r->index()] = 1;
 
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    if (ShenandoahHeap::heap()->is_aging_cycle()) {
-      r->decrement_age();
-    }
-  }
   if (r->affiliation() == YOUNG_GENERATION) {
     _young_region_count++;
     _young_bytes_to_evacuate += r->get_live_data_bytes();
