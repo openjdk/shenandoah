@@ -38,6 +38,7 @@
 #include "gc/shenandoah/shenandoahSTWMark.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahVMOperations.hpp"
 #include "runtime/vmThread.hpp"
@@ -156,11 +157,12 @@ void ShenandoahDegenGC::op_degenerated() {
 
       op_cleanup_early();
 
+    case _degenerated_evac:
+
       if (heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
         op_global_coalesce_and_fill();
       }
 
-    case _degenerated_evac:
       // If heuristics thinks we should do the cycle, this flag would be set,
       // and we can do evacuation. Otherwise, it would be the shortcut cycle.
       if (heap->is_evacuation_in_progress()) {
@@ -224,6 +226,24 @@ void ShenandoahDegenGC::op_degenerated() {
       break;
     default:
       ShouldNotReachHere();
+  }
+
+  if (heap->mode()->is_generational()) {
+    // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
+    // Otherwise, these actions have no effect.
+
+    heap->young_generation()->unadjust_available();
+    heap->old_generation()->unadjust_available();
+    heap->young_generation()->increase_used(heap->get_young_evac_expended());
+    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
+
+    heap->set_alloc_supplement_reserve(0);
+    heap->set_young_evac_reserve(0);
+    heap->reset_young_evac_expended();
+    heap->set_old_evac_reserve(0);
+    heap->reset_old_evac_expended();
+    heap->set_promotion_reserve(0);
+
   }
 
   if (ShenandoahVerify) {
