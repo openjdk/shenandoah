@@ -1243,6 +1243,11 @@ public:
     // pinned regions.
     if (!r->is_pinned()) {
       _heap->complete_marking_context()->reset_top_at_mark_start(r);
+    } else {
+      if (r->is_old() && r->is_active() && !r->is_humongous()) {
+        r->begin_preemptible_coalesce_and_fill();
+        r->oop_fill_and_coalesce();
+      }
     }
 
     size_t live = r->used();
