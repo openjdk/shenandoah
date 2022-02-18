@@ -44,7 +44,7 @@ void ShenandoahRuntime::arraycopy_barrier_narrow_oop_entry(narrowOop* src, narro
 #define current JavaThread::cast(Thread::current())
 
 // Shenandoah pre write barrier slowpath
-JRT_ENTRY(void, ShenandoahRuntime::write_ref_field_pre_entry(oopDesc* orig, JavaThread *thread))
+JRT_LEAF(void, ShenandoahRuntime::write_ref_field_pre_entry(oopDesc* orig, JavaThread *thread))
   assert(orig != NULL, "should be optimized out");
   shenandoah_assert_correct(NULL, orig);
   // store the original value that was in the field reference
