@@ -25,7 +25,6 @@
 #include "precompiled.hpp"
 #include "memory/allocation.hpp"
 #include "memory/universe.hpp"
-#include "runtime/interfaceSupport.inline.hpp"
 
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/gcTimer.hpp"
@@ -2103,24 +2102,6 @@ size_t ShenandoahHeap::tlab_used(Thread* thread) const {
   return _free_set->used();
 }
 
-class ThreadStateTransitionFromJava {
-  private:
-  JavaThread* _thread;
-
-  public:
-  ThreadStateTransitionFromJava(JavaThread* thread, JavaThreadState to) : _thread(thread) {
-    assert(thread != NULL, "must be active Java thread");
-    assert(thread == Thread::current(), "must be current thread");
-    assert(thread->thread_state() == _thread_in_Java, "Expect original thread state to be Java");
-    assert((to == _thread_in_native) || (to == _thread_in_vm), "Invalid thread state transition");
-    thread->set_thread_state(to);
-  }
-
-  ~ThreadStateTransitionFromJava() {
-    _thread->set_thread_state(_thread_in_Java);
-  }
-};
-
 bool ShenandoahHeap::try_cancel_gc() {
   while (true) {
     jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
@@ -2131,16 +2112,8 @@ bool ShenandoahHeap::try_cancel_gc() {
     Thread* thread = Thread::current();
     if (thread->is_Java_thread()) {
       // We need to provide a safepoint here.  Otherwise we might spin forever if a SP is pending.
-      JavaThread* java_thread = JavaThread::cast(thread);
-      if (java_thread->thread_state() == _thread_in_Java) {
-        // ThreadBlockInVM requires thread state to be _thread_in_vm.  If we are in Java, safely transition the thread state.
-        ThreadStateTransitionFromJava transition(java_thread, _thread_in_vm);
-        ThreadBlockInVM sp(java_thread);
-        SpinPause();
-      } else {
-        ThreadBlockInVM sp(java_thread);
-        SpinPause();
-      }
+      ThreadBlockInVM sp(JavaThread::cast(thread));
+      SpinPause();
     }
   }
 }
