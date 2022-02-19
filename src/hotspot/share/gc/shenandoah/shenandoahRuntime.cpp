@@ -41,8 +41,6 @@ void ShenandoahRuntime::arraycopy_barrier_narrow_oop_entry(narrowOop* src, narro
   bs->arraycopy_barrier(src, dst, length);
 }
 
-#define current JavaThread::cast(Thread::current())
-
 // Shenandoah pre write barrier slowpath
 JRT_LEAF(void, ShenandoahRuntime::write_ref_field_pre_entry(oopDesc* orig, JavaThread *thread))
   assert(orig != NULL, "should be optimized out");
@@ -53,38 +51,35 @@ JRT_LEAF(void, ShenandoahRuntime::write_ref_field_pre_entry(oopDesc* orig, JavaT
   ShenandoahBarrierSet::satb_mark_queue_set().enqueue_known_active(queue, orig);
 JRT_END
 
-JRT_ENTRY(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong(oopDesc* src, oop* load_addr))
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong(oopDesc* src, oop* load_addr))
   return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator(src, load_addr);
 JRT_END
 
-JRT_ENTRY(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong_narrow(oopDesc* src, narrowOop* load_addr))
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong_narrow(oopDesc* src, narrowOop* load_addr))
   return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator(src, load_addr);
 JRT_END
 
 // Shenandoah clone barrier: makes sure that references point to to-space
 // in cloned objects.
-JRT_ENTRY(void, ShenandoahRuntime::shenandoah_clone_barrier(oopDesc* src))
+JRT_LEAF(void, ShenandoahRuntime::shenandoah_clone_barrier(oopDesc* src))
   oop s = oop(src);
   shenandoah_assert_correct(NULL, s);
   ShenandoahBarrierSet::barrier_set()->clone_barrier(s);
 JRT_END
 
-JRT_ENTRY(oopDesc*, ShenandoahRuntime::load_reference_barrier_weak(oopDesc * src, oop* load_addr))
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_weak(oopDesc * src, oop* load_addr))
   return (oopDesc*) ShenandoahBarrierSet::barrier_set()->load_reference_barrier<oop>(ON_WEAK_OOP_REF, oop(src), load_addr);
 JRT_END
 
-JRT_ENTRY(oopDesc*, ShenandoahRuntime::load_reference_barrier_weak_narrow(oopDesc * src, narrowOop* load_addr))
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_weak_narrow(oopDesc * src, narrowOop* load_addr))
   return (oopDesc*) ShenandoahBarrierSet::barrier_set()->load_reference_barrier<narrowOop>(ON_WEAK_OOP_REF, oop(src), load_addr);
 JRT_END
 
-JRT_ENTRY(oopDesc*, ShenandoahRuntime::load_reference_barrier_phantom(oopDesc * src, oop* load_addr))
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_phantom(oopDesc * src, oop* load_addr))
   return (oopDesc*) ShenandoahBarrierSet::barrier_set()->load_reference_barrier<oop>(ON_PHANTOM_OOP_REF, oop(src), load_addr);
 JRT_END
 
-JRT_ENTRY(oopDesc*, ShenandoahRuntime::load_reference_barrier_phantom_narrow(oopDesc * src, narrowOop* load_addr))
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_phantom_narrow(oopDesc * src, narrowOop* load_addr))
   return (oopDesc*) ShenandoahBarrierSet::barrier_set()->load_reference_barrier<narrowOop>(ON_PHANTOM_OOP_REF, oop(src), load_addr);
-
-#undef current
-
 JRT_END
 
