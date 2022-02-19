@@ -1226,14 +1226,18 @@ public:
 class ShenandoahPostCompactClosure : public ShenandoahHeapRegionClosure {
 private:
   ShenandoahHeap* const _heap;
-  size_t _live;
+  volatile size_t _live;
 
 public:
   ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()), _live(0) {
     _heap->free_set()->clear();
   }
 
-  void heap_region_do(ShenandoahHeapRegion* r) {
+  virtual bool is_thread_safe() override {
+    return true;
+  }
+
+  void heap_region_do(ShenandoahHeapRegion* r) override {
     assert (!r->is_cset(), "cset regions should have been demoted already");
 
     // Need to reset the complete-top-at-mark-start pointer here because
@@ -1245,6 +1249,9 @@ public:
       _heap->complete_marking_context()->reset_top_at_mark_start(r);
     } else {
       if (r->is_old() && r->is_active() && !r->is_humongous()) {
+        // Pinned regions are not compacted so they may still hold unmarked objects with
+        // reference to reclaimed memory. Remembered set scanning will crash if it attempts
+        // to iterate the oops in these objects.
         r->begin_preemptible_coalesce_and_fill();
         r->oop_fill_and_coalesce();
       }
@@ -1279,7 +1286,7 @@ public:
 
     r->set_live_data(live);
     r->reset_alloc_metadata();
-    _live += live;
+    Atomic::add(&_live, live);
   }
 
   size_t get_live() {
@@ -1422,7 +1429,7 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     }
 
     ShenandoahPostCompactClosure post_compact;
-    heap->heap_region_iterate(&post_compact);
+    heap->parallel_heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
     if (heap->mode()->is_generational()) {
       log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
