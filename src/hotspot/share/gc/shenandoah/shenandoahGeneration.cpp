@@ -439,7 +439,7 @@ ShenandoahObjToScanQueueSet* ShenandoahGeneration::old_gen_task_queues() const {
   return nullptr;
 }
 
-void ShenandoahGeneration::scan_remembered_set() {
+void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -447,8 +447,13 @@ void ShenandoahGeneration::scan_remembered_set() {
   reserve_task_queues(nworkers);
 
   ShenandoahReferenceProcessor* rp = ref_processor();
+#ifdef KELVIN_DEPRECATED
   ShenandoahRegionIterator regions;
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &regions);
+#else
+  ShenandoahRegionChunkIterator work_list(nworkers);
+  ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &work_list, is_concurrent);
+#endif
   heap->workers()->run_task(&task);
 }
 

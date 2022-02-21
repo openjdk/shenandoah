@@ -525,6 +525,63 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
   }
 }
 
+void ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice(OopIterateClosure* blk,
+                                                             HeapWord* start, size_t words, bool write_table, bool is_concurrent) {
+  assert(words % CardTable::card_size_in_words == 0, "Humongous iteration must span whole number of cards");
+  assert(is_humongous(), "only humongous region here");
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+
+  // Find head.
+  ShenandoahHeapRegion* r = humongous_start_region();
+  assert(r->is_humongous_start(), "need humongous head here");
+
+  oop obj = cast_to_oop(r->bottom());
+  RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
+  size_t card_index = scanner->card_index_for_addr(start);
+  size_t num_cards = words / CardTable::card_size_in_words();
+
+  if (write_table) {
+    while (num_cards-- > 0) {
+      if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
+#undef KELVIN_TRACE_CANCEL
+#ifdef KELVIN_TRACE_CANCEL
+        printf("ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice() aborting while iterating over write-table cards\n");
+        fflush(stdout);
+#endif  
+        return;
+      }
+      if (scanner->is_write_card_dirty(card_index++)) {
+        obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
+      }
+      start += CardTable::card_size_in_words();
+    }
+  } else {
+    while (num_cards-- > 0) {
+      if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
+#undef KELVIN_TRACE_CANCEL
+#ifdef KELVIN_TRACE_CANCEL
+        printf("ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice() aborting while iterating over read-table cards\n");
+        fflush(stdout);
+#endif  
+        return;
+      }
+      if (scanner->is_card_dirty(card_index++)) {
+        obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
+      }
+      start += CardTable::card_size_in_words();
+    }
+  }
+}
+
+void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk, HeapWord* start, size_t words) {
+  assert(is_humongous(), "only humongous region here");
+  // Find head.
+  ShenandoahHeapRegion* r = humongous_start_region();
+  assert(r->is_humongous_start(), "need humongous head here");
+  oop obj = cast_to_oop(r->bottom());
+  obj->oop_iterate(blk, MemRegion(start, start + words));
+}
+
 void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
   assert(is_humongous(), "only humongous region here");
   // Find head.

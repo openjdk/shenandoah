@@ -122,7 +122,16 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // Concurrent remembered set scanning
     if (_generation->generation_mode() == YOUNG) {
       ShenandoahConcurrentPhase gc_phase("Concurrent remembered set scanning", ShenandoahPhaseTimings::init_scan_rset);
-      _generation->scan_remembered_set();
+      _generation->scan_remembered_set(true /* is_concurrent */);
+      // Degen will merge write-card-table and read-card-table and rescan the remembered set.
+      if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_roots)) {
+#undef KELVIN_TRACE_CANCEL
+#ifdef KELVIN_TRACE_CANCEL
+        printf("ShenandoahConcurrentGC::collect() aborting after scan_remembered_set abort\n");
+        fflush(stdout);
+#endif  
+        return false;
+      }
     }
 
     // Concurrent mark roots
