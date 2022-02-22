@@ -550,6 +550,7 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 }
 
 void ShenandoahHeapRegion::recycle() {
+  RTGC_TIME_BLOCK
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   if (affiliation() == YOUNG_GENERATION) {
@@ -568,8 +569,6 @@ void ShenandoahHeapRegion::recycle() {
 
   make_empty();
   set_affiliation(FREE);
-
-  heap->clear_cards_for(this);
 
   if (ZapUnusedHeapArea) {
     SpaceMangler::mangle_region(MemRegion(bottom(), end()));
