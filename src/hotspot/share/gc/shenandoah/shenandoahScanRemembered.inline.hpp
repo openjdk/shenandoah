@@ -518,28 +518,16 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
-#undef KELVIN_MAKE_NOISE
-#ifdef KELVIN_MAKE_NOISE
-  printf("process_clusters(" SIZE_FORMAT ", region: " SIZE_FORMAT ", scan from " PTR_FORMAT " to " PTR_FORMAT ")\n",
-         first_cluster, r->index(), p2i(start_of_range), p2i(end_of_range));
-#endif
-
   while (count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
+#ifdef ENABLE_CANCELLATION_OF_REMEMBERED_SET_SCANNING
+    // This check is currently disabled to avoid crashes that are not
+    // yet debugged.
     if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
-#undef KELVIN_TRACE_CANCEL
-#ifdef KELVIN_TRACE_CANCEL
-      printf("ShenandoahScanRemembered::process_clusters() aborting while iterating over clusters\n");
-      fflush(stdout);
-#endif  
       return;
     }
-#ifdef KELVIN_TRACE_CANCEL
-    printf("ShenandoahScanRemembered::process_clusters() cancellation not detected\n");
-    fflush(stdout);
-#endif  
-
+#endif
     card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     first_cluster++;
@@ -737,11 +725,6 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
   size_t words = clusters * cluster_size;
   size_t start_cluster_no = cluster_for_addr(start_of_range);
   assert(addr_for_cluster(start_cluster_no) == start_of_range, "process_region_slice range must align on cluster boundary");
-#ifdef KELVIN_MAKE_NOISE
-  static size_t invocation_no = 0;
-  // Don't worry about non-atomic race on increment
-  size_t this_invocation = invocation_no++;
-#endif
 
   // region->end() represents the end of memory spanned by this region, but not all of this
   //   memory is eligible to be scanned because some of this memory has not yet been allocated.
@@ -780,32 +763,14 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
   // If I am assigned to process a range that starts beyond end_of_range (top or update-watermark), we have no work to do.
 
   if (start_of_range < end_of_range) {
-#ifdef KELVIN_MAKE_NOISE
-    printf(SIZE_FORMAT ": process_region_slice(%s region: " SIZE_FORMAT ", offset: " SIZE_FORMAT ", words: " SIZE_FORMAT ")\n",
-           this_invocation, region->is_humongous()? "humongous": "regular", region->index(), start_offset, words);
-    fflush(stdout);
-#endif
     if (region->is_humongous()) {
       ShenandoahHeapRegion* start_region = region->humongous_start_region();
       process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     } else {
       process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     }
-#ifdef KELVIN_MAKE_NOISE
-    printf(SIZE_FORMAT ": process_region_slice(region: " SIZE_FORMAT ") has completed\n", this_invocation, region->index());
-    fflush(stdout);
-#endif
   }
-#ifdef KELVIN_MAKE_NOISE
-  else {
-    printf(SIZE_FORMAT ": process_region_slice(%s region: " SIZE_FORMAT ") no work between " PTR_FORMAT " and " PTR_FORMAT "\n",
-           this_invocation, region->is_humongous()? "humongous": "regular", 
-           region->index(), p2i(start_of_range), p2i(end_of_range));
-    fflush(stdout);
-  }
-#endif
 }
-
 
 template<typename RememberedSet>
 inline size_t
@@ -880,17 +845,6 @@ inline bool ShenandoahRegionChunkIterator::next(work_chunk *assignment) {
   size_t region_index = group_region_index + regions_spanned_by_chunk_offset;
   size_t offset_within_region = offset_of_this_chunk % region_size_words;
   
-#undef KELVIN_VERBOSE_SPECIAL
-#ifdef KELVIN_VERBOSE_SPECIAL
-  printf("SRCI::next(), index: " SIZE_FORMAT ", region: " SIZE_FORMAT ", offset: " SIZE_FORMAT ", size: " SIZE_FORMAT
-         "\n  group_no: " SIZE_FORMAT ", group_region_index: " SIZE_FORMAT ", group_region_offset: " SIZE_FORMAT
-         "\n  index_within_group: " SIZE_FORMAT ", group_chunk_size: " SIZE_FORMAT ", offset_of_this_chunk: " SIZE_FORMAT
-         "\n  regions_spanned_by_chunk_offset: " SIZE_FORMAT "\n",
-         new_index + 1, region_index, offset_within_region, group_chunk_size,
-         group_no, group_region_index, group_region_offset, index_within_group, group_chunk_size, offset_of_this_chunk,
-         regions_spanned_by_chunk_offset);
-  fflush(stdout);
-#endif
   assignment->_r = _heap->get_region(region_index);
   assignment->_chunk_offset = offset_within_region;
   assignment->_chunk_size = group_chunk_size;

@@ -447,13 +447,8 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   reserve_task_queues(nworkers);
 
   ShenandoahReferenceProcessor* rp = ref_processor();
-#ifdef KELVIN_DEPRECATED
-  ShenandoahRegionIterator regions;
-  ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &regions);
-#else
   ShenandoahRegionChunkIterator work_list(nworkers);
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &work_list, is_concurrent);
-#endif
   heap->workers()->run_task(&task);
 }
 

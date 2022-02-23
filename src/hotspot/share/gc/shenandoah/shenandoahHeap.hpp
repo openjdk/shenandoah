@@ -519,7 +519,6 @@ private:
   // Reference updating
   void prepare_update_heap_references(bool concurrent);
   void update_heap_references(bool concurrent);
-
   // Final update region states
   void update_heap_region_states(bool concurrent);
   void rebuild_free_set(bool concurrent);

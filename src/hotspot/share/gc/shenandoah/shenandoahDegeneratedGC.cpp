@@ -75,7 +75,9 @@ void ShenandoahDegenGC::entry_degenerated() {
   // TODO: Why not age during degenerated cycles?  Investigate and fix, or explain why not.
   heap->set_aging_cycle(false);
 
-  ShenandoahWorkerScope scope(heap->workers(), ShenandoahWorkerPolicy::calc_workers_for_stw_degenerated(), "stw degenerated gc");
+  ShenandoahWorkerScope scope(heap->workers(),
+                              ShenandoahWorkerPolicy::calc_workers_for_stw_degenerated(),
+                              "stw degenerated gc");
 
   heap->set_degenerated_gc_in_progress(true);
   op_degenerated();
@@ -370,7 +372,6 @@ void ShenandoahDegenGC::op_init_updaterefs() {
 void ShenandoahDegenGC::op_updaterefs() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_updaterefs);
-
   // Handed over from concurrent update references phase
   heap->update_heap_references(false /*concurrent*/);
 

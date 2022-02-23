@@ -543,11 +543,6 @@ void ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice(OopIterateClosure* 
   if (write_table) {
     while (num_cards-- > 0) {
       if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
-#undef KELVIN_TRACE_CANCEL
-#ifdef KELVIN_TRACE_CANCEL
-        printf("ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice() aborting while iterating over write-table cards\n");
-        fflush(stdout);
-#endif  
         return;
       }
       if (scanner->is_write_card_dirty(card_index++)) {
@@ -558,11 +553,6 @@ void ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice(OopIterateClosure* 
   } else {
     while (num_cards-- > 0) {
       if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
-#undef KELVIN_TRACE_CANCEL
-#ifdef KELVIN_TRACE_CANCEL
-        printf("ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice() aborting while iterating over read-table cards\n");
-        fflush(stdout);
-#endif  
         return;
       }
       if (scanner->is_card_dirty(card_index++)) {

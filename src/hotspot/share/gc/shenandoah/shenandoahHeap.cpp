@@ -2403,24 +2403,11 @@ class ShenandoahUpdateHeapRefsTask : public WorkerTask {
 private:
   ShenandoahHeap* _heap;
 
-#ifdef KELVIN_DEPRECATED
-  ShenandoahRegionIterator* _regions;
-#else
   ShenandoahRegionIterator* _regions;
   ShenandoahRegionChunkIterator* _work_chunks;
-#endif
   bool _mixed_evac;             // true iff most recent evacuation includes old-gen HeapRegions
 
 public:
-#ifdef KELVIN_DEPRECATED
-  ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions, bool mixed_evac) :
-    WorkerTask("Shenandoah Update References"),
-    _heap(ShenandoahHeap::heap()),
-    _regions(regions),
-    _mixed_evac(mixed_evac)
-  {
-  }
-#else
   ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions, ShenandoahRegionChunkIterator* work_chunks, bool mixed_evac) :
     WorkerTask("Shenandoah Update References"),
     _heap(ShenandoahHeap::heap()),
@@ -2429,7 +2416,6 @@ public:
     _mixed_evac(mixed_evac)
   {
   }
-#endif
 
   void work(uint worker_id) {
     if (CONCURRENT) {
@@ -2445,12 +2431,8 @@ public:
 private:
   template<class T>
   void do_work(uint worker_id) {
-#undef KELVIN_TRACE_CANCEL
-#ifdef KELVIN_TRACE_CANCEL
-    printf("ShenandoahUpdateHeapRefsTask::do_work(%u) starting its work\n", worker_id);
-    fflush(stdout);
-#endif
     T cl;
+
     ShenandoahHeapRegion* r = _regions->next();
     // We update references for global, old, and young collections.
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
@@ -2509,9 +2491,11 @@ private:
       if (region_progress && ShenandoahPacing) {
         _heap->pacer()->report_updaterefs(pointer_delta(update_watermark, r->bottom()));
       }
+      if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
+        return;
+      }
       r = _regions->next();
     }
-#ifndef KELVIN_DEPRECATED
     if (_heap->mode()->is_generational() && (_heap->active_generation()->generation_mode() != GLOBAL)) {
       // There's no remembered set processing if not in generational mode.
 
@@ -2525,21 +2509,9 @@ private:
         ShenandoahHeapRegion* r = assignment._r;
 
         if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
-#undef KELVIN_TRACE_CANCEL
-#ifdef KELVIN_TRACE_CANCEL
-          printf("ShenandoahUpdateHeapRefsTask::work(%u), aborting update refs of rem-set\n", worker_id);
-          fflush(stdout);
-#endif  
           return;
         }
 
-#undef KELVIN_MAKE_NOISE
-#ifdef KELVIN_MAKE_NOISE
-        printf("SUHRT::do_work(%u) on assignment for region " SIZE_FORMAT " @offset " SIZE_FORMAT " size: " SIZE_FORMAT "\n",
-               "  is_cset? %d, is_active? %d, affiliation: %s\n",
-               worker_id, r->index(), assignment._chunk_offset, assignment._chunk_size,
-               r->is_cset(), r->is_active(), affiliation_name(r->affiliation()));
-#endif
         if (r->is_active() && !r->is_cset() && (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION)) {
           HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
           HeapWord* end_of_range = r->get_update_watermark();
@@ -2601,12 +2573,6 @@ private:
               assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
               scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT);
             }
-#ifdef KELVIN_TRACE_CANCEL
-            else if (!CONCURRENT) {
-              printf("SUHRT::do_work(%u): STW UR scan ignores remset region " SIZE_FORMAT ", offset: " SIZE_FORMAT ", size: " SIZE_FORMAT "\n",
-                     worker_id, r->index(), assignment._chunk_offset, assignment._chunk_size);
-            }
-#endif
           }
           if (ShenandoahPacing) {
             _heap->pacer()->report_updaterefs(pointer_delta(end_of_range, start_of_range));
@@ -2616,27 +2582,9 @@ private:
         have_work = _work_chunks->next(&assignment);
       }
     }
-#ifdef KELVIN_TRACE_CANCEL
-    printf("ShenandoahUpdateHeapRefsTask::do_work(%u) completed its work\n", worker_id);
-    fflush(stdout);
-#endif
-#endif
   }
 };
 
-#ifdef KELVIN_DEPRECATED
-void ShenandoahHeap::update_heap_references(bool concurrent) {
-  assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-
-  if (concurrent) {
-    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, _mixed_evac);
-    workers()->run_task(&task);
-  } else {
-    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, _mixed_evac);
-    workers()->run_task(&task);
-  }
-}
-#else
 void ShenandoahHeap::update_heap_references(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   ShenandoahRegionChunkIterator work_list(workers()->active_workers());
@@ -2649,7 +2597,6 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
     workers()->run_task(&task);
   }
 }
-#endif
 
 class ShenandoahFinalUpdateRefsUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
 private:

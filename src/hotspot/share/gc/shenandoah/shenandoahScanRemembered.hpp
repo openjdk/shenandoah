@@ -1087,8 +1087,6 @@ public:
   inline bool has_next() const;
 };
 
-
-
 typedef ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet> RememberedScanner;
 
 class ShenandoahScanRememberedTask : public WorkerTask {
@@ -1096,26 +1094,14 @@ class ShenandoahScanRememberedTask : public WorkerTask {
   ShenandoahObjToScanQueueSet* _queue_set;
   ShenandoahObjToScanQueueSet* _old_queue_set;
   ShenandoahReferenceProcessor* _rp;
-#ifdef KELVIN_DEPRECATED
-  ShenandoahRegionIterator* _regions;
-#else
   ShenandoahRegionChunkIterator* _work_list;
   bool _is_concurrent;
-#endif
  public:
-#ifdef KELVIN_DEPRECATED
-  ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
-                               ShenandoahObjToScanQueueSet* old_queue_set,
-                               ShenandoahReferenceProcessor* rp,
-                               ShenandoahRegionIterator* regions);
-#else
   ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
                                ShenandoahObjToScanQueueSet* old_queue_set,
                                ShenandoahReferenceProcessor* rp,
                                ShenandoahRegionChunkIterator* work_list,
                                bool is_concurrent);
-#endif
-
   void work(uint worker_id);
   void do_work(uint worker_id);
 };
