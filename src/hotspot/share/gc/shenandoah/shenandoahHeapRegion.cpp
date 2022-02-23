@@ -550,7 +550,6 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 }
 
 void ShenandoahHeapRegion::recycle() {
-  RTGC_TIME_BLOCK
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   if (affiliation() == YOUNG_GENERATION) {
