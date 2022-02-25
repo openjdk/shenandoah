@@ -90,13 +90,18 @@ void ShenandoahDegenGC::op_degenerated() {
   // some phase, we have to upgrade the Degenerate GC to Full GC.
   heap->clear_cancelled_gc(true /* clear oom handler */);
 
-  // We can't easily clear the old mark in progress flag because it must be done
-  // on a safepoint (not sure if that is a hard requirement). At any rate, once
-  // we are in a degenerated cycle, there should be no more old marking.
-  if (heap->is_concurrent_old_mark_in_progress()) {
-    heap->old_generation()->cancel_marking();
+  if (_generation->generation_mode() == GenerationMode::GLOBAL) {
+    // We can't easily clear the old mark in progress flag because it must be done
+    // on a safepoint (not sure if that is a hard requirement). At any rate, once
+    // we are in a global degenerated cycle, there should be no more old marking.
+    if (heap->is_concurrent_old_mark_in_progress()) {
+      heap->old_generation()->cancel_marking();
+    }
   }
-  assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
+
+  if (!heap->is_concurrent_old_mark_in_progress()) {
+    assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
+  }
 
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
