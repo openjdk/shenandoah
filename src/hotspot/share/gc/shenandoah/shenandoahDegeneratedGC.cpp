@@ -94,8 +94,9 @@ void ShenandoahDegenGC::op_degenerated() {
     // We can't easily clear the old mark in progress flag because it must be done
     // on a safepoint (not sure if that is a hard requirement). At any rate, once
     // we are in a global degenerated cycle, there should be no more old marking.
-    if (heap->is_concurrent_old_mark_in_progress()) {
+    if (heap->is_concurrent_old_mark_in_progress() || heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
       heap->old_generation()->cancel_marking();
+      heap->set_concurrent_prep_for_mixed_evacuation_in_progress(false);
     }
   }
 
