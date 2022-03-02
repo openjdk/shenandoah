@@ -810,7 +810,7 @@ public:
   void clear_cards(HeapWord* start, HeapWord* end);
   void mark_card_as_dirty(void* location);
   void retire_plab(PLAB* plab);
-  void cancel_mixed_collections();
+  void cancel_old_gc();
   void coalesce_and_fill_old_regions();
 
 // ---------- Helper functions

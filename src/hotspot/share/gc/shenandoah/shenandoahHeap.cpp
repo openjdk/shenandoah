@@ -981,9 +981,18 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
   }
 }
 
-void ShenandoahHeap::cancel_mixed_collections() {
+void ShenandoahHeap::cancel_old_gc() {
+  shenandoah_assert_safepoint();
   assert(_old_generation != NULL, "Should only have mixed collections in generation mode.");
+
+  // Stop marking
+  old_generation()->cancel_marking();
+  // Stop coalescing undead objects
+  set_concurrent_prep_for_mixed_evacuation_in_progress(false);
+  // Stop tracking old regions
   old_heuristics()->abandon_collection_candidates();
+  // Remove old generation access to young generation mark queues
+  young_generation()->set_old_gen_task_queues(nullptr);
 }
 
 void ShenandoahHeap::coalesce_and_fill_old_regions() {

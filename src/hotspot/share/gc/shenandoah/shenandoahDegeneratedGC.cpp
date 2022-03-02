@@ -91,13 +91,8 @@ void ShenandoahDegenGC::op_degenerated() {
   heap->clear_cancelled_gc(true /* clear oom handler */);
 
   if (_generation->generation_mode() == GenerationMode::GLOBAL) {
-    // We can't easily clear the old mark in progress flag because it must be done
-    // on a safepoint (not sure if that is a hard requirement). At any rate, once
-    // we are in a global degenerated cycle, there should be no more old marking.
-    if (heap->is_concurrent_old_mark_in_progress() || heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
-      heap->old_generation()->cancel_marking();
-      heap->set_concurrent_prep_for_mixed_evacuation_in_progress(false);
-    }
+    // Global collection will include the old generation, so stop any work there.
+    heap->cancel_old_gc();
   }
 
   if (!heap->is_concurrent_old_mark_in_progress()) {
@@ -131,8 +126,17 @@ void ShenandoahDegenGC::op_degenerated() {
 
     case _degenerated_roots:
       // Degenerated from concurrent root mark, reset the flag for STW mark
-      if (heap->is_concurrent_mark_in_progress()) {
-        heap->cancel_concurrent_mark();
+      if (heap->mode()->is_generational()) {
+        if (heap->is_concurrent_young_mark_in_progress()) {
+          // We want to allow old generation marking to be punctuated by young collections
+          // (even if they have degenerated). If this is a global cycle, we'd have cancelled
+          // the entire old gc before coming into this switch.
+          heap->young_generation()->cancel_marking();
+        }
+      } else {
+        if (heap->is_concurrent_mark_in_progress()) {
+          heap->cancel_concurrent_mark();
+        }
       }
 
       if (_degen_point == ShenandoahDegenPoint::_degenerated_roots) {

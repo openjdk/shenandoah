@@ -158,6 +158,14 @@ bool ShenandoahOldGeneration::is_concurrent_mark_in_progress() {
   return ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress();
 }
 
+void ShenandoahOldGeneration::cancel_marking() {
+  if (is_concurrent_mark_in_progress()) {
+    purge_satb_buffers(true);
+  }
+
+  ShenandoahGeneration::cancel_marking();
+}
+
 void ShenandoahOldGeneration::purge_satb_buffers(bool abandon) {
   ShenandoahHeap *heap = ShenandoahHeap::heap();
   shenandoah_assert_safepoint();
