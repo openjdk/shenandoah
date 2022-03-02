@@ -176,7 +176,9 @@ void ShenandoahDegenGC::op_degenerated() {
           // it will not have TAMS or UWM updated. Such a region is effectively
           // skipped during update references which can lead to crashes and corruption
           // if the from-space reference is accessed.
-          heap->labs_make_parsable();
+          if (UseTLAB) {
+            heap->labs_make_parsable();
+          }
 
           for (size_t i = 0; i < heap->num_regions(); i++) {
             ShenandoahHeapRegion* r = heap->get_region(i);
