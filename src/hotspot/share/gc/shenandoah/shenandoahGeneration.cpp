@@ -398,10 +398,10 @@ ShenandoahMarkingContext* ShenandoahGeneration::complete_marking_context() {
 void ShenandoahGeneration::cancel_marking() {
   if (is_concurrent_mark_in_progress()) {
     set_mark_incomplete();
-    _task_queues->clear();
-    ref_processor()->abandon_partial_discovery();
-    set_concurrent_mark_in_progress(false);
   }
+  _task_queues->clear();
+  ref_processor()->abandon_partial_discovery();
+  set_concurrent_mark_in_progress(false);
 }
 
 ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
