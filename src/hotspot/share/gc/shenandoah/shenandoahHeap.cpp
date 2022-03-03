@@ -2543,11 +2543,12 @@ private:
               size_t card_index = scanner->card_index_for_addr(start_of_range);
               ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, end_of_range);
 
-              // Find the first marked object that begins within this range.  Any object that begins in a previous range
-              // is part of a different scanning assignment.  Any object that starts after end_of_range is also not my
-              // responsibility.  (Either allocated during evacuation, so does not hold pointers to from-space, or is
-              // beyond the range of my assigned work chunk.)
-              p = ctx->get_next_marked_addr(start_of_range, end_of_range);
+              // Any object that begins in a previous range is part of a different scanning assignment.  Any object that
+              // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
+              // not hold pointers to from-space, or is beyond the range of my assigned work chunk.)
+
+              // If there is not an object at address p, then ctx->is_marked(obj) will fail below.
+              p = start_of_range;
               while (p < end_of_range) {
                 oop obj = cast_to_oop(p);
                 if (ctx->is_marked(obj)) {

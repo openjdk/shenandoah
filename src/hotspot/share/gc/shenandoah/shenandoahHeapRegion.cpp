@@ -527,7 +527,7 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
 
 void ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice(OopIterateClosure* blk,
                                                              HeapWord* start, size_t words, bool write_table, bool is_concurrent) {
-  assert(words % CardTable::card_size_in_words == 0, "Humongous iteration must span whole number of cards");
+  assert(words % CardTable::card_size_in_words() == 0, "Humongous iteration must span whole number of cards");
   assert(is_humongous(), "only humongous region here");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 

@@ -635,6 +635,11 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
               }
           }
 
+          // TODO: only iterate over this object if it spans dirty within this cluster or within following clusters.
+          // Code as written is known not to examine a zombie object because either the object is marked, or we are
+          // not using the mark-context to differentiate objects, so the object is known to have been coalesced and
+          // filled if it is not "live".
+
           if (reaches_next_cluster || spans_dirty_within_this_cluster) {
             if (obj->is_objArray()) {
               objArrayOop array = objArrayOop(obj);

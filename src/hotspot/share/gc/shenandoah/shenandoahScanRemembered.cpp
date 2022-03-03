@@ -249,6 +249,10 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(size_t worker_count
     _total_chunks(calc_total_chunks()),
     _index(0)
 {
+  assert(_smallest_chunk_size ==
+         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster,
+         "_smallest_chunk_size is not valid");
+
   size_t words_in_region = ShenandoahHeapRegion::region_size_words();
   size_t group_span = _first_group_chunk_size * _group_size;
 

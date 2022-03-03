@@ -29,8 +29,6 @@
 
 void ShenandoahCardTable::initialize() {
   CardTable::initialize();
-  assert(_smallest_chunk_size == 
-         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster);
 
   _write_byte_map = _byte_map;
   _write_byte_map_base = _byte_map_base;

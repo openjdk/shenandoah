@@ -1021,12 +1021,13 @@ typedef struct ChunkOfRegion {
 
 class ShenandoahRegionChunkIterator : public StackObj {
 private:
-  // smallest_chunk_size is 64 cards.  This is computed from
-  // CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+  // smallest_chunk_size is 64 words per card *
+  // ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster.
+  // This is computed from CardTable::card_size_in_words() *
+  //      ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   // We can't perform this computation here, because of encapsulation and initialization constraints.  We paste
-  // the magic number here, and assert that this number matches the intended computation in initialize() method.
-  static const size_t _smallest_chunk_size = 64;
-    
+  // the magic number here, and assert that this number matches the intended computation in constructor.
+  static const size_t _smallest_chunk_size = 64 * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
 
   // The total remembered set scanning effort is divided into chunks of work that are assigned to individual worker tasks.
   // The chunks of assigned work are divided into groups, where the size of each group (_group_size) is 4 * the number of
