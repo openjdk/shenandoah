@@ -525,8 +525,10 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
   }
 }
 
-void ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice(OopIterateClosure* blk,
-                                                             HeapWord* start, size_t words, bool write_table, bool is_concurrent) {
+// DO NOT CANCEL.  If this worker thread has accepted responsibility for scanning a particular range of addresses, it
+// must finish the work before it can be cancelled.
+void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, bool dirty_only,
+                                                       HeapWord* start, size_t words, bool write_table, bool is_concurrent) {
   assert(words % CardTable::card_size_in_words() == 0, "Humongous iteration must span whole number of cards");
   assert(is_humongous(), "only humongous region here");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -540,24 +542,26 @@ void ShenandoahHeapRegion::oop_iterate_humongous_dirty_slice(OopIterateClosure* 
   size_t card_index = scanner->card_index_for_addr(start);
   size_t num_cards = words / CardTable::card_size_in_words();
 
-  if (write_table) {
-    while (num_cards-- > 0) {
-      if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
-        return;
+  if (dirty_only) {
+    if (write_table) {
+      while (num_cards-- > 0) {
+        if (scanner->is_write_card_dirty(card_index++)) {
+          obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
+        }
+        start += CardTable::card_size_in_words();
       }
-      if (scanner->is_write_card_dirty(card_index++)) {
-        obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
+    } else {
+      while (num_cards-- > 0) {
+        if (scanner->is_card_dirty(card_index++)) {
+          obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
+        }
+        start += CardTable::card_size_in_words();
       }
-      start += CardTable::card_size_in_words();
     }
   } else {
+    // Scan all data, regardless of whether cards are dirty
     while (num_cards-- > 0) {
-      if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
-        return;
-      }
-      if (scanner->is_card_dirty(card_index++)) {
-        obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
-      }
+      obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
       start += CardTable::card_size_in_words();
     }
   }

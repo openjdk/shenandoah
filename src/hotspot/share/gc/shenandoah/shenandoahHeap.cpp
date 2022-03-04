@@ -2438,18 +2438,14 @@ private:
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();
-    while (r != NULL) {
-      if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
-
-        if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
+#undef KELVIN_TRACE_CANCEL
 #ifdef KELVIN_TRACE_CANCEL
-          printf("ShenandoahUpdateHeapRefsTask::do_work(%u) aborting during iteration over young regions\n", worker_id);
-          fflush(stdout);
-#endif  
-          return;
-        }
-        return;
-      }
+    if (r != NULL) {
+      printf("[%u] Begin update heap refs with young region " SIZE_FORMAT "\n", worker_id, r->index());
+      fflush(stdout);
+    }
+#endif
+    while (r != NULL) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
 
@@ -2492,25 +2488,34 @@ private:
         _heap->pacer()->report_updaterefs(pointer_delta(update_watermark, r->bottom()));
       }
       if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
+#ifdef KELVIN_TRACE_CANCEL
+        printf("[%u] cancel update heap refs for young region " SIZE_FORMAT "\n", worker_id, r->index());
+        fflush(stdout);
+#endif  
         return;
       }
       r = _regions->next();
     }
     if (_heap->mode()->is_generational() && (_heap->active_generation()->generation_mode() != GLOBAL)) {
-      // There's no remembered set processing if not in generational mode.
+      // There's no remembered set processing if not in generational mode or if GLOBAL mode of generational.
 
       // After this thread has exhausted its traditional update-refs work, it continues with updating refs within remembered set.
       // The remembered set workload is better balanced between threads, so threads that are "behind" can catch up with other
       // threads during this phase, allowing all threads to work more effectively in parallel.
       work_chunk assignment;
       bool have_work = _work_chunks->next(&assignment);
+#ifdef KELVIN_TRACE_CANCEL
+      if (have_work) {
+        ShenandoahHeapRegion* r = assignment._r;
+        printf("[%d]: Begin update heap refs with chunk region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", size: "
+               SIZE_FORMAT "\n", worker_id, r->index(), p2i(r->bottom() + assignment._chunk_offset), 
+               p2i(r->bottom() + assignment._chunk_offset + assignment._chunk_size), assignment._chunk_size);
+        fflush(stdout);
+      }
+#endif
       RememberedScanner* scanner = _heap->card_scan();
       while (have_work) {
         ShenandoahHeapRegion* r = assignment._r;
-
-        if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
-          return;
-        }
 
         if (r->is_active() && !r->is_cset() && (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION)) {
           HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
@@ -2531,7 +2536,8 @@ private:
             // old-gen heap regions.
 
             if (r->is_humongous()) {
-              r->oop_iterate_humongous_dirty_slice(&cl, start_of_range, assignment._chunk_size, true, CONCURRENT);
+              // Need to examine both dirty and clean cards during mixed evac.
+              r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true, CONCURRENT);
             } else {
               // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
               // and filled.  Use mark bits to find objects that need to be updated.
@@ -2580,6 +2586,18 @@ private:
           }
         }
         // Otherwise, this work chunk had nothing for me to do, so do not report pacer progress.
+
+        // Before we take responsibility for another chunk of work, see if cancellation is requested.
+        if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
+#ifdef KELVIN_TRACE_CANCELLATION
+          printf("[%d]: Cancel update heap refs for chunk region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", size: "
+                 SIZE_FORMAT "\n", worker_id, r->index(), p2i(r->bottom() + assignment._chunk_offset), 
+                 p2i(r->bottom() + assignment._chunk_offset + assignment._chunk_size), assignment._chunk_size);
+        fflush(stdout);
+#endif
+          return;
+        }
+
         have_work = _work_chunks->next(&assignment);
       }
     }

@@ -487,6 +487,10 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
 
 // Process all objects starting within count clusters beginning with first_cluster for which the start address is
 // less than end_of_range.  For any such object, process the complete object, even if its end reaches beyond end_of_range.
+
+// Do not CANCEL within process_clusters.  It is assumed that if a worker thread accepts responsbility for processing
+// a chunk of work, it will finish the work it starts.  Otherwise, the chunk of work will be lost in the transition to
+// degenerated execution.
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void
@@ -521,13 +525,6 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   while (count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
-#ifdef ENABLE_CANCELLATION_OF_REMEMBERED_SET_SCANNING
-    // This check is currently disabled to avoid crashes that are not
-    // yet debugged.
-    if (heap->check_cancelled_gc_and_yield(is_concurrent)) {
-      return;
-    }
-#endif
     card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     first_cluster++;
@@ -697,7 +694,7 @@ ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHe
   HeapWord* first_cluster_addr = _rs->addr_for_card_index(first_card_index);
   size_t spanned_words = count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster * CardTable::card_size_in_words();
 
-  start_region->oop_iterate_humongous_dirty_slice(cl, first_cluster_addr, spanned_words, write_table, is_concurrent);
+  start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, write_table, is_concurrent);
 }
 
 template<typename RememberedSet>
