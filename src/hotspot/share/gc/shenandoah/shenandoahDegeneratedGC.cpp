@@ -303,7 +303,7 @@ void ShenandoahDegenGC::op_reset() {
 }
 
 void ShenandoahDegenGC::op_mark() {
-  assert(!ShenandoahHeap::heap()->is_concurrent_mark_in_progress(), "Should be reset");
+  assert(!_generation->is_concurrent_mark_in_progress(), "Should be reset");
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_stw_mark);
   ShenandoahSTWMark mark(_generation, false /*full gc*/);
   mark.mark();

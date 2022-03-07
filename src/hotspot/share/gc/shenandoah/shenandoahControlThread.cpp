@@ -467,7 +467,15 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   young_generation->set_mark_incomplete();
   old_generation->set_mark_incomplete();
   service_concurrent_cycle(young_generation, cause, true);
-  if (!heap->cancelled_gc()) {
+  if (heap->cancelled_gc()) {
+    // Young generation bootstrap cycle has failed. Concurrent mark for old generation
+    // is not going to happen so subsequent young generation collections no longer need
+    // to enqueue old references.
+    young_generation->set_old_gen_task_queues(NULL);
+
+    // Also abandon any writes to the old generation that may be queued in the SATB buffers.
+    ShenandoahHeap::heap()->purge_old_satb_buffers(true);
+  } else {
     // Reset the degenerated point. Normally this would happen at the top
     // of the control loop, but here we have just completed a young cycle
     // which has bootstrapped the old concurrent marking.
