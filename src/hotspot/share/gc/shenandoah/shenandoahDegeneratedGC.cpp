@@ -90,7 +90,7 @@ void ShenandoahDegenGC::op_degenerated() {
   // some phase, we have to upgrade the Degenerate GC to Full GC.
   heap->clear_cancelled_gc(true /* clear oom handler */);
 
-  if (_generation->generation_mode() == GenerationMode::GLOBAL) {
+  if (heap->mode()->is_generational() && _generation->generation_mode() == GenerationMode::GLOBAL) {
     // Global collection will include the old generation, so stop any work there.
     heap->cancel_old_gc();
   }
