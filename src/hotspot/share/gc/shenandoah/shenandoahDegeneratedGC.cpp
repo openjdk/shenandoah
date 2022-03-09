@@ -126,16 +126,16 @@ void ShenandoahDegenGC::op_degenerated() {
 
     case _degenerated_roots:
       // Degenerated from concurrent root mark, reset the flag for STW mark
-      if (heap->mode()->is_generational()) {
-        if (heap->is_concurrent_young_mark_in_progress()) {
+      if (!heap->mode()->is_generational()) {
+        if (heap->is_concurrent_mark_in_progress()) {
+          heap->cancel_concurrent_mark();
+        }
+      } else {
+        if (_generation->is_concurrent_mark_in_progress()) {
           // We want to allow old generation marking to be punctuated by young collections
           // (even if they have degenerated). If this is a global cycle, we'd have cancelled
           // the entire old gc before coming into this switch.
-          heap->young_generation()->cancel_marking();
-        }
-      } else {
-        if (heap->is_concurrent_mark_in_progress()) {
-          heap->cancel_concurrent_mark();
+          _generation->cancel_marking();
         }
       }
 
