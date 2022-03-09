@@ -474,7 +474,8 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
     young_generation->set_old_gen_task_queues(NULL);
 
     // Also abandon any writes to the old generation that may be queued in the SATB buffers.
-    ShenandoahHeap::heap()->purge_old_satb_buffers(true);
+    // This needs to happen on a safepoint.
+    // TODO: ShenandoahHeap::heap()->purge_old_satb_buffers(true);
   } else {
     // Reset the degenerated point. Normally this would happen at the top
     // of the control loop, but here we have just completed a young cycle

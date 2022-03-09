@@ -615,6 +615,13 @@ void ShenandoahConcurrentGC::op_init_mark() {
     Universe::verify();
   }
 
+  if (heap->mode()->is_generational() && heap->is_concurrent_old_mark_in_progress()) {
+      // Purge the SATB buffers, transferring any valid, old pointers to the
+      // old generation mark queue. Any pointers in a young region will be
+      // abandoned.
+      heap->purge_old_satb_buffers(false /* abandon */);
+  }
+
   _generation->set_concurrent_mark_in_progress(true);
 
   if (_do_old_gc_bootstrap) {
@@ -1130,13 +1137,6 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
   }
 
   heap->update_heap_region_states(true /*concurrent*/);
-
-  if (heap->is_concurrent_old_mark_in_progress()) {
-    // Purge the SATB buffers, transferring any valid, old pointers to the
-    // old generation mark queue. From here on, no mutator will have access
-    // to anything that will be trashed and recycled.
-    heap->purge_old_satb_buffers(false /* abandon */);
-  }
 
   heap->set_update_refs_in_progress(false);
   heap->set_has_forwarded_objects(false);
