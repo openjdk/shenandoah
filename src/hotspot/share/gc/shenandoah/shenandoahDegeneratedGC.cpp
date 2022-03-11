@@ -94,11 +94,6 @@ void ShenandoahDegenGC::op_degenerated() {
     if (_generation->generation_mode() == GenerationMode::GLOBAL) {
       // Global collection will include the old generation, so stop any work there.
       heap->cancel_old_gc();
-    } else if (heap->is_concurrent_old_mark_in_progress()) {
-      // Purge the SATB buffers, transferring any valid, old pointers to the
-      // old generation mark queue. Any pointers in a young region will be
-      // abandoned.
-      heap->purge_old_satb_buffers(false /* abandon */);
     }
   }
 

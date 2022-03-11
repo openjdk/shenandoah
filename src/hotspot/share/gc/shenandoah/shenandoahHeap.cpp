@@ -2820,8 +2820,8 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   }
 }
 
-void ShenandoahHeap::purge_old_satb_buffers(bool abandon) {
-  ((ShenandoahOldGeneration*)_old_generation)->purge_satb_buffers(abandon);
+void ShenandoahHeap::purge_old_satb_buffers() {
+  ((ShenandoahOldGeneration*) _old_generation)->purge_satb_buffers();
 }
 
 template<>
