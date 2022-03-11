@@ -984,6 +984,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
   assert(_old_generation != NULL, "Should only have mixed collections in generation mode.");
+  log_info(gc)("Terminating old gc cycle.");
 
   // Stop marking
   old_generation()->cancel_marking();

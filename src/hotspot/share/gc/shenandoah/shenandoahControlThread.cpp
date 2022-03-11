@@ -473,6 +473,9 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
     // to enqueue old references.
     young_generation->set_old_gen_task_queues(NULL);
 
+    // Also clear old queues
+    old_generation->task_queues()->clear();
+
     // Also abandon any writes to the old generation that may be queued in the SATB buffers.
     // This needs to happen on a safepoint.
     // TODO: ShenandoahHeap::heap()->purge_old_satb_buffers(true);
