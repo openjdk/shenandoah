@@ -94,7 +94,7 @@ ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQu
 void ShenandoahScanRememberedTask::work(uint worker_id) {
   if (_is_concurrent) {
     // This sets up a thread local reference to the worker_id which is needed by the weak reference processor.
-    ShenandoahConcurrentWorkerSession worker_session(worker_id)
+    ShenandoahConcurrentWorkerSession worker_session(worker_id);
     ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
     do_work(worker_id);
   } else {
