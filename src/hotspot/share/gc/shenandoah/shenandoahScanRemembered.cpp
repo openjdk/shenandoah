@@ -93,12 +93,12 @@ ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQu
 
 void ShenandoahScanRememberedTask::work(uint worker_id) {
   if (_is_concurrent) {
-    // This sets up a thread local reference to the worker_id which is necessary the weak reference processor.
-    ShenandoahConcurrentWorkerSession worker_session(worker_id);
+    // This sets up a thread local reference to the worker_id which is needed by the weak reference processor.
+    ShenandoahConcurrentWorkerSession worker_session(worker_id)
     ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
     do_work(worker_id);
   } else {
-    // This sets up a thread local reference to the worker_id which is necessary the weak reference processor.
+    // This sets up a thread local reference to the worker_id which is needed by the weak reference processor.
     ShenandoahParallelWorkerSession worker_session(worker_id);
     do_work(worker_id);
   }
@@ -126,7 +126,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
     }
 #endif
     ShenandoahHeapRegion* region = assignment._r;
-    log_debug(gc)("ShenandoahScanRememberedTask::work(%u), processing slice of region "
+    log_debug(gc)("ShenandoahScanRememberedTask::do_work(%u), processing slice of region "
                   SIZE_FORMAT " at offset " SIZE_FORMAT ", size: " SIZE_FORMAT,
                   worker_id, region->index(), assignment._chunk_offset, assignment._chunk_size);
     if (region->affiliation() == OLD_GENERATION) {
