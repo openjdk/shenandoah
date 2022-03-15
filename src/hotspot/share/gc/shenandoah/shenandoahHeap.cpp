@@ -996,6 +996,13 @@ void ShenandoahHeap::cancel_old_gc() {
   young_generation()->set_old_gen_task_queues(nullptr);
 }
 
+bool ShenandoahHeap::is_old_gc_active() {
+  return is_concurrent_old_mark_in_progress()
+      || is_concurrent_prep_for_mixed_evacuation_in_progress()
+      || old_heuristics()->unprocessed_old_or_hidden_collection_candidates() > 0
+      || young_generation()->old_gen_task_queues() != nullptr;
+}
+
 void ShenandoahHeap::coalesce_and_fill_old_regions() {
   class ShenandoahGlobalCoalesceAndFill : public ShenandoahHeapRegionClosure {
    public:
