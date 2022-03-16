@@ -127,7 +127,7 @@ void ShenandoahDegenGC::op_degenerated() {
         // may hold a mix of old and young pointers. The old pointers need to be transferred
         // to the old generation mark queues and the young pointers are _not_ part of this
         // snapshot, so they must be dropped here.
-        heap->purge_old_satb_buffers();
+        heap->transfer_old_pointers_from_satb();
       }
 
       // Note that we can only do this for "outside-cycle" degens, otherwise we would risk

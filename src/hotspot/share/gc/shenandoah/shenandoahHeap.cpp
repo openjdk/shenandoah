@@ -2827,8 +2827,8 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   }
 }
 
-void ShenandoahHeap::purge_old_satb_buffers() {
-  ((ShenandoahOldGeneration*) _old_generation)->purge_satb_buffers();
+void ShenandoahHeap::transfer_old_pointers_from_satb() {
+  ((ShenandoahOldGeneration*) _old_generation)->transfer_pointers_from_satb();
 }
 
 template<>

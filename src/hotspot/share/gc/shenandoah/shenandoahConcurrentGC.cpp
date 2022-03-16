@@ -614,7 +614,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
       // Purge the SATB buffers, transferring any valid, old pointers to the
       // old generation mark queue. Any pointers in a young region will be
       // abandoned.
-      heap->purge_old_satb_buffers();
+      heap->transfer_old_pointers_from_satb();
     }
   }
 

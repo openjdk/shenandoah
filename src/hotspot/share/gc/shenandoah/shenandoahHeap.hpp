@@ -839,7 +839,7 @@ public:
 
   static inline void increase_object_age(oop obj, uint additional_age);
 
-  void purge_old_satb_buffers();
+  void transfer_old_pointers_from_satb();
 private:
   void trash_cset_regions();
 

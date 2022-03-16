@@ -164,7 +164,7 @@ void ShenandoahOldGeneration::cancel_marking() {
   ShenandoahGeneration::cancel_marking();
 }
 
-void ShenandoahOldGeneration::purge_satb_buffers() {
+void ShenandoahOldGeneration::transfer_pointers_from_satb() {
   ShenandoahHeap *heap = ShenandoahHeap::heap();
   shenandoah_assert_safepoint();
   assert(heap->is_concurrent_old_mark_in_progress(), "Only necessary during old marking.");
