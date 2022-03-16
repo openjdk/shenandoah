@@ -146,7 +146,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
       }
     }
 
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
+    if (heap->cancelled_gc()) {
       return false;
     }
 
@@ -200,16 +200,15 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // been filled.
   _allow_preemption.set();
 
-  if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle)) {
+  if (heap->cancelled_gc()) {
     return false;
   }
 
   if (heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
     if (!entry_coalesce_and_fill()) {
-      // If old-gen degenerates instead of resuming, we'll just start up an out-of-cycle degenerated GC.
-      // This should be a rare event.  Normally, we'll resume the coalesce-and-fill effort after the
-      // preempting young-gen GC finishes.
-      check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_outside_cycle);
+      // If an allocation failure occurs during coalescing, we will run a degenerated
+      // cycle for the young generation. This should be a rare event.  Normally, we'll
+      // resume the coalesce-and-fill effort after the preempting young-gen GC finishes.
       return false;
     }
   }
