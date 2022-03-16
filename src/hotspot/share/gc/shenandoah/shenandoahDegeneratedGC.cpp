@@ -90,16 +90,21 @@ void ShenandoahDegenGC::op_degenerated() {
   // some phase, we have to upgrade the Degenerate GC to Full GC.
   heap->clear_cancelled_gc(true /* clear oom handler */);
 
-  if (heap->mode()->is_generational() && _generation->generation_mode() == GenerationMode::GLOBAL) {
-    // We can only get to a degenerated global cycle _after_ a concurrent global cycle
-    // has been cancelled. In which case, we expect the concurrent global cycle to have
-    // cancelled the old gc already.
-    assert(!heap->is_old_gc_active(), "Old GC should not be active during global cycle.");
-  }
+#ifdef ASSERT
+  if (heap->mode()->is_generational()) {
+    if (_generation->generation_mode() == GenerationMode::GLOBAL) {
+      // We can only get to a degenerated global cycle _after_ a concurrent global cycle
+      // has been cancelled. In which case, we expect the concurrent global cycle to have
+      // cancelled the old gc already.
+      assert(!heap->is_old_gc_active(), "Old GC should not be active during global cycle.");
+    }
 
-  if (!heap->is_concurrent_old_mark_in_progress()) {
-    assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
+    if (!heap->is_concurrent_old_mark_in_progress()) {
+      // If we are not marking the old generation, there should be nothing in the old mark queues
+      assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
+    }
   }
+#endif
 
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
@@ -116,6 +121,14 @@ void ShenandoahDegenGC::op_degenerated() {
       // we can do the most aggressive degen cycle, which includes processing references and
       // class unloading, unless those features are explicitly disabled.
 
+      if (heap->is_concurrent_old_mark_in_progress()) {
+        // We have come straight into a degenerated cycle without running a concurrent cycle
+        // first and the SATB barrier is enabled to support concurrent old marking. The SATB buffer
+        // may hold a mix of old and young pointers. The old pointers need to be transferred
+        // to the old generation mark queues and the young pointers are _not_ part of this
+        // snapshot, so they must be dropped here.
+        heap->purge_old_satb_buffers();
+      }
 
       // Note that we can only do this for "outside-cycle" degens, otherwise we would risk
       // changing the cycle parameters mid-cycle during concurrent -> degenerated handover.
