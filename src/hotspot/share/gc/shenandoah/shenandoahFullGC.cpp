@@ -159,9 +159,14 @@ void ShenandoahFullGC::entry_full(GCCause::Cause cause) {
 }
 
 void ShenandoahFullGC::op_full(GCCause::Cause cause) {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
 
+  // Turn off GC cancellation in case cancellation is pending.  Otherwise, certain stop-the-world actions during
+  // full gc (such as coalescing and filling pinned ShenandoahHeapRegions) will be prematurely aborted.
+  heap->clear_cancelled_gc(true /* clear oom handler */);
+  
   // Perform full GC
   do_it(cause);
 
