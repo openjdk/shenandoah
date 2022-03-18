@@ -1140,7 +1140,7 @@ public:
         // reference to reclaimed memory. Remembered set scanning will crash if it attempts
         // to iterate the oops in these objects.
         r->begin_preemptible_coalesce_and_fill();
-        r->oop_fill_and_coalesce();
+        r->oop_fill_and_coalesce_wo_cancel();
       }
       r = _regions.next();
     }
