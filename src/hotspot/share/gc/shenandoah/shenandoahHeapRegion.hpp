@@ -393,7 +393,7 @@ public:
   // region is completely coalesced and filled.  Returns false if cancelled before task is complete.
   bool oop_fill_and_coalesce();
 
-  // Like oop_fill_and_coalesc(), but without honoring cancellation requests.
+  // Like oop_fill_and_coalesce(), but without honoring cancellation requests.
   bool oop_fill_and_coalesce_wo_cancel();
 
   // During global collections, this service iterates through an old-gen heap region that is not part of collection
