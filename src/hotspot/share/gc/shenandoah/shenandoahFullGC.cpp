@@ -159,6 +159,7 @@ void ShenandoahFullGC::entry_full(GCCause::Cause cause) {
 }
 
 void ShenandoahFullGC::op_full(GCCause::Cause cause) {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
 
@@ -193,6 +194,11 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_old_evac_reserve(0);
   heap->reset_old_evac_expended();
   heap->set_promotion_reserve(0);
+
+  if (heap->mode()->is_generational()) {
+    // Full GC supersedes any marking or coalescing in old generation.
+    heap->cancel_old_gc();
+  }
 
   if (ShenandoahVerify) {
     heap->verifier()->verify_before_fullgc();
@@ -1130,7 +1136,7 @@ public:
         // reference to reclaimed memory. Remembered set scanning will crash if it attempts
         // to iterate the oops in these objects.
         r->begin_preemptible_coalesce_and_fill();
-        r->oop_fill_and_coalesce();
+        r->oop_fill_and_coalesce_wo_cancel();
       }
       r = _regions.next();
     }
