@@ -284,14 +284,14 @@
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
                                                                             \
-  product(double, ShenandoahGenerationalEvacWaste, 1.6, EXPERIMENTAL,       \
+  product(double, ShenandoahGenerationalEvacWaste, 2.0, EXPERIMENTAL,       \
           "For generational mode, how much waste evacuations produce "      \
           "within the reserved space.  Larger values make evacuations "     \
           "more resilient against evacuation conflicts, at expense of "     \
           "evacuating less on each GC cycle.  Smaller values increase "     \
           "the risk of evacuation failures, which will trigger "            \
           "stop-the-world Full GC passes.  The default value for "          \
-          "generational mode is 1.6.  The reason for the higher default "   \
+          "generational mode is 2.0.  The reason for the higher default "   \
           "value in generational mode is because generational mode "        \
           "enforces the evacuation budget, triggering degenerated GC "      \
           "which upgrades to full GC whenever the budget is exceeded.")     \
