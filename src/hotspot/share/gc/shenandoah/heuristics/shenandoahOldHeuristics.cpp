@@ -101,8 +101,9 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 
   size_t old_evacuation_budget = (size_t) (max_old_evacuation_bytes / ShenandoahEvacWaste);
 
-  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s",
-                byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget));
+  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
+               byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
+               unprocessed_old_collection_candidates());
 
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
   size_t lost_evacuation_capacity = 0;

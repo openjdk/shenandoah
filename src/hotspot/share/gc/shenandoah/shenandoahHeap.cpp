@@ -2558,8 +2558,10 @@ private:
             // old-gen heap regions.
 
             if (r->is_humongous()) {
-              // Need to examine both dirty and clean cards during mixed evac.
-              r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true, CONCURRENT);
+              if (start_of_range < end_of_range) {
+                // Need to examine both dirty and clean cards during mixed evac.
+                r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true, CONCURRENT);
+              }
             } else {
               // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
               // and filled.  Use mark bits to find objects that need to be updated.
@@ -2567,35 +2569,37 @@ private:
               // Future TODO: establish a second remembered set to identify which old-gen regions point to other old-gen
               // regions which are in the collection set for a particular mixed evacuation.
 
-              HeapWord* p = nullptr;
-              size_t card_index = scanner->card_index_for_addr(start_of_range);
-              ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, end_of_range);
+              if (start_of_range < end_of_range) {
+                HeapWord* p = nullptr;
+                size_t card_index = scanner->card_index_for_addr(start_of_range);
+                ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, end_of_range);
 
-              // Any object that begins in a previous range is part of a different scanning assignment.  Any object that
-              // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
-              // not hold pointers to from-space, or is beyond the range of my assigned work chunk.)
+                // Any object that begins in a previous range is part of a different scanning assignment.  Any object that
+                // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
+                // not hold pointers to from-space, or is beyond the range of my assigned work chunk.)
 
-              // If there is not an object at address p, then ctx->is_marked(obj) will fail below.
-              p = start_of_range;
-              while (p < end_of_range) {
-                oop obj = cast_to_oop(p);
-                if (ctx->is_marked(obj)) {
-                  objs.do_object(obj);
-                  p += obj->size();
-                } else {
-                  // This object is not marked so we don't scan it.
-                  HeapWord* tams = ctx->top_at_mark_start(r);
-                  if (p >= tams) {
+                // If there is not an object at address p, then ctx->is_marked(obj) will fail below.
+                p = start_of_range;
+                while (p < end_of_range) {
+                  oop obj = cast_to_oop(p);
+                  if (ctx->is_marked(obj)) {
+                    objs.do_object(obj);
                     p += obj->size();
                   } else {
-                    p = ctx->get_next_marked_addr(p, tams);
+                    // This object is not marked so we don't scan it.
+                    HeapWord* tams = ctx->top_at_mark_start(r);
+                    if (p >= tams) {
+                      p += obj->size();
+                    } else {
+                      p = ctx->get_next_marked_addr(p, tams);
+                    }
                   }
                 }
               }
             }
           } else {
             // This is a young evac..
-            if (end_of_range > start_of_range) {
+            if (start_of_range < end_of_range) {
               size_t cluster_size =
                 CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
               size_t clusters = assignment._chunk_size / cluster_size;
@@ -2603,7 +2607,7 @@ private:
               scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT);
             }
           }
-          if (ShenandoahPacing) {
+          if (ShenandoahPacing && (start_of_range < end_of_range)) {
             _heap->pacer()->report_updaterefs(pointer_delta(end_of_range, start_of_range));
           }
         }
