@@ -515,7 +515,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _old_evac_reserve(0),
   _old_evac_expended(0),
   _young_evac_reserve(0),
-  _young_evac_expended(0),
   _captured_old_usage(0),
   _previous_promotion(0),
   _cancel_requested_time(0),
@@ -1167,20 +1166,12 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   ShenandoahHeapLocker locker(lock());
   if (mode()->is_generational()) {
     if (req.affiliation() == YOUNG_GENERATION) {
-      if (req.is_gc_alloc()) {
-        // This is a shared alloc for purposes of evacuation.
-        size_t expended = get_young_evac_expended();
-        size_t reserved = get_young_evac_reserve();
-        if (requested_bytes + expended > reserved) {
-          // Expended may exceed budget because of GCLAB size growth.
-          log_info(gc)("Evacuation expended (" SIZE_FORMAT "%s) has exceeded budget (" SIZE_FORMAT "%s)",
-                       byte_size_in_proper_unit(expended), proper_unit_for_byte_size(expended),
-                       byte_size_in_proper_unit(reserved), proper_unit_for_byte_size(reserved));
+      if (req.is_mutator_alloc()) {
+        if (requested_bytes >= young_generation()->adjusted_available()) {
+          // We know this is not a GCLAB.  This must be a TLAB or a shared allocation.  Reject the allocation request if
+          // exceeds established capacity limits.
+          return nullptr;
         }
-      }  else if (requested_bytes >= young_generation()->adjusted_available()) {
-        // We know this is not a GCLAB.  This must be a TLAB or a shared allocation.  Reject the allocation request if
-        // exceeds established capacity limits.
-        return nullptr;
       }
     } else {                    // reg.affiliation() == OLD_GENERATION
       assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
