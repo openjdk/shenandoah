@@ -2440,7 +2440,7 @@ private:
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();
-#undef KELVIN_TRACE_CANCEL
+#define KELVIN_TRACE_CANCEL
 #ifdef KELVIN_TRACE_CANCEL
     if (r != NULL) {
       printf("[%u] Begin update heap refs with young region " SIZE_FORMAT "\n", worker_id, r->index());
@@ -2499,7 +2499,8 @@ private:
       r = _regions->next();
     }
     if (_heap->mode()->is_generational() && (_heap->active_generation()->generation_mode() != GLOBAL)) {
-      // There's no remembered set processing if not in generational mode or if GLOBAL mode of generational.
+      // Since this is generational and not GLOBAL, we have to process the remembered set.  There's no remembered
+      // set processing if not in generational mode or if GLOBAL mode.
 
       // After this thread has exhausted its traditional update-refs work, it continues with updating refs within remembered set.
       // The remembered set workload is better balanced between threads, so threads that are "behind" can catch up with other
@@ -2507,17 +2508,20 @@ private:
       work_chunk assignment;
       bool have_work = _work_chunks->next(&assignment);
 #ifdef KELVIN_TRACE_CANCEL
-      if (have_work) {
-        ShenandoahHeapRegion* r = assignment._r;
-        printf("[%d]: Begin update heap refs with chunk region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", size: "
-               SIZE_FORMAT "\n", worker_id, r->index(), p2i(r->bottom() + assignment._chunk_offset), 
-               p2i(r->bottom() + assignment._chunk_offset + assignment._chunk_size), assignment._chunk_size);
+      if (!have_work) {
+        printf("[%d]: No more work for generational non-GLOBAL update heap refs\n", worker_id);
         fflush(stdout);
       }
 #endif
       RememberedScanner* scanner = _heap->card_scan();
       while (have_work) {
         ShenandoahHeapRegion* r = assignment._r;
+#ifdef KELVIN_TRACE_CANCEL
+        printf("[%d]: At top of generational non-GLOBAL update heap refs with chunk region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", size: "
+               SIZE_FORMAT "\n", worker_id, r->index(), p2i(r->bottom() + assignment._chunk_offset), 
+               p2i(r->bottom() + assignment._chunk_offset + assignment._chunk_size), assignment._chunk_size);
+        fflush(stdout);
+#endif
 
         if (r->is_active() && !r->is_cset() && (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION)) {
           HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
@@ -2540,7 +2544,15 @@ private:
             if (r->is_humongous()) {
               if (start_of_range < end_of_range) {
                 // Need to examine both dirty and clean cards during mixed evac.
+#ifdef KELVIN_TRACE_CANCEL
+                printf("[%d]: Attempting mixed oop_iterate_humongous_slice()\n", worker_id);
+                fflush(stdout);
+#endif
                 r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true, CONCURRENT);
+#ifdef KELVIN_TRACE_CANCEL
+                printf("[%d]: Back from mixed oop_iterate_humongous_slice()\n", worker_id);
+                fflush(stdout);
+#endif
               }
             } else {
               // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
@@ -2548,6 +2560,10 @@ private:
               //
               // Future TODO: establish a second remembered set to identify which old-gen regions point to other old-gen
               // regions which are in the collection set for a particular mixed evacuation.
+#ifdef KELVIN_TRACE_CANCEL
+              printf("[%d]: Attempting mixed iteration over objects\n", worker_id);
+              fflush(stdout);
+#endif
 
               if (start_of_range < end_of_range) {
                 HeapWord* p = nullptr;
@@ -2558,44 +2574,100 @@ private:
                 // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
                 // not hold pointers to from-space, or is beyond the range of my assigned work chunk.)
 
-                // If there is not an object at address p, then ctx->is_marked(obj) will fail below.
+                // Find the first object that begins in my range, if there is one.
                 p = start_of_range;
-                while (p < end_of_range) {
-                  oop obj = cast_to_oop(p);
-                  if (ctx->is_marked(obj)) {
-                    objs.do_object(obj);
-                    p += obj->size();
-                  } else {
-                    // This object is not marked so we don't scan it.
-                    HeapWord* tams = ctx->top_at_mark_start(r);
-                    if (p >= tams) {
-                      p += obj->size();
+                oop obj = cast_to_oop(p);
+                HeapWord* tams = ctx->top_at_mark_start(r);
+                if (p >= tams) {
+                  // We cannot use ctx->is_marked(obj) to test whether an object begins at this address.  Instead,
+                  // we need to use the remembered set crossing map to advance p to the first object that starts
+                  // within the enclosing card.
+
+                  while (true) {
+                    HeapWord* first_object = scanner->first_object_in_card(card_index);
+                    if (first_object != nullptr) {
+                      p = first_object;
+                      break;
+                    } else if (scanner->addr_for_card_index(card_index + 1) < end_of_range) {
+                      card_index++;
                     } else {
-                      p = ctx->get_next_marked_addr(p, tams);
+                      // Force the loop that follows to immediately terminate.
+                      p = end_of_range;
+                      break;
                     }
                   }
+                  obj = cast_to_oop(p);
+                  // Note: p may be >= end_of_range
+                } else if (!ctx->is_marked(obj)) {
+                  p = ctx->get_next_marked_addr(p, tams);
+                  obj = cast_to_oop(p);
+                  // If there are no more marked objects before tams, this returns tams.
+                  // Note that tams is either >= end_of_range, or tams is the start of an object that is marked.
                 }
+#ifdef KELVIN_TRACE_CANCEL
+                printf("[%d]: Starting mixed iteration over objects, first object in range " PTR_FORMAT ", TAMS: " PTR_FORMAT "\n",
+                       worker_id, p2i(p), p2i(tams));
+                fflush(stdout);
+#endif
+                while (p < end_of_range) {
+                  // p is known to point to the beginning of marked object obj
+                  objs.do_object(obj);
+#ifdef KELVIN_TRACE_CANCEL
+                  printf("[%d]: Back from do_object(" PTR_FORMAT ")\n", worker_id, p2i(obj));
+                  fflush(stdout);
+#endif
+                  HeapWord* prev_p = p;
+                  if (p >= tams) {
+                    p += obj->size();
+                  } else {
+                    p = ctx->get_next_marked_addr(p, tams);
+                    // If there are no more marked objects before tams, this returns tams.
+                    // Note that tams is either >= end_of_range, or tams is the start of an object that is marked.
+                  }
+                  assert(p != prev_p, "Lack of forward progress");
+                  obj = cast_to_oop(p);
+                }
+#ifdef KELVIN_TRACE_CANCEL
+                printf("[%d]: Back from mixed iteration over objects in range\n", worker_id);
+                fflush(stdout);
+#endif
               }
             }
           } else {
             // This is a young evac..
             if (start_of_range < end_of_range) {
+#ifdef KELVIN_TRACE_CANCEL
+            printf("[%d]: Attempting mixed young-evac process_region_slice over range [" PTR_FORMAT ", " PTR_FORMAT "]\n",
+                   worker_id, p2i(start_of_range), p2i(end_of_range));
+            fflush(stdout);
+#endif
               size_t cluster_size =
                 CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
               size_t clusters = assignment._chunk_size / cluster_size;
               assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
               scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT);
             }
+#ifdef KELVIN_TRACE_CANCEL
+            printf("[%d]: Done with mixed young-evac process_region_slice over range [" PTR_FORMAT ", " PTR_FORMAT "]\n",
+                   worker_id, p2i(start_of_range), p2i(end_of_range));
+            fflush(stdout);
+#endif
           }
           if (ShenandoahPacing && (start_of_range < end_of_range)) {
             _heap->pacer()->report_updaterefs(pointer_delta(end_of_range, start_of_range));
           }
         }
         // Otherwise, this work chunk had nothing for me to do, so do not report pacer progress.
+#ifdef KELVIN_TRACE_CANCEL
+        else {
+          printf("[%d]: Ignoring assignment because it does not pertain to OLD generation\n", worker_id);
+          fflush(stdout);
+        }
+#endif
 
         // Before we take responsibility for another chunk of work, see if cancellation is requested.
         if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
-#ifdef KELVIN_TRACE_CANCELLATION
+#ifdef KELVIN_TRACE_CANCEL
           printf("[%d]: Cancel update heap refs for chunk region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT ", size: "
                  SIZE_FORMAT "\n", worker_id, r->index(), p2i(r->bottom() + assignment._chunk_offset), 
                  p2i(r->bottom() + assignment._chunk_offset + assignment._chunk_size), assignment._chunk_size);
@@ -2603,8 +2675,15 @@ private:
 #endif
           return;
         }
-
+#ifdef KELVIN_TRACE_CANCEL
+        printf("[%d]: Remembered set processing has not been cancelled\n", worker_id);
+        fflush(stdout);
+#endif
         have_work = _work_chunks->next(&assignment);
+#ifdef KELVIN_TRACE_CANCEL
+        printf("[%d]: Remembered set processing there is %swork enough to do\n", worker_id, have_work? "": "not ");
+        fflush(stdout);
+#endif
       }
     }
   }

@@ -931,6 +931,14 @@ public:
   void register_object_wo_lock(HeapWord *addr);
   void coalesce_objects(HeapWord *addr, size_t length_in_words);
 
+  HeapWord* first_object_in_card(size_t card_index) {
+    if (_scc->has_object(card_index)) {
+      return addr_for_card_index(card_index) + _scc->get_first_start(card_index);
+    } else {
+      return nullptr;
+    }
+  }
+
   // Return true iff this object is "properly" registered.
   bool verify_registration(HeapWord* address, ShenandoahMarkingContext* ctx);
 
