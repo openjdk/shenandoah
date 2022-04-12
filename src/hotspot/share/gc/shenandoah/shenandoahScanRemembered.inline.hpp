@@ -449,9 +449,12 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
         last_obj = obj;
       } else {
         offset = ctx->get_next_marked_addr(base_addr + offset, tams) - base_addr;
-        // offset will be zero if no objects are marked in this card.
+        // If there are no marked objects remaining in this region, offset equals tams - base_addr.  If this offset is
+        // greater than max_offset, we will immediately exit this loop.  Otherwise, the next iteration of the loop will
+        // treat the object at offset as marked and live (because address >= tams) and we will continue iterating object
+        // by consulting the size() fields of each.
       }
-    } while (offset > 0 && offset < max_offset);
+    } while (offset < max_offset);
     if (last_obj != nullptr && prev_offset + last_obj->size() >= max_offset) {
       // last marked object extends beyond end of card
       if (_scc->get_last_start(index) != prev_offset) {

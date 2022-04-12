@@ -2400,6 +2400,20 @@ ShenandoahVerifier* ShenandoahHeap::verifier() {
   return _verifier;
 }
 
+#undef KELVIN_BREAKPOINT
+#ifdef KELVIN_BREAKPOINT
+HeapWord *kelvin_get_next_marked(ShenandoahMarkingContext* const ctx, HeapWord* p, HeapWord* tams) {
+  printf("Here's an invocation(" PTR_FORMAT ", " PTR_FORMAT ")\n", p2i(p), p2i(tams));
+  return ctx->get_next_marked_addr(p, tams);
+}
+
+void kelvin_breakpoint(HeapWord* p, HeapWord* prev_p) {
+  printf("Got to kelvin breakpoint because " PTR_FORMAT " equals " PTR_FORMAT "\n", 
+         p2i(p), p2i(prev_p));
+}
+#endif
+
+
 template<bool CONCURRENT>
 class ShenandoahUpdateHeapRefsTask : public WorkerTask {
 private:
@@ -2440,7 +2454,7 @@ private:
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();
-#define KELVIN_TRACE_CANCEL
+#undef KELVIN_TRACE_CANCEL
 #ifdef KELVIN_TRACE_CANCEL
     if (r != NULL) {
       printf("[%u] Begin update heap refs with young region " SIZE_FORMAT "\n", worker_id, r->index());
@@ -2617,13 +2631,17 @@ private:
                   fflush(stdout);
 #endif
                   HeapWord* prev_p = p;
-                  if (p >= tams) {
-                    p += obj->size();
-                  } else {
+                  p += obj->size();
+                  if (p < tams) {
                     p = ctx->get_next_marked_addr(p, tams);
-                    // If there are no more marked objects before tams, this returns tams.
-                    // Note that tams is either >= end_of_range, or tams is the start of an object that is marked.
+                    // If there are no more marked objects before tams, this returns tams.  Note that tams is
+                    // either >= end_of_range, or tams is the start of an object that is marked.
                   }
+#ifdef KELVIN_BREAKPOINT
+                  if (p == prev_p) {
+                    kelvin_breakpoint(p, prev_p);
+                  }
+#endif
                   assert(p != prev_p, "Lack of forward progress");
                   obj = cast_to_oop(p);
                 }
