@@ -53,6 +53,8 @@ class outputStream;
   f(init_mark_gross,                                "Pause Init Mark (G)")             \
   f(init_mark,                                      "Pause Init Mark (N)")             \
   f(init_manage_tlabs,                              "  Manage TLABs")                  \
+  f(init_swap_rset,                                 "  Swap Remembered Set")           \
+  f(init_transfer_satb,                             "  Transfer Old From SATB")        \
   f(init_update_region_states,                      "  Update Region States")          \
                                                                                        \
   f(init_scan_rset,                                 "Concurrent Scan Remembered Set")  \
