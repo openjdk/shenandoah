@@ -66,8 +66,6 @@ class outputStream;
   f(final_mark,                                     "Pause Final Mark (N)")            \
   f(finish_mark,                                    "  Finish Mark")                   \
   SHENANDOAH_PAR_PHASE_DO(finish_mark_,             "    FM: ", f)                     \
-  f(coalesce_and_fill,                              "Coalesce and Fill Old Dead")      \
-  SHENANDOAH_PAR_PHASE_DO(coalesce_and_fill_,       "    CFOD: ", f)                   \
   f(purge,                                          "  System Purge")                  \
   SHENANDOAH_PAR_PHASE_DO(purge_cu_par_,            "      CU: ", f)                   \
   f(purge_weak_par,                                 "    Weak Roots")                  \
@@ -100,6 +98,8 @@ class outputStream;
   f(conc_class_unload_purge_ec,                     "    Exception Caches")            \
   f(conc_strong_roots,                              "Concurrent Strong Roots")         \
   SHENANDOAH_PAR_PHASE_DO(conc_strong_roots_,       "  CSR: ", f)                      \
+  f(coalesce_and_fill,                              "Coalesce and Fill Old Dead")      \
+  SHENANDOAH_PAR_PHASE_DO(coalesce_and_fill_,       "    CFOD: ", f)                   \
   f(conc_evac,                                      "Concurrent Evacuation")           \
                                                                                        \
   f(final_roots_gross,                              "Pause Final Roots (G)")           \
