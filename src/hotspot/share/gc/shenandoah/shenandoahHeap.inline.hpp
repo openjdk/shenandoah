@@ -633,7 +633,7 @@ inline size_t ShenandoahHeap::set_old_evac_reserve(size_t new_val) {
 
 inline size_t ShenandoahHeap::get_old_evac_reserve() const {
   size_t result = _old_evac_reserve;
-y  return result;
+  return result;
 }
 
 inline void ShenandoahHeap::reset_old_evac_expended() {
