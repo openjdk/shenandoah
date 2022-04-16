@@ -58,6 +58,8 @@ private:
 
   size_t _plab_evacuated;
   size_t _plab_promoted;
+  size_t _plab_preallocated_promoted;
+  bool   _plab_retries_enabled;
 
   uint  _worker_id;
   int  _disarmed_value;
@@ -74,6 +76,8 @@ private:
     _plab_size(0),
     _plab_evacuated(0),
     _plab_promoted(0),
+    _plab_preallocated_promoted(0),
+    _plab_retries_enabled(true),
     _disarmed_value(0),
     _paced_time(0) {
 
@@ -155,6 +159,18 @@ public:
     data(thread)->_plab_size = v;
   }
 
+  static void enable_plab_retries(Thread* thread) {
+    data(thread)->_plab_retries_enabled = true;
+  }
+
+  static void disable_plab_retries(Thread* thread) {
+    data(thread)->_plab_retries_enabled = false;
+  }
+
+  static bool plab_retries_enabled(Thread* thread) {
+    return data(thread)->_plab_retries_enabled;
+  }
+
   static void enable_plab_promotions(Thread* thread) {
     data(thread)->_plab_allows_promotion = true;
   }
@@ -197,6 +213,14 @@ public:
 
   static size_t get_plab_promoted(Thread* thread) {
     return data(thread)->_plab_promoted;
+  }
+
+  static void set_plab_preallocated_promoted(Thread* thread, size_t value) {
+    data(thread)->_plab_preallocated_promoted = value;
+  }
+
+  static size_t get_plab_preallocated_promoted(Thread* thread) {
+    return data(thread)->_plab_preallocated_promoted;
   }
 
   static void add_paced_time(Thread* thread, double v) {

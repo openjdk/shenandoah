@@ -300,7 +300,14 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         promotion_reserve = previously_promoted * 2;
       }
 
-      heap->set_promotion_reserve(promotion_reserve);
+      // Do not fill up old-gen memory with promotions.  Reserve some amount of memory for compaction purposes.
+      if (old_generation->available() -
+          ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes() < promotion_reserve) {
+
+        promotion_reserve =
+          old_generation->available() - ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes();
+      }
+      heap->set_promoted_reserve(promotion_reserve);
       heap->capture_old_usage(old_generation->used());
 
       //  OldEvacuationReserve for old generation: how much memory are we reserving to hold the results of

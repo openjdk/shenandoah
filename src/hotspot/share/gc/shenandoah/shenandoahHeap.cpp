@@ -511,7 +511,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _regions(NULL),
   _update_refs_iterator(this),
   _alloc_supplement_reserve(0),
-  _promotion_reserve(0),
+  _promoted_reserve(0),
   _old_evac_reserve(0),
   _old_evac_expended(0),
   _young_evac_reserve(0),
@@ -903,27 +903,28 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   size_t min_size = MAX2(size, PLAB::min_size());
 
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
-  size_t new_size = ShenandoahThreadLocalData::plab_size(thread) * 2;
+  size_t cur_size = ShenandoahThreadLocalData::plab_size(thread);
+  size_t future_size = cur_size * 2;
   // Limit growth of PLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
   // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
   if (ShenandoahMaxEvacLABRatio > 0) {
-    new_size = MIN2(new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
+    future_size = MIN2(future_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
   }
-  new_size = MIN2(new_size, PLAB::max_size());
-  new_size = MAX2(new_size, PLAB::min_size());
+  future_size = MIN2(future_size, PLAB::max_size());
+  future_size = MAX2(future_size, PLAB::min_size());
 
-  size_t unalignment = new_size % CardTable::card_size_in_words();
+  size_t unalignment = cur_size % CardTable::card_size_in_words();
   if (unalignment != 0) {
-    new_size = new_size - unalignment + CardTable::card_size_in_words();
+    cur_size = cur_size - unalignment + CardTable::card_size_in_words();
   }
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
-  // heuristics should catch up with them.  Note that the requested new_size may
+  // heuristics should catch up with them.  Note that the requested cur_size may
   // not be honored, but we remember that this is the preferred size.
-  ShenandoahThreadLocalData::set_plab_size(thread, new_size);
+  ShenandoahThreadLocalData::set_plab_size(thread, future_size);
 
-  if (new_size < size) {
+  if (cur_size < size) {
     // New size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good PLABs, when we encounter a large object.
     return NULL;
@@ -938,8 +939,8 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   size_t actual_size = 0;
   // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
-  // less than the remaining evacuation need.
-  HeapWord* plab_buf = allocate_new_plab(min_size, new_size, &actual_size);
+  // less than the remaining evacuation need.  It also adjusts plab_preallocated and expend_promoted if appropriate.
+  HeapWord* plab_buf = allocate_new_plab(min_size, cur_size, &actual_size);
   if (plab_buf == NULL) {
     return NULL;
   }
@@ -976,9 +977,18 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
     plab->retire();
   } else {
     Thread* thread = Thread::current();
-    size_t evacuated = ShenandoahThreadLocalData::get_plab_evacuated(thread);
-    // We don't enforce limits on get_plab_promoted(thread).  Promotion uses any memory not required for evacuation.
-    expend_old_evac(evacuated);
+
+    // We don't enforce limits on plab_evacuated.  We let it consume all available old-gen memory in order to reduce
+    // probability of an evacuation failure.  We do enforce limits on promotion, to make sure that excessive promotion
+    // does not result in an old-gen evacuation failure.  Note that a failed promotion is relatively harmless.  Any
+    // object that fails to promote in the current cycle will be eligible for promotion in a subsequent cycle.
+    size_t not_promoted =
+      ShenandoahThreadLocalData::get_plab_preallocated_promoted(thread) - ShenandoahThreadLocalData::get_plab_promoted(thread);
+    ShenandoahThreadLocalData::reset_plab_promoted(thread);
+    ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
+    if (not_promoted > 0) {
+      unexpend_promoted(not_promoted);
+    }
     size_t waste = plab->waste();
     HeapWord* top = plab->top();
     plab->retire();
@@ -1161,9 +1171,13 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region, bool is_promotion) {
+  // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
+  bool promotion_eligible = false;
+  bool plab_alloc = false;
   size_t requested_bytes = req.size() * HeapWordSize;
 
   ShenandoahHeapLocker locker(lock());
+  Thread* thread = Thread::current();
   if (mode()->is_generational()) {
     if (req.affiliation() == YOUNG_GENERATION) {
       if (req.is_mutator_alloc()) {
@@ -1175,32 +1189,35 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       }
     } else {                    // reg.affiliation() == OLD_GENERATION
       assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-
       if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
         // We've already retired this thread's previously exhausted PLAB and have accounted for how that PLAB's
         // memory was allotted.
-        Thread* thread = Thread::current();
         ShenandoahThreadLocalData::reset_plab_evacuated(thread);
         ShenandoahThreadLocalData::reset_plab_promoted(thread);
+        plab_alloc = true;
 
-        // Conservatively, assume this entire PLAB will be used for promotion.  Act as if we need to serve the
-        // rest of evacuation need from as-yet unallocated old-gen memory.
-        size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
-        size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
-        if (remaining_evac_need >= evac_available) {
-          // Disable promotions within this thread because the entirety of this PLAB must be available to hold
-          // old-gen evacuations.
-          ShenandoahThreadLocalData::disable_plab_promotions(thread);
+        size_t promotion_avail = get_promoted_reserve();
+        size_t promotion_expended = get_promoted_expended();
+        if (promotion_expended + requested_bytes > promotion_avail) {
+          promotion_avail = 0;
         } else {
-          ShenandoahThreadLocalData::enable_plab_promotions(thread);
+          promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
+          promotion_eligible = true;
         }
       } else if (is_promotion) {
         // This is a shared alloc for promotion
-        Thread* thread = Thread::current();
-        size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
-        size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
-        if (remaining_evac_need >= evac_available) {
-          return nullptr;       // We need to reserve the remaining memory for evacuation so defer the promotion
+        size_t promotion_avail = get_promoted_reserve();
+        size_t promotion_expended = get_promoted_expended();
+        if (promotion_expended + requested_bytes > promotion_avail) {
+          promotion_avail = 0;
+        } else {
+          promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
+        }
+
+        if (promotion_avail == 0) {
+          // We need to reserve the remaining memory for evacuation.  Reject this allocation.  The object will be
+          // evacuated to young-gen memory and promoted during a future GC pass.
+          return nullptr;
         }
         // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
       } else {
@@ -1209,9 +1226,36 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     }
   }
 
-  HeapWord* result = _free_set->allocate(req, in_new_region);
+  HeapWord* result;
+  if (plab_alloc && !promotion_eligible && (ShenandoahThreadLocalData::plab_size(thread) > PLAB::min_size())) {
+    // Simulate failure of the allocation in order to force the PLAB size to shrink, in hopes of still promoting out of PLAB
+    result = nullptr;
+  } else {
+    result = _free_set->allocate(req, in_new_region);
+  }
   if (result != NULL) {
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      ShenandoahThreadLocalData::reset_plab_promoted(thread);
+      if (req.is_gc_alloc()) {
+        if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+          if (promotion_eligible) {
+            size_t actual_size = req.actual_size() * HeapWordSize;
+            // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
+            // When we retire this plab, we'll unexpend what we don't really use.
+            ShenandoahThreadLocalData::enable_plab_promotions(thread);
+            expend_promoted(actual_size);
+            ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
+          } else {
+            // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
+            ShenandoahThreadLocalData::disable_plab_promotions(thread);
+            ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
+          }
+        } else if (is_promotion) {
+          // Shared promotion.  Assume size is requested_bytes.
+          expend_promoted(requested_bytes);
+        }
+      }
+
       // Register the newly allocated object while we're holding the global lock since there's no synchronization
       // built in to the implementation of register_object().  There are potential races when multiple independent
       // threads are allocating objects, some of which might span the same card region.  For example, consider
@@ -1230,6 +1274,14 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       // representing object b while first-start represents object c.  This is why we need to require all register_object()
       // invocations to be "mutually exclusive" with respect to each card's memory range.
       ShenandoahHeap::heap()->card_scan()->register_object(result);
+    }
+  } else {
+    // The allocation failed.  If this was a plab allocation, We've already retired it and no longer have a plab.
+    if ((req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) && req.is_gc_alloc() &&
+        (req.type() == ShenandoahAllocRequest::_alloc_plab)) {
+      // We don't need to disable PLAB promotions because there is no PLAB.  We leave promotions enabled because
+      // this allows the surrounding infrastructure to retry alloc_plab_slow() with a smaller PLAB size.
+      ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
     }
   }
   return result;
