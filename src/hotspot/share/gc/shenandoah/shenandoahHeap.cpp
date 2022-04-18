@@ -2634,7 +2634,8 @@ private:
               if (start_of_range < end_of_range) {
                 HeapWord* p = nullptr;
                 size_t card_index = scanner->card_index_for_addr(start_of_range);
-                ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, end_of_range);
+                // In case last object in my range spans boundary of my chunk, I may need to scan all the way to top()
+                ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, r->top());
 
                 // Any object that begins in a previous range is part of a different scanning assignment.  Any object that
                 // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
