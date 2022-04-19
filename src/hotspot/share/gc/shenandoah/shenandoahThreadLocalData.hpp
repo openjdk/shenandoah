@@ -56,14 +56,15 @@ private:
   PLAB* _plab;
   size_t _plab_size;
 
+  uint  _worker_id;
+  int  _disarmed_value;
+  double _paced_time;
+
   size_t _plab_evacuated;
   size_t _plab_promoted;
   size_t _plab_preallocated_promoted;
   bool   _plab_retries_enabled;
 
-  uint  _worker_id;
-  int  _disarmed_value;
-  double _paced_time;
 
   ShenandoahThreadLocalData() :
     _gc_state(0),
@@ -74,12 +75,12 @@ private:
     _gclab_size(0),
     _plab(NULL),
     _plab_size(0),
+    _disarmed_value(0),
+    _paced_time(0),
     _plab_evacuated(0),
     _plab_promoted(0),
     _plab_preallocated_promoted(0),
-    _plab_retries_enabled(true),
-    _disarmed_value(0),
-    _paced_time(0) {
+    _plab_retries_enabled(true) {
 
     // At least on x86_64, nmethod entry barrier encodes _disarmed_value offset
     // in instruction as disp8 immed
