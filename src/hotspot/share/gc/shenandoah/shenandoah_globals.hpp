@@ -324,7 +324,7 @@
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
                                                                             \
-  product(uintx, ShenandoahOldEvacReserve, 2, EXPERIMENTAL,                 \
+  product(uintx, ShenandoahOldEvacReserve, 5, EXPERIMENTAL,                 \
           "How much of old-generation heap to reserve for old-generation "  \
           "evacuations.  Larger values allow GC to evacuate more live "     \
           "old-generation objects on every cycle, while potentially "       \
