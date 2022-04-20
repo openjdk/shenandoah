@@ -221,9 +221,8 @@ void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
   }
 }
 
-// Returns true iff the chosen collection set includes a mix of young-gen and old-gen regions.
-bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
-  bool result;
+void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
+
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahCollectionSet* collection_set = heap->collection_set();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -406,7 +405,7 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
     // GC is evacuating and updating references.
 
-    result = _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
+    _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
 
     // At this point, young_generation->available() knows about recently discovered immediate garbage.  We also
     // know the composition of the chosen collection set.
@@ -569,7 +568,6 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->rebuild();
   }
-  return result;
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {

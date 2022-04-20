@@ -77,9 +77,8 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
-// Returns true iff the chosen collection set includes old-gen regions
-bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
-  bool result = false;
+void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
+
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   assert(collection_set->count() == 0, "Must be empty");
@@ -184,9 +183,7 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   if (immediate_percent <= ShenandoahImmediateThreshold) {
 
     if (old_heuristics != NULL) {
-      if (old_heuristics->prime_collection_set(collection_set)) {
-        result = true;
-      }
+      old_heuristics->prime_collection_set(collection_set);
 
       // We can shrink old_evac_reserve() if the chosen collection set is smaller than maximum allowed.
       size_t bytes_reserved_for_old_evacuation = collection_set->get_old_bytes_reserved_for_evacuation();
@@ -200,7 +197,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
     // of the heuristics subclasses.
     choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
-
   }
   // else, we're going to skip evacuation and update refs because we reclaimed sufficient amounts of immediate garbage.
 
@@ -223,7 +219,6 @@ bool ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      byte_size_in_proper_unit(collection_set->garbage()),
                      proper_unit_for_byte_size(collection_set->garbage()),
                      cset_percent);
-  return result;
 }
 
 void ShenandoahHeuristics::record_cycle_start() {

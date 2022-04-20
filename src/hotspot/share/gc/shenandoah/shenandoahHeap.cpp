@@ -497,9 +497,7 @@ void ShenandoahHeap::initialize_heuristics() {
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(NULL),
-  _mixed_evac(false),
   _prep_for_mixed_evac_in_progress(false),
-  _evacuation_allowance(0),
   _initial_size(0),
   _used(0),
   _committed(0),
@@ -2507,12 +2505,12 @@ private:
   bool _mixed_evac;             // true iff most recent evacuation includes old-gen HeapRegions
 
 public:
-  ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions, ShenandoahRegionChunkIterator* work_chunks, bool mixed_evac) :
+  explicit ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions,
+                                        ShenandoahRegionChunkIterator* work_chunks) :
     WorkerTask("Shenandoah Update References"),
     _heap(ShenandoahHeap::heap()),
     _regions(regions),
-    _work_chunks(work_chunks),
-    _mixed_evac(mixed_evac)
+    _work_chunks(work_chunks)
   {
   }
 
@@ -2619,7 +2617,6 @@ private:
                p2i(r->bottom() + assignment._chunk_offset + assignment._chunk_size), assignment._chunk_size);
         fflush(stdout);
 #endif
-
         if (r->is_active() && !r->is_cset() && (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION)) {
           HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
           HeapWord* end_of_range = r->get_update_watermark();
@@ -2628,8 +2625,8 @@ private:
           }
 
           // Old region in a young cycle or mixed cycle.
-          if (_mixed_evac) {
-            // TODO: For _mixed_evac, consider building an old-gen remembered set that allows restricted updating
+          if (is_mixed) {
+            // TODO: For mixed evac, consider building an old-gen remembered set that allows restricted updating
             // within old-gen HeapRegions.  This remembered set can be constructed by old-gen concurrent marking
             // and augmented by card marking.  For example, old-gen concurrent marking can remember for each old-gen
             // card which other old-gen regions it refers to: none, one-other specifically, multiple-other non-specific.
@@ -2661,7 +2658,6 @@ private:
               printf("[%d]: Attempting mixed iteration over objects\n", worker_id);
               fflush(stdout);
 #endif
-
               if (start_of_range < end_of_range) {
                 HeapWord* p = nullptr;
                 size_t card_index = scanner->card_index_for_addr(start_of_range);
@@ -2796,10 +2792,10 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
   ShenandoahRegionChunkIterator work_list(workers()->active_workers());
 
   if (concurrent) {
-    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, &work_list, _mixed_evac);
+    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
   } else {
-    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list, _mixed_evac);
+    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
   }
 }
