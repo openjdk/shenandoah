@@ -222,7 +222,14 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     ShenandoahHeapLocker locker(heap->lock());
 
     size_t old_usage_before_evac = heap->capture_old_usage(0);
+
     size_t old_usage_now = old_gen->used();
+#undef KELVIN_SUSPECTS_OLD_USAGE_INCLUDES_COLLECTION_SET
+#ifdef KELVIN_SUSPECTS_OLD_USAGE_INCLUDES_COLLECTION_SET
+    // but maybe the problem all stems from not resetting old_evac_reserve.
+    printf("old_usage_now: " SIZE_FORMAT ", old_usage_before_evac: " SIZE_FORMAT "\n",
+           old_usage_now, old_usage_before_evac);
+#endif
     size_t promoted_bytes = old_usage_now - old_usage_before_evac;
     heap->set_previous_promotion(promoted_bytes);
 
@@ -238,6 +245,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     heap->set_old_evac_reserve(0);
     heap->reset_old_evac_expended();
     heap->set_promoted_reserve(0);
+    heap->reset_promoted_expended();
   }
   log_info(gc, ergo)("At end of concurrent GC, old_available: " SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
                      byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),

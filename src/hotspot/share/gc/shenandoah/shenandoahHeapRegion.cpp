@@ -643,7 +643,11 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 
 void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-
+#undef KELVIN_TRACE_RECYCLE
+#ifdef KELVIN_TRACE_RECYCLE
+  printf("recycling %s region " SIZE_FORMAT " decreasing used by " SIZE_FORMAT "\n",
+         (affiliation() == YOUNG_GENERATION)? "young": (affiliation() == OLD_GENERATION)? "old": "unknown", index(), used());
+#endif
   if (affiliation() == YOUNG_GENERATION) {
     heap->young_generation()->decrease_used(used());
   } else if (affiliation() == OLD_GENERATION) {

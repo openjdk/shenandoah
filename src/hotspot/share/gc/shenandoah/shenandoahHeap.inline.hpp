@@ -309,13 +309,16 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   } else if (is_promotion && (plab->words_remaining() > 0) && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
     return nullptr;
   }
-  // if plab->word_size() <= 0, thread's plab not yet initialized for this pass, so allow_plab_promotions() not reliable
+#undef KELVIN_PROMOTION_FAILURE
+  // if plab->word_size() <= 0, thread's plab not yet initialized for this pass, so allow_plab_promotions() is not trustworthy
   obj = plab->allocate(size);
-  if (obj == nullptr) {
+  if ((obj == nullptr) && (plab->words_remaining() < PLAB::min_size())) {
     // allocate_from_plab_slow will establish allow_plab_promotions(thread) for future invocations
     obj = allocate_from_plab_slow(thread, size, is_promotion);
-    if (obj == nullptr)
-      return nullptr;
+  }
+  // if plab->words_remaining() >= PLAB::min_size(), just return nullptr so we can use a shared allocation
+  if (obj == nullptr) {
+    return nullptr;
   }
   if (is_promotion) {
     ShenandoahThreadLocalData::add_to_plab_promoted(thread, size * HeapWordSize);
@@ -393,15 +396,37 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
              copy = allocate_from_plab(thread, size, is_promotion);
              if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
                  ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
-               // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve.  Try resetting
-               // the desired PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
-               ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
-               copy = allocate_from_plab(thread, size, is_promotion);
-               // If we still get nullptr, we'll try a shared allocation below.
-               if (copy == nullptr) {
-                 // If retry fails, don't continue to retry until we have success (probably in next GC pass)
-                 ShenandoahThreadLocalData::disable_plab_retries(thread);
+               // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve or because
+               // the requested object does not fit within the current plab but the plab still has an "abundance" of memory,
+               // where abundance is defined as >= PLAB::min_size().  In the former case, we try resetting the desired
+               // PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
+
+               // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
+               // this particular allocation to be shared.
+               
+               PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+               if (plab->words_remaining() < PLAB::min_size()) {
+                 ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
+                 copy = allocate_from_plab(thread, size, is_promotion);
+                 // If we still get nullptr, we'll try a shared allocation below.
+                 if (copy == nullptr) {
+#ifdef KELVIN_PROMOTION_FAILURE
+                   if (is_promotion) {
+                     printf(PTR_FORMAT ": allocate_from_plab() retry failed to allocate promotion of size " SIZE_FORMAT
+                            ", disabling retries!\n", p2i(thread), size);
+                   }
+#endif
+                   // If retry fails, don't continue to retry until we have success (probably in next GC pass)
+                   ShenandoahThreadLocalData::disable_plab_retries(thread);
+                 }
                }
+               // else, copy still equals nullptr.  this will cause shared allocation below, preserving this plab for future needs.
+#ifdef KELVIN_PROMOTION_FAILURE
+               else {
+                 printf(PTR_FORMAT ": try_evacuate_object() not retrying allocate_from_plab() because plab is plentiful\n",
+                        p2i(thread));
+               }
+#endif
              } else if (copy != nullptr) {
                ShenandoahThreadLocalData::enable_plab_retries(thread);
              }
@@ -419,6 +444,12 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       // If we failed to allocated in LAB, we'll try a shared allocation.
       ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
       copy = allocate_memory(req, is_promotion);
+#ifdef KELVIN_PROMOTION_FAILURE
+      if (is_promotion && (copy == nullptr)) {
+        printf(PTR_FORMAT ": shared allocation failed to allocate promotion of size " SIZE_FORMAT "\n",
+               p2i(thread), size);
+      }
+#endif
       alloc_from_lab = false;
     }
 #ifdef ASSERT
@@ -430,6 +461,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       assert(mode()->is_generational(), "Should only be here in generational mode.");
       if (from_region->is_young()) {
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
+#ifdef KELVIN_PROMOTION_FAILURE
+        printf(PTR_FORMAT ": handling promotion failure\n", p2i(thread));
+#endif
         handle_promotion_failure();
         return NULL;
       } else {
@@ -611,6 +645,10 @@ inline size_t ShenandoahHeap::get_promoted_reserve() const {
 
 // returns previous value
 size_t ShenandoahHeap::capture_old_usage(size_t old_usage) {
+#undef KELVIN_OLD_USAGE
+#ifdef KELVIN_OLD_USAGE
+  printf("Capturing old usage to be " SIZE_FORMAT ", previous value: " SIZE_FORMAT "\n", old_usage, _captured_old_usage);
+#endif
   size_t previous_value = _captured_old_usage;
   _captured_old_usage = old_usage;
   return previous_value;

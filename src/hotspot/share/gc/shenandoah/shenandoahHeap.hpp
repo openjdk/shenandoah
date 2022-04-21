@@ -802,6 +802,7 @@ public:
   void clear_cards(HeapWord* start, HeapWord* end);
   void mark_card_as_dirty(void* location);
   void retire_plab(PLAB* plab);
+  void retire_plab(PLAB* plab, Thread* thread);
   void cancel_old_gc();
   bool is_old_gc_active();
   void coalesce_and_fill_old_regions();

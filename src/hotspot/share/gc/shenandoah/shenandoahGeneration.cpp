@@ -248,7 +248,6 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     ShenandoahHeapLocker locker(heap->lock());
     heap->collection_set()->clear();
 
-
     if (heap->mode()->is_generational()) {
 
       // During initialization and phase changes, it is more likely that fewer objects die young and old-gen
@@ -291,47 +290,58 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 #endif
       // We'll never promote more than the amount of memory that is to be evacuated from young-gen.
       size_t max_young_evacuation = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
-      if (max_young_evacuation < promotion_reserve) {
-        promotion_reserve = max_young_evacuation;
+      size_t proposed_reserve = max_young_evacuation * ShenandoahEvacWaste;
+      if (proposed_reserve < promotion_reserve) {
+        promotion_reserve = proposed_reserve;
       }
 #ifdef KELVIN_PROMOTION_BUDGETING
       printf("    promotion_reserve adjusted by young evac reserve: " SIZE_FORMAT "\n", promotion_reserve);
 #endif
 
+#ifdef KELVIN_UNRELIABLE_CODE
+      // kelvin finds that this restriction is unreliable and causes premature promotion failure.  
       if (previously_promoted == 0) {
         // Very conservatively, assume linear population decay (rather than more typical exponential) and assume all of
         // used is live.
         size_t proposed_reserve = young_generation->used() / (ShenandoahAgingCyclePeriod * InitialTenuringThreshold);
-        if (promotion_reserve > proposed_reserve * ShenandoahGenerationalEvacWaste) {
-          promotion_reserve = (size_t) (proposed_reserve * ShenandoahGenerationalEvacWaste);
+        if (promotion_reserve > proposed_reserve * ShenandoahEvacWaste) {
+          promotion_reserve = (size_t) (proposed_reserve * ShenandoahEvacWaste);
         }
 #ifdef KELVIN_PROMOTION_BUDGETING
         printf("promotion_reserve adjusted by lack of recent history: " SIZE_FORMAT "\n", promotion_reserve);
 #endif
-      } else if (previously_promoted * 4 * ShenandoahGenerationalEvacWaste < promotion_reserve) {
+      } else if (previously_promoted * 4 * ShenandoahEvacWaste < promotion_reserve) {
         // let the new promotion budget be 4 times the previous promotion budget
 
-        promotion_reserve = (size_t) (previously_promoted * 4 * ShenandoahGenerationalEvacWaste);
+        // But let's not reduce below the size of a single region size.
+        if ((previously_promoted * 4 * ShenandoahEvacWaste >= ShenandoahHeapRegion::region_size_bytes())) {
+          promotion_reserve = (size_t) (previously_promoted * 4 * ShenandoahEvacWaste);
 #ifdef KELVIN_PROMOTION_BUDGETING
-        printf("        promotion_reserve adjusted by recent history: " SIZE_FORMAT "\n", promotion_reserve);
+          printf("        promotion_reserve adjusted by recent history: " SIZE_FORMAT "\n", promotion_reserve);
+#endif
+        }
+#ifdef KELVIN_PROMOTION_BUDGETING
+        else {
+          printf("  not shrinking promotion_reserve for recent history\n");
+        }
 #endif
       }
+#endif  // KELVIN_UNRELIABLE_CODE
 
-
-      // Do not fill up old-gen memory with promotions.  Reserve some amount of memory for compaction purposes.
-      if (old_generation->available() -
-          ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes() < promotion_reserve) {
-
-        promotion_reserve =
-          old_generation->available() - ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes();
+      size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes();
+        // Do not fill up old-gen memory with promotions.  Reserve some amount of memory for compaction purposes.
+#ifdef KELVIN_PROMOTION_BUDGETING
+      printf("                          minimum_evacuation_reserve: " SIZE_FORMAT "\n", minimum_evacuation_reserve);
+#endif
+      if (old_generation->available() < minimum_evacuation_reserve) {
+        promotion_reserve = 0;
+      } else if (promotion_reserve > old_generation->available() - minimum_evacuation_reserve) {
+        promotion_reserve = old_generation->available() - minimum_evacuation_reserve;
       }
-
 #ifdef KELVIN_PROMOTION_BUDGETING
       printf("promotion_reserve adjusted by reserve for evacuation: " SIZE_FORMAT "\n", promotion_reserve);
 #endif
-
       heap->set_promoted_reserve(promotion_reserve);
-      heap->capture_old_usage(old_generation->used());
 
       //  OldEvacuationReserve for old generation: how much memory are we reserving to hold the results of
       //     evacuating old-gen heap regions?  In order to sustain a consistent pace of young-gen collections,
@@ -364,6 +374,13 @@ bool ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // The heuristics may consult and/or change the values of PromotionReserved, OldEvacuationReserved, and
     // YoungEvacuationReserved, all of which are represented in the shared ShenandoahHeap data structure.
     result = _heuristics->choose_collection_set(heap->collection_set(), heap->old_heuristics());
+
+    if (heap->mode()->is_generational()) {
+      ShenandoahGeneration* old_generation = heap->old_generation();
+      size_t old_gen_usage_base = old_generation->used() - heap->collection_set()->get_old_garbage();
+    heap->capture_old_usage(old_gen_usage_base);
+    } 
+
 
     //  EvacuationAllocationSupplement: This represents memory that can be allocated in excess of young_gen->available()
     //     during evacuation and update-refs.  This memory can be temporarily borrowed from old-gen allotment, then
