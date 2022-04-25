@@ -1251,21 +1251,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     }
   }
 
-  HeapWord* result;
-#ifdef KELVIN_DEPRECATE
-  if (plab_alloc && !promotion_eligible && (ShenandoahThreadLocalData::plab_size(thread) > PLAB::min_size())) {
-    // This is an evacuation allocation (not a promotion).  We arrived in allocate_from_plab_slow() because the plab was
-    // exhausted.  If we return nullptr here, that will cause us to try shrinking the plab_size to PLAB::min_size().  But
-    // no need to try that unless we are really unable to allocate the PLAB.
-    // unable to all
-    // Simulate failure of the allocation in order to force the PLAB size to shrink, in hopes of still promoting out of PLAB
-    result = nullptr;
-  } else {
-#endif
-    result = _free_set->allocate(req, in_new_region);
-#ifdef KELVIN_DEPRECATE
-  }
-#endif
+  HeapWord* result = _free_set->allocate(req, in_new_region);
   if (result != NULL) {
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
       ShenandoahThreadLocalData::reset_plab_promoted(thread);

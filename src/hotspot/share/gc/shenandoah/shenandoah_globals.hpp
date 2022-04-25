@@ -331,7 +331,7 @@
           "creating greater impact on the cadence at which the young- "     \
           "generation allocation pool is replenished.  During mixed "       \
           "evacuations, the bound on amount of old-generation heap "        \
-          "regions included in the collecdtion set is the smaller "         \
+          "regions included in the collection set is the smaller "          \
           "of the quantities specified by this parameter and the "          \
           "size of ShenandoahEvacReserve as adjusted by the value of "      \
           "ShenandoahOldEvacRatioPercent.  In percents of total "           \
@@ -341,7 +341,8 @@
   product(uintx, ShenandoahOldEvacRatioPercent, 12, EXPERIMENTAL,           \
           "The maximum proportion of evacuation from old-gen memory, as "   \
           "a percent ratio.  The default value 12 denotes that no more "    \
-          "than one eighth (12%) of the collection set evacuation "         \
+          "than one eighth (~12%) of the potential collection set "         \
+          "evacuation "                                                     \
           "workload may be comprised of old-gen heap regions.  A larger "   \
           "value allows a smaller number of mixed evacuations to process "  \
           "the entire list of old-gen collection candidates at the cost "   \
