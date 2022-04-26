@@ -367,6 +367,12 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       printf("                                     young-gen available: " SIZE_FORMAT "\n", young_generation->available());
       printf("                               regions_available_to_loan: " SIZE_FORMAT "\n", regions_available_to_loan);
 #endif
+#undef KELVIN_DIAGNOSE_CRASH
+#ifdef KELVIN_DIAGNOSE_CRASH
+      printf("                                     young-gen available: " SIZE_FORMAT "\n", young_generation->available());
+      printf("                        desired young_evacuation_reserve: " SIZE_FORMAT "\n", young_evacuation_reserve);
+      printf("    b4 shortfall calculations, regions_available_to_loan: " SIZE_FORMAT "\n", regions_available_to_loan);
+#endif
       size_t old_regions_loaned_for_young_evac;
       if (young_evacuation_reserve > young_generation->available()) {
         size_t short_fall = young_evacuation_reserve - young_generation->available();
@@ -382,6 +388,12 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         old_regions_loaned_for_young_evac = 0;
       }
 
+#ifdef KELVIN_DIAGNOSE_CRASH
+      printf("                                     young-gen available: " SIZE_FORMAT "\n", young_generation->available());
+      printf("                               regions_available_to_loan: " SIZE_FORMAT "\n", regions_available_to_loan);
+      printf("         young_evacuation_reserve truncated by available: " SIZE_FORMAT "\n", young_evacuation_reserve);
+      printf("                  borrowed from old for young evacuation: " SIZE_FORMAT "\n", old_regions_loaned_for_young_evac);
+#endif
 #ifdef KELVIN_PROMOTION_BUDGETING
       printf("         young_evacuation_reserve truncated by available: " SIZE_FORMAT "\n", young_evacuation_reserve);
       printf("                  borrowed from old for young evacuation: " SIZE_FORMAT "\n", old_regions_loaned_for_young_evac);
@@ -511,6 +523,10 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       // Round down to get net available.
       size_t net_available_old_regions = (old_generation->available() -
                                           (heap->get_old_evac_reserve() + promotion_reserve) / region_size_bytes);
+#ifdef KELVIN_DIAGNOSE_CRASH
+      printf(" after collection set chosen, regions available for loan: " SIZE_FORMAT "\n", regions_available_to_loan);
+      printf("                          net regions available for loan: " SIZE_FORMAT "\n", net_available_old_regions);
+#endif
       if (regions_available_to_loan > net_available_old_regions) {
         regions_available_to_loan = net_available_old_regions;
       }
@@ -528,11 +544,22 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       } else {
         old_regions_loaned_for_young_evac = 0;
       }
+#ifdef KELVIN_DIAGNOSE_CRASH
+      printf("                                young evacuation reserve: " SIZE_FORMAT "\n", young_evacuation_reserve);
+      printf("                                  young_gen->available(): " SIZE_FORMAT "\n", young_generation->available());
+      printf("                       old_regions_loaned_for_young_evac: " SIZE_FORMAT "\n", old_regions_loaned_for_young_evac);
+      printf("                               regions_available_to_loan: " SIZE_FORMAT "\n", regions_available_to_loan);
+#endif
 #ifdef KELVIN_PROMOTION_BUDGETING
       printf("                         total regions available to loan: " SIZE_FORMAT "\n", regions_available_to_loan);
 #endif
       if (regions_available_to_loan + old_regions_loaned_for_young_evac > collection_set->get_young_region_count()) {
-        assert(collection_set->get_young_region_count() > old_regions_loaned_for_young_evac,
+#ifdef KELVIN_DIAGNOSE_CRASH
+        printf("young_region_count: " SIZE_FORMAT ", immediate garbage regions: " SIZE_FORMAT
+               ", regions loaned for young evac: " SIZE_FORMAT "\n", collection_set->get_young_region_count(),
+               collection_set->get_immediate_trash() / region_size_bytes, old_regions_loaned_for_young_evac);
+#endif
+        assert(collection_set->get_young_region_count() >= old_regions_loaned_for_young_evac,
                "Cannot loan for young evac more regions than in young collection set");
         regions_available_to_loan = collection_set->get_young_region_count() - old_regions_loaned_for_young_evac;
       }
