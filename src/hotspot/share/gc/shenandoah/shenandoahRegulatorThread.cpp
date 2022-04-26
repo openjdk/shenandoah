@@ -72,7 +72,7 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
     ShenandoahControlThread::GCMode mode = _control_thread->gc_mode();
     if (mode == ShenandoahControlThread::none) {
       if (should_unload_classes()) {
-        if (start_global_cycle()) {
+        if (_control_thread->request_concurrent_gc(GLOBAL)) {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
@@ -83,11 +83,7 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
         }
       }
     } else if (mode == ShenandoahControlThread::marking_old) {
-      if (should_unload_classes()) {
-        if (start_global_cycle()) {
-          log_info(gc)("Heuristics request to interrupt old for global (unload classes) accepted.");
-        }
-      } else if (start_young_cycle()) {
+      if (start_young_cycle()) {
         log_info(gc)("Heuristics request to interrupt old for young collection accepted");
       }
     }
