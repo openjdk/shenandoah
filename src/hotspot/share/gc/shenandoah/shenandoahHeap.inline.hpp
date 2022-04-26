@@ -687,7 +687,6 @@ inline size_t ShenandoahHeap::get_old_evac_expended() {
 }
 
 inline void ShenandoahHeap::reset_promoted_expended() {
-  printf("reset_promoted_expended\n");
   Atomic::store(&_promoted_expended, (size_t) 0);
 }
 
