@@ -127,10 +127,6 @@ void ShenandoahBarrierSet::on_thread_detach(Thread *thread) {
     // This is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each
     // PLAB is aligned with the start of each card's memory range.
     if (plab != NULL) {
-#undef KELVIN_THREAD_DETACH
-#ifdef KELVIN_THREAD_DETACH
-      printf(PTR_FORMAT ": retiring plab because thread is detaching\n", p2i(thread));
-#endif
       _heap->retire_plab(plab, thread);
     }
 

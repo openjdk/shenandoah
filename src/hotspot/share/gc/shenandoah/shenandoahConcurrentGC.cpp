@@ -224,12 +224,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     size_t old_usage_before_evac = heap->capture_old_usage(0);
 
     size_t old_usage_now = old_gen->used();
-#undef KELVIN_SUSPECTS_OLD_USAGE_INCLUDES_COLLECTION_SET
-#ifdef KELVIN_SUSPECTS_OLD_USAGE_INCLUDES_COLLECTION_SET
-    // but maybe the problem all stems from not resetting old_evac_reserve.
-    printf("old_usage_now: " SIZE_FORMAT ", old_usage_before_evac: " SIZE_FORMAT "\n",
-           old_usage_now, old_usage_before_evac);
-#endif
     size_t promoted_bytes = old_usage_now - old_usage_before_evac;
     heap->set_previous_promotion(promoted_bytes);
 
