@@ -48,7 +48,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generatio
 // evacuating no more than heap->get_old_evac_reserve() / ShenandoahEvacWaste bytes.
 //
 // If prime_collection_set() does not consume all of this available memory, it will reduce the old_evac_reserve
-// and increase the promoted_reserve(), making sure to not promote into the memory 
+// and increase the promoted_reserve(), making sure to not promote into the memory
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   if (unprocessed_old_collection_candidates() == 0) {

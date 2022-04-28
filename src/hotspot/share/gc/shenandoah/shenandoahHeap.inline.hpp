@@ -402,7 +402,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
                // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
                // this particular allocation to be shared.
-               
+
                PLAB* plab = ShenandoahThreadLocalData::plab(thread);
                if (plab->words_remaining() < PLAB::min_size()) {
                  ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());

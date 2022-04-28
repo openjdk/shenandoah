@@ -288,11 +288,11 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         }
         if (((((young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100) * ShenandoahOldEvacRatioPercent) / 100) <
             old_evacuation_reserve) {
-          old_evacuation_reserve = 
+          old_evacuation_reserve =
             (((young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100) * ShenandoahOldEvacRatioPercent) / 100;
         }
       }
-      
+
       if (old_evacuation_reserve < minimum_evacuation_reserve) {
         // Even if there's nothing to be evacuated on this cycle, we still need to reserve this memory for future
         // evacuations.  It is ok to loan this memory to young-gen if we don't need it for evacuation on this pass.
@@ -312,7 +312,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       //  young_evacuation_reserve for young generation: how much memory are we reserving to hold the results
       //  of evacuating young collection set regions?  This is typically smaller than the total amount
       //  of available memory, and is also smaller than the total amount of marked live memory within
-      //  young-gen.  This value is the smaller of 
+      //  young-gen.  This value is the smaller of
       //
       //    1. (young_gen->capacity() * ShenandoahEvacReserve) / 100
       //    2. (young_gen->available() + (old_gen->free_region_memory - old_evacuation_reserve);
@@ -343,7 +343,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         regions_available_to_loan = net_available_old_regions;
       }
       // Otherwise, the reason regions_available_to_loan is less than net_available_old_regions is because the
-      // available memory is scattered between many partially used regions.  
+      // available memory is scattered between many partially used regions.
 
       if (young_evacuation_reserve > young_generation->available()) {
         size_t short_fall = young_evacuation_reserve - young_generation->available();
@@ -413,7 +413,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         regions_available_to_loan += old_regions_loaned_for_young_evac;
         old_regions_loaned_for_young_evac = 0;
       }
-      
+
       // Limit promotion_reserve so that we can set aside memory to be loaned from old-gen to young-gen.  This
       // value is not "critical".  If we underestimate, certain promotions will simply be deferred.  If we put
       // "all the rest" of old-gen memory into the promotion reserve, we'll have nothing left to loan to young-gen
@@ -493,7 +493,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
       assert(old_regions_loaned_for_young_evac <= collection_set->get_young_region_count(),
              "Cannot loan more regions than will be reclaimed");
-      
+
       if (regions_available_to_loan > (collection_set->get_young_region_count() - old_regions_loaned_for_young_evac)) {
         regions_available_to_loan = collection_set->get_young_region_count() - old_regions_loaned_for_young_evac;
       }
@@ -508,7 +508,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       // TODO: young_available, which feeds into alloc_budget_evac_and_update is lacking memory available within
       // existing young-gen regions that were not selected for the collection set.  Add this in and adjust the
       // log message (where it says "empty-region allocation budget").
-      
+
       log_info(gc, ergo)("Memory reserved for evacuation and update-refs includes promotion budget: " SIZE_FORMAT
                          "%s, young evacuation budget: " SIZE_FORMAT "%s, old evacuation budget: " SIZE_FORMAT
                          "%s, empty-region allocation budget: " SIZE_FORMAT "%s, including supplement: " SIZE_FORMAT "%s",
@@ -521,7 +521,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
                          byte_size_in_proper_unit(allocation_supplement), proper_unit_for_byte_size(allocation_supplement));
     }
   }
-  
+
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
                             ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
