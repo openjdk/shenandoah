@@ -57,6 +57,8 @@ private:
   size_t                _young_region_count;
   size_t                _old_region_count;
 
+  size_t                _old_garbage;        // How many bytes of old garbage are present in a mixed collection set?
+
   shenandoah_padding(0);
   volatile size_t       _current_index;
   shenandoah_padding(1);
@@ -105,6 +107,8 @@ public:
   inline size_t get_old_region_count();
 
   inline size_t get_young_region_count();
+
+  inline size_t get_old_garbage();
 
   bool has_old_regions() const { return _has_old_regions; }
   size_t used()          const { return _used; }

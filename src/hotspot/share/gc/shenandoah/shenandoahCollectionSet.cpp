@@ -44,6 +44,7 @@ ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedS
   _garbage(0),
   _used(0),
   _region_count(0),
+  _old_garbage(0),
   _current_index(0) {
 
   // The collection set map is reserved to cover the entire heap *and* zero addresses.
@@ -94,6 +95,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   } else if (r->affiliation() == OLD_GENERATION) {
     _old_region_count++;
     _old_bytes_to_evacuate += r->get_live_data_bytes();
+    _old_garbage += r->garbage();
   }
 
   _region_count++;
@@ -115,6 +117,7 @@ void ShenandoahCollectionSet::clear() {
 #endif
 
   _garbage = 0;
+  _old_garbage = 0;
   _used = 0;
 
   _region_count = 0;

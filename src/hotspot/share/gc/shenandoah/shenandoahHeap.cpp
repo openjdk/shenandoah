@@ -509,7 +509,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _regions(NULL),
   _update_refs_iterator(this),
   _alloc_supplement_reserve(0),
-  _promotion_reserve(0),
+  _promoted_reserve(0),
   _old_evac_reserve(0),
   _old_evac_expended(0),
   _young_evac_reserve(0),
@@ -901,82 +901,102 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   size_t min_size = MAX2(size, PLAB::min_size());
 
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
-  size_t new_size = ShenandoahThreadLocalData::plab_size(thread) * 2;
+  size_t cur_size = ShenandoahThreadLocalData::plab_size(thread);
+  size_t future_size = cur_size * 2;
   // Limit growth of PLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
   // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
   if (ShenandoahMaxEvacLABRatio > 0) {
-    new_size = MIN2(new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
+    future_size = MIN2(future_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
   }
-  new_size = MIN2(new_size, PLAB::max_size());
-  new_size = MAX2(new_size, PLAB::min_size());
+  future_size = MIN2(future_size, PLAB::max_size());
+  future_size = MAX2(future_size, PLAB::min_size());
 
-  size_t unalignment = new_size % CardTable::card_size_in_words();
+  size_t unalignment = cur_size % CardTable::card_size_in_words();
   if (unalignment != 0) {
-    new_size = new_size - unalignment + CardTable::card_size_in_words();
+    cur_size = cur_size - unalignment + CardTable::card_size_in_words();
   }
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
-  // heuristics should catch up with them.  Note that the requested new_size may
+  // heuristics should catch up with them.  Note that the requested cur_size may
   // not be honored, but we remember that this is the preferred size.
-  ShenandoahThreadLocalData::set_plab_size(thread, new_size);
-
-  if (new_size < size) {
+  ShenandoahThreadLocalData::set_plab_size(thread, future_size);
+  if (cur_size < size) {
     // New size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good PLABs, when we encounter a large object.
-    return NULL;
-  }
-
-  // Retire current PLAB, and allocate a new one.
-  PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-  // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.  This
-  // is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each PLAB is
-  // aligned with the start of a card's memory range.
-  retire_plab(plab);
-
-  size_t actual_size = 0;
-  // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
-  // less than the remaining evacuation need.
-  HeapWord* plab_buf = allocate_new_plab(min_size, new_size, &actual_size);
-  if (plab_buf == NULL) {
-    return NULL;
-  }
-
-  assert (size <= actual_size, "allocation should fit");
-
-  if (ZeroTLAB) {
-    // ..and clear it.
-    Copy::zero_to_words(plab_buf, actual_size);
-  } else {
-    // ...and zap just allocated object.
-#ifdef ASSERT
-    // Skip mangling the space corresponding to the object header to
-    // ensure that the returned space is not considered parsable by
-    // any concurrent GC thread.
-    size_t hdr_size = oopDesc::header_size();
-    Copy::fill_to_words(plab_buf + hdr_size, actual_size - hdr_size, badHeapWordVal);
-#endif // ASSERT
-  }
-  plab->set_buf(plab_buf, actual_size);
-
-  if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
     return nullptr;
   }
-  return plab->allocate(size);
+
+  PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+  if (plab->words_remaining() < PLAB::min_size()) {
+    // Retire current PLAB, and allocate a new one.
+    // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.  This
+    // is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each PLAB is
+    // aligned with the start of a card's memory range.
+
+    retire_plab(plab, thread);
+
+    size_t actual_size = 0;
+    // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
+    // less than the remaining evacuation need.  It also adjusts plab_preallocated and expend_promoted if appropriate.
+    HeapWord* plab_buf = allocate_new_plab(min_size, cur_size, &actual_size);
+    if (plab_buf == NULL) {
+      return NULL;
+    }
+    assert (size <= actual_size, "allocation should fit");
+    if (ZeroTLAB) {
+      // ..and clear it.
+      Copy::zero_to_words(plab_buf, actual_size);
+    } else {
+      // ...and zap just allocated object.
+#ifdef ASSERT
+      // Skip mangling the space corresponding to the object header to
+      // ensure that the returned space is not considered parsable by
+      // any concurrent GC thread.
+      size_t hdr_size = oopDesc::header_size();
+      Copy::fill_to_words(plab_buf + hdr_size, actual_size - hdr_size, badHeapWordVal);
+#endif // ASSERT
+    }
+    plab->set_buf(plab_buf, actual_size);
+
+    if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
+      return nullptr;
+    }
+    return plab->allocate(size);
+  } else {
+    // If there's still at least min_size() words available within the current plab, don't retire it.  Let's gnaw
+    // away on this plab as long as we can.  Meanwhile, return nullptr to force this particular allocation request
+    // to be satisfied with a shared allocation.  By packing more promotions into the previously allocated PLAB, we
+    // reduce the likelihood of evacuation failures, and we we reduce the need for downsizing our PLABs.
+    return nullptr;
+  }
 }
 
 // TODO: It is probably most efficient to register all objects (both promotions and evacuations) that were allocated within
 // this plab at the time we retire the plab.  A tight registration loop will run within both code and data caches.  This change
 // would allow smaller and faster in-line implementation of alloc_from_plab().  Since plabs are aligned on card-table boundaries,
 // this object registration loop can be performed without acquiring a lock.
-void ShenandoahHeap::retire_plab(PLAB* plab) {
+void ShenandoahHeap::retire_plab(PLAB* plab, Thread* thread) {
   if (!mode()->is_generational()) {
     plab->retire();
   } else {
-    Thread* thread = Thread::current();
-    size_t evacuated = ShenandoahThreadLocalData::get_plab_evacuated(thread);
-    // We don't enforce limits on get_plab_promoted(thread).  Promotion uses any memory not required for evacuation.
-    expend_old_evac(evacuated);
+    // We don't enforce limits on plab_evacuated.  We let it consume all available old-gen memory in order to reduce
+    // probability of an evacuation failure.  We do enforce limits on promotion, to make sure that excessive promotion
+    // does not result in an old-gen evacuation failure.  Note that a failed promotion is relatively harmless.  Any
+    // object that fails to promote in the current cycle will be eligible for promotion in a subsequent cycle.
+
+    // When the plab was instantiated, its entirety was treated as if the entire buffer was going to be dedicated to
+    // promotions.  Now that we are retiring the buffer, we adjust for the reality that the plab is not entirely promotions.
+    //  1. Some of the plab may have been dedicated to evacuations.
+    //  2. Some of the plab may have been abandoned due to waste (at the end of the plab).
+    size_t not_promoted =
+      ShenandoahThreadLocalData::get_plab_preallocated_promoted(thread) - ShenandoahThreadLocalData::get_plab_promoted(thread);
+    ShenandoahThreadLocalData::reset_plab_promoted(thread);
+    ShenandoahThreadLocalData::reset_plab_evacuated(thread);
+    ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
+    if (not_promoted > 0) {
+      unexpend_promoted(not_promoted);
+    }
     size_t waste = plab->waste();
     HeapWord* top = plab->top();
     plab->retire();
@@ -988,6 +1008,16 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
                     plab->waste() - waste, p2i(top));
       card_scan()->register_object_wo_lock(top);
     }
+  }
+}
+
+
+void ShenandoahHeap::retire_plab(PLAB* plab) {
+  if (!mode()->is_generational()) {
+    plab->retire();
+  } else {
+    Thread* thread = Thread::current();
+    retire_plab(plab, thread);
   }
 }
 
@@ -1159,9 +1189,13 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region, bool is_promotion) {
+  // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
+  bool promotion_eligible = false;
+  bool plab_alloc = false;
   size_t requested_bytes = req.size() * HeapWordSize;
 
   ShenandoahHeapLocker locker(lock());
+  Thread* thread = Thread::current();
   if (mode()->is_generational()) {
     if (req.affiliation() == YOUNG_GENERATION) {
       if (req.is_mutator_alloc()) {
@@ -1173,32 +1207,31 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       }
     } else {                    // reg.affiliation() == OLD_GENERATION
       assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-
       if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-        // We've already retired this thread's previously exhausted PLAB and have accounted for how that PLAB's
-        // memory was allotted.
-        Thread* thread = Thread::current();
-        ShenandoahThreadLocalData::reset_plab_evacuated(thread);
-        ShenandoahThreadLocalData::reset_plab_promoted(thread);
+        plab_alloc = true;
 
-        // Conservatively, assume this entire PLAB will be used for promotion.  Act as if we need to serve the
-        // rest of evacuation need from as-yet unallocated old-gen memory.
-        size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
-        size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
-        if (remaining_evac_need >= evac_available) {
-          // Disable promotions within this thread because the entirety of this PLAB must be available to hold
-          // old-gen evacuations.
-          ShenandoahThreadLocalData::disable_plab_promotions(thread);
+        size_t promotion_avail = get_promoted_reserve();
+        size_t promotion_expended = get_promoted_expended();
+        if (promotion_expended + requested_bytes > promotion_avail) {
+          promotion_avail = 0;
         } else {
-          ShenandoahThreadLocalData::enable_plab_promotions(thread);
+          promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
+          promotion_eligible = true;
         }
       } else if (is_promotion) {
         // This is a shared alloc for promotion
-        Thread* thread = Thread::current();
-        size_t remaining_evac_need = get_old_evac_reserve() - get_old_evac_expended();
-        size_t evac_available = old_generation()->adjusted_available() - requested_bytes;
-        if (remaining_evac_need >= evac_available) {
-          return nullptr;       // We need to reserve the remaining memory for evacuation so defer the promotion
+        size_t promotion_avail = get_promoted_reserve();
+        size_t promotion_expended = get_promoted_expended();
+        if (promotion_expended + requested_bytes > promotion_avail) {
+          promotion_avail = 0;
+        } else {
+          promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
+        }
+
+        if (promotion_avail == 0) {
+          // We need to reserve the remaining memory for evacuation.  Reject this allocation.  The object will be
+          // evacuated to young-gen memory and promoted during a future GC pass.
+          return nullptr;
         }
         // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
       } else {
@@ -1210,6 +1243,27 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   HeapWord* result = _free_set->allocate(req, in_new_region);
   if (result != NULL) {
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      ShenandoahThreadLocalData::reset_plab_promoted(thread);
+      if (req.is_gc_alloc()) {
+        if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+          if (promotion_eligible) {
+            size_t actual_size = req.actual_size() * HeapWordSize;
+            // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
+            // When we retire this plab, we'll unexpend what we don't really use.
+            ShenandoahThreadLocalData::enable_plab_promotions(thread);
+            expend_promoted(actual_size);
+            ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
+          } else {
+            // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
+            ShenandoahThreadLocalData::disable_plab_promotions(thread);
+            ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
+          }
+        } else if (is_promotion) {
+          // Shared promotion.  Assume size is requested_bytes.
+          expend_promoted(requested_bytes);
+        }
+      }
+
       // Register the newly allocated object while we're holding the global lock since there's no synchronization
       // built in to the implementation of register_object().  There are potential races when multiple independent
       // threads are allocating objects, some of which might span the same card region.  For example, consider
@@ -1228,6 +1282,14 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       // representing object b while first-start represents object c.  This is why we need to require all register_object()
       // invocations to be "mutually exclusive" with respect to each card's memory range.
       ShenandoahHeap::heap()->card_scan()->register_object(result);
+    }
+  } else {
+    // The allocation failed.  If this was a plab allocation, We've already retired it and no longer have a plab.
+    if ((req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) && req.is_gc_alloc() &&
+        (req.type() == ShenandoahAllocRequest::_alloc_plab)) {
+      // We don't need to disable PLAB promotions because there is no PLAB.  We leave promotions enabled because
+      // this allows the surrounding infrastructure to retry alloc_plab_slow() with a smaller PLAB size.
+      ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
     }
   }
   return result;
@@ -1486,12 +1548,11 @@ public:
 
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
     assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
-    // TODO; Retiring a PLAB disables it so it cannot support future allocations.  This is overkill.  For old-gen
-    // regions, the important thing is to make the memory parsable by the remembered-set scanning code that drives
-    // the update-refs processing that follows.  After the updating of old-gen references is done, it is ok to carve
-    // this remnant object into smaller pieces during the subsequent evacuation pass, as long as the PLAB is made parsable
-    // again before the next update-refs phase.
-    ShenandoahHeap::heap()->retire_plab(plab);
+
+    // There are two reasons to retire all plabs between old-gen evacuation passes.
+    //  1. We need to make the plab memory parseable by remembered-set scanning.
+    //  2. We need to establish a trustworthy UpdateWaterMark value within each old-gen heap region
+    ShenandoahHeap::heap()->retire_plab(plab, thread);
     if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_plab_size(thread, 0);
     }
@@ -2402,13 +2463,17 @@ template<bool CONCURRENT>
 class ShenandoahUpdateHeapRefsTask : public WorkerTask {
 private:
   ShenandoahHeap* _heap;
+
   ShenandoahRegionIterator* _regions;
+  ShenandoahRegionChunkIterator* _work_chunks;
 
 public:
-  explicit ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions) :
+  explicit ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions,
+                                        ShenandoahRegionChunkIterator* work_chunks) :
     WorkerTask("Shenandoah Update References"),
     _heap(ShenandoahHeap::heap()),
-    _regions(regions)
+    _regions(regions),
+    _work_chunks(work_chunks)
   {
   }
 
@@ -2427,8 +2492,8 @@ private:
   template<class T>
   void do_work(uint worker_id) {
     T cl;
-    ShenandoahHeapRegion* r = _regions->next();
 
+    ShenandoahHeapRegion* r = _regions->next();
     // We update references for global, old, and young collections.
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
@@ -2438,59 +2503,24 @@ private:
       assert (update_watermark >= r->bottom(), "sanity");
 
       log_debug(gc)("ShenandoahUpdateHeapRefsTask::do_work(%u) looking at region " SIZE_FORMAT, worker_id, r->index());
+      bool region_progress = false;
       if (r->is_active() && !r->is_cset()) {
         if (!_heap->mode()->is_generational() || (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION)) {
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
+          region_progress = true;
         } else if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
           if (_heap->active_generation()->generation_mode() == GLOBAL) {
-            _heap->marked_object_oop_iterate(r, &cl, update_watermark);
-          } else {
-            // Old region in a young cycle or mixed cycle.
-            if (!is_mixed) {
-              // This is a young evac..
-              _heap->card_scan()->process_region(r, &cl, true);
-            } else {
-              // This is a _mixed_evac.
-              //
-              // TODO: For _mixed_evac, consider building an old-gen remembered set that allows restricted updating
-              // within old-gen HeapRegions.  This remembered set can be constructed by old-gen concurrent marking
-              // and augmented by card marking.  For example, old-gen concurrent marking can remember for each old-gen
-              // card which other old-gen regions it refers to: none, one-other specifically, multiple-other non-specific.
-              // Update-references when _mixed_evac processess each old-gen memory range that has a traditional DIRTY
-              // card or if the "old-gen remembered set" indicates that this card holds pointers specifically to an
-              // old-gen region in the most recent collection set, or if this card holds pointers to other non-specific
-              // old-gen heap regions.
-              if (r->is_humongous()) {
-                r->oop_iterate_humongous(&cl);
-              } else {
-                // This is a mixed evacuation.  Old regions that are candidates for collection have not been coalesced
-                // and filled.  Use mark bits to find objects that need to be updated.
-                //
-                // Future TODO: establish a second remembered set to identify which old-gen regions point to other old-gen
-                // regions which are in the collection set for a particular mixed evacuation.
-                HeapWord *p = r->bottom();
-                ShenandoahObjectToOopBoundedClosure<T> objs(&cl, p, update_watermark);
+            // Note that GLOBAL collection is not as effectively balanced as young and mixed cycles.  This is because
+            // concurrent GC threads are parceled out entire heap regions of work at a time and there
+            // is no "catchup phase" consisting of remembered set scanning, during which parcels of work are smaller
+            // and more easily distributed more fairly across threads.
 
-                // Anything beyond update_watermark was allocated during evacuation.  Thus, it is known to not hold
-                // references to collection set objects.
-                while (p < update_watermark) {
-                  oop obj = cast_to_oop(p);
-                  if (ctx->is_marked(obj)) {
-                    objs.do_object(obj);
-                    p += obj->size();
-                  } else {
-                    // This object is not marked so we don't scan it.
-                    HeapWord* tams = ctx->top_at_mark_start(r);
-                    if (p >= tams) {
-                      p += obj->size();
-                    } else {
-                      p = ctx->get_next_marked_addr(p, tams);
-                    }
-                  }
-                }
-              }
-            }
+            // TODO: Consider an improvement to load balance GLOBAL GC.
+            _heap->marked_object_oop_iterate(r, &cl, update_watermark);
+            region_progress = true;
           }
+          // Otherwise, this is an old region in a young or mixed cycle.  Process it during a second phase, below.
+          // Don't bother to report pacing progress in this case.
         } else {
           // Because updating of references runs concurrently, it is possible that a FREE inactive region transitions
           // to a non-free active region while this loop is executing.  Whenever this happens, the changing of a region's
@@ -2507,7 +2537,7 @@ private:
                  affiliation_name(r->affiliation()), r->index());
         }
       }
-      if (ShenandoahPacing) {
+      if (region_progress && ShenandoahPacing) {
         _heap->pacer()->report_updaterefs(pointer_delta(update_watermark, r->bottom()));
       }
       if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
@@ -2515,21 +2545,140 @@ private:
       }
       r = _regions->next();
     }
+    if (_heap->mode()->is_generational() && (_heap->active_generation()->generation_mode() != GLOBAL)) {
+      // Since this is generational and not GLOBAL, we have to process the remembered set.  There's no remembered
+      // set processing if not in generational mode or if GLOBAL mode.
+
+      // After this thread has exhausted its traditional update-refs work, it continues with updating refs within remembered set.
+      // The remembered set workload is better balanced between threads, so threads that are "behind" can catch up with other
+      // threads during this phase, allowing all threads to work more effectively in parallel.
+      work_chunk assignment;
+      bool have_work = _work_chunks->next(&assignment);
+      RememberedScanner* scanner = _heap->card_scan();
+      while (have_work) {
+        ShenandoahHeapRegion* r = assignment._r;
+        if (r->is_active() && !r->is_cset() && (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION)) {
+          HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
+          HeapWord* end_of_range = r->get_update_watermark();
+          if (end_of_range > start_of_range + assignment._chunk_size) {
+            end_of_range = start_of_range + assignment._chunk_size;
+          }
+
+          // Old region in a young cycle or mixed cycle.
+          if (is_mixed) {
+            // TODO: For mixed evac, consider building an old-gen remembered set that allows restricted updating
+            // within old-gen HeapRegions.  This remembered set can be constructed by old-gen concurrent marking
+            // and augmented by card marking.  For example, old-gen concurrent marking can remember for each old-gen
+            // card which other old-gen regions it refers to: none, one-other specifically, multiple-other non-specific.
+            // Update-references when _mixed_evac processess each old-gen memory range that has a traditional DIRTY
+            // card or if the "old-gen remembered set" indicates that this card holds pointers specifically to an
+            // old-gen region in the most recent collection set, or if this card holds pointers to other non-specific
+            // old-gen heap regions.
+
+            if (r->is_humongous()) {
+              if (start_of_range < end_of_range) {
+                // Need to examine both dirty and clean cards during mixed evac.
+                r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true, CONCURRENT);
+              }
+            } else {
+              // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
+              // and filled.  Use mark bits to find objects that need to be updated.
+              //
+              // Future TODO: establish a second remembered set to identify which old-gen regions point to other old-gen
+              // regions which are in the collection set for a particular mixed evacuation.
+              if (start_of_range < end_of_range) {
+                HeapWord* p = nullptr;
+                size_t card_index = scanner->card_index_for_addr(start_of_range);
+                // In case last object in my range spans boundary of my chunk, I may need to scan all the way to top()
+                ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, r->top());
+
+                // Any object that begins in a previous range is part of a different scanning assignment.  Any object that
+                // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
+                // not hold pointers to from-space, or is beyond the range of my assigned work chunk.)
+
+                // Find the first object that begins in my range, if there is one.
+                p = start_of_range;
+                oop obj = cast_to_oop(p);
+                HeapWord* tams = ctx->top_at_mark_start(r);
+                if (p >= tams) {
+                  // We cannot use ctx->is_marked(obj) to test whether an object begins at this address.  Instead,
+                  // we need to use the remembered set crossing map to advance p to the first object that starts
+                  // within the enclosing card.
+
+                  while (true) {
+                    HeapWord* first_object = scanner->first_object_in_card(card_index);
+                    if (first_object != nullptr) {
+                      p = first_object;
+                      break;
+                    } else if (scanner->addr_for_card_index(card_index + 1) < end_of_range) {
+                      card_index++;
+                    } else {
+                      // Force the loop that follows to immediately terminate.
+                      p = end_of_range;
+                      break;
+                    }
+                  }
+                  obj = cast_to_oop(p);
+                  // Note: p may be >= end_of_range
+                } else if (!ctx->is_marked(obj)) {
+                  p = ctx->get_next_marked_addr(p, tams);
+                  obj = cast_to_oop(p);
+                  // If there are no more marked objects before tams, this returns tams.
+                  // Note that tams is either >= end_of_range, or tams is the start of an object that is marked.
+                }
+                while (p < end_of_range) {
+                  // p is known to point to the beginning of marked object obj
+                  objs.do_object(obj);
+                  HeapWord* prev_p = p;
+                  p += obj->size();
+                  if (p < tams) {
+                    p = ctx->get_next_marked_addr(p, tams);
+                    // If there are no more marked objects before tams, this returns tams.  Note that tams is
+                    // either >= end_of_range, or tams is the start of an object that is marked.
+                  }
+                  assert(p != prev_p, "Lack of forward progress");
+                  obj = cast_to_oop(p);
+                }
+              }
+            }
+          } else {
+            // This is a young evac..
+            if (start_of_range < end_of_range) {
+              size_t cluster_size =
+                CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+              size_t clusters = assignment._chunk_size / cluster_size;
+              assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
+              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT);
+            }
+          }
+          if (ShenandoahPacing && (start_of_range < end_of_range)) {
+            _heap->pacer()->report_updaterefs(pointer_delta(end_of_range, start_of_range));
+          }
+        }
+        // Otherwise, this work chunk had nothing for me to do, so do not report pacer progress.
+
+        // Before we take responsibility for another chunk of work, see if cancellation is requested.
+        if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
+          return;
+        }
+        have_work = _work_chunks->next(&assignment);
+      }
+    }
   }
 };
 
 void ShenandoahHeap::update_heap_references(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
+  ShenandoahRegionChunkIterator work_list(workers()->active_workers());
 
   if (concurrent) {
-    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator);
+    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
   } else {
-    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator);
+    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
   }
 }
-
 
 class ShenandoahFinalUpdateRefsUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
 private:

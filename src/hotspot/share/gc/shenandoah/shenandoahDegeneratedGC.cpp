@@ -72,6 +72,7 @@ void ShenandoahDegenGC::entry_degenerated() {
 
   // In case degenerated GC preempted evacuation or update-refs, clear the aging cycle now.  No harm in clearing it
   // redundantly if it is already clear.  We don't age during degenerated cycles.
+  // TODO: Why not age during degenerated cycles?  Investigate and fix, or explain why not.
   heap->set_aging_cycle(false);
 
   ShenandoahWorkerScope scope(heap->workers(),
@@ -286,7 +287,7 @@ void ShenandoahDegenGC::op_degenerated() {
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
     heap->reset_old_evac_expended();
-    heap->set_promotion_reserve(0);
+    heap->set_promoted_reserve(0);
 
   }
 

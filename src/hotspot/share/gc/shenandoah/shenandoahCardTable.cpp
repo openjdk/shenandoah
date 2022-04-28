@@ -29,6 +29,7 @@
 
 void ShenandoahCardTable::initialize() {
   CardTable::initialize();
+
   _write_byte_map = _byte_map;
   _write_byte_map_base = _byte_map_base;
   const size_t rs_align = _page_size == (size_t) os::vm_page_size() ? 0 :

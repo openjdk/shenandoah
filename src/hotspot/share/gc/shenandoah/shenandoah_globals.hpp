@@ -267,8 +267,9 @@
           "evacuate more live objects on every cycle, while leaving "       \
           "less headroom for application to allocate while GC is "          \
           "evacuating and updating references. This parameter is "          \
-          "consulted at the of marking, before selecting the collection "   \
-          "set.  If available memory at this time is smaller than the "     \
+          "consulted at the end of marking, before selecting the "          \
+          "collection set.  "                                               \
+          "If available memory at this time is smaller than the "           \
           "indicated reserve, the bound on collection set size is "         \
           "adjusted downward.  The size of a generational mixed "           \
           "evacuation collection set (comprised of both young and old "     \
@@ -323,14 +324,14 @@
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
                                                                             \
-  product(uintx, ShenandoahOldEvacReserve, 2, EXPERIMENTAL,                 \
+  product(uintx, ShenandoahOldEvacReserve, 5, EXPERIMENTAL,                 \
           "How much of old-generation heap to reserve for old-generation "  \
           "evacuations.  Larger values allow GC to evacuate more live "     \
           "old-generation objects on every cycle, while potentially "       \
           "creating greater impact on the cadence at which the young- "     \
           "generation allocation pool is replenished.  During mixed "       \
           "evacuations, the bound on amount of old-generation heap "        \
-          "regions included in the collecdtion set is the smaller "         \
+          "regions included in the collection set is the smaller "          \
           "of the quantities specified by this parameter and the "          \
           "size of ShenandoahEvacReserve as adjusted by the value of "      \
           "ShenandoahOldEvacRatioPercent.  In percents of total "           \
@@ -340,7 +341,8 @@
   product(uintx, ShenandoahOldEvacRatioPercent, 12, EXPERIMENTAL,           \
           "The maximum proportion of evacuation from old-gen memory, as "   \
           "a percent ratio.  The default value 12 denotes that no more "    \
-          "than one eighth (12%) of the collection set evacuation "         \
+          "than one eighth (~12%) of the potential collection set "         \
+          "evacuation "                                                     \
           "workload may be comprised of old-gen heap regions.  A larger "   \
           "value allows a smaller number of mixed evacuations to process "  \
           "the entire list of old-gen collection candidates at the cost "   \
@@ -510,6 +512,13 @@
           "young collection set memory to be allocated during the "         \
           "subsequent concurrent mark phase of GC.")                        \
           range(0, 100)                                                     \
+                                                                            \
+  product(uintx, ShenandoahOldCompactionReserve, 8, EXPERIMENTAL,           \
+          "During generational GC, prevent promotions from filling "        \
+          "this number of heap regions.  These regions are reserved "       \
+          "for the purpose of supporting compaction of old-gen "            \
+          "memory.  Otherwise, old-gen memory cannot be compacted.")        \
+          range(0, 128)                                                     \
                                                                             \
   product(bool, ShenandoahPromoteTenuredObjects, true, DIAGNOSTIC,          \
           "Turn on/off evacuating individual tenured young objects "        \

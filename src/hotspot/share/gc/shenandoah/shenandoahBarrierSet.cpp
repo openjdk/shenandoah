@@ -127,7 +127,7 @@ void ShenandoahBarrierSet::on_thread_detach(Thread *thread) {
     // This is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each
     // PLAB is aligned with the start of each card's memory range.
     if (plab != NULL) {
-      _heap->retire_plab(plab);
+      _heap->retire_plab(plab, thread);
     }
 
     // SATB protocol requires to keep alive reacheable oops from roots at the beginning of GC
