@@ -339,7 +339,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   if (collection_set->has_old_regions()) {
     heap->shenandoah_policy()->record_mixed_cycle();
   }
-  
+
   size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
   size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
