@@ -36,7 +36,7 @@ void ShenandoahGenerationalMode::initialize_flags() const {
     FLAG_SET_DEFAULT(VerifyBeforeExit, false);
   }
 
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahUnloadClassesFrequency, 50);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahUnloadClassesFrequency, 0);
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
 
