@@ -423,17 +423,32 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       //  2. if (previously promoted > 0), 4 times the amount of memory promoted in previous GC pass
       //  3. young_bytes_reserved_for_evacuation / ((0x02 << InitialTenuringThreshold) - 1)
       //      (Assume exponential decay of objects, with number of objects of age 0 being twice the number
-      //       of objects of age 1, which is twice the number of objexts of age 2, and so on.)
+      //       of objects of age 1, which is twice the number of objects of age 2, and so on.  For example,
+      //       if tenure age is 1, 1/3 of young evac will be promoted.  If tenure age is 2, 1/7 of young evac
+      //       will be promoted.)
 
       size_t previously_promoted = heap->get_previous_promotion();
+#undef KELVIN_TRACE_PROMOTION_BUDGET
+#ifdef KELVIN_TRACE_PROMOTION_BUDGET
+      printf("PromotionBudget: previously_promoted: " SIZE_FORMAT "\n", previously_promoted);
+#endif
       assert(old_generation->available() > old_evacuation_committed, "Cannot evacuate more than available");
       size_t promotion_reserve = (old_generation->available() - old_evacuation_committed -
                                   old_regions_loaned_for_young_evac * region_size_bytes);
+#ifdef KELVIN_TRACE_PROMOTION_BUDGET
+      printf("PromotionBudget: initial promotion_reserve: " SIZE_FORMAT ", old_avail: " SIZE_FORMAT
+             ", old_evac_commit: " SIZE_FORMAT ", old regions loaned for young_evac: " SIZE_FORMAT "\n",
+             promotion_reserve, old_generation->available(), old_evacuation_committed, old_regions_loaned_for_young_evac);
+#endif
       if (previously_promoted > 0) {
         if (previously_promoted * 4 < promotion_reserve) {
           promotion_reserve = previously_promoted * 4;
         }
       }
+#ifdef KELVIN_TRACE_PROMOTION_BUDGET
+      printf("PromotionBudget: promotion_reserve limited by previously promoted: " SIZE_FORMAT "\n",
+             promotion_reserve);
+#endif
       size_t promotion_divisor = (0x02 << InitialTenuringThreshold) - 1;
       size_t young_evacuation_committed = (size_t) (ShenandoahEvacWaste *
                                                     collection_set->get_young_bytes_reserved_for_evacuation());
@@ -442,6 +457,15 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         promotion_reserve = anticipated_promotion;
       }
       heap->set_promoted_reserve(promotion_reserve);
+#ifdef KELVIN_TRACE_PROMOTION_BUDGET
+      printf("PromotionBudget: promotion_reserve limited by fraction of young evac: " SIZE_FORMAT
+             ", young_evac: " SIZE_FORMAT ", divisor: " SIZE_FORMAT  "\n",
+             promotion_reserve, young_evacuation_committed, promotion_divisor);
+#endif
+      if (collection_set->get_old_bytes_reserved_for_evacuation() == 0) {
+        // Setting old evacuation reserve to zero denotes that there is no old-gen evacuation in this pass.
+        heap->set_old_evac_reserve(0);
+      }
 
       size_t old_gen_usage_base = old_generation->used() - collection_set->get_old_garbage();
       heap->capture_old_usage(old_gen_usage_base);

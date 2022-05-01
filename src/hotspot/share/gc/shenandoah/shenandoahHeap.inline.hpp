@@ -312,9 +312,22 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   // if plab->word_size() <= 0, thread's plab not yet initialized for this pass, so allow_plab_promotions() is not trustworthy
   obj = plab->allocate(size);
   if ((obj == nullptr) && (plab->words_remaining() < PLAB::min_size())) {
+#undef KELVIN_SCRUTINY
+#ifdef KELVIN_SCRUTINY
+    printf(PTR_FORMAT ": refreshing plab for allocation of size: " SIZE_FORMAT ", remaining_words: " SIZE_FORMAT
+           ", is_promotion: %s\n", p2i(thread), size, plab->words_remaining(), is_promotion? "true": "false");
+    fflush(stdout);
+#endif
     // allocate_from_plab_slow will establish allow_plab_promotions(thread) for future invocations
     obj = allocate_from_plab_slow(thread, size, is_promotion);
   }
+#ifdef KELVIN_SCRUTINY
+  else if (obj == nullptr) {
+    printf(PTR_FORMAT ": Not refreshing plab for allocation of size: " SIZE_FORMAT ", remaining_words: " SIZE_FORMAT
+           ", is_promotion: %s\n", p2i(thread), size, plab->words_remaining(), is_promotion? "true": "false");
+    fflush(stdout);
+  }
+#endif
   // if plab->words_remaining() >= PLAB::min_size(), just return nullptr so we can use a shared allocation
   if (obj == nullptr) {
     return nullptr;
@@ -391,6 +404,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
            break;
         }
         case OLD_GENERATION: {
+#undef KELVIN_SPECIAL_SCRUTINY
            if (ShenandoahUsePLAB) {
              copy = allocate_from_plab(thread, size, is_promotion);
              if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
@@ -405,16 +419,38 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
                PLAB* plab = ShenandoahThreadLocalData::plab(thread);
                if (plab->words_remaining() < PLAB::min_size()) {
+#ifdef KELVIN_SPECIAL_SCRUTINY
+                 printf(PTR_FORMAT ": plab_alloc failed for size " SIZE_FORMAT ", remaining words: " SIZE_FORMAT ", retry with min plab size\n",
+                        p2i(thread), size, plab->words_remaining());
+                 fflush(stdout);
+#endif
                  ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
                  copy = allocate_from_plab(thread, size, is_promotion);
                  // If we still get nullptr, we'll try a shared allocation below.
                  if (copy == nullptr) {
                    // If retry fails, don't continue to retry until we have success (probably in next GC pass)
+#ifdef KELVIN_SPECIAL_SCRUTINY
+                   printf(PTR_FORMAT ": disabling plab retres because plab alloc retry failed\n", p2i(thread));
+                   fflush(stdout);
+#endif
                    ShenandoahThreadLocalData::disable_plab_retries(thread);
                  }
                }
                // else, copy still equals nullptr.  this causes shared allocation below, preserving this plab for future needs.
+#ifdef KELVIN_SPECIAL_SCRUTINY
+               else {
+                 printf(PTR_FORMAT ": plab_alloc failed for size " SIZE_FORMAT ", remaining words: " SIZE_FORMAT ", preserving plab to force shared allocation\n",
+                        p2i(thread), size, plab->words_remaining());
+                 fflush(stdout);
+               }
+#endif
              } else if (copy != nullptr) {
+#ifdef KELVIN_SPECIAL_SCRUTINY
+               if (!ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
+                 printf(PTR_FORMAT ": enabling plab retries because plab alloc succeeded\n", p2i(thread));
+                 fflush(stdout);
+               }
+#endif
                ShenandoahThreadLocalData::enable_plab_retries(thread);
              }
            }
@@ -429,9 +465,24 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
     if (copy == NULL) {
       // If we failed to allocated in LAB, we'll try a shared allocation.
-      ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
-      copy = allocate_memory(req, is_promotion);
-      alloc_from_lab = false;
+      if (!is_promotion || (size > PLAB::min_size())) {
+        ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
+        copy = allocate_memory(req, is_promotion);
+        alloc_from_lab = false;
+#ifdef KELVIN_SPECIAL_SCRUTINY
+        printf(PTR_FORMAT ": tried shared allocation of size " SIZE_FORMAT ", is_promotion: %s, %s\n",
+               p2i(thread), size, is_promotion? "true": "false", (copy == nullptr)? "failed": "succeeded");
+        fflush(stdout);
+#endif
+      }
+      // else, we leave copy equal to NULL, signalling a promotion failure below if appropriate
+#ifdef KELVIN_SPECIAL_SCRUTINY
+      else {
+        printf(PTR_FORMAT ": did NOT try shared allocation of size " SIZE_FORMAT ", is_promotion: %s\n",
+               p2i(thread), size, is_promotion? "true": "false");
+        fflush(stdout);
+      }
+#endif
     }
 #ifdef ASSERT
   }

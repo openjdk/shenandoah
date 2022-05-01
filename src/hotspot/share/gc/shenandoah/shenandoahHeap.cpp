@@ -1191,6 +1191,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region, bool is_promotion) {
   // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
   bool promotion_eligible = false;
+  bool allow_allocation = true;
   bool plab_alloc = false;
   size_t requested_bytes = req.size() * HeapWordSize;
 
@@ -1214,6 +1215,11 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         size_t promotion_expended = get_promoted_expended();
         if (promotion_expended + requested_bytes > promotion_avail) {
           promotion_avail = 0;
+          if (get_old_evac_reserve() == 0) {
+            // There are no old-gen evacuations in this pass.  There's no value in creating a plab that cannot
+            // be used for promotions.
+            allow_allocation = false;
+          }
         } else {
           promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
           promotion_eligible = true;
@@ -1239,8 +1245,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       }
     }
   }
-
-  HeapWord* result = _free_set->allocate(req, in_new_region);
+  HeapWord* result = (allow_allocation)? _free_set->allocate(req, in_new_region): nullptr;
   if (result != NULL) {
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
       ShenandoahThreadLocalData::reset_plab_promoted(thread);
@@ -1255,6 +1260,13 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
             ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
           } else {
             // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
+#undef KELVIN_MYSTERY
+#ifdef KELVIN_MYSTERY
+            printf(PTR_FORMAT ": disabling promotions for requested bytes: " SIZE_FORMAT ", promotion_expended: " SIZE_FORMAT
+                   ", promotion_reserved: " SIZE_FORMAT "\n",
+                   p2i(thread), requested_bytes, get_promoted_expended(), get_promoted_reserve());
+            fflush(stdout);
+#endif
             ShenandoahThreadLocalData::disable_plab_promotions(thread);
             ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
           }
