@@ -414,7 +414,7 @@ void ShenandoahHeuristics::record_success_concurrent(bool abbreviated) {
   _degenerated_cycles_in_a_row = 0;
   _successful_cycles_in_a_row++;
 
-  if (!abbreviated) {
+  if (!(abbreviated && ShenandoahAdaptiveIgnoreShortCycles)) {
     _gc_time_history->add(time_since_last_gc());
     _gc_times_learned++;
   }
