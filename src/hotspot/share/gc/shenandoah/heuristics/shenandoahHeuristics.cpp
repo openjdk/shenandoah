@@ -219,6 +219,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      byte_size_in_proper_unit(collection_set->garbage()),
                      proper_unit_for_byte_size(collection_set->garbage()),
                      cset_percent);
+
+  size_t bytes_evacuated = collection_set->get_bytes_reserved_for_evacuation();
+  log_info(gc, ergo)("Total Evacuation: " SIZE_FORMAT "%s", bytes_evacuated, proper_unit_for_byte_size(bytes_evacuated));
 }
 
 void ShenandoahHeuristics::record_cycle_start() {

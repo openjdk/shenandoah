@@ -58,6 +58,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   uint included_old_regions = 0;
   size_t evacuated_old_bytes = 0;
+  size_t collected_old_bytes = 0;
 
   // TODO:
   // The max_old_evacuation_bytes and promotion_budget_bytes constants represent a first
@@ -98,6 +99,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       collection_set->add_region(r);
       included_old_regions++;
       evacuated_old_bytes += r->get_live_data_bytes();
+      collected_old_bytes += r->garbage();
       consume_old_collection_candidate();
     } else {
       break;
@@ -105,8 +107,10 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
 
   if (included_old_regions > 0) {
-    log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, " SIZE_FORMAT " %s)",
-                 included_old_regions, byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes));
+    log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, evacuating: "
+                 SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)", included_old_regions,
+                 byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes),
+                 byte_size_in_proper_unit(collected_old_bytes), proper_unit_for_byte_size(collected_old_bytes));
   }
   return (included_old_regions > 0);
 }
