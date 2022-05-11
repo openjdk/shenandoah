@@ -45,22 +45,7 @@ public:
   // Return true if entry should be filtered out (removed), false if
   // it should be retained.
   bool operator()(const void* entry) const {
-    if (!_heap->requires_marking(entry)) {
-      // The object is already marked, don't need to mark it again
-      return true;
-    }
-
-    if (_heap->mode()->is_generational() && _heap->is_concurrent_old_mark_in_progress()) {
-      // The SATB barrier is left on during concurrent marking of the old generation.
-      // It is possible for the barrier to record an address of a reachable object
-      // which exists in the collection set of a young generation collection. Once the
-      // object is evacuated, the address left in the SATB buffer is no longer valid (or safe).
-      ShenandoahHeapRegion* region = _heap->heap_region_containing(entry);
-      return !region->is_active() || region->is_cset();
-    }
-
-    // Keep this object in the SATB buffer.
-    return false;
+    return !_heap->requires_marking(entry);
   }
 };
 
