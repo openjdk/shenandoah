@@ -2461,7 +2461,9 @@ private:
               // old-gen region in the most recent collection set, or if this card holds pointers to other non-specific
               // old-gen heap regions.
               if (r->is_humongous()) {
-                r->oop_iterate_humongous(&cl);
+                // Need to examine both dirty and clean cards during mixed evac.
+                oop obj = cast_to_oop(r->bottom());
+                r->oop_iterate_humongous_slice(&cl, false, r->bottom(), obj->size(), true, CONCURRENT);
               } else {
                 // This is a mixed evacuation.  Old regions that are candidates for collection have not been coalesced
                 // and filled.  Use mark bits to find objects that need to be updated.
