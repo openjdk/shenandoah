@@ -577,7 +577,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
   // Find head.
   ShenandoahHeapRegion* r = humongous_start_region();
   assert(r->is_humongous_start(), "need humongous head here");
-  assert(CardTable::card_size_in_words * (words / CardTable::card_size_in_words()) == words,
+  assert(CardTable::card_size_in_words() * (words / CardTable::card_size_in_words()) == words,
          "slice must be integral number of cards");
 
   oop obj = cast_to_oop(r->bottom());
