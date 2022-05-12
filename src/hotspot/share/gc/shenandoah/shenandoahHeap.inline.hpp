@@ -301,18 +301,26 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   assert(UseTLAB, "TLABs should be enabled");
 
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-  if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
-    return NULL;
-  } else if (plab == NULL) {
-    assert(!thread->is_Java_thread() && !thread->is_Worker_thread(),
-           "Performance: thread should have PLAB: %s", thread->name());
+  HeapWord* obj;
+  if (plab == NULL) {
+    assert(!thread->is_Java_thread() && !thread->is_Worker_thread(), "Performance: thread should have PLAB: %s", thread->name());
     // No PLABs in this thread, fallback to shared allocation
-    return NULL;
+    return nullptr;
+  } else if (is_promotion && (plab->words_remaining() > 0) && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
+    return nullptr;
   }
-  HeapWord* obj = plab->allocate(size);
-  if (obj == NULL) {
+  // if plab->word_size() <= 0, thread's plab not yet initialized for this pass, so allow_plab_promotions() is not trustworthy
+  obj = plab->allocate(size);
+  if ((obj == nullptr) && (plab->words_remaining() < PLAB::min_size())) {
+    // allocate_from_plab_slow will establish allow_plab_promotions(thread) for future invocations
     obj = allocate_from_plab_slow(thread, size, is_promotion);
   }
+  // if plab->words_remaining() >= PLAB::min_size(), just return nullptr so we can use a shared allocation
+  if (obj == nullptr) {
+    return nullptr;
+  }
+
+
   if (is_promotion) {
     ShenandoahThreadLocalData::add_to_plab_promoted(thread, size * HeapWordSize);
   } else {
@@ -387,12 +395,29 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         case OLD_GENERATION: {
            if (ShenandoahUsePLAB) {
              copy = allocate_from_plab(thread, size, is_promotion);
-             if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread))) {
-               // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve.  Try resetting
-               // the desired PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
-               ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
-               copy = allocate_from_plab(thread, size, is_promotion);
-               // If we still get nullptr, we'll try a shared allocation below.
+             if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
+                 ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
+               // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve or because
+               // the requested object does not fit within the current plab but the plab still has an "abundance" of memory,
+               // where abundance is defined as >= PLAB::min_size().  In the former case, we try resetting the desired
+               // PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
+
+               // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
+               // this particular allocation to be shared.
+
+               PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+               if (plab->words_remaining() < PLAB::min_size()) {
+                 ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
+                 copy = allocate_from_plab(thread, size, is_promotion);
+                 // If we still get nullptr, we'll try a shared allocation below.
+                 if (copy == nullptr) {
+                   // If retry fails, don't continue to retry until we have success (probably in next GC pass)
+                   ShenandoahThreadLocalData::disable_plab_retries(thread);
+                 }
+               }
+               // else, copy still equals nullptr.  this causes shared allocation below, preserving this plab for future needs.
+             } else if (copy != nullptr) {
+               ShenandoahThreadLocalData::enable_plab_retries(thread);
              }
            }
            break;
@@ -405,10 +430,13 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     }
 
     if (copy == NULL) {
-      // If we failed to allocated in LAB, we'll try a shared allocation.
-      ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
-      copy = allocate_memory(req, is_promotion);
-      alloc_from_lab = false;
+      // If we failed to allocate in LAB, we'll try a shared allocation.
+      if (!is_promotion || (size > PLAB::min_size())) {
+        ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
+        copy = allocate_memory(req, is_promotion);
+        alloc_from_lab = false;
+      }
+      // else, we leave copy equal to NULL, signaling a promotion failure below if appropriate
     }
 #ifdef ASSERT
   }
@@ -588,14 +616,14 @@ inline bool ShenandoahHeap::is_aging_cycle() const {
   return _is_aging_cycle.is_set();
 }
 
-inline size_t ShenandoahHeap::set_promotion_reserve(size_t new_val) {
-  size_t orig = _promotion_reserve;
-  _promotion_reserve = new_val;
+inline size_t ShenandoahHeap::set_promoted_reserve(size_t new_val) {
+  size_t orig = _promoted_reserve;
+  _promoted_reserve = new_val;
   return orig;
 }
 
-inline size_t ShenandoahHeap::get_promotion_reserve() const {
-  return _promotion_reserve;
+inline size_t ShenandoahHeap::get_promoted_reserve() const {
+  return _promoted_reserve;
 }
 
 // returns previous value
@@ -624,16 +652,31 @@ inline size_t ShenandoahHeap::get_old_evac_reserve() const {
 }
 
 inline void ShenandoahHeap::reset_old_evac_expended() {
-  _old_evac_expended = 0;
+  Atomic::store(&_old_evac_expended, (size_t) 0);
 }
 
 inline size_t ShenandoahHeap::expend_old_evac(size_t increment) {
-  _old_evac_expended += increment;
-  return _old_evac_expended;
+  return Atomic::add(&_old_evac_expended, increment);
 }
 
-inline size_t ShenandoahHeap::get_old_evac_expended() const {
-  return _old_evac_expended;
+inline size_t ShenandoahHeap::get_old_evac_expended() {
+  return Atomic::load(&_old_evac_expended);
+}
+
+inline void ShenandoahHeap::reset_promoted_expended() {
+  Atomic::store(&_promoted_expended, (size_t) 0);
+}
+
+inline size_t ShenandoahHeap::expend_promoted(size_t increment) {
+  return Atomic::add(&_promoted_expended, increment);
+}
+
+inline size_t ShenandoahHeap::unexpend_promoted(size_t decrement) {
+  return Atomic::sub(&_promoted_expended, decrement);
+}
+
+inline size_t ShenandoahHeap::get_promoted_expended() {
+  return Atomic::load(&_promoted_expended);
 }
 
 inline size_t ShenandoahHeap::set_young_evac_reserve(size_t new_val) {

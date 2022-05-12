@@ -299,7 +299,7 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
         promotion_reserve = previously_promoted * 2;
       }
 
-      heap->set_promotion_reserve(promotion_reserve);
+      heap->set_promoted_reserve(promotion_reserve);
       heap->capture_old_usage(old_generation->used());
 
       //  OldEvacuationReserve for old generation: how much memory are we reserving to hold the results of

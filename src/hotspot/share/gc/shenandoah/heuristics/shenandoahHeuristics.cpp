@@ -250,7 +250,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
       const size_t available_young_regions = free_regions + immediate_regions + young_generation->free_unaffiliated_regions();
       const size_t available_old_regions = old_generation->free_unaffiliated_regions();
-      size_t already_reserved_old_bytes = heap->get_old_evac_reserve() + heap->get_promotion_reserve();
+      size_t already_reserved_old_bytes = heap->get_old_evac_reserve() + heap->get_promoted_reserve();
       size_t regions_reserved_for_evac_and_promotion = (already_reserved_old_bytes + region_size_bytes - 1) / region_size_bytes;
       regions_available_to_loan = available_old_regions - regions_reserved_for_evac_and_promotion;
 
@@ -314,7 +314,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
     heap->set_alloc_supplement_reserve(potential_evac_supplement);
 
-    size_t promotion_budget = heap->get_promotion_reserve();
+    size_t promotion_budget = heap->get_promoted_reserve();
     size_t old_evac_budget = heap->get_old_evac_reserve();
     size_t alloc_budget_evac_and_update = potential_evac_supplement + young_available;
 
