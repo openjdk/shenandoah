@@ -81,4 +81,8 @@ size_t ShenandoahCollectionSet::get_young_region_count() {
   return _young_region_count;
 }
 
+size_t ShenandoahCollectionSet::get_old_garbage() {
+  return _old_garbage;
+}
+
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCOLLECTIONSET_INLINE_HPP

@@ -1194,7 +1194,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   bool allow_allocation = true;
   bool plab_alloc = false;
   size_t requested_bytes = req.size() * HeapWordSize;
-
+  HeapWord* result = nullptr;
   ShenandoahHeapLocker locker(lock());
   Thread* thread = Thread::current();
   if (mode()->is_generational()) {
@@ -1244,7 +1244,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       }
     }
   }
-  HeapWord* result = _free_set->allocate(req, in_new_region);
+  result = (allow_allocation)? _free_set->allocate(req, in_new_region): nullptr;
   if (result != NULL) {
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
       ShenandoahThreadLocalData::reset_plab_promoted(thread);
