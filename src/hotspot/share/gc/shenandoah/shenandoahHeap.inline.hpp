@@ -369,6 +369,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region,
                                                ShenandoahRegionAffiliation target_gen) {
   bool alloc_from_lab = true;
+  bool has_plab = false;
   HeapWord* copy = NULL;
   size_t size = p->size();
   bool is_promotion = (target_gen == OLD_GENERATION) && from_region->is_young();
@@ -394,6 +395,10 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         }
         case OLD_GENERATION: {
            if (ShenandoahUsePLAB) {
+             PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+             if (plab != nullptr) {
+               has_plab = true;
+             }
              copy = allocate_from_plab(thread, size, is_promotion);
              if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
                  ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
@@ -404,8 +409,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
                // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
                // this particular allocation to be shared.
-
-               PLAB* plab = ShenandoahThreadLocalData::plab(thread);
                if (plab->words_remaining() < PLAB::min_size()) {
                  ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
                  copy = allocate_from_plab(thread, size, is_promotion);
@@ -430,8 +433,8 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
     }
 
     if (copy == NULL) {
-      // If we failed to allocate in LAB, we'll try a shared allocation.
-      if (!is_promotion || (size > PLAB::min_size())) {
+      // If we failed to allocated in LAB, we'll try a shared allocation.
+      if (!is_promotion || !has_plab || (size > PLAB::min_size())) {
         ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
         copy = allocate_memory(req, is_promotion);
         alloc_from_lab = false;
@@ -447,6 +450,37 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       assert(mode()->is_generational(), "Should only be here in generational mode.");
       if (from_region->is_young()) {
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
+
+        // We squelch excessive reports to reduce noise in logs.  Squelch enforcement is not "perfect" because
+        // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static 
+        // last_report_epoch and this_epoch_report_count variables.
+        const uint MaxReportsPerEpoch = 4;
+        static uint last_report_epoch = 0;
+        static uint epoch_report_count = 0;
+        PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+        const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
+        size_t promotion_reserve;
+        size_t promotion_expended;
+        size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
+        {
+          // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
+          ShenandoahHeapLocker locker(lock());
+          promotion_reserve = get_promoted_reserve();
+          promotion_expended = get_promoted_expended();
+        }
+        uint gc_id = GCId::current();
+        if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
+          log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
+                             ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
+                             size, plab == nullptr? "no": "yes",
+                             words_remaining, promote_enabled, promotion_reserve, promotion_expended);
+          if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
+            log_info(gc, ergo)("Squelching additional promotion failure reports for epoch %d\n", last_report_epoch);
+          } else if (gc_id != last_report_epoch) {
+            last_report_epoch = GCId::current();
+            epoch_report_count = 1;
+          }
+        }
         handle_promotion_failure();
         return NULL;
       } else {
