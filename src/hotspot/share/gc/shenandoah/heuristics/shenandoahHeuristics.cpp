@@ -77,8 +77,25 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
-void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
+size_t ShenandoahHeuristics::prioritize_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  size_t old_consumed = 0;
+  if (heap->mode()->is_generational()) {
+    for (size_t i = 0; i < num_regions; i++) {
+      ShenandoahHeapRegion* region = heap->get_region(i);
+      if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
+        size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahEvacWaste);
+        if (old_consumed + promotion_need < old_available) {
+          old_consumed += promotion_need;
+          preselected_regions[i] = true;
+        }
+      }
+    }
+  }
+  return old_consumed;
+}
 
+void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   assert(collection_set->count() == 0, "Must be empty");
@@ -113,6 +130,14 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       continue;
     }
 
+#undef KELVIN_SEE_COLLECTION_CONSTRUCTION
+#ifdef KELVIN_SEE_COLLECTION_CONSTRUCTION
+    printf("%s %s %s region[" SIZE_FORMAT "] age: %d, live: " SIZE_FORMAT ", garbage: " SIZE_FORMAT "\n",
+           region->is_regular()? "Regular": "Irregular",
+           affiliation_name(region->affiliation()),
+           region->is_empty()? "empty": "unempty", region->index(), region->age(),
+           region->get_live_data_bytes(), region->garbage());
+#endif
     size_t garbage = region->garbage();
     total_garbage += garbage;
 
@@ -131,9 +156,16 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         live_memory += region->get_live_data_bytes();
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
-        if (heap->mode()->is_generational() && (region->age() >= InitialTenuringThreshold)) {
-          // Bias selection of regions that have reached tenure age
-          for (uint j = region->age() - InitialTenuringThreshold; j > 0; j--) {
+        if (collection_set->is_preselected(i)) {
+          // If regions is presected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
+
+          // TODO: Deprecate and/or refine ShenandoahTenuredRegionUsageBias.  If we preselect the regions, we can just
+          // set garbage to "max" value, which is the region size rather than doing this extra work to bias selection.
+          // May also want to exercise more discretion in prioritize_aged_regions() if we decide there are good reasons
+          // to not promote all eligible aged regions on the current GC pass.
+
+          // If we're at tenure age, bias at least once.
+          for (uint j = region->age() + 1 - InitialTenuringThreshold; j > 0; j--) {
             garbage = (garbage + ShenandoahTenuredRegionUsageBias) * ShenandoahTenuredRegionUsageBias;
           }
         }
