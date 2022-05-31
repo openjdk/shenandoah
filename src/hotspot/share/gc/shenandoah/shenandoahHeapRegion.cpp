@@ -122,11 +122,9 @@ void ShenandoahHeapRegion::make_regular_bypass() {
     case _cset:
     case _humongous_start:
     case _humongous_cont:
-      // TODO: Changing this region to young during compaction may not be
-      // technically correct here because it completely disregards the ages
-      // and origins of the objects being moved. It is, however, certainly
-      // more correct than putting live objects into a region without a
-      // generational affiliation.
+      // In the case that full generational-mode GC consolidates old or young objects within a previously empty region,
+      // we make the region regular before setting its affiliation.  If make_regular_bypass() is called again during
+      // full post compaction, the region's _state will already be _regular so we will not overwrite its affiliation.
       set_affiliation(YOUNG_GENERATION);
       set_state(_regular);
       return;

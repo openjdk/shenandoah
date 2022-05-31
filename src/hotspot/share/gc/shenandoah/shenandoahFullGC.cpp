@@ -514,7 +514,7 @@ public:
 
     bool promote_object = false;
     if ((_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) &&
-        (from_region_age + object_age > InitialTenuringThreshold)) {
+        (from_region_age + object_age >= InitialTenuringThreshold)) {
       if ((_old_to_region != nullptr) && (_old_compact_point + obj_size > _old_to_region->end())) {
         finish_old_region();
         _old_to_region = nullptr;
@@ -523,6 +523,10 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           ShenandoahHeapRegion* new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
+          if (new_to_region->is_empty()) {
+            // Set the region state to regular.  This avoids overwriting affiliation with YOUNG during post compaction.
+            new_to_region->make_regular_bypass();
+          }
           new_to_region->set_affiliation(OLD_GENERATION);
           _old_to_region = new_to_region;
           _old_compact_point = _old_to_region->bottom();
@@ -549,6 +553,10 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
+          if (new_to_region->is_empty()) {
+            // Set the region state to regular.  This avoids overwriting affiliation with YOUNG during post compaction.
+            new_to_region->make_regular_bypass();
+          }
           new_to_region->set_affiliation(OLD_GENERATION);
         } else {
           // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
@@ -590,6 +598,10 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
+          if (new_to_region->is_empty()) {
+            // Set the region state to regular.  This avoids overwriting affiliation with YOUNG during post compaction.
+            new_to_region->make_regular_bypass();
+          }
           new_to_region->set_affiliation(YOUNG_GENERATION);
         } else {
           // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
