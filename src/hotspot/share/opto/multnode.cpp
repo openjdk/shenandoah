@@ -74,6 +74,16 @@ ProjNode* MultiNode::proj_out_or_null(uint which_proj, bool is_io_use) const {
 
 // Get a named projection
 ProjNode* MultiNode::proj_out(uint which_proj) const {
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  if (outcnt() != 2) {
+    if (Opcode() == Op_If) {
+      printf("# OpCode() is Op_If AND outcnt() != 2\n");
+    } else if (Opcode() == Op_RangeCheck) {
+      printf("# Opcode() is Op_RangeCheck AND outcnt() != 2\n");
+    }
+  }
+#endif
   assert((Opcode() != Op_If && Opcode() != Op_RangeCheck) || outcnt() == 2, "bad if #1");
   ProjNode* p = proj_out_or_null(which_proj);
   assert(p != NULL, "named projection %u not found", which_proj);
