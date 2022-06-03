@@ -523,10 +523,6 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           ShenandoahHeapRegion* new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          if (new_to_region->is_empty()) {
-            // Set the region state to regular.  This avoids overwriting affiliation with YOUNG during post compaction.
-            new_to_region->make_regular_bypass();
-          }
           new_to_region->set_affiliation(OLD_GENERATION);
           _old_to_region = new_to_region;
           _old_compact_point = _old_to_region->bottom();
@@ -553,10 +549,6 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          if (new_to_region->is_empty()) {
-            // Set the region state to regular.  This avoids overwriting affiliation with YOUNG during post compaction.
-            new_to_region->make_regular_bypass();
-          }
           new_to_region->set_affiliation(OLD_GENERATION);
         } else {
           // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
@@ -598,10 +590,6 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          if (new_to_region->is_empty()) {
-            // Set the region state to regular.  This avoids overwriting affiliation with YOUNG during post compaction.
-            new_to_region->make_regular_bypass();
-          }
           new_to_region->set_affiliation(YOUNG_GENERATION);
         } else {
           // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
@@ -835,11 +823,13 @@ private:
 public:
   ShenandoahEnsureHeapActiveClosure() : _heap(ShenandoahHeap::heap()) {}
   void heap_region_do(ShenandoahHeapRegion* r) {
+    bool is_generational = _heap->mode()->is_generational();
     if (r->is_trash()) {
       r->recycle();
     }
     if (r->is_cset()) {
-      r->make_regular_bypass();
+      // If generational, leave affiliation alone.
+      r->make_regular_bypass(!is_generational);
     }
     if (r->is_empty_uncommitted()) {
       r->make_committed_bypass();
@@ -1258,6 +1248,7 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion* r) {
     assert (!r->is_cset(), "cset regions should have been demoted already");
+    bool is_generational = _heap->mode()->is_generational();
 
     // Need to reset the complete-top-at-mark-start pointer here because
     // the complete marking bitmap is no longer valid. This ensures
@@ -1272,7 +1263,7 @@ public:
 
     // Make empty regions that have been allocated into regular
     if (r->is_empty() && live > 0) {
-      r->make_regular_bypass();
+      r->make_regular_bypass(!is_generational);
     }
 
     // Reclaim regular regions that became empty
@@ -1287,7 +1278,7 @@ public:
     }
 
     // Update final usage for generations
-    if (_heap->mode()->is_generational() && live != 0) {
+    if (is_generational && live != 0) {
       if (r->is_young()) {
         _heap->young_generation()->increase_used(live);
       } else if (r->is_old()) {
@@ -1346,7 +1337,8 @@ void ShenandoahFullGC::compact_humongous_objects() {
         ShenandoahRegionAffiliation original_affiliation = r->affiliation();
         for (size_t c = old_start; c <= old_end; c++) {
           ShenandoahHeapRegion* r = heap->get_region(c);
-          r->make_regular_bypass();
+          // Consider regions emptied by humongous evacuation to be young
+          r->make_regular_bypass(true);
           r->set_top(r->bottom());
         }
 

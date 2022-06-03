@@ -169,7 +169,7 @@ public:
 
   // Allowed transitions from the outside code:
   void make_regular_allocation(ShenandoahRegionAffiliation affiliation);
-  void make_regular_bypass();
+  void make_regular_bypass(bool make_young_affiliation);
   void make_humongous_start();
   void make_humongous_cont();
   void make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation);
