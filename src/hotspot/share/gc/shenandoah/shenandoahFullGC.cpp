@@ -167,12 +167,13 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
   do_it(cause);
 
   metrics.snap_after();
-  size_t old_available = heap->old_generation()->available();
-  size_t young_available = heap->young_generation()->available();
-  log_info(gc, ergo)("At end of Full GC, old_available: " SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                     byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
-
+  if (heap->mode()->is_generational()) {
+    size_t old_available = heap->old_generation()->available();
+    size_t young_available = heap->young_generation()->available();
+    log_info(gc, ergo)("At end of Full GC, old_available: " SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                       byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+  }
   if (metrics.is_good_progress()) {
     ShenandoahHeap::heap()->notify_gc_progress();
   } else {
@@ -187,18 +188,18 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
   heap->set_gc_generation(heap->global_generation());
 
-  // There will be no concurrent allocations during full GC so reset these coordination variables.
-  heap->young_generation()->unadjust_available();
-  heap->old_generation()->unadjust_available();
-  // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
-
-  heap->set_alloc_supplement_reserve(0);
-  heap->set_young_evac_reserve(0);
-  heap->set_old_evac_reserve(0);
-  heap->reset_old_evac_expended();
-  heap->set_promotion_reserve(0);
-
   if (heap->mode()->is_generational()) {
+    // There will be no concurrent allocations during full GC so reset these coordination variables.
+    heap->young_generation()->unadjust_available();
+    heap->old_generation()->unadjust_available();
+    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
+
+    heap->set_alloc_supplement_reserve(0);
+    heap->set_young_evac_reserve(0);
+    heap->set_old_evac_reserve(0);
+    heap->reset_old_evac_expended();
+    heap->set_promotion_reserve(0);
+
     // Full GC supersedes any marking or coalescing in old generation.
     heap->cancel_old_gc();
   }
