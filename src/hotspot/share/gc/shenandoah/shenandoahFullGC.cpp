@@ -834,8 +834,8 @@ public:
       r->recycle();
     }
     if (r->is_cset()) {
-      // If generational, leave affiliation alone.
-      r->make_regular_bypass(!is_generational);
+      // Leave afffiliatoin unchanged.
+      r->make_regular_bypass();
     }
     if (r->is_empty_uncommitted()) {
       r->make_committed_bypass();
@@ -1269,7 +1269,11 @@ public:
 
     // Make empty regions that have been allocated into regular
     if (r->is_empty() && live > 0) {
-      r->make_regular_bypass(!is_generational);
+      if (!is_generational) {
+        r->set_affiliation(YOUNG_GENERATION);
+      }
+      // else, generational mode compaction has already established affiliation.
+      r->make_regular_bypass();
     }
 
     // Reclaim regular regions that became empty
@@ -1343,8 +1347,8 @@ void ShenandoahFullGC::compact_humongous_objects() {
         ShenandoahRegionAffiliation original_affiliation = r->affiliation();
         for (size_t c = old_start; c <= old_end; c++) {
           ShenandoahHeapRegion* r = heap->get_region(c);
-          // Consider regions emptied by humongous evacuation to be young
-          r->make_regular_bypass(true);
+          // Leave humongous region affiliation unchanged.
+          r->make_regular_bypass();
           r->set_top(r->bottom());
         }
 
