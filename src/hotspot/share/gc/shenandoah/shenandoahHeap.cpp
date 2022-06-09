@@ -2461,7 +2461,12 @@ private:
               // old-gen region in the most recent collection set, or if this card holds pointers to other non-specific
               // old-gen heap regions.
               if (r->is_humongous()) {
-                r->oop_iterate_humongous(&cl);
+                // Need to examine both dirty and clean cards during mixed evac.
+                oop obj = cast_to_oop(r->bottom());
+                size_t obj_size = obj->size();
+                size_t card_size_in_words = CardTable::card_size_in_words();
+                size_t size_up = (obj_size - 1 + card_size_in_words) & ~(card_size_in_words - 1);
+                r->oop_iterate_humongous_slice(&cl, false, r->bottom(), size_up, true, CONCURRENT);
               } else {
                 // This is a mixed evacuation.  Old regions that are candidates for collection have not been coalesced
                 // and filled.  Use mark bits to find objects that need to be updated.
