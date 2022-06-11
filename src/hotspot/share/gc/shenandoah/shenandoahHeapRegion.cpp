@@ -110,6 +110,26 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation a
   }
 }
 
+// Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned.  This implements
+// behavior previously performed as a side effect of make_regular_bypass().
+void ShenandoahHeapRegion::make_young_maybe() {
+ switch (_state) {
+   case _empty_uncommitted:
+   case _empty_committed:
+   case _cset:
+   case _humongous_start:
+   case _humongous_cont:
+     set_affiliation(YOUNG_GENERATION);
+     return;
+   case _pinned_cset:
+   case _regular:
+   case _pinned:
+     return;
+   default:
+     assert(false, "Unexpected _state in make_young_maybe");
+  }
+}
+
 void ShenandoahHeapRegion::make_regular_bypass() {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress() || ShenandoahHeap::heap()->is_degenerated_gc_in_progress(),
