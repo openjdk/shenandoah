@@ -834,7 +834,7 @@ public:
       r->recycle();
     }
     if (r->is_cset()) {
-      // Leave afffiliatoin unchanged.
+      // Leave afffiliation unchanged.
       r->make_regular_bypass();
     }
     if (r->is_empty_uncommitted()) {
@@ -1270,7 +1270,7 @@ public:
     // Make empty regions that have been allocated into regular
     if (r->is_empty() && live > 0) {
       if (!is_generational) {
-        r->set_affiliation(YOUNG_GENERATION);
+        r->make_young_maybe();
       }
       // else, generational mode compaction has already established affiliation.
       r->make_regular_bypass();
