@@ -2462,11 +2462,15 @@ private:
               // old-gen heap regions.
               if (r->is_humongous()) {
                 // Need to examine both dirty and clean cards during mixed evac.
-                oop obj = cast_to_oop(r->bottom());
+                ShenandoahHeapRegion* start_region = r->humongous_start_region();
+                oop obj = cast_to_oop(start_region->bottom());
                 size_t obj_size = obj->size();
+                HeapWord* end_of_object = start_region->bottom() + obj_size;
+                HeapWord* start_of_scan = r->bottom();
                 size_t card_size_in_words = CardTable::card_size_in_words();
-                size_t size_up = (obj_size - 1 + card_size_in_words) & ~(card_size_in_words - 1);
-                r->oop_iterate_humongous_slice(&cl, false, r->bottom(), size_up, true, CONCURRENT);
+                size_t words_to_scan = end_of_object - start_of_scan;
+                size_t size_up = (words_to_scan - 1 + card_size_in_words) & ~(card_size_in_words - 1);
+                r->oop_iterate_humongous_slice(&cl, false, start_of_scan, size_up, true, CONCURRENT);
               } else {
                 // This is a mixed evacuation.  Old regions that are candidates for collection have not been coalesced
                 // and filled.  Use mark bits to find objects that need to be updated.
