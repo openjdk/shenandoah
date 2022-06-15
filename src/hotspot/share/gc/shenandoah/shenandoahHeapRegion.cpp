@@ -617,10 +617,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
     }
   } else {
     // Scan all data, regardless of whether cards are dirty
-    while (num_cards-- > 0) {
-      obj->oop_iterate(blk, MemRegion(start, start + CardTable::card_size_in_words()));
-      start += CardTable::card_size_in_words();
-    }
+    obj->oop_iterate(blk, MemRegion(start, start + num_cards * CardTable::card_size_in_words()));
   }
 }
 
