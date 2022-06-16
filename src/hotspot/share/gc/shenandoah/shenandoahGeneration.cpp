@@ -339,7 +339,7 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       //  is loaned to the evacuation effort (because regions to be collected consume more memory than the compacted
       //  regions that will replace them).  In summary, if there are old-gen regions that are available to hold the
       //  results of young-gen evacuations, it is safe to loan them for this purpose.  At this point, we have not yet
-      //  established a promotion_reserve.  We'll do that after we choose the collection set and analyze its impact
+      //  established a promoted_reserve.  We'll do that after we choose the collection set and analyze its impact
       //  on available memory.
       //
       // We do not know the evacuation_supplement until after we have computed the collection set.  It is not always
@@ -491,7 +491,7 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       young_evacuation_reserve_used = (size_t) (ShenandoahEvacWaste * young_evacuation_reserve_used);
       heap->set_young_evac_reserve(young_evacuation_reserve_used);
 
-      // Adjust old_regions_loaned_for_young_evac to feed into calculations of promotion_reserve
+      // Adjust old_regions_loaned_for_young_evac to feed into calculations of promoted_reserve
       if (young_evacuation_reserve_used > young_generation->available()) {
         size_t short_fall = young_evacuation_reserve_used - young_generation->available();
 
@@ -535,7 +535,7 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
         old_evacuation_committed = minimum_evacuation_reserve - old_bytes_loaned;
       }
       
-      // Limit promotion_reserve so that we can set aside memory to be loaned from old-gen to young-gen.  This
+      // Limit promoted_reserve so that we can set aside memory to be loaned from old-gen to young-gen.  This
       // value is not "critical".  If we underestimate, certain promotions will simply be deferred.  If we put
       // "all the rest" of old-gen memory into the promotion reserve, we'll have nothing left to loan to young-gen
       // during the evac and update phases of GC.  So we "limit" the sizes of the promotion budget to be the smaller of:
@@ -559,10 +559,10 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       size_t old_avail = old_generation->available();
       size_t promotion_reserve = old_avail - (old_evacuation_committed + consumed_by_advance_promotion + old_bytes_loaned);
 
-      // We experimented with constraining promotion_reserve to be no larger than 4 times the size of previously_promoted,
+      // We experimented with constraining promoted_reserve to be no larger than 4 times the size of previously_promoted,
       // but this constraint was too limiting, resulting in failure of legitimate promotions.
       
-      // We had also experimented with constraining promotion_reserve to be no more than young_evacuation_committed
+      // We had also experimented with constraining promoted_reserve to be no more than young_evacuation_committed
       // divided by promotion_divisor, where:
       //  size_t promotion_divisor = (0x02 << InitialTenuringThreshold) - 1;
       // This also was found to be too limiting, resulting in failure of legitimate promotions.
