@@ -911,9 +911,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   future_size = MIN2(future_size, PLAB::max_size());
   future_size = MAX2(future_size, PLAB::min_size());
 
-  size_t unalignment = cur_size % CardTable::card_size_in_words();
+  size_t unalignment = future_size % CardTable::card_size_in_words();
   if (unalignment != 0) {
-    cur_size = cur_size - unalignment + CardTable::card_size_in_words();
+    future_size = future_size - unalignment + CardTable::card_size_in_words();
   }
 
   // Record new heuristic value even if we take any shortcut. This captures
@@ -921,8 +921,8 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // heuristics should catch up with them.  Note that the requested cur_size may
   // not be honored, but we remember that this is the preferred size.
   ShenandoahThreadLocalData::set_plab_size(thread, future_size);
-  if (cur_size < size) {
-    // New size still does not fit the object. Fall back to shared allocation.
+  if (future_size < size) {
+    // Future size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good PLABs, when we encounter a large object.
     return nullptr;
   }
