@@ -468,18 +468,29 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
           promotion_reserve = get_promoted_reserve();
           promotion_expended = get_promoted_expended();
         }
-        uint gc_id = GCId::current();
-        if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
-          log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
+        uint gc_id;
+        // We can only query GCId::current() if current thread is a named thread.  If current thread is not a
+        // named thread, then we don't even try to squelch the promotion failure report, we don't update the
+        // the last_report_epoch, and we don't increment the epoch_report_count
+        if (thread->is_Named_thread())
+          gc_id = GCId::current();
+          if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
+            log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
+                               ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
+                               size, plab == nullptr? "no": "yes",
+                               words_remaining, promote_enabled, promotion_reserve, promotion_expended);
+            if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
+              log_info(gc, ergo)("Squelching additional promotion failure reports for epoch %d\n", last_report_epoch);
+            } else if (gc_id != last_report_epoch) {
+              last_report_epoch = gc_id;;
+              epoch_report_count = 1;
+            }
+          }
+        } else {
+          log_info(gc, ergo)("Promotion failed (unfiltered), size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
                              ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
                              size, plab == nullptr? "no": "yes",
                              words_remaining, promote_enabled, promotion_reserve, promotion_expended);
-          if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
-            log_info(gc, ergo)("Squelching additional promotion failure reports for epoch %d\n", last_report_epoch);
-          } else if (gc_id != last_report_epoch) {
-            last_report_epoch = GCId::current();
-            epoch_report_count = 1;
-          }
         }
         handle_promotion_failure();
         return NULL;
