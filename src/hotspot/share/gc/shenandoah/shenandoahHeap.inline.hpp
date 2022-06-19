@@ -485,12 +485,11 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
               epoch_report_count = 1;
             }
           }
-          else {
-            log_info(gc, ergo)("Promotion failed (unfiltered), size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
-                               ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
-                               size, plab == nullptr? "no": "yes",
-                               words_remaining, promote_enabled, promotion_reserve, promotion_expended);
-          }
+        } else {
+          log_info(gc, ergo)("Promotion failed (unfiltered), size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
+                             ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
+                             size, plab == nullptr? "no": "yes",
+                             words_remaining, promote_enabled, promotion_reserve, promotion_expended);
         }
         handle_promotion_failure();
         return NULL;
