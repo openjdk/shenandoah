@@ -590,7 +590,7 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       assert(old_avail >= promotion_reserve + old_evacuation_committed + old_bytes_loaned + consumed_by_advance_promotion,
              "Budget exceeds available old-gen memory");
       log_info(gc, ergo)("Old available: " SIZE_FORMAT ", Promotion reserve: " SIZE_FORMAT ", Old evacuation reserve: "
-                         SIZE_FORMAT ",\n    Advance promotion reserve: " SIZE_FORMAT ", Old loaned to young: " SIZE_FORMAT,
+                         SIZE_FORMAT ", Advance promotion reserve: " SIZE_FORMAT ", Old loaned to young: " SIZE_FORMAT,
                          old_avail, promotion_reserve, old_evacuation_committed, consumed_by_advance_promotion,
                          old_regions_loaned_for_young_evac * region_size_bytes);
       promotion_reserve += consumed_by_advance_promotion;
