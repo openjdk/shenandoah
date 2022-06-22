@@ -449,15 +449,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
                         p2i(thread), plab->words_remaining(), PLAB::min_size());
                }
 #endif
-             } else if (copy != nullptr) {
-#ifdef KELVIN_SCRUTINY
-               printf("enabling plab retries for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", plab_size: " SIZE_FORMAT "\n",
-                      p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread));
-#endif
-               ShenandoahThreadLocalData::enable_plab_retries(thread);
              }
 #ifdef KELVIN_SCRUTINY
-             else {
+             else if (copy == nullptr) {
                printf("allocate_from_plab did NOT retry for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", plab_size: " SIZE_FORMAT ", retries_enabled: %s, copy: " PTR_FORMAT "\n",
                       p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread), ShenandoahThreadLocalData::plab_retries_enabled(thread)? "yes": "no", p2i(copy));
              }
@@ -550,7 +544,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
               epoch_report_count = 1;
             }
           }
-        } else {
+        } else if (epoch_report_count < MaxReportsPerEpoch) {
+          // Unnamed threads are much less common than named threads.  In the rare case that an unnamed thread experiences
+          // a promotion failure before a named thread within a given epoch, the report for the unnamed thread will be squelched.
           {
             // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
             ShenandoahHeapLocker locker(lock());

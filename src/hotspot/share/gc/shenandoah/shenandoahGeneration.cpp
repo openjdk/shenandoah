@@ -439,6 +439,10 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       } else {
         old_regions_loaned_for_young_evac = 0;
       }
+      // In generational mode, we may end up choosing a young collection set that contains so many promotable objects
+      // that there is not sufficient space in old generation to hold the promoted objects.  That is ok because we have
+      // assured there is sufficient space in young generation to hold the rejected promotion candidates.  These rejected
+      // promotion candidates will presumably be promoted in a future evacuation cycle.
       heap->set_young_evac_reserve(young_evacuation_reserve);
     } else {
       // Not generational mode: limit young evac reserve by young available; no need to establish old_evac_reserve.
@@ -589,8 +593,8 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
 
       assert(old_avail >= promotion_reserve + old_evacuation_committed + old_bytes_loaned + consumed_by_advance_promotion,
              "Budget exceeds available old-gen memory");
-      log_info(gc, ergo)("Old available: " SIZE_FORMAT ", Promotion reserve: " SIZE_FORMAT ", Old evacuation reserve: "
-                         SIZE_FORMAT ", Advance promotion reserve: " SIZE_FORMAT ", Old loaned to young: " SIZE_FORMAT,
+      log_info(gc, ergo)("Old available: " SIZE_FORMAT ", Original promotion reserve: " SIZE_FORMAT ", Old evacuation reserve: "
+                         SIZE_FORMAT ", Advance promotion reserve supplement: " SIZE_FORMAT ", Old loaned to young: " SIZE_FORMAT,
                          old_avail, promotion_reserve, old_evacuation_committed, consumed_by_advance_promotion,
                          old_regions_loaned_for_young_evac * region_size_bytes);
       promotion_reserve += consumed_by_advance_promotion;

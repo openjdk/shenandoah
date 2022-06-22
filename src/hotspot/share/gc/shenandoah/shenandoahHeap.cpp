@@ -956,6 +956,12 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 #endif
     if (plab_buf == NULL) {
       return NULL;
+    } else {
+#ifdef KELVIN_PLAB
+      printf("enabling plab retries for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", plab_size: " SIZE_FORMAT "\n",
+             p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread));
+#endif
+      ShenandoahThreadLocalData::enable_plab_retries(thread);
     }
     assert (size <= actual_size, "allocation should fit");
     if (ZeroTLAB) {
@@ -1234,7 +1240,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         size_t promotion_avail = get_promoted_reserve();
         size_t promotion_expended = get_promoted_expended();
 #ifdef KELVIN_PLAB
-        printf("alloc_under_lock() 4 plab, avail: " SIZE_FORMAT ", expended: " SIZE_FORMAT ", requested_bytes: " SIZE_FORMAT "\n",
+        printf("alloc_under_lock() for plab, avail: " SIZE_FORMAT ", expended: " SIZE_FORMAT ", requested_bytes: " SIZE_FORMAT "\n",
                promotion_avail, promotion_expended, requested_bytes);
 #endif
         if (promotion_expended + requested_bytes > promotion_avail) {
@@ -1289,14 +1295,15 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     }
   }
   result = (allow_allocation)? _free_set->allocate(req, in_new_region): nullptr;
-#ifdef KELVIN_PLAB
-  printf(" _free_set->allocate() returned " PTR_FORMAT "\n", p2i(result));
-#endif
   if (result != NULL) {
     if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
       ShenandoahThreadLocalData::reset_plab_promoted(thread);
       if (req.is_gc_alloc()) {
         if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+#ifdef KELVIN_PLAB
+          printf(PTR_FORMAT ": _free_set->allocate() returned plab: " PTR_FORMAT " of size: " SIZE_FORMAT "\n",
+                 p2i(thread), p2i(result), req.actual_size() * HeapWordSize);
+#endif
           if (promotion_eligible) {
             size_t actual_size = req.actual_size() * HeapWordSize;
             // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
@@ -1319,6 +1326,10 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
           }
         } else if (is_promotion) {
           // Shared promotion.  Assume size is requested_bytes.
+#ifdef KELVIN_PLAB
+          printf(PTR_FORMAT ": _free_set->allocate() returned shared promotion: " PTR_FORMAT " of size: " SIZE_FORMAT "\n",
+                 p2i(thread), p2i(result), req.actual_size() * HeapWordSize);
+#endif
           expend_promoted(requested_bytes);
 #ifdef KELVIN_PLAB
           printf(" expending " SIZE_FORMAT " for shared promotion\n", requested_bytes);
