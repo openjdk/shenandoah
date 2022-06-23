@@ -81,8 +81,6 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliati
   return NULL;
 }
 
-#undef KELVIN_ALLOC
-
 HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& in_new_region) {
   // Scan the bitmap looking for a first fit.
   //
@@ -126,19 +124,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       // First try to fit into a region that is already in use in the same generation.
       HeapWord* result = allocate_with_affiliation(req.affiliation(), req, in_new_region);
       if (result != NULL) {
-#ifdef KELVIN_ALLOC
-        printf("alloc_single() found in-use region to allocate %s: " PTR_FORMAT "\n", 
-               affiliation_name(req.affiliation()), p2i(result));
-#endif
         return result;
       }
       // Then try a free region that is dedicated to GC allocations.
       result = allocate_with_affiliation(FREE, req, in_new_region);
       if (result != NULL) {
-#ifdef KELVIN_ALLOC
-        printf("alloc_single() found FREE region to allocate %s: " PTR_FORMAT "\n",
-               affiliation_name(req.affiliation()), p2i(result));
-#endif
         return result;
       }
 
@@ -156,20 +146,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
             flip_to_gc(r);
             HeapWord *result = try_allocate_in(r, req, in_new_region);
             if (result != NULL) {
-#ifdef KELVIN_ALLOC
-              printf("alloc_single() found mutator FREE region to allocate %s: " PTR_FORMAT "\n",
-                     affiliation_name(req.affiliation()), p2i(result));
-#endif
               return result;
             }
           }
         }
       }
-              
-#ifdef KELVIN_ALLOC
-      printf("alloc_single() found no region to allocate %s of size " SIZE_FORMAT "\n",
-             affiliation_name(req.affiliation()), req.size() * HeapWordSize);
-#endif
 
       // No dice. Do not try to mix mutator and GC allocations, because
       // URWM moves due to GC allocations would expose unparsable mutator

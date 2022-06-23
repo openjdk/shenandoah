@@ -130,14 +130,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       continue;
     }
 
-#undef KELVIN_SEE_COLLECTION_CONSTRUCTION
-#ifdef KELVIN_SEE_COLLECTION_CONSTRUCTION
-    printf("%s %s %s region[" SIZE_FORMAT "] age: %d, live: " SIZE_FORMAT ", garbage: " SIZE_FORMAT "\n",
-           region->is_regular()? "Regular": "Irregular",
-           affiliation_name(region->affiliation()),
-           region->is_empty()? "empty": "unempty", region->index(), region->age(),
-           region->get_live_data_bytes(), region->garbage());
-#endif
     size_t garbage = region->garbage();
     total_garbage += garbage;
 

@@ -895,8 +895,6 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   return gclab->allocate(size);
 }
 
-#undef KELVIN_PLAB
-
 // Establish a new PLAB and allocate size HeapWords within it.
 HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion) {
   // New object should fit the PLAB size
@@ -926,10 +924,6 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // heuristics should catch up with them.  Note that the requested cur_size may
   // not be honored, but we remember that this is the preferred size.
   ShenandoahThreadLocalData::set_plab_size(thread, future_size);
-#ifdef KELVIN_PLAB
-  printf("alloc_from_plab_slow(), is_promo: %s, cur_size: " SIZE_FORMAT ", future_size: " SIZE_FORMAT " size: " SIZE_FORMAT "\n",
-         is_promotion? "yes": "no", cur_size, future_size, size);
-#endif
   if (cur_size < size) {
     // The PLAB to be allocated is still not large enough to hold the object. Fall back to shared allocation.
     // This avoids retiring perfectly good PLABs in order to represent a single large object allocation.
@@ -950,17 +944,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
     // less than the remaining evacuation need.  It also adjusts plab_preallocated and expend_promoted if appropriate.
     HeapWord* plab_buf = allocate_new_plab(min_size, cur_size, &actual_size);
-#ifdef KELVIN_PLAB
-    printf(" retired plab, allocated new plab of requested size " SIZE_FORMAT ", actual_size: " SIZE_FORMAT " at " PTR_FORMAT "\n",
-           cur_size, actual_size, p2i(plab_buf));
-#endif
     if (plab_buf == NULL) {
       return NULL;
     } else {
-#ifdef KELVIN_PLAB
-      printf("enabling plab retries for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", plab_size: " SIZE_FORMAT "\n",
-             p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread));
-#endif
       ShenandoahThreadLocalData::enable_plab_retries(thread);
     }
     assert (size <= actual_size, "allocation should fit");
@@ -979,19 +965,11 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     }
     plab->set_buf(plab_buf, actual_size);
 
-#ifdef KELVIN_PLAB
-    printf(" allow_plab_promotions? %s, endeavoring to allocate " SIZE_FORMAT "\n",
-           ShenandoahThreadLocalData::allow_plab_promotions(thread)? "yes": "no", size);
-#endif
     if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
       return nullptr;
     }
     return plab->allocate(size);
   } else {
-#ifdef KELVIN_PLAB
-    printf(" alloc_from_plab_slow() not retiring because words_remaining(" SIZE_FORMAT ") >= min_size (" SIZE_FORMAT ")\n",
-           plab->words_remaining(), PLAB::min_size());
-#endif
     // If there's still at least min_size() words available within the current plab, don't retire it.  Let's gnaw
     // away on this plab as long as we can.  Meanwhile, return nullptr to force this particular allocation request
     // to be satisfied with a shared allocation.  By packing more promotions into the previously allocated PLAB, we
@@ -1239,35 +1217,16 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         plab_alloc = true;
         size_t promotion_avail = get_promoted_reserve();
         size_t promotion_expended = get_promoted_expended();
-#ifdef KELVIN_PLAB
-        printf("alloc_under_lock() for plab, avail: " SIZE_FORMAT ", expended: " SIZE_FORMAT ", requested_bytes: " SIZE_FORMAT "\n",
-               promotion_avail, promotion_expended, requested_bytes);
-#endif
         if (promotion_expended + requested_bytes > promotion_avail) {
-#ifdef KELVIN_PLAB
-          printf(" setting promotion_avail to 0\n");
-#endif
           promotion_avail = 0;
           if (get_old_evac_reserve() == 0) {
-#ifdef KELVIN_PLAB
-            printf(" no old-gen evacuations and no promotions, do not bother to create plab\n");
-#endif
             // There are no old-gen evacuations in this pass.  There's no value in creating a plab that cannot
             // be used for promotions.
             allow_allocation = false;
           }
-#ifdef KELVIN_PLAB
-          else {
-            printf(" plab approved with promotion_avail set to zero (this plab only for evacuation)\n");
-          }
-#endif
         } else {
           promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
           promotion_eligible = true;
-#ifdef KELVIN_PLAB
-          printf(" plab approved with promotion_avail: " SIZE_FORMAT " (which is eligible for promotion)\n",
-                 promotion_avail);
-#endif
         }
       } else if (is_promotion) {
         // This is a shared alloc for promotion
@@ -1280,10 +1239,6 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         }
 
         if (promotion_avail == 0) {
-#ifdef KELVIN_PLAB
-          printf(" rejecting shared promotion: avail: " SIZE_FORMAT ", expended: " SIZE_FORMAT ", requested: " SIZE_FORMAT "\n",
-                 promotion_avail, promotion_expended, requested_bytes);
-#endif
           // We need to reserve the remaining memory for evacuation.  Reject this allocation.  The object will be
           // evacuated to young-gen memory and promoted during a future GC pass.
           return nullptr;
@@ -1300,40 +1255,22 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       ShenandoahThreadLocalData::reset_plab_promoted(thread);
       if (req.is_gc_alloc()) {
         if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-#ifdef KELVIN_PLAB
-          printf(PTR_FORMAT ": _free_set->allocate() returned plab: " PTR_FORMAT " of size: " SIZE_FORMAT "\n",
-                 p2i(thread), p2i(result), req.actual_size() * HeapWordSize);
-#endif
           if (promotion_eligible) {
             size_t actual_size = req.actual_size() * HeapWordSize;
             // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
             // When we retire this plab, we'll unexpend what we don't really use.
             ShenandoahThreadLocalData::enable_plab_promotions(thread);
-#ifdef KELVIN_PLAB
-            printf(" expending actual size " SIZE_FORMAT " for plab allocation\n", actual_size);
-#endif
             expend_promoted(actual_size);
             assert(get_promoted_expended() <= get_promoted_reserve(), "Do not expend more promotion than budgeted");
             ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
           } else {
-#ifdef KELVIN_PLAB
-            printf(" NOT expending actual size " SIZE_FORMAT " because entire plab dedicated to evacuation\n",
-                   req.actual_size() * HeapWordSize);
-#endif
             // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
             ShenandoahThreadLocalData::disable_plab_promotions(thread);
             ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
           }
         } else if (is_promotion) {
           // Shared promotion.  Assume size is requested_bytes.
-#ifdef KELVIN_PLAB
-          printf(PTR_FORMAT ": _free_set->allocate() returned shared promotion: " PTR_FORMAT " of size: " SIZE_FORMAT "\n",
-                 p2i(thread), p2i(result), req.actual_size() * HeapWordSize);
-#endif
           expend_promoted(requested_bytes);
-#ifdef KELVIN_PLAB
-          printf(" expending " SIZE_FORMAT " for shared promotion\n", requested_bytes);
-#endif
           assert(get_promoted_expended() <= get_promoted_reserve(), "Do not expend more promotion than budgeted");
         }
       }
@@ -1361,9 +1298,6 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     // The allocation failed.  If this was a plab allocation, We've already retired it and no longer have a plab.
     if ((req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) && req.is_gc_alloc() &&
         (req.type() == ShenandoahAllocRequest::_alloc_plab)) {
-#ifdef KELVIN_PLAB
-      printf(" PLAB allocation failed, leave promotions enabled but size is zero\n");
-#endif
       // We don't need to disable PLAB promotions because there is no PLAB.  We leave promotions enabled because
       // this allows the surrounding infrastructure to retry alloc_plab_slow() with a smaller PLAB size.
       ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);

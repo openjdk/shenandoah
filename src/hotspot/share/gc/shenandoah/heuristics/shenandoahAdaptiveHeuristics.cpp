@@ -145,14 +145,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       cur_cset = new_cset;
       // cur_garbage = new_garbage;
     }
-#undef KELVIN_SEE_ADAPTIVE_COLLECTION_SET
-#ifdef KELVIN_SEE_ADAPTIVE_COLLECTION_SET
-    else {
-      printf("Not including region " SIZE_FORMAT " because new_cset: " SIZE_FORMAT ", cur_cset: " SIZE_FORMAT
-             ", garbage: " SIZE_FORMAT ", garbage threshold: " SIZE_FORMAT ", age: %u of tenure threshold " SIZE_FORMAT "\n",
-             r->index(), new_cset, cur_cset, r->garbage(), garbage_threshold, r->age(), (size_t) InitialTenuringThreshold);
-    }
-#endif
   }
 }
 

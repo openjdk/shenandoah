@@ -105,16 +105,6 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _has_old_regions |= r->is_old();
   _garbage += r->garbage();
   _used += r->used();
-#undef KELVIN_TRACE_COLLECTION_SET
-#ifdef KELVIN_TRACE_COLLECTION_SET
-  printf("Collecting %s region " SIZE_FORMAT " (age: %u) with garbage: " SIZE_FORMAT ", live: " SIZE_FORMAT
-         ", collection set regions (old: " SIZE_FORMAT ", young: " SIZE_FORMAT
-         "),\n    bytes evacuated (old: " SIZE_FORMAT ", young: " SIZE_FORMAT " including promoted: " SIZE_FORMAT
-         "), garbage: " SIZE_FORMAT " (old: " SIZE_FORMAT ")\n",
-         r->is_old()? "old": "young", r->index(), r->age(), r->garbage(), r->get_live_data_bytes(),
-         _old_region_count, _young_region_count,
-         _old_bytes_to_evacuate, _young_bytes_to_evacuate, _young_bytes_to_promote, _garbage, _old_garbage);
-#endif
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
 }

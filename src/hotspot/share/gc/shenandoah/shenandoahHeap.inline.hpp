@@ -297,8 +297,6 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
   return allocate_from_gclab_slow(thread, size);
 }
 
-#undef KELVIN_SCRUTINY
-
 inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size, bool is_promotion) {
   assert(UseTLAB, "TLABs should be enabled");
 
@@ -314,10 +312,6 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   // if plab->word_size() <= 0, thread's plab not yet initialized for this pass, so allow_plab_promotions() is not trustworthy
   obj = plab->allocate(size);
   if ((obj == nullptr) && (plab->words_remaining() < PLAB::min_size())) {
-#ifdef KELVIN_SCRUTINY
-    printf("alloc_from_plab(" PTR_FORMAT ", size: " SIZE_FORMAT ", is_promotion: %s), words_remaining: " SIZE_FORMAT ", min_size: " SIZE_FORMAT " failed\n",
-           p2i(thread), size, is_promotion? "yes": "no", plab->words_remaining(), PLAB::min_size());
-#endif
     // allocate_from_plab_slow will establish allow_plab_promotions(thread) for future invocations
     obj = allocate_from_plab_slow(thread, size, is_promotion);
   }
@@ -363,12 +357,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
       if (result != NULL) {
         return result;
       }
-      // If we failed to promote this aged object, we'll fall through to code below and evacuat to young-gen.
-#undef KELVIN_CLOSE_ENCOUNTER
-#ifdef KELVIN_CLOSE_ENCOUNTER
-      // It seems that if promotion fails, I'm signalling allocation failure during evacuation, which triggers degenerated gc.
-      printf("evacuate_object Promotion failed, trying to evacuate to %s\n", affiliation_name(target_gen));
-#endif
+      // If we failed to promote this aged object, we'll fall through to code below and evacuate to young-gen.
     }
   }
   return try_evacuate_object(p, thread, r, target_gen);
@@ -412,10 +401,6 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
              copy = allocate_from_plab(thread, size, is_promotion);
              if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
                  ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
-#ifdef KELVIN_SCRUTINY
-               printf("allocate_from_plab failed for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", plab_size: " SIZE_FORMAT ", retries_enabled: %s\n",
-                      p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread), ShenandoahThreadLocalData::plab_retries_enabled(thread)? "yes": "no");
-#endif
                // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve or because
                // the requested object does not fit within the current plab but the plab still has an "abundance" of memory,
                // where abundance is defined as >= PLAB::min_size().  In the former case, we try resetting the desired
@@ -430,32 +415,10 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
                  if (copy == nullptr) {
                    // If retry fails, don't continue to retry until we have success (probably in next GC pass)
                    ShenandoahThreadLocalData::disable_plab_retries(thread);
-#ifdef KELVIN_SCRUTINY
-                   printf("disabling plab retries for thread: " PTR_FORMAT ", attempt to allocate " SIZE_FORMAT " from smaller PLAB size " SIZE_FORMAT " still failed\n",
-                          p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread));
-#endif
                  }
-#ifdef KELVIN_SCRUTINY
-                 else {
-                   printf("after shrinking plab size, thread " PTR_FORMAT " successfully allocated size " SIZE_FORMAT " FROM SMALLER PLAB SIZE " SIZE_FORMAT "\n",
-                          p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread));
-                 }
-#endif
                }
                // else, copy still equals nullptr.  this causes shared allocation below, preserving this plab for future needs.
-#ifdef KELVIN_SCRUTINY
-               else {
-                 printf("thread " PTR_FORMAT " not retrying plab allocation because words remaining " SIZE_FORMAT " greater or equal to min_size " SIZE_FORMAT ", force shared alloc!\n",
-                        p2i(thread), plab->words_remaining(), PLAB::min_size());
-               }
-#endif
              }
-#ifdef KELVIN_SCRUTINY
-             else if (copy == nullptr) {
-               printf("allocate_from_plab did NOT retry for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", plab_size: " SIZE_FORMAT ", retries_enabled: %s, copy: " PTR_FORMAT "\n",
-                      p2i(thread), size, ShenandoahThreadLocalData::plab_size(thread), ShenandoahThreadLocalData::plab_retries_enabled(thread)? "yes": "no", p2i(copy));
-             }
-#endif
            }
            break;
         }
@@ -471,30 +434,8 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       if (!is_promotion || !has_plab || (size > PLAB::min_size())) {
         ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
         copy = allocate_memory(req, is_promotion);
-#undef KELVIN_PARANOIA
-#ifdef KELVIN_PARANOIA
-        if (is_promotion && (copy == nullptr)) {
-          printf("Attempted Promotion failed to allocate shared of size " SIZE_FORMAT "\n", size);
-        }
-#endif
         alloc_from_lab = false;
-#ifdef KELVIN_SCRUTINY
-        printf("try_evacuate_object attempted shared alloc for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", has plab? %s , plab_size: " SIZE_FORMAT ", copy: " PTR_FORMAT "\n",
-               p2i(thread), size, has_plab? "yes": "no", ShenandoahThreadLocalData::plab_size(thread), p2i(copy));
-#endif
       }
-#ifdef KELVIN_PARANOIA
-      else if (is_promotion) {
-        printf("Intended Promotion of size " SIZE_FORMAT " not attempted because %s, PLAB::min_size(): " SIZE_FORMAT "\n",
-               size, has_plab? "has plab": "no reason", PLAB::min_size());
-      }
-#endif
-#ifdef KELVIN_SCRUTINY
-      else {
-        printf("try_evacuate_object is failing to find memory for copy for thread: " PTR_FORMAT ", size: " SIZE_FORMAT ", has plab? %s , plab_size: " SIZE_FORMAT "\n",
-               p2i(thread), size, has_plab? "yes": "no", ShenandoahThreadLocalData::plab_size(thread));
-      }
-#endif
       // else, we leave copy equal to NULL, signaling a promotion failure below if appropriate.
       // We choose not to promote objects smaller than PLAB::min_size() by way of shared allocations, as this is too
       // costly.  Instead, we'll simply "evacuate" to young-gen memory (using a GCLAB) and will promote in a future
