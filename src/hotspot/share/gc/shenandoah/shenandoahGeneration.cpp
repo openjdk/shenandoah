@@ -393,12 +393,12 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       //       set (because it has less live data and thus can fit within the evacuation limits even though it has less
       //       garbage).
 
-      size_t young_evacuation_reserve = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
+      size_t young_evacuation_reserve = (young_generation->max_capacity() * ShenandoahEvacReserve) / 100;
       // old evacuation can pack into existing partially used regions.  young evacuation and loans for young allocations
       // need to target regions that do not already hold any old-gen objects.  Round down.
       regions_available_to_loan = old_generation->free_unaffiliated_regions();
-      consumed_by_advance_promotion = _heuristics->prioritize_aged_regions(old_generation->available() - old_evacuation_reserve,
-                                                                           num_regions, preselected_regions);
+      consumed_by_advance_promotion = _heuristics->select_aged_regions(old_generation->available() - old_evacuation_reserve,
+                                                                       num_regions, preselected_regions);
       size_t net_available_old_regions =
         (old_generation->available() - old_evacuation_reserve - consumed_by_advance_promotion) / region_size_bytes;
 

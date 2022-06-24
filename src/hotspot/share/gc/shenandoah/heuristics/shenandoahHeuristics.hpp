@@ -153,7 +153,7 @@ public:
 
   virtual void record_requested_gc();
 
-  virtual size_t prioritize_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]);
+  virtual size_t select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]);
 
   virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics);
 

@@ -77,7 +77,7 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
-size_t ShenandoahHeuristics::prioritize_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
+size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   size_t old_consumed = 0;
   if (heap->mode()->is_generational()) {
@@ -153,7 +153,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
           // TODO: Deprecate and/or refine ShenandoahTenuredRegionUsageBias.  If we preselect the regions, we can just
           // set garbage to "max" value, which is the region size rather than doing this extra work to bias selection.
-          // May also want to exercise more discretion in prioritize_aged_regions() if we decide there are good reasons
+          // May also want to exercise more discretion in select_aged_regions() if we decide there are good reasons
           // to not promote all eligible aged regions on the current GC pass.
 
           // If we're at tenure age, bias at least once.
