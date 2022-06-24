@@ -452,7 +452,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
 
         // We squelch excessive reports to reduce noise in logs.  Squelch enforcement is not "perfect" because
-        // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static 
+        // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static
         // last_report_epoch and this_epoch_report_count variables.
         const uint MaxReportsPerEpoch = 4;
         static uint last_report_epoch = 0;
