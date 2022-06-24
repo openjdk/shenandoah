@@ -233,6 +233,13 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   // Make sure the code below treats available without the soft tail.
   size_t soft_tail = max_capacity - capacity;
   available = (available > soft_tail) ? (available - soft_tail) : 0;
+  size_t usable = ShenandoahHeap::heap()->free_set()->available();
+  if (usable < available) {
+    log_debug(gc)("Usable (" SIZE_FORMAT "%s) is less than available (" SIZE_FORMAT "%s)",
+                  byte_size_in_proper_unit(usable), proper_unit_for_byte_size(usable),
+                  byte_size_in_proper_unit(available), proper_unit_for_byte_size(available));
+    available = usable;
+  }
 
   // Track allocation rate even if we decide to start a cycle for other reasons.
   double rate = _allocation_rate.sample(allocated);
