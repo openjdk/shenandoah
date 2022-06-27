@@ -221,7 +221,7 @@ void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
   }
 }
 
-void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
+void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahCollectionSet* collection_set = heap->collection_set();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -247,12 +247,13 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
     ShenandoahHeapLocker locker(heap->lock());
-    heap->collection_set()->clear();
+    collection_set->clear();
 
     size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * region_size_bytes;
     size_t avail_evac_reserve_for_loan_to_young_gen = 0;
     size_t old_regions_loaned_for_young_evac = 0;
     size_t regions_available_to_loan = 0;
+
     size_t old_evacuation_reserve = 0;
     size_t num_regions = heap->num_regions();
     size_t consumed_by_advance_promotion = 0;
