@@ -111,6 +111,16 @@ protected:
   // Used by concurrent and degenerated GC to reset regions.
   void prepare_gc(bool do_old_gc_bootstrap);
 
+  // Compute evacuation budgets prior to choosing collection set.
+  void compute_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
+                                  size_t &old_regions_loaned_for_young_evac, size_t &regions_available_to_loan,
+                                  size_t &minimum_evacuation_reserve, size_t &consumed_by_advance_promotion);
+
+  // Adjust evacuation budgets after choosing collection set.
+  void adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
+                                 size_t old_regions_loaned_for_young_evac, size_t regions_available_to_loan,
+                                 size_t minimum_evacuation_reserve, size_t consumed_by_advance_promotion);
+
   // Return true iff prepared collection set includes at least one old-gen HeapRegion.
   virtual void prepare_regions_and_collection_set(bool concurrent);
 
