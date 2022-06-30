@@ -202,6 +202,20 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         size_t region_count = heap->trash_humongous_region_at(region);
         log_debug(gc)("Trashed " SIZE_FORMAT " regions for humongous object.", region_count);
       }
+    } else if (region->is_pinned()) {
+      assert(!region->is_humongous(), "Humongous region should be handled elsewhere.");
+      if (region->has_live()) {
+        // TODO: Can we assert that a pinned region has live objects? Why else is it pinned?
+        // This region is pinned, so we aren't going to include it in the collection set.
+        // However, we must still 'fill' in the dead objects in this region to stop
+        // subsequent remembered set scan from tracing through into garbage. Here we add it
+        // to the set of candidates, but with _zero_ garbage so that it sorts to the end of
+        // the garbage-first list.
+        region->begin_preemptible_coalesce_and_fill();
+        candidates[cand_idx]._region = region;
+        candidates[cand_idx]._garbage = 0;
+        cand_idx++;
+      }
     } else if (region->is_trash()) {
       // Count humongous objects made into trash here.
       immediate_regions++;
