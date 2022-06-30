@@ -542,7 +542,15 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     }
 
     size_t allocation_supplement = regions_for_runway * region_size_bytes;
+#ifdef KELVIN_RETREAT
+    if (heap->get_alloc_supplement_reserve() != allocation_supplement) {
+      printf("DEVIANT BEHAVIOR DETECTED: get_alloc_supplement_reserve() [" SIZE_FORMAT "] != allocation_supplement ["
+             SIZE_FORMAT "]\n", heap->get_alloc_supplement_reserve(), allocation_supplement);
+    }
+#else
+    // squelching this for right now, because we seem to run better with different allocation_supplement
     heap->set_alloc_supplement_reserve(allocation_supplement);
+#endif
 
     size_t promotion_budget = heap->get_promoted_reserve();
     size_t old_evac_budget = heap->get_old_evac_reserve();
