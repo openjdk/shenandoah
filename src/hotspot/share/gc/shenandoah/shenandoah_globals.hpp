@@ -117,6 +117,13 @@
           "max heap size.")                                                 \
           range(0,100)                                                      \
                                                                             \
+  product(uintx, ShenandoahOldMinFreeThreshold, 5, EXPERIMENTAL,            \
+          "Percentage of free heap memory below which most heuristics "     \
+          "old generation trigger collection independent of other   "       \
+          "triggers. Provides a safety margin for many heuristics. In "     \
+          "percents of (soft) max heap size.")                              \
+          range(0,100)                                                      \
+                                                                            \
   product(uintx, ShenandoahAllocationThreshold, 0, EXPERIMENTAL,            \
           "How many new allocations should happen since the last GC cycle " \
           "before some heuristics trigger the collection. In percents of "  \
