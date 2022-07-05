@@ -205,7 +205,6 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     } else if (region->is_pinned()) {
       assert(!region->is_humongous(), "Humongous region should be handled elsewhere.");
       if (region->has_live()) {
-        // TODO: Can we assert that a pinned region has live objects? Why else is it pinned?
         // This region is pinned, so we aren't going to include it in the collection set.
         // However, we must still 'fill' in the dead objects in this region to stop
         // subsequent remembered set scan from tracing through into garbage. Here we add it
