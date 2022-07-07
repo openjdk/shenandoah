@@ -258,12 +258,17 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       log_info(gc, ref)("choose_collection_set() back from prime_collectiON_set");
 #endif
 
+#ifdef KELVIN_DEPRECATE
+      // We don't shrink evac_reserve here.  That's done in
+      // adjust_evacuation_budgets() upon return from choose_collection_set()
+
       // We can shrink old_evac_reserve() if the chosen collection set is smaller than maximum allowed.
       size_t bytes_reserved_for_old_evacuation = collection_set->get_old_bytes_reserved_for_evacuation();
       if (bytes_reserved_for_old_evacuation * ShenandoahEvacWaste < heap->get_old_evac_reserve()) {
         size_t old_evac_reserve = (size_t) (bytes_reserved_for_old_evacuation * ShenandoahEvacWaste);
         heap->set_old_evac_reserve(old_evac_reserve);
       }
+#endif
     }
     // else, this is global collection and doesn't need to prime_collection_set
 

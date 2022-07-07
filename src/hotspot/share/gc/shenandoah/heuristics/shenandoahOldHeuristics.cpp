@@ -164,7 +164,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       }
 #else
     // It's probably overkill to compensate with lost_evacuation_capacity.  But it's the safe thing to do and
-    // probably has little impact on contenty of primed collection set.
+    //  has minimal impact on content of primed collection set.
     if (r->get_live_data_bytes() + lost_evacuation_capacity <= remaining_old_evacuation_budget) {
 #endif
       // Decrement remaining evacuation budget by bytes that will be copied.
@@ -172,7 +172,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       remaining_old_evacuation_budget -= r->get_live_data_bytes();
 #ifdef KELVIN_RETREAT
       // KELVIN WANTS TO KEEP THIS CODE IN FINAL REFACTOR: BUT IT'S NOT SO EASY, BECAUSE EXCESS_OLD_CAPACITY_FOR_EVACUATION
-      // IS A CONCEPT ONLY DEFINED UNDER KELVIN_RETREAT CONDITIONAL COPILATION
+      // IS A CONCEPT ONLY DEFINED UNDER KELVIN_RETREAT CONDITIONAL COMPILATION.  SO I DON'T NEED IT AFTER ALL.
       // If the cumulative loss of free memory from
       // regions that are to be collected exceeds excess_old_capacity_for_evacuation,  decrease
       // remaining_old_evacuation_budget by this loss as well.
