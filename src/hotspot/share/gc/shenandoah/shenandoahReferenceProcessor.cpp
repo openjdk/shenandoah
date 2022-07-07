@@ -537,7 +537,10 @@ void ShenandoahReferenceProcessor::enqueue_references(bool concurrent) {
     // Nothing to enqueue
     return;
   }
-
+#undef KELVIN_CHASE
+#ifdef KELVIN_CHASE
+  log_info(gc,ref)("starting enqueue_references(%s)", concurrent? "concurrent": "non-concurrent");
+#endif
   if (!concurrent) {
     // When called from mark-compact or degen-GC, the locking is done by the VMOperation,
     enqueue_references_locked();
@@ -554,6 +557,9 @@ void ShenandoahReferenceProcessor::enqueue_references(bool concurrent) {
   // Reset internal pending list
   _pending_list = NULL;
   _pending_list_tail = &_pending_list;
+#ifdef KELVIN_CHASE
+  log_info(gc,ref)("all done with enqueue_references()");
+#endif
 }
 
 template<typename T>

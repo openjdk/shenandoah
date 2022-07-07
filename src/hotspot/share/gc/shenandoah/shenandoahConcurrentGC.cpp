@@ -158,24 +158,40 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // Process weak roots that might still point to regions that would be broken by cleanup
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
+#undef KELVIN_CHASE
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("Done with weak refs, looking at weak roots");
+#endif
     entry_weak_roots();
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("Done with weak roots");
+#endif
   }
 
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.  Note that
   // we will not age young-gen objects in the case that we skip evacuation.
   entry_cleanup_early();
+#ifdef KELVIN_CHASE
+  log_info(gc, ref)("Done with entry_cleanup_early");
+#endif
 
   {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
+#ifdef KELVIN_CHASE
+  log_info(gc, ref)("Done with free set log_status");
+#endif
 
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
       heap->is_concurrent_weak_root_in_progress()) {
     entry_class_unloading();
   }
+#ifdef KELVIN_CHASE
+  log_info(gc, ref)("Done with class unloading");
+#endif
 
   // Processing strong roots
   // This may be skipped if there is nothing to update/evacuate.
@@ -183,11 +199,17 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   if (heap->is_concurrent_strong_root_in_progress()) {
     entry_strong_roots();
   }
+#ifdef KELVIN_CHASE
+  log_info(gc, ref)("Done with strong roots");
+#endif
 
   // Global marking has completed. We need to fill in any unmarked objects in the old generation
   // so that subsequent remembered set scans will not walk pointers into reclaimed memory.
   if (!heap->cancelled_gc() && heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
     entry_global_coalesce_and_fill();
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("Done with entry_global_coalesce_and_fill");
+#endif
   }
 
   // Continue the cycle with evacuation and optional update-refs.

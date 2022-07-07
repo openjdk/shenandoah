@@ -53,7 +53,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   size_t evacuated_old_bytes = 0;
   size_t collected_old_bytes = 0;
 
-#define KELVIN_RETREAT
+#undef KELVIN_RETREAT
 #ifdef KELVIN_RETREAT
   // TODO:
   // The max_old_evacuation_bytes and promotion_budget_bytes constants represent a first
@@ -102,19 +102,41 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
-#ifdef KELVIN_RETREAT
 
+#ifdef KELVIN_RETREAT
   size_t old_evacuation_budget = (size_t) (max_old_evacuation_bytes / ShenandoahEvacWaste);
 
+#define KELVIN_FIXUP
+#ifdef KELVIN_FIXUP
+  size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes();
+  if (minimum_evacuation_reserve > heap->old_generation()->available()) {
+    // Due to round-off errors during enforcement of minimum_evacuation_reserve during previous GC passes,
+    // there can be slight discrepancies here.
+    minimum_evacuation_reserve = heap->old_generation()->available();
+  }
+  if (old_evacuation_budget < minimum_evacuation_reserve) {
+    // Even if there's nothing to be evacuated on this cycle, we still need to reserve this memory for future
+    // evacuations.
+    old_evacuation_budget = minimum_evacuation_reserve;
+  }
+#endif
+  
   if (old_evacuation_budget != (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste)) {
     printf("DEVIANT BEHAVIOR DETECTED: old_evacuation_budget [" SIZE_FORMAT
            "]!= (heap->get_old_evac_reserve() / ShenandoahEvacWaste)[" SIZE_FORMAT "])\n",
            old_evacuation_budget, (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste));
+    printf("old_evacuation_budget computed from:\n");
+    printf(" capacity * ShenandoahOldEvacReserve: " SIZE_FORMAT "\n",
+           (heap->old_generation()->soft_max_capacity() * ShenandoahOldEvacReserve) / 100);
+    printf("       ratio_bound_on_old_evac_bytes: " SIZE_FORMAT "\n", ratio_bound_on_old_evac_bytes);
+    printf("                       old_available: " SIZE_FORMAT "\n", old_available);
+    printf("  DO NOT care about promotion_budget: " SIZE_FORMAT "\n", promotion_budget_bytes);
+    printf("            max_old_evacuation_bytes: " SIZE_FORMAT "\n", max_old_evacuation_bytes);
+    printf("  max_old_evacuation_bytes/EvacWaste: " SIZE_FORMAT "\n", (size_t) (max_old_evacuation_bytes / ShenandoahEvacWaste));
   }
   log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s",
                 byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget));
 #else
-  // squelch this for now
   size_t old_evacuation_budget = (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste);
 #endif
 
@@ -141,14 +163,19 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
                r->index());
       }
 #else
-    if (r->get_live_data_bytes() <= remaining_old_evacuation_budget) {
+    // It's probably overkill to compensate with lost_evacuation_capacity.  But it's the safe thing to do and
+    // probably has little impact on contenty of primed collection set.
+    if (r->get_live_data_bytes() + lost_evacuation_capacity <= remaining_old_evacuation_budget) {
 #endif
-      // Decrement remaining evacuation budget by bytes that will be copied.  If the cumulative loss of free memory from
-      // regions that are to be collected exceeds excess_old_capacity_for_evacuation,  decrease
-      // remaining_old_evacuation_budget by this loss as well.
+      // Decrement remaining evacuation budget by bytes that will be copied.
       lost_evacuation_capacity += r->free();
       remaining_old_evacuation_budget -= r->get_live_data_bytes();
 #ifdef KELVIN_RETREAT
+      // KELVIN WANTS TO KEEP THIS CODE IN FINAL REFACTOR: BUT IT'S NOT SO EASY, BECAUSE EXCESS_OLD_CAPACITY_FOR_EVACUATION
+      // IS A CONCEPT ONLY DEFINED UNDER KELVIN_RETREAT CONDITIONAL COPILATION
+      // If the cumulative loss of free memory from
+      // regions that are to be collected exceeds excess_old_capacity_for_evacuation,  decrease
+      // remaining_old_evacuation_budget by this loss as well.
       if (lost_evacuation_capacity > excess_old_capacity_for_evacuation) {
         // This is slightly conservative because we really only need to remove from the remaining evacuation budget
         // the amount by which lost_evacution_capacity exceeds excess_old_capacity_for_evacuation, but this is relatively

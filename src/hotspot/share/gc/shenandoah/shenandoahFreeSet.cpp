@@ -578,7 +578,10 @@ void ShenandoahFreeSet::rebuild() {
     reserve_regions(to_reserve);
   } else {
     size_t young_reserve = (_heap->young_generation()->max_capacity() / 100) * ShenandoahEvacReserve;
-    size_t old_reserve = (_heap->old_generation()->max_capacity() / 100) * ShenandoahOldEvacReserve;
+    // size_t old_reserve = (_heap->old_generation()->max_capacity() / 100) * ShenandoahOldEvacReserve;
+    // In order to enable regions to be loaned from old-gen to young-gen, we do not reserve old-gen regions.
+    // Enforcement of ShenandoahOldEvacReserve does not require ShenandoahnFreeSet involvement.
+    size_t old_reserve = 0;
     size_t to_reserve = young_reserve + old_reserve;
     reserve_regions(to_reserve);
   }

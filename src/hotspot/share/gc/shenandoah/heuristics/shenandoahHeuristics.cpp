@@ -98,6 +98,10 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
 void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
+#undef KELVIN_CHASE
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("choose_collection_set() begins");
+#endif
   assert(collection_set->count() == 0, "Must be empty");
   assert(_generation->generation_mode() != OLD, "Old GC invokes ShenandoahOldHeuristics::choose_collection_set()");
 
@@ -130,8 +134,12 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       continue;
     }
 
+#undef KELVIN_CHASE
     size_t garbage = region->garbage();
     total_garbage += garbage;
+#ifdef KELVIN_CHASE
+    log_info(gc, ergo)("Region " SIZE_FORMAT " with garbage: " SIZE_FORMAT " is in generation\n", region->index(), garbage);
+#endif
 
     if (region->is_empty()) {
       free_regions++;
@@ -142,24 +150,38 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         immediate_regions++;
         immediate_garbage += garbage;
         region->make_trash_immediate();
+#ifdef KELVIN_CHASE
+        log_info(gc, ergo)("Regular region is immediate trash");
+#endif
       } else {
         assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
 
+#ifdef KELVIN_CHASE
+        log_info(gc, ergo)("Regular region is not trash, has " SIZE_FORMAT " live bytes",
+                           region->get_live_data_bytes());
+#endif
         live_memory += region->get_live_data_bytes();
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
         if (collection_set->is_preselected(i)) {
           // If regions is presected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
-
+#ifdef KELVIN_DEPRECATE
           // TODO: Deprecate and/or refine ShenandoahTenuredRegionUsageBias.  If we preselect the regions, we can just
           // set garbage to "max" value, which is the region size rather than doing this extra work to bias selection.
           // May also want to exercise more discretion in select_aged_regions() if we decide there are good reasons
           // to not promote all eligible aged regions on the current GC pass.
 
+
           // If we're at tenure age, bias at least once.
           for (uint j = region->age() + 1 - InitialTenuringThreshold; j > 0; j--) {
             garbage = (garbage + ShenandoahTenuredRegionUsageBias) * ShenandoahTenuredRegionUsageBias;
           }
+#else
+          garbage = ShenandoahHeapRegion::region_size_bytes();
+#endif
+#ifdef KELVIN_CHASE
+          log_info(gc, ergo)("Regular region is to be tenured at age: " SIZE_FORMAT, region->age());
+#endif
         }
         candidates[cand_idx]._garbage = garbage;
         cand_idx++;
@@ -194,6 +216,11 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   save_last_live_memory(live_memory);
 
+#undef KELVIN_CHASE
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("choose_collection_set() finished step 1");
+#endif
+
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
   // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
 
@@ -208,7 +235,13 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   if (immediate_percent <= ShenandoahImmediateThreshold) {
 
     if (old_heuristics != NULL) {
+#ifdef KELVIN_CHASE
+      log_info(gc, ref)("choose_collection_set() about to prime_collection_set");
+#endif
       old_heuristics->prime_collection_set(collection_set);
+#ifdef KELVIN_CHASE
+      log_info(gc, ref)("choose_collection_set() back from prime_collectiON_set");
+#endif
 
       // We can shrink old_evac_reserve() if the chosen collection set is smaller than maximum allowed.
       size_t bytes_reserved_for_old_evacuation = collection_set->get_old_bytes_reserved_for_evacuation();
@@ -219,7 +252,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     }
     // else, this is global collection and doesn't need to prime_collection_set
 
-#define KELVIN_RETREAT
+#undef KELVIN_RETREAT
 #ifdef KELVIN_RETREAT
     ShenandoahYoungGeneration* young_generation = heap->young_generation();
     size_t young_evacuation_reserve = (young_generation->soft_max_capacity() * ShenandoahEvacReserve) / 100;
@@ -312,9 +345,17 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       heap->set_young_evac_reserve(young_evacuation_reserve);
     }
 #endif
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("choose_collection_set() finished step 2");
+#endif
     // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
     // of the heuristics subclasses.
     choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
+
+#ifdef KELVIN_CHASE
+    log_info(gc, ref)("choose_collection_set() finished choosing collection set");
+#endif
+
 #ifdef KELVIN_RETREAT
 
     // Now compute the evacuation supplement, which is extra memory borrowed from old-gen that can be allocated
