@@ -88,8 +88,29 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
         if (old_consumed + promotion_need < old_available) {
           old_consumed += promotion_need;
           preselected_regions[i] = true;
+#undef KELVIN_SEE_THIS
+#ifdef KELVIN_SEE_THIS
+          printf("preselecting region " SIZE_FORMAT " with live data: " SIZE_FORMAT ", garbage: " SIZE_FORMAT
+                 " old_consumed: " SIZE_FORMAT " of available " SIZE_FORMAT "\n",
+                 region->index(), region->get_live_data_bytes(), region->garbage(), old_consumed, old_available);
+#endif
         }
+#ifdef KELVIN_SEE_THIS
+        else {
+          printf("Region " SIZE_FORMAT " of age %d not preselected due to consumed, check: %s\n",
+                 region->index(), region->age(), preselected_regions[i]? "true": "false");
+        }
+#endif
+        // Note that we keep going even if one region is excluded from selection.  Subsequent regions may be selected
+        // if they have smaller live data.
       }
+#ifdef KELVIN_SEE_THIS
+      else {
+        printf("Region " SIZE_FORMAT " of age %d not preselected due to age or empty or generation, check: %s\n",
+               region->index(), region->age(), preselected_regions[i]? "true": "false");
+      }
+#endif
+
     }
   }
   return old_consumed;
@@ -153,6 +174,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 #ifdef KELVIN_CHASE
         log_info(gc, ergo)("Regular region is immediate trash");
 #endif
+#ifdef KELVIN_SEE_THIS
+        printf("Treating regular region " SIZE_FORMAT " as trash\n", region->index());
+#endif
       } else {
         assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
 
@@ -164,25 +188,16 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
         if (collection_set->is_preselected(i)) {
-          // If regions is presected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
-#ifdef KELVIN_DEPRECATE
-          // TODO: Deprecate and/or refine ShenandoahTenuredRegionUsageBias.  If we preselect the regions, we can just
-          // set garbage to "max" value, which is the region size rather than doing this extra work to bias selection.
-          // May also want to exercise more discretion in select_aged_regions() if we decide there are good reasons
-          // to not promote all eligible aged regions on the current GC pass.
-
-
-          // If we're at tenure age, bias at least once.
-          for (uint j = region->age() + 1 - InitialTenuringThreshold; j > 0; j--) {
-            garbage = (garbage + ShenandoahTenuredRegionUsageBias) * ShenandoahTenuredRegionUsageBias;
-          }
-#else
+          // If region is preselected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
           garbage = ShenandoahHeapRegion::region_size_bytes();
-#endif
 #ifdef KELVIN_CHASE
           log_info(gc, ergo)("Regular region is to be tenured at age: " SIZE_FORMAT, region->age());
 #endif
         }
+#ifdef KELVIN_SEE_THIS
+        printf("Adding %sregion " SIZE_FORMAT " (" SIZE_FORMAT ") at index " SIZE_FORMAT " with perceived garbage " SIZE_FORMAT ", actual garbage: " SIZE_FORMAT "\n",
+               collection_set->is_preselected(i)? "preselected ": "", region->index(), i, cand_idx, garbage, region->garbage());
+#endif
         candidates[cand_idx]._garbage = garbage;
         cand_idx++;
       }

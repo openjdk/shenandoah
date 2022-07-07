@@ -221,7 +221,8 @@ void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
   }
 }
 
-void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
+void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
+                                                      ShenandoahCollectionSet* collection_set,
                                                       size_t &old_regions_loaned_for_young_evac, size_t &regions_available_to_loan,
                                                       size_t &minimum_evacuation_reserve, size_t &consumed_by_advance_promotion) {
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -235,7 +236,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, Shen
     size_t avail_evac_reserve_for_loan_to_young_gen = 0;
     size_t old_evacuation_reserve = 0;
     size_t num_regions = heap->num_regions();
-    bool preselected_regions[num_regions];
     for (unsigned int i = 0; i < num_regions; i++) {
       preselected_regions[i] = false;
     }
@@ -444,13 +444,17 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
     assert(consumed_by_advance_promotion >= collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste,
            "Advance promotion should be at least young_bytes_to_be_promoted * ShenandoahEvacWaste");
+
     assert(consumed_by_advance_promotion <= (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste * 33) / 32,
-           "Round-off errors should be less than 3.125%%");
+           "Round-off errors should be less than 3.125%%, consumed by advance: " SIZE_FORMAT ", promoted: " SIZE_FORMAT,
+           consumed_by_advance_promotion, (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
   
     collection_set->abandon_preselected();
     if (old_evacuated_committed > old_evacuation_reserve) {
       // This should only happen due to round-off errors when enforcing ShenandoahEvacWaste
-      assert(old_evacuated_committed <= (33 * old_evacuation_reserve) / 32, "Round-off errors should be less than 3.125%%");
+      assert(old_evacuated_committed <= (33 * old_evacuation_reserve) / 32,
+             "Round-off errors should be less than 3.125%%, committed: " SIZE_FORMAT ", reserved: " SIZE_FORMAT,
+             old_evacuated_committed, old_evacuation_reserve);
       old_evacuated_committed = old_evacuation_reserve;
     } else if (old_evacuated_committed < old_evacuation_reserve) {
       // This may happen if the old-gen collection consumes less than full budget.
@@ -739,8 +743,14 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
   {
     size_t old_regions_loaned_for_young_evac, regions_available_to_loan, minimum_evacuation_reserve, consumed_by_advance_promotion;
+    bool* preselected_regions = nullptr;
+    if (heap->mode()->is_generational()) {
+      preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
+    }
+
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
+
     ShenandoahHeapLocker locker(heap->lock());
     collection_set->clear();
     // TODO: young_available can include available (between top() and end()) within each young region that is not
@@ -752,17 +762,20 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // GC is evacuating and updating references.
 
     // Budgeting parameters to compute_evacuation_budgets are passed by reference.
-    compute_evacuation_budgets(heap, collection_set, old_regions_loaned_for_young_evac, regions_available_to_loan,
-                               minimum_evacuation_reserve, consumed_by_advance_promotion);
+    compute_evacuation_budgets(heap, preselected_regions, collection_set, old_regions_loaned_for_young_evac,
+                               regions_available_to_loan, minimum_evacuation_reserve, consumed_by_advance_promotion);
 #ifdef KELVIN_CHASE
     log_info(gc, ref)("Back from compute_evacuation_budgets");
 #endif
-    _heuristics->choose_collection_set(heap->collection_set(), heap->old_heuristics());
+    _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
 #ifdef KELVIN_CHASE
     log_info(gc, ref)("Back from choose_collection_set");
 #endif
-    adjust_evacuation_budgets(heap, collection_set, old_regions_loaned_for_young_evac, regions_available_to_loan,
-                              minimum_evacuation_reserve, consumed_by_advance_promotion);
+    if (!collection_set->is_empty()) {
+      adjust_evacuation_budgets(heap, collection_set, old_regions_loaned_for_young_evac, regions_available_to_loan,
+                                minimum_evacuation_reserve, consumed_by_advance_promotion);
+    }
+    // otherwise, this is an abbreviated cycle and we make no use of evacuation budgets.
 #ifdef KELVIN_CHASE
     log_info(gc, ref)("Back from adjust_evacuation_budgets");
 #endif

@@ -106,7 +106,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 #ifdef KELVIN_RETREAT
   size_t old_evacuation_budget = (size_t) (max_old_evacuation_bytes / ShenandoahEvacWaste);
 
-#define KELVIN_FIXUP
+#undef KELVIN_FIXUP
 #ifdef KELVIN_FIXUP
   size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes();
   if (minimum_evacuation_reserve > heap->old_generation()->available()) {

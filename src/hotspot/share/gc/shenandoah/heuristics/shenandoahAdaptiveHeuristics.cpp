@@ -141,6 +141,11 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     // (((new_garbage < min_garbage) && (r->garbage() > ShenandoahSmallerGarbageThreshold)) || (r->garbage() > garbage_threshold))
 
     if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
+#undef KELVIN_SEES_THIS
+#ifdef KELVIN_SEES_THIS
+      printf("Adding region " SIZE_FORMAT " to cset with garbage: " SIZE_FORMAT ", sorted at " SIZE_FORMAT " and age: %d\n",
+             r->index(), r->garbage(), data[idx]._garbage, r->age());
+#endif
       cset->add_region(r);
       cur_cset = new_cset;
       // cur_garbage = new_garbage;
