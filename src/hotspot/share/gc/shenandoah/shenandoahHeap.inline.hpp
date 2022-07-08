@@ -696,6 +696,10 @@ size_t ShenandoahHeap::get_previous_promotion() const {
 
 inline size_t ShenandoahHeap::set_old_evac_reserve(size_t new_val) {
   size_t orig = _old_evac_reserve;
+#undef KELVIN_DESPARADO
+#ifdef KELVIN_DESPARADO
+  printf("setting old evac reserve to " SIZE_FORMAT "\n", new_val);
+#endif
   _old_evac_reserve = new_val;
   return orig;
 }

@@ -131,7 +131,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     if (is_global) {
       size_t max_young_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
       size_t young_cur_cset = 0;
-      size_t max_old_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
+      size_t max_old_cset    = (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste);
       size_t old_cur_cset = 0;
 
       log_info(gc, ergo)("Adaptive CSet Selection for GLOBAL. Max Young Cset: " SIZE_FORMAT
