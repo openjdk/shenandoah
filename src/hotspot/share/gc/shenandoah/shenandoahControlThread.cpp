@@ -225,12 +225,12 @@ void ShenandoahControlThread::run_service() {
         // blocking 'request_gc' method, but there it loops and resets the
         // '_requested_gc_cause' until a full cycle is completed.
         _requested_gc_cause = GCCause::_no_gc;
-      } else if (heap->is_concurrent_old_mark_in_progress() || heap->is_concurrent_prep_for_mixed_evacuation_in_progress()) {
+      } else if (heap->is_concurrent_old_mark_in_progress() || heap->is_prepare_for_old_mark_in_progress()) {
         // Nobody asked us to do anything, but we have an old-generation mark or old-generation preparation for
         // mixed evacuation in progress, so resume working on that.
         log_info(gc)("Resume old gc: marking=%s, preparing=%s",
                      BOOL_TO_STR(heap->is_concurrent_old_mark_in_progress()),
-                     BOOL_TO_STR(heap->is_concurrent_prep_for_mixed_evacuation_in_progress()));
+                     BOOL_TO_STR(heap->is_prepare_for_old_mark_in_progress()));
 
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = OLD;
@@ -482,9 +482,9 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
   assert(!heap->is_concurrent_old_mark_in_progress(), "Old already in progress.");
   assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");
 
+  old_generation->prepare_gc();
+
   young_generation->set_old_gen_task_queues(old_generation->task_queues());
-  young_generation->set_mark_incomplete();
-  old_generation->set_mark_incomplete();
   service_concurrent_cycle(young_generation, cause, true);
 
   process_phase_timings(heap);
@@ -531,7 +531,7 @@ bool ShenandoahControlThread::check_soft_max_changed() const {
 void ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause) {
 
   assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress() ||
-         ShenandoahHeap::heap()->is_concurrent_prep_for_mixed_evacuation_in_progress(),
+           ShenandoahHeap::heap()->is_prepare_for_old_mark_in_progress(),
          "Old mark or mixed-evac prep should be in progress");
   log_debug(gc)("Resuming old generation with " UINT32_FORMAT " marking tasks queued.", generation->task_queues()->tasks());
 

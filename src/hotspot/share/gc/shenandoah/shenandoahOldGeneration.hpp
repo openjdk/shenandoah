@@ -48,6 +48,8 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
 
   virtual void cancel_marking() override;
 
+  virtual void prepare_gc() override;
+
   void prepare_regions_and_collection_set(bool concurrent) override;
 
   virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
@@ -73,6 +75,12 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   void transfer_pointers_from_satb();
 
   bool is_concurrent_mark_in_progress() override;
+
+ private:
+  bool entry_coalesce_and_fill();
+  bool coalesce_and_fill();
+
+  ShenandoahHeapRegion** _coalesce_and_fill_region_array;
 };
 
 

@@ -204,21 +204,12 @@ void ShenandoahGeneration::merge_write_table() {
   heap->old_generation()->parallel_heap_region_iterate(&task);
 }
 
-void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
+void ShenandoahGeneration::prepare_gc() {
   // Reset mark bitmap for this generation (typically young)
   reset_mark_bitmap();
-  if (do_old_gc_bootstrap) {
-    // Reset mark bitmap for old regions also.  Note that do_old_gc_bootstrap is only true if this generation is YOUNG.
-    ShenandoahHeap::heap()->old_generation()->reset_mark_bitmap();
-  }
-
   // Capture Top At Mark Start for this generation (typically young)
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_heap_region_iterate(&cl);
-  if (do_old_gc_bootstrap) {
-    // Capture top at mark start for both old-gen regions also.  Note that do_old_gc_bootstrap is only true if generation is YOUNG.
-    ShenandoahHeap::heap()->old_generation()->parallel_heap_region_iterate(&cl);
-  }
 }
 
 void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {

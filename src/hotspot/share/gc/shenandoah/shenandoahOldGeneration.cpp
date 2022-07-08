@@ -37,11 +37,15 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
+#include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
+#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
+#include "prims/jvmtiTagMap.hpp"
+#include "utilities/events.hpp"
 
 class ShenandoahFlushAllSATB : public ThreadClosure {
  private:
@@ -124,8 +128,49 @@ public:
   }
 };
 
+class ShenandoahConcurrentCoalesceAndFillTask : public WorkerTask {
+ private:
+  uint _nworkers;
+  ShenandoahHeapRegion** _coalesce_and_fill_region_array;
+  uint _coalesce_and_fill_region_count;
+  volatile bool _is_preempted;
+
+ public:
+  ShenandoahConcurrentCoalesceAndFillTask(uint nworkers, ShenandoahHeapRegion** coalesce_and_fill_region_array,
+                                          uint region_count) :
+    WorkerTask("Shenandoah Concurrent Coalesce and Fill"),
+    _nworkers(nworkers),
+    _coalesce_and_fill_region_array(coalesce_and_fill_region_array),
+    _coalesce_and_fill_region_count(region_count),
+    _is_preempted(false) {
+  }
+
+  void work(uint worker_id) {
+    for (uint region_idx = worker_id; region_idx < _coalesce_and_fill_region_count; region_idx += _nworkers) {
+      ShenandoahHeapRegion* r = _coalesce_and_fill_region_array[region_idx];
+      if (r->is_humongous()) {
+        // there's only one object in this region and it's not garbage, so no need to coalesce or fill
+        continue;
+      }
+
+      if (!r->oop_fill_and_coalesce()) {
+        // Coalesce and fill has been preempted
+        Atomic::store(&_is_preempted, true);
+        return;
+      }
+    }
+  }
+
+  // Value returned from is_completed() is only valid after all worker thread have terminated.
+  bool is_completed() {
+    return !Atomic::load(&_is_preempted);
+  }
+};
+
 ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
-  : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity) {
+  : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity),
+    _coalesce_and_fill_region_array(NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC))
+{
   // Always clear references for old generation
   ref_processor()->set_soft_reference_policy(true);
 }
@@ -163,6 +208,84 @@ void ShenandoahOldGeneration::cancel_marking() {
   }
 
   ShenandoahGeneration::cancel_marking();
+}
+
+void ShenandoahOldGeneration::prepare_gc() {
+  // Coalesce and fill objects _after_ weak root processing and class unloading.
+  // Weak root and reference processing makes assertions about unmarked referents
+  // that will fail if they've been overwritten with filler objects. There is also
+  // a case in the LRB that permits access to from-space objects for the purpose
+  // of class unloading that is unlikely to function correctly if the object has
+  // been filled.
+  // _allow_preemption.set();
+  //
+
+
+  bool parseable = entry_coalesce_and_fill();
+  if (!parseable) {
+    // If an allocation failure occurs during coalescing, we will run a degenerated
+    // cycle for the young generation. This should be a rare event.  Normally, we'll
+    // resume the coalesce-and-fill effort after the preempting young-gen GC finishes.
+    guarantee(parseable, "TODO: Restore support for interruption during filling.");
+
+    // if (!_allow_preemption.try_unset()) {
+    //   // The regulator thread has unset the preemption guard. That thread will shortly cancel
+    //   // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
+    //   while (!heap->cancelled_gc()) {
+    //     SpinPause();
+    //   }
+    // }
+    //
+    // if (heap->cancelled_gc()) {
+    //   return false;
+    // }
+    return;
+  }
+
+  // Now that we have made the old generation parseable, it is safe to reset the mark bitmap.
+  ShenandoahGeneration::prepare_gc();
+}
+
+bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
+  char msg[1024];
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+
+  ShenandoahConcurrentPhase gc_phase("Coalescing and filling (OLD)", ShenandoahPhaseTimings::coalesce_and_fill);
+
+  // TODO: I don't think we're using these concurrent collection counters correctly.
+  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+  EventMark em("%s", msg);
+  ShenandoahWorkerScope scope(heap->workers(),
+                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
+                              "concurrent coalesce and fill");
+
+  return coalesce_and_fill();
+}
+
+bool ShenandoahOldGeneration::coalesce_and_fill() {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  heap->set_prepare_for_old_mark_in_progress(true);
+
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
+  WorkerThreads* workers = heap->workers();
+  uint nworkers = workers->active_workers();
+
+  log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
+  uint coalesce_and_fill_regions_count = old_heuristics->old_coalesce_and_fill_candidates();
+  assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
+  old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
+  ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
+
+  workers->run_task(&task);
+  if (task.is_completed()) {
+    // Remember that we're done with coalesce-and-fill.
+    heap->set_prepare_for_old_mark_in_progress(false);
+    return true;
+  } else {
+    log_debug(gc)("Suspending coalesce-and-fill of old heap regions");
+    // Otherwise, we got preempted before the work was done.
+    return false;
+  }
 }
 
 void ShenandoahOldGeneration::transfer_pointers_from_satb() {

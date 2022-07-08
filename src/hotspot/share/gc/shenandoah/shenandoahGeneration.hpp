@@ -109,7 +109,7 @@ protected:
   void merge_write_table();
 
   // Used by concurrent and degenerated GC to reset regions.
-  void prepare_gc(bool do_old_gc_bootstrap);
+  virtual void prepare_gc();
 
   // Return true iff prepared collection set includes at least one old-gen HeapRegion.
   virtual void prepare_regions_and_collection_set(bool concurrent);
