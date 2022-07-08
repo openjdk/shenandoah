@@ -85,70 +85,138 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // we hit max_cset. When max_cset is hit, we terminate the cset selection. Note that in this scheme,
   // ShenandoahGarbageThreshold is the soft threshold which would be ignored until min_garbage is hit.
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  size_t max_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
-  size_t capacity    = heap->young_generation()->soft_max_capacity();
 
-  // As currently implemented, we are not enforcing that new_garbage > min_garbage
+  // As currently implemented, we are not enforcing that new_garbage > min_garbage.  In a previous implementation
+  // of this code, we forced additional regions into the collection set in an attempt to satisfy this condition,
+  // even when regions had extremely low additional garbage to contribute.  This seemed counterproductive.
+
   // size_t free_target = (capacity / 100) * ShenandoahMinFreeThreshold + max_cset;
   // size_t min_garbage = (free_target > actual_free ? (free_target - actual_free) : 0);
 
-  log_info(gc, ergo)("Adaptive CSet Selection. Max CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
-                     byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
-                     byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
+  // Note that live data bytes within a region is not the same as heap_region_size - garbage.  This is because
+  // each region contains a combination of used memory (which is garbage plus live) and unused memory, which has not
+  // yet been allocated.  It may be the case that the region on this iteration has too much live data to be added to
+  // the collection set while one or more regions seen on subsequent iterations of this loop can be added to the collection
+  // set because they have smaller live memory, even though they also have smaller garbage (and necessarily a larger
+  // amount of unallocated memory).
 
-  // Better select garbage-first regions
-  QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
+  // BANDAID: In an earlier version of this code, this was written:
+  //   if ((new_cset <= max_cset) && ((new_garbage < min_garbage) || (r->garbage() > garbage_threshold)))
+  // The problem with the original code is that in some cases the collection set would include hundreds of regions,
+  // each with less than 100 bytes of garbage.  Evacuating these regions is counterproductive.
 
-  size_t cur_cset = 0;
-  // size_t cur_garbage = 0;
+  // TODO: Think about changing the description and defaults for ShenandoahGarbageThreshold and ShenandoahMinFreeThreshold.
+  // If "customers" want to evacuate regions with smaller amounts of garbage contained therein, they should specify a lower
+  // value of ShenandoahGarbageThreshold.  As implemented currently, we may experience back-to-back collections if there is
+  // not enough memory to be reclaimed.  Let's not let pursuit of min_garbage drive us to make poor decisions.  Maybe we
+  // want yet another global parameter to allow a region to be placed into the collection set if
+  //   (((new_garbage < min_garbage) && (r->garbage() > ShenandoahSmallerGarbageThreshold)) 
+  //     || (r->garbage() > garbage_threshold))
+
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+
 
   // In generational mode, the sort order within the data array is not strictly descending amounts of garbage.  In
   // particular, regions that have reached tenure age will be sorted into this array before younger regions that contain
   // more garbage.  This represents one of the reasons why we keep looking at regions even after we decide, for example,
   // to exclude one of the regions because it might require evacuation of too much live data.
   bool is_generational = heap->mode()->is_generational();
-  for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
-    size_t new_cset;
-    if (is_generational && (r->age() >= InitialTenuringThreshold)) {
-      // Entire region will be promoted, This region does not impact young-gen evacuation reserve.  Memory has already
-      // been set aside to hold evacuation results as advance_promotion_reserve.
-      new_cset = cur_cset;
-    } else {
-      new_cset = cur_cset + r->get_live_data_bytes();
-    }
-    // As currently implemented, we are not enforcing that new_garbage > min_garbage
-    // size_t new_garbage = cur_garbage + r->garbage();
+  bool is_global = (_generation->generation_mode() == GLOBAL);
 
-    // Note that live data bytes within a region is not the same as heap_region_size - garbage.  This is because
-    // each region contains a combination of used memory (which is garbage plus live) and unused memory, which has not
-    // yet been allocated.  It may be the case that the region on this iteration has too much live data to be added to
-    // the collection set while one or more regions seen on subsequent iterations of this loop can be added to the collection
-    // set because they have smaller live memory, even though they also have smaller garbage (and necessarily a larger
-    // amount of unallocated memory).
+  // Better select garbage-first regions
+  QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
 
-    // BANDAID: In an earlier version of this code, this was written:
-    //   if ((new_cset <= max_cset) && ((new_garbage < min_garbage) || (r->garbage() > garbage_threshold)))
-    // The problem with the original code is that in some cases the collection set would include hundreds of regions,
-    // each with less than 100 bytes of garbage.  Evacuating these regions is counterproductive.
+  if (is_generational) {
+    if (is_global) {
+      size_t max_young_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
+      size_t young_cur_cset = 0;
+      size_t max_old_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
+      size_t old_cur_cset = 0;
 
-    // TODO: Think about changing the description and defaults for ShenandoahGarbageThreshold and ShenandoahMinFreeThreshold.
-    // If "customers" want to evacuate regions with smaller amounts of garbage contained therein, they should specify a lower
-    // value of ShenandoahGarbageThreshold.  As implemented currently, we may experience back-to-back collections if there is
-    // not enough memory to be reclaimed.  Let's not let pursuit of min_garbage drive us to make poor decisions.  Maybe we
-    // want yet another global parameter to allow a region to be placed into the collection set if
-    // (((new_garbage < min_garbage) && (r->garbage() > ShenandoahSmallerGarbageThreshold)) || (r->garbage() > garbage_threshold))
+      log_info(gc, ergo)("Adaptive CSet Selection for GLOBAL. Max Young Cset: " SIZE_FORMAT
+                         "%s, Max Old CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
+                         byte_size_in_proper_unit(max_young_cset),    proper_unit_for_byte_size(max_young_cset),
+                         byte_size_in_proper_unit(max_old_cset),    proper_unit_for_byte_size(max_old_cset),
+                         byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
-    if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
+      for (size_t idx = 0; idx < size; idx++) {
+        ShenandoahHeapRegion* r = data[idx]._region;
+        bool add_region = false;
+        if (r->is_old()) {
+          size_t new_cset = old_cur_cset + r->get_live_data_bytes();
+          if ((new_cset <= max_old_cset) && (r->garbage() > garbage_threshold)) {
+            add_region = true;
+            old_cur_cset = new_cset;
+          }
+        } else if (r->age() >= InitialTenuringThreshold) {
+          // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
+          // This region has been pre-selected and its impact on promotion reserve is already accounted for.
+          add_region = true;
+        } else {
+          size_t new_cset = young_cur_cset + r->get_live_data_bytes();
+          if ((new_cset <= max_young_cset) && (r->garbage() > garbage_threshold)) {
+            add_region = true;
+            young_cur_cset = new_cset;
+          }
+        }
+
+        if (add_region) {
 #undef KELVIN_SEES_THIS
 #ifdef KELVIN_SEES_THIS
-      printf("Adding region " SIZE_FORMAT " to cset with garbage: " SIZE_FORMAT ", sorted at " SIZE_FORMAT " and age: %d\n",
-             r->index(), r->garbage(), data[idx]._garbage, r->age());
+          printf("Adding %s region " SIZE_FORMAT " to cset with garbage: " SIZE_FORMAT ", sorted at " SIZE_FORMAT " and age: %d\n",
+                 affiliation_name(r->affiliation()), r->index(), r->garbage(), data[idx]._garbage, r->age());
 #endif
-      cset->add_region(r);
-      cur_cset = new_cset;
-      // cur_garbage = new_garbage;
+          cset->add_region(r);
+        }
+      }
+    } else {
+      // This is young-gen collection.
+      size_t max_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
+      size_t cur_cset = 0;
+
+      log_info(gc, ergo)("Adaptive CSet Selection for YOUNG. Max CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
+                         byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
+                         byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
+
+      for (size_t idx = 0; idx < size; idx++) {
+        ShenandoahHeapRegion* r = data[idx]._region;
+        size_t new_cset;
+        if (r->age() >= InitialTenuringThreshold) {
+          // Entire region will be promoted, This region does not impact young-gen evacuation reserve.  Memory has already
+          // been set aside to hold evacuation results as advance_promotion_reserve.
+          new_cset = cur_cset;
+        } else {
+          new_cset = cur_cset + r->get_live_data_bytes();
+        }
+
+        if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
+#undef KELVIN_SEES_THIS
+#ifdef KELVIN_SEES_THIS
+          printf("Adding region " SIZE_FORMAT " to cset with garbage: " SIZE_FORMAT ", sorted at " SIZE_FORMAT " and age: %d\n",
+                 r->index(), r->garbage(), data[idx]._garbage, r->age());
+#endif
+          cset->add_region(r);
+          cur_cset = new_cset;
+        }
+      }
+    }
+  } else {
+    // Traditional Shenandoah (non-generational)
+    size_t max_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
+    size_t cur_cset = 0;
+    log_info(gc, ergo)("Adaptive CSet Selection. Max CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
+                         byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
+                         byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
+
+    for (size_t idx = 0; idx < size; idx++) {
+      ShenandoahHeapRegion* r = data[idx]._region;
+      size_t new_cset;
+      new_cset = cur_cset + r->get_live_data_bytes();
+      if ((new_cset <= max_cset) && (r->garbage() > garbage_threshold)) {
+        cset->add_region(r);
+        cur_cset = new_cset;
+      }
     }
   }
 }

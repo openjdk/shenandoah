@@ -246,9 +246,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
   collection_set->set_immediate_trash(immediate_garbage);
-
+  
   if (immediate_percent <= ShenandoahImmediateThreshold) {
-
     if (old_heuristics != NULL) {
 #ifdef KELVIN_CHASE
       log_info(gc, ref)("choose_collection_set() about to prime_collection_set");
@@ -269,8 +268,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         heap->set_old_evac_reserve(old_evac_reserve);
       }
 #endif
-    }
+    } 
     // else, this is global collection and doesn't need to prime_collection_set
+
 
 #undef KELVIN_RETREAT
 #ifdef KELVIN_RETREAT
