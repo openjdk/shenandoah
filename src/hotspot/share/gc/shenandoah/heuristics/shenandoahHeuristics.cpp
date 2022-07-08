@@ -118,6 +118,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
 
 void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  bool is_generational = heap->mode()->is_generational();
 
 #undef KELVIN_CHASE
 #ifdef KELVIN_CHASE
@@ -187,11 +188,11 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         live_memory += region->get_live_data_bytes();
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
-        if (collection_set->is_preselected(i)) {
+        if (is_generational && collection_set->is_preselected(i)) {
           // If region is preselected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
           garbage = ShenandoahHeapRegion::region_size_bytes();
 #ifdef KELVIN_CHASE
-          log_info(gc, ergo)("Regular region is to be tenured at age: " SIZE_FORMAT, region->age());
+          log_info(gc, ergo)("Regular region is to be tenured at age: %d", region->age());
 #endif
         }
 #ifdef KELVIN_SEE_THIS
@@ -231,7 +232,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   save_last_live_memory(live_memory);
 
-#undef KELVIN_CHASE
 #ifdef KELVIN_CHASE
     log_info(gc, ref)("choose_collection_set() finished step 1");
 #endif
