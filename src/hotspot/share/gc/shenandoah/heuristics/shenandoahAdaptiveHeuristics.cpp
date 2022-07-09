@@ -162,11 +162,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
         }
 
         if (add_region) {
-#undef KELVIN_SEES_THIS
-#ifdef KELVIN_SEES_THIS
-          printf("Adding %s region " SIZE_FORMAT " to cset with garbage: " SIZE_FORMAT ", sorted at " SIZE_FORMAT " and age: %d\n",
-                 affiliation_name(r->affiliation()), r->index(), r->garbage(), data[idx]._garbage, r->age());
-#endif
           cset->add_region(r);
         }
       }
@@ -191,11 +186,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
         }
 
         if ((new_cset <= max_cset) && ((r->garbage() > garbage_threshold) || (r->age() >= InitialTenuringThreshold))) {
-#undef KELVIN_SEES_THIS
-#ifdef KELVIN_SEES_THIS
-          printf("Adding region " SIZE_FORMAT " to cset with garbage: " SIZE_FORMAT ", sorted at " SIZE_FORMAT " and age: %d\n",
-                 r->index(), r->garbage(), data[idx]._garbage, r->age());
-#endif
           cset->add_region(r);
           cur_cset = new_cset;
         }
