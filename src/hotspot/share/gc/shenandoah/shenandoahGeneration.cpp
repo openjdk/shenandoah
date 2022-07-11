@@ -412,6 +412,11 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     if (young_evac_reserve > young_generation->available()) {
       young_evac_reserve = young_generation->available();
     }
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    printf("setting young evac reserve to " SIZE_FORMAT ", young available; " SIZE_FORMAT  "\n",
+           young_evac_reserve, young_generation->available());
+#endif
     heap->set_young_evac_reserve(young_evac_reserve);
   }
 }
@@ -605,20 +610,18 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     // existing young-gen regions that were not selected for the collection set.  Add this in and adjust the
     // log message (where it says "empty-region allocation budget").
 
-    log_info(gc, ergo)("Memory reserved for young evacuation: " SIZE_FORMAT "%s for evacuating " SIZE_FORMAT
-                       "%s out of young available: " SIZE_FORMAT "%s",
-                       byte_size_in_proper_unit(young_evacuated_reserve_used),
-                       proper_unit_for_byte_size(young_evacuated_reserve_used),
-                       byte_size_in_proper_unit(young_evacuated), proper_unit_for_byte_size(young_evacuated),
-                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+    log_debug(gc)("Memory reserved for young evacuation: " SIZE_FORMAT "%s for evacuating " SIZE_FORMAT
+                  "%s out of young available: " SIZE_FORMAT "%s",
+                  byte_size_in_proper_unit(young_evacuated_reserve_used),
+                  proper_unit_for_byte_size(young_evacuated_reserve_used),
+                  byte_size_in_proper_unit(young_evacuated), proper_unit_for_byte_size(young_evacuated),
+                  byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
   
-    if (old_evacuated > 0) {
-      log_info(gc, ergo)("Memory reserved for old evacuation: " SIZE_FORMAT "%s for evacuating " SIZE_FORMAT
-                         "%s out of old available: " SIZE_FORMAT "%s",
-                         byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
-                         byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
-                         byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available));
-    }
+    log_debug(gc)("Memory reserved for old evacuation: " SIZE_FORMAT "%s for evacuating " SIZE_FORMAT
+                  "%s out of old available: " SIZE_FORMAT "%s",
+                  byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
+                  byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
+                  byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available));
 
     assert(old_available > old_evacuation_reserve + promotion_reserve + old_bytes_loaned_for_young_evac + allocation_supplement,
            "old_available must be larger than accumulated reserves");
@@ -808,15 +811,24 @@ void ShenandoahGeneration::clear_used() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
   Atomic::store(&_used, (size_t)0);
+#ifdef KELVIN_DESPERADO
+  printf("%s::clear_used() yields " SIZE_FORMAT "\n", generation_name(_generation_mode),  _used);
+#endif
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
+#ifdef KELVIN_DESPERADO
+  printf("%s::increase_used(" SIZE_FORMAT " bytes) yields " SIZE_FORMAT "\n", generation_name(_generation_mode),  bytes, _used);
+#endif
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
+#ifdef KELVIN_DESPERADO
+  printf("%s::decrease_used(" SIZE_FORMAT " bytes) yields " SIZE_FORMAT "\n", generation_name(_generation_mode), bytes, _used);
+#endif
 }
 
 size_t ShenandoahGeneration::used_regions() const {
@@ -840,21 +852,37 @@ size_t ShenandoahGeneration::used_regions_size() const {
 size_t ShenandoahGeneration::available() const {
   size_t in_use = used();
   size_t soft_capacity = soft_max_capacity();
+#undef KELVIN_DESPERADO
+#ifdef KELVIN_DESPERADO
+  printf("%s::available() soft_capacity: " SIZE_FORMAT ", in_use: " SIZE_FORMAT " returning " SIZE_FORMAT "\n",
+         generation_name(_generation_mode), soft_capacity, in_use, in_use > soft_capacity ? 0 : soft_capacity - in_use);
+#endif
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
   _adjusted_capacity = soft_max_capacity() + adjustment;
+#ifdef KELVIN_DESPERADO
+  printf("%s::adjusting available by %ld, result is " SIZE_FORMAT "\n",
+         generation_name(_generation_mode), adjustment, _adjusted_capacity);
+#endif
   return _adjusted_capacity;
 }
 
 size_t ShenandoahGeneration::unadjust_available() {
   _adjusted_capacity = soft_max_capacity();
+#ifdef KELVIN_DESPERADO
+  printf("%s::unadjusting available, result is " SIZE_FORMAT "\n", generation_name(_generation_mode), _adjusted_capacity);
+#endif
   return _adjusted_capacity;
 }
 
 size_t ShenandoahGeneration::adjusted_available() const {
   size_t in_use = used();
   size_t capacity = _adjusted_capacity;
+#ifdef KELVIN_DESPERADO
+  printf("%s::adjusted_available() returning " SIZE_FORMAT "\n",
+         generation_name(_generation_mode), in_use > capacity ? 0 : capacity - in_use);
+#endif
   return in_use > capacity ? 0 : capacity - in_use;
 }

@@ -195,6 +195,11 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     // Traditional Shenandoah (non-generational)
     size_t max_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
     size_t cur_cset = 0;
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    printf("young_evac_reserve: " SIZE_FORMAT ", EvacWaste: %f\n", heap->get_young_evac_reserve(), ShenandoahEvacWaste);
+#endif
+
     log_info(gc, ergo)("Adaptive CSet Selection. Max CSet: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
                          byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                          byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
