@@ -657,11 +657,6 @@ bool ShenandoahHeap::is_gc_generation_young() const {
 // If this bound is smaller than NewSize, it supersedes,
 // resulting in a fixed size given by MaxNewSize.
 size_t ShenandoahHeap::young_generation_capacity(size_t capacity) {
-#undef KELVIN_DESPERADO
-#ifdef KELVIN_DESPERADO
-  printf("Computing young-generation_capacity from input: " SIZE_FORMAT ", NewSize: " SIZE_FORMAT ", MaxNewSize: " SIZE_FORMAT
-         ", NewRatio: " SIZE_FORMAT "\n", capacity, NewSize, MaxNewSize, NewRatio);
-#endif
   if (strcmp(ShenandoahGCMode, "generational") == 0) {
     if (FLAG_IS_CMDLINE(NewSize) && !FLAG_IS_CMDLINE(MaxNewSize) && !FLAG_IS_CMDLINE(NewRatio)) {
       capacity = MIN2(NewSize, capacity);
@@ -676,9 +671,6 @@ size_t ShenandoahHeap::young_generation_capacity(size_t capacity) {
     }
   }
   // else, make no adjustment to global capacity
-#ifdef KELVIN_DESPERADO
-  printf("Computed young-generation_capacity is " SIZE_FORMAT "\n", capacity);
-#endif
   return capacity;
 }
 

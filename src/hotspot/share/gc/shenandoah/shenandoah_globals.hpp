@@ -101,6 +101,15 @@
           "be taken for collection.")                                       \
           range(0,100)                                                      \
                                                                             \
+  product(uintx, ShenandoahIgnoreGarbageThreshold, 5, EXPERIMENTAL,         \
+          "When less than this amount of garbage (as a percentage of "      \
+          "region size) exists within a region, the region will not be "    \
+          "added to the collection set, even if when the heuristic has "    \
+          "chosen to aggressively add regions with less than "              \
+          "ShenandoahGarbageThreshold amount of garbage into the "          \
+          "collection set.")                                                \
+          range(0,100)                                                      \
+                                                                            \
   product(uintx, ShenandoahInitFreeThreshold, 70, EXPERIMENTAL,             \
           "When less than this amount of memory is free within the"         \
           "heap or generation, trigger a learning cycle if we are "         \

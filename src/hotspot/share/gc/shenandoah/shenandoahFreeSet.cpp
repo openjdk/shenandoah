@@ -73,14 +73,6 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliati
       if (r->affiliation() == affiliation) {
         HeapWord* result = try_allocate_in(r, req, in_new_region);
         if (result != NULL) {
-#undef KELVIN_DESPERADO
-#ifdef KELVIN_DESPERADO
-          // I'm puzzed as to how I can start out a tradishen collection with zero available because
-          // my tlab and shared mutator allocations are supposed to avoid using the gc reserve
-          printf("After allocate_with_affiliation %s of size " SIZE_FORMAT " in new region? %s, young available is: " SIZE_FORMAT "\n",
-                 affiliation_name(affiliation), req.size(), in_new_region? "yes": "no",
-                 _heap->young_generation()->available());
-#endif
           return result;
         }
       }
@@ -113,14 +105,6 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           // try_allocate_in() increases used if the allocation is successful.
           HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
           if (result != NULL) {
-#ifdef KELVIN_DESPERADO
-            // I'm puzzed as to how I can start out a tradishen collection with zero available because
-            // my tlab and shared mutator allocations are supposed to avoid using the gc reserve
-            printf("After allocate_single of %s size " SIZE_FORMAT " for region " SIZE_FORMAT " between mutator_left " SIZE_FORMAT
-                   " amd mutator_right " SIZE_FORMAT ", in new region? %s, available is: " SIZE_FORMAT "\n",
-                   (req.type() == ShenandoahAllocRequest::_alloc_tlab)? "TLAB": "Shared", req.size(), idx, _mutator_leftmost,
-                   _mutator_rightmost, in_new_region? "yes": "no", _heap->young_generation()->available());
-#endif
             return result;
           }
         }
@@ -366,10 +350,6 @@ void ShenandoahFreeSet::recompute_bounds() {
 
 void ShenandoahFreeSet::adjust_bounds() {
   // Rewind both mutator bounds until the next bit.
-#ifdef KELVIN_DESPERADO
-  printf("At adjust_bounds, _mutator [" SIZE_FORMAT " , " SIZE_FORMAT "], _collector [" SIZE_FORMAT ", " SIZE_FORMAT "], _max: " SIZE_FORMAT "\n",
-         _mutator_leftmost, _mutator_rightmost, _collector_leftmost, _collector_rightmost, _max);
-#endif
   while (_mutator_leftmost < _max && !is_mutator_free(_mutator_leftmost)) {
     _mutator_leftmost++;
   }
@@ -383,10 +363,6 @@ void ShenandoahFreeSet::adjust_bounds() {
   while (_collector_rightmost > 0 && !is_collector_free(_collector_rightmost)) {
     _collector_rightmost--;
   }
-#ifdef KELVIN_DESPERADO
-  printf("After adjust_bounds, _mutator [" SIZE_FORMAT " , " SIZE_FORMAT "], _collector [" SIZE_FORMAT ", " SIZE_FORMAT "]\n",
-         _mutator_leftmost, _mutator_rightmost, _collector_leftmost, _collector_rightmost);
-#endif
 }
 
 HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
@@ -492,16 +468,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     adjust_bounds();
   }
   assert_bounds();
-
-#ifdef KELVIN_DESPERADO
-  // I'm puzzed as to how I can start out a tradishen collection with zero available because
-  // my tlab and shared mutator allocations are supposed to avoid using the gc reserve
-  // BTW, I think affiliation is always going to be young because we promote humongous by relabel.
-  printf("After allocate_contiguous of size " SIZE_FORMAT " spanning regions " SIZE_FORMAT " to " SIZE_FORMAT
-         ", young available is: " SIZE_FORMAT "\n",
-         req.size(), beg, end, _heap->young_generation()->available());
-#endif
-
   req.set_actual_size(words_size);
   return _heap->get_region(beg)->bottom();
 }
@@ -608,14 +574,7 @@ void ShenandoahFreeSet::rebuild() {
   // Evac reserve: reserve trailing space for evacuations
   if (!_heap->mode()->is_generational()) {
     size_t to_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
-#ifdef KELVIN_DESPERADO
-    printf("Rebuilding FreeSet with reserve: " SIZE_FORMAT ", free_set capacity: " SIZE_FORMAT "\n", to_reserve, _capacity);
-#endif
     reserve_regions(to_reserve);
-#ifdef KELVIN_DESPERADO
-    printf(" After reserve, free_set capacity: " SIZE_FORMAT "\n", _capacity);
-    _heap->young_generation()->available();  // side effect of call prints current value
-#endif
   } else {
     size_t young_reserve = (_heap->young_generation()->max_capacity() / 100) * ShenandoahEvacReserve;
     // Note that all allocations performed from old-gen are performed by GC, generally using PLABs for both
