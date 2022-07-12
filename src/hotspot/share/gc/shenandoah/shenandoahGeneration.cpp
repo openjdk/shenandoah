@@ -23,7 +23,7 @@
  */
 
 #include "precompiled.hpp"
-
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
@@ -747,4 +747,14 @@ size_t ShenandoahGeneration::adjusted_available() const {
   size_t in_use = used();
   size_t capacity = _adjusted_capacity;
   return in_use > capacity ? 0 : capacity - in_use;
+}
+
+void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
+  heuristics()->record_success_concurrent(false);
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();
+}
+
+void ShenandoahGeneration::record_success_degenerated() {
+  heuristics()->record_success_degenerated();
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_degenerated();
 }

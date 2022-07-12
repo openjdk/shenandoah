@@ -82,7 +82,7 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
           log_info(gc)("Heuristics request for young collection accepted");
         }
       }
-    } else if (mode == ShenandoahControlThread::marking_old) {
+    } else if (mode == ShenandoahControlThread::servicing_old) {
       if (start_young_cycle()) {
         log_info(gc)("Heuristics request to interrupt old for young collection accepted");
       }

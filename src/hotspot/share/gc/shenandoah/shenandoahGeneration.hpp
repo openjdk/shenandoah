@@ -159,6 +159,9 @@ protected:
 
   virtual bool is_concurrent_mark_in_progress() = 0;
   void confirm_heuristics_mode();
+
+  virtual void record_success_concurrent(bool abbreviated);
+  virtual void record_success_degenerated();
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP

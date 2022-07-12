@@ -76,11 +76,25 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
 
   bool is_concurrent_mark_in_progress() override;
 
+  virtual void record_success_concurrent(bool abbreviated) override;
+
+  enum State {
+    IDLE, FILLING, BOOTSTRAPPING, MARKING, WAITING
+  };
+
+  void transition_to(State new_state);
+
+  State state() const {
+    return _state;
+  }
+
  private:
   bool entry_coalesce_and_fill();
   bool coalesce_and_fill();
 
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
+
+  State _state;
 };
 
 

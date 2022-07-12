@@ -73,7 +73,7 @@ public:
     concurrent_normal,
     stw_degenerated,
     stw_full,
-    marking_old
+    servicing_old
   } GCMode;
 
   void run_service();
@@ -103,7 +103,7 @@ private:
   shenandoah_padding(3);
 
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
-  void resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause);
+  bool resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause);
   void service_concurrent_cycle(ShenandoahGeneration* generation, GCCause::Cause cause, bool reset_old_bitmap_specially);
   void service_stw_full_cycle(GCCause::Cause cause);
 

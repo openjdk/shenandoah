@@ -26,6 +26,7 @@
 #include "precompiled.hpp"
 
 #include "gc/shared/strongRootsScope.hpp"
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahAggressiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahCompactHeuristics.hpp"
@@ -169,7 +170,8 @@ class ShenandoahConcurrentCoalesceAndFillTask : public WorkerTask {
 
 ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
   : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity),
-    _coalesce_and_fill_region_array(NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC))
+    _coalesce_and_fill_region_array(NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC)),
+    _state(IDLE)
 {
   // Always clear references for old generation
   ref_processor()->set_soft_reference_policy(true);
@@ -211,36 +213,10 @@ void ShenandoahOldGeneration::cancel_marking() {
 }
 
 void ShenandoahOldGeneration::prepare_gc() {
-  // Coalesce and fill objects _after_ weak root processing and class unloading.
-  // Weak root and reference processing makes assertions about unmarked referents
-  // that will fail if they've been overwritten with filler objects. There is also
-  // a case in the LRB that permits access to from-space objects for the purpose
-  // of class unloading that is unlikely to function correctly if the object has
-  // been filled.
-  // _allow_preemption.set();
-  //
 
-
-  bool parseable = entry_coalesce_and_fill();
-  if (!parseable) {
-    // If an allocation failure occurs during coalescing, we will run a degenerated
-    // cycle for the young generation. This should be a rare event.  Normally, we'll
-    // resume the coalesce-and-fill effort after the preempting young-gen GC finishes.
-    guarantee(parseable, "TODO: Restore support for interruption during filling.");
-
-    // if (!_allow_preemption.try_unset()) {
-    //   // The regulator thread has unset the preemption guard. That thread will shortly cancel
-    //   // the gc, but the control thread is now racing it. Wait until this thread sees the cancellation.
-    //   while (!heap->cancelled_gc()) {
-    //     SpinPause();
-    //   }
-    // }
-    //
-    // if (heap->cancelled_gc()) {
-    //   return false;
-    // }
-    return;
-  }
+  // Make the old generation regions parseable, so they can be safely
+  // scanned when looking for objects in memory indicated by dirty cards.
+  entry_coalesce_and_fill();
 
   // Now that we have made the old generation parseable, it is safe to reset the mark bitmap.
   ShenandoahGeneration::prepare_gc();
@@ -265,6 +241,7 @@ bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
 bool ShenandoahOldGeneration::coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   heap->set_prepare_for_old_mark_in_progress(true);
+  transition_to(FILLING);
 
   ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
   WorkerThreads* workers = heap->workers();
@@ -279,6 +256,7 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   workers->run_task(&task);
   if (task.is_completed()) {
     // Remember that we're done with coalesce-and-fill.
+    transition_to(BOOTSTRAPPING);
     heap->set_prepare_for_old_mark_in_progress(false);
     return true;
   } else {
@@ -329,6 +307,13 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
   }
 }
 
+void ShenandoahOldGeneration::transition_to(State new_state) {
+  if (_state != new_state) {
+    log_info(gc)("Old generation transition from %d to %d", _state, new_state);
+    _state = new_state;
+  }
+}
+
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
   assert(ShenandoahOldGCHeuristics != NULL, "ShenandoahOldGCHeuristics should not equal NULL");
   ShenandoahHeuristics* trigger;
@@ -346,4 +331,9 @@ ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahM
   trigger->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
   _heuristics = new ShenandoahOldHeuristics(this, trigger);
   return _heuristics;
+}
+
+void ShenandoahOldGeneration::record_success_concurrent(bool abbreviated) {
+  heuristics()->record_success_concurrent(false);
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_old();
 }
