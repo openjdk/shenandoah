@@ -112,7 +112,7 @@ protected:
   void prepare_gc(bool do_old_gc_bootstrap);
 
   // Compute evacuation budgets prior to choosing collection set.
-  void compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions, ShenandoahCollectionSet* collection_set, 
+  void compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions, ShenandoahCollectionSet* collection_set,
                                   size_t &old_regions_loaned_for_young_evac, size_t &regions_available_to_loan,
                                   size_t &minimum_evacuation_reserve, size_t &consumed_by_advance_promotion);
 

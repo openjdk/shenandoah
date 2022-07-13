@@ -436,7 +436,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     assert(consumed_by_advance_promotion <= (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste * 33) / 32,
            "Round-off errors should be less than 3.125%%, consumed by advance: " SIZE_FORMAT ", promoted: " SIZE_FORMAT,
            consumed_by_advance_promotion, (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
-  
+
     collection_set->abandon_preselected();
     if (old_evacuated_committed > old_evacuation_reserve) {
       // This should only happen due to round-off errors when enforcing ShenandoahEvacWaste
@@ -520,7 +520,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                                                 old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement);
 
     // We experimented with constraining promoted_reserve to be no larger than 4 times the size of previously_promoted,
-    // but this constraint was too limiting, resulting in failure of legitimate promotions.  This was tried before we 
+    // but this constraint was too limiting, resulting in failure of legitimate promotions.  This was tried before we
     // had special handling in place for advance promotion.  We should retry now that advance promotion is handled
     // specially.
 
@@ -608,7 +608,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                   proper_unit_for_byte_size(young_evacuated_reserve_used),
                   byte_size_in_proper_unit(young_evacuated), proper_unit_for_byte_size(young_evacuated),
                   byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
-  
+
     log_debug(gc)("Memory reserved for old evacuation: " SIZE_FORMAT "%s for evacuating " SIZE_FORMAT
                   "%s out of old available: " SIZE_FORMAT "%s",
                   byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),

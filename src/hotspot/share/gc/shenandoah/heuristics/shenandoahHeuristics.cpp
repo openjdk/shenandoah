@@ -195,13 +195,12 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
   collection_set->set_immediate_trash(immediate_garbage);
-  
+
   if (immediate_percent <= ShenandoahImmediateThreshold) {
     if (old_heuristics != NULL) {
       old_heuristics->prime_collection_set(collection_set);
-    } 
+    }
     // else, this is global collection and doesn't need to prime_collection_set
-
 
     // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
     // of the heuristics subclasses.
