@@ -223,15 +223,18 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                                          ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
-
     parallel_heap_region_iterate(&cl);
-    heap->assert_pinned_region_status();
 
     if (generation_mode() == YOUNG) {
-      // Also capture update_watermark for old-gen regions.
-      ShenandoahCaptureUpdateWaterMarkForOld old_cl(complete_marking_context());
+      // We always need to update the watermark for old regions. If there
+      // are mixed collections pending, we also need to synchronize the
+      // pinned status for old regions. Since we are already visiting every
+      // old region here, go ahead and sync the pin status too.
+      ShenandoahFinalMarkUpdateRegionStateClosure old_cl(nullptr);
       heap->old_generation()->parallel_heap_region_iterate(&old_cl);
     }
+
+    heap->assert_pinned_region_status();
   }
 
   {
@@ -241,7 +244,6 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
     heap->collection_set()->clear();
 
     size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * region_size_bytes;
-    size_t avail_evac_reserve_for_loan_to_young_gen = 0;
     size_t old_regions_loaned_for_young_evac = 0;
     size_t regions_available_to_loan = 0;
     size_t old_evacuation_reserve = 0;
@@ -300,14 +302,13 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       if (old_evacuation_reserve < minimum_evacuation_reserve) {
         // Even if there's nothing to be evacuated on this cycle, we still need to reserve this memory for future
         // evacuations.  It is ok to loan this memory to young-gen if we don't need it for evacuation on this pass.
-        avail_evac_reserve_for_loan_to_young_gen = minimum_evacuation_reserve - old_evacuation_reserve;
         old_evacuation_reserve = minimum_evacuation_reserve;
       }
 
       heap->set_old_evac_reserve(old_evacuation_reserve);
       heap->reset_old_evac_expended();
 
-      // Compute the young evauation reserve: This is how much memory is available for evacuating young-gen objects.
+      // Compute the young evacuation reserve: This is how much memory is available for evacuating young-gen objects.
       // We ignore the possible effect of promotions, which reduce demand for young-gen evacuation memory.
       //
       // TODO: We could give special treatment to the regions that have reached promotion age, because we know their
@@ -447,7 +448,6 @@ void  ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) 
       ShenandoahYoungGeneration* young_generation = heap->young_generation();
       size_t old_evacuation_committed = (size_t) (ShenandoahEvacWaste *
                                                   collection_set->get_old_bytes_reserved_for_evacuation());
-      size_t immediate_garbage_regions = collection_set->get_immediate_trash() / region_size_bytes;
 
       if (old_evacuation_committed > old_evacuation_reserve) {
         // This should only happen due to round-off errors when enforcing ShenandoahEvacWaste

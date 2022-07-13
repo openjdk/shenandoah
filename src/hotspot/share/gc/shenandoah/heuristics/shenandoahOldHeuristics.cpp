@@ -31,15 +31,12 @@
 #include "utilities/quickSort.hpp"
 
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
-    ShenandoahHeuristics(generation),
-    _old_collection_candidates(0),
-    _next_old_collection_candidate(0),
-    _hidden_old_collection_candidates(0),
-    _hidden_next_old_collection_candidate(0),
-    _old_coalesce_and_fill_candidates(0),
-    _first_coalesce_and_fill_candidate(0),
-    _trigger_heuristic(trigger_heuristic),
-    _promotion_failed(false)
+  ShenandoahHeuristics(generation),
+  _last_old_collection_candidate(0),
+  _next_old_collection_candidate(0),
+  _last_old_region(0),
+  _trigger_heuristic(trigger_heuristic),
+  _promotion_failed(false)
 {
 }
 
@@ -85,11 +82,9 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // depletes old-gen available memory to the point that there is insufficient memory to hold old-gen objects
   // that need to be evacuated from within the old-gen collection set.
   //
-  // Key idea: if there is not sufficient memory within old-gen to hold an object that wants to be promoted, defer
+  // Key idea: if there is insufficient memory within old-gen to hold an object that wants to be promoted, defer
   // promotion until a subsequent evacuation pass.  Enforcement is provided at the time PLABs and shared allocations
   // in old-gen memory are requested.
-
-  const size_t promotion_budget_bytes = heap->get_promoted_reserve();
 
   // old_evacuation_budget is an upper bound on the amount of live memory that can be evacuated.
   //
@@ -182,8 +177,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     size_t garbage = region->garbage();
     total_garbage += garbage;
 
-    if (region->is_regular()) {
+    if (region->is_regular() || region->is_pinned()) {
       if (!region->has_live()) {
+        assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
         region->make_trash_immediate();
         immediate_regions++;
         immediate_garbage += garbage;
@@ -201,19 +197,6 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         // check above.
         size_t region_count = heap->trash_humongous_region_at(region);
         log_debug(gc)("Trashed " SIZE_FORMAT " regions for humongous object.", region_count);
-      }
-    } else if (region->is_pinned()) {
-      assert(!region->is_humongous(), "Humongous region should be handled elsewhere.");
-      if (region->has_live()) {
-        // This region is pinned, so we aren't going to include it in the collection set.
-        // However, we must still 'fill' in the dead objects in this region to stop
-        // subsequent remembered set scan from tracing through into garbage. Here we add it
-        // to the set of candidates, but with _zero_ garbage so that it sorts to the end of
-        // the garbage-first list.
-        region->begin_preemptible_coalesce_and_fill();
-        candidates[cand_idx]._region = region;
-        candidates[cand_idx]._garbage = 0;
-        cand_idx++;
       }
     } else if (region->is_trash()) {
       // Count humongous objects made into trash here.
@@ -234,30 +217,20 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   //
   // TODO: allow ShenandoahOldGarbageThreshold to be determined adaptively, by heuristics.
 
+
   const size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold / 100;
   size_t candidates_garbage = 0;
+  _last_old_region = (uint)cand_idx;
+  _last_old_collection_candidate = (uint)cand_idx;
+
   for (size_t i = 0; i < cand_idx; i++) {
     candidates_garbage += candidates[i]._garbage;
     if (candidates[i]._garbage < garbage_threshold) {
       // Candidates are sorted in decreasing order of garbage, so no regions after this will be above the threshold
-      _hidden_next_old_collection_candidate = 0;
-      _hidden_old_collection_candidates = (uint)i;
-      _first_coalesce_and_fill_candidate = (uint)i;
-      _old_coalesce_and_fill_candidates = (uint)(cand_idx - i);
-
-      // Note that we do not coalesce and fill occupied humongous regions
-      // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
-      log_info(gc)("Old-gen mark evac (" UINT32_FORMAT " RR, " UINT32_FORMAT " CF)",
-                   _hidden_old_collection_candidates, _old_coalesce_and_fill_candidates);
-      return;
+      _last_old_collection_candidate = (uint)i;
+      break;
     }
   }
-
-  // If we reach here, all of non-humogous old-gen regions are candidates for collection set.
-  _hidden_next_old_collection_candidate = 0;
-  _hidden_old_collection_candidates = (uint)cand_idx;
-  _first_coalesce_and_fill_candidate = 0;
-  _old_coalesce_and_fill_candidates = 0;
 
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
@@ -265,62 +238,58 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   log_info(gc)("Old-gen mark evac (" UINT32_FORMAT " RR, " UINT32_FORMAT " CF), "
                "Collectable Garbage: " SIZE_FORMAT "%s, "
                "Immediate Garbage: " SIZE_FORMAT "%s",
-               _hidden_old_collection_candidates, _old_coalesce_and_fill_candidates,
+               _last_old_collection_candidate, _last_old_region - _last_old_collection_candidate,
                byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
                byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage));
 }
 
 void ShenandoahOldHeuristics::start_old_evacuations() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-
-  _old_collection_candidates = _hidden_old_collection_candidates;
-  _next_old_collection_candidate = _hidden_next_old_collection_candidate;
-
-  _hidden_old_collection_candidates = 0;
+  _next_old_collection_candidate = 0;
 }
 
 uint ShenandoahOldHeuristics::unprocessed_old_or_hidden_collection_candidates() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  return _old_collection_candidates + _hidden_old_collection_candidates;
+  return _last_old_collection_candidate;
 }
 
 uint ShenandoahOldHeuristics::unprocessed_old_collection_candidates() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  return _old_collection_candidates;
+  return _last_old_collection_candidate - _next_old_collection_candidate;
 }
 
 ShenandoahHeapRegion* ShenandoahOldHeuristics::next_old_collection_candidate() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  return _region_data[_next_old_collection_candidate]._region;
+  ShenandoahHeapRegion* next = _region_data[_next_old_collection_candidate]._region;
+  if (next->is_pinned()) {
+    // This region is pinned now and cannot be collected. Swap it to the back of the
+    // list of candidates
+  }
+  return next;
 }
 
 void ShenandoahOldHeuristics::consume_old_collection_candidate() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   _next_old_collection_candidate++;
-  _old_collection_candidates--;
 }
 
 uint ShenandoahOldHeuristics::old_coalesce_and_fill_candidates() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  return _old_coalesce_and_fill_candidates;
+  return _last_old_region;
 }
 
 void ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  uint count = _old_coalesce_and_fill_candidates;
-  int index = _first_coalesce_and_fill_candidate;
-  while (count-- > 0) {
+  uint end = _last_old_region;
+  uint index = _next_old_collection_candidate;
+  while (index < end) {
     *buffer++ = _region_data[index++]._region;
   }
 }
 
 void ShenandoahOldHeuristics::abandon_collection_candidates() {
-  _old_collection_candidates = 0;
+  _last_old_collection_candidate = 0;
   _next_old_collection_candidate = 0;
-  _hidden_old_collection_candidates = 0;
-  _hidden_next_old_collection_candidate = 0;
-  _old_coalesce_and_fill_candidates = 0;
-  _first_coalesce_and_fill_candidate = 0;
+  _last_old_region = 0;
 }
 
 void ShenandoahOldHeuristics::handle_promotion_failure() {

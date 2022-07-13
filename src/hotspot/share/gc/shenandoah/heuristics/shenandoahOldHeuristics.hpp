@@ -35,33 +35,16 @@ class ShenandoahOldHeuristics : public ShenandoahHeuristics {
 
 private:
 
-  // if (_generation->generation_mode() == OLD) _old_collection_candidates
+  // if (_generation->generation_mode() == OLD) _last_old_collection_candidate
   //  represent the number of regions selected for collection following the
   //  most recently completed old-gen mark that have not yet been selected
   //  for evacuation and _next_collection_candidate is the index within
   //  _region_data of the next candidate region to be selected for evacuation.
   // if (_generation->generation_mode() != OLD) these two variables are
   //  not used.
-  uint _old_collection_candidates;
+  uint _last_old_collection_candidate;
   uint _next_old_collection_candidate;
-
-  // At the time we select the old-gen collection set, _hidden_old_collection_candidates
-  // and _hidden_next_old_collection_candidates are set to remember the intended old-gen
-  // collection set.  After all old-gen regions not in the old-gen collection set have been
-  // coalesced and filled, the content of these variables is copied to _old_collection_candidates
-  // and _next_old_collection_candidates so that evacuations can begin evacuating these regions.
-  uint _hidden_old_collection_candidates;
-  uint _hidden_next_old_collection_candidate;
-
-  // if (_generation->generation_mode() == OLD)
-  //  _old_coalesce_and_fill_candidates represents the number of regions
-  //  that were chosen for the garbage contained therein to be coalesced
-  //  and filled and _first_coalesce_and_fill_candidate represents the
-  //  the index of the first such region within the _region_data array.
-  // if (_generation->generation_mode() != OLD) these two variables are
-  //  not used.
-  uint _old_coalesce_and_fill_candidates;
-  uint _first_coalesce_and_fill_candidate;
+  uint _last_old_region;
 
   // This can be the 'static' or 'adaptive' heuristic.
   ShenandoahHeuristics* _trigger_heuristic;

@@ -295,12 +295,16 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
   }
 
   {
+    // This doesn't actually choose a collection set, but prepares a list of
+    // regions as 'candidates' for inclusion in a mixed collection.
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset : ShenandoahPhaseTimings::degen_gc_choose_cset);
     ShenandoahHeapLocker locker(heap->lock());
     heuristics()->choose_collection_set(nullptr, nullptr);
   }
 
   {
+    // Though we did not choose a collection set above, we still may have
+    // freed up immediate garbage regions so proceed with rebuilding the free set.
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset : ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->rebuild();
