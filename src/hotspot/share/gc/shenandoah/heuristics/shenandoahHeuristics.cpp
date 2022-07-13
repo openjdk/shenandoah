@@ -126,7 +126,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   ShenandoahMarkingContext* const ctx = _generation->complete_marking_context();
 
-  size_t remnant_available = 0;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
     if (!in_generation(region)) {
@@ -362,6 +361,14 @@ bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
   return ((_generation->generation_mode() == GLOBAL)
           || (_generation->generation_mode() == YOUNG && region->affiliation() == YOUNG_GENERATION)
           || (_generation->generation_mode() == OLD && region->affiliation() == OLD_GENERATION));
+}
+
+size_t ShenandoahHeuristics::min_free_threshold() {
+  size_t min_free_threshold =
+      _generation->generation_mode() == GenerationMode::OLD
+          ? ShenandoahOldMinFreeThreshold
+          : ShenandoahMinFreeThreshold;
+  return _generation->soft_max_capacity() / 100 * min_free_threshold;
 }
 
 void ShenandoahHeuristics::save_last_live_memory(size_t live_memory) {

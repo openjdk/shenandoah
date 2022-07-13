@@ -236,9 +236,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     size_t avail_evac_reserve_for_loan_to_young_gen = 0;
     size_t old_evacuation_reserve = 0;
     size_t num_regions = heap->num_regions();
-    for (unsigned int i = 0; i < num_regions; i++) {
-      preselected_regions[i] = false;
-    }
 
     // During initialization and phase changes, it is more likely that fewer objects die young and old-gen
     // memory is not yet full (or is in the process of being replaced).  During these times especially, it
@@ -670,6 +667,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     bool* preselected_regions = nullptr;
     if (heap->mode()->is_generational()) {
       preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
+      for (unsigned int i = 0; i < heap->num_regions(); i++) {
+        preselected_regions[i] = false;
+      }
     }
 
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
