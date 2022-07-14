@@ -1037,7 +1037,7 @@ void ShenandoahHeap::cancel_old_gc() {
 bool ShenandoahHeap::is_old_gc_active() {
   return is_concurrent_old_mark_in_progress()
          || is_prepare_for_old_mark_in_progress()
-         || old_heuristics()->unprocessed_old_or_hidden_collection_candidates() > 0
+         || old_heuristics()->unprocessed_old_collection_candidates() > 0
          || young_generation()->old_gen_task_queues() != nullptr;
 }
 

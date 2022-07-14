@@ -248,7 +248,7 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   uint nworkers = workers->active_workers();
 
   log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
-  uint coalesce_and_fill_regions_count = old_heuristics->old_coalesce_and_fill_candidates();
+  uint coalesce_and_fill_regions_count = old_heuristics->last_old_region_index();
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);

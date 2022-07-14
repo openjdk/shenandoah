@@ -26,8 +26,10 @@
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
-#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
+#include "gc/shenandoah/shenandoahCollectionSet.hpp"
+#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "utilities/quickSort.hpp"
 
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
@@ -248,7 +250,7 @@ void ShenandoahOldHeuristics::start_old_evacuations() {
   _next_old_collection_candidate = 0;
 }
 
-uint ShenandoahOldHeuristics::unprocessed_old_or_hidden_collection_candidates() {
+uint ShenandoahOldHeuristics::last_old_collection_candidate_index() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   return _last_old_collection_candidate;
 }
@@ -272,7 +274,7 @@ void ShenandoahOldHeuristics::consume_old_collection_candidate() {
   _next_old_collection_candidate++;
 }
 
-uint ShenandoahOldHeuristics::old_coalesce_and_fill_candidates() {
+uint ShenandoahOldHeuristics::last_old_region_index() {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   return _last_old_region;
 }
@@ -311,7 +313,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   // Future refinement: under certain circumstances, we might be more sophisticated about this choice.
   // For example, we could choose to abandon the previous old collection before it has completed evacuations,
   // but this would require that we coalesce and fill all garbage within unevacuated collection-set regions.
-  if (unprocessed_old_or_hidden_collection_candidates() > 0) {
+  if (unprocessed_old_collection_candidates() > 0) {
     return false;
   }
 

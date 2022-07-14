@@ -25,11 +25,12 @@
 #ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHOLDHEURISTICS_HPP
 #define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHOLDHEURISTICS_HPP
 
-#include "gc/shenandoah/shenandoahCollectionSet.inline.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+
+class ShenandoahCollectionSet;
+class ShenandoahGeneration;
+class ShenandoahHeapRegion;
 
 class ShenandoahOldHeuristics : public ShenandoahHeuristics {
 
@@ -52,9 +53,6 @@ private:
   // Flag is set when promotion failure is detected (by gc thread), cleared when old generation collection begins (by control thread)
   volatile bool _promotion_failed;
 
-  // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
-  void prepare_for_old_collections();
-
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
                                                      size_t free) override;
@@ -63,6 +61,9 @@ public:
   ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic);
 
   virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) override;
+
+  // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
+  void prepare_for_old_collections();
 
   // Return true iff the collection set is primed with at least one old-gen region.
   bool prime_collection_set(ShenandoahCollectionSet* set);
@@ -75,7 +76,7 @@ public:
   uint unprocessed_old_collection_candidates();
 
   // How many old or hidden collection candidates have not yet been processed?
-  uint unprocessed_old_or_hidden_collection_candidates();
+  uint last_old_collection_candidate_index();
 
   // Return the next old-collection candidate in order of decreasing amounts of garbage.  (We process most-garbage regions
   // first.)  This does not consume the candidate.  If the candidate is selected for inclusion in a collection set, then
@@ -87,11 +88,11 @@ public:
 
   // How many old-collection regions were identified at the end of the most recent old-gen mark to require their
   // unmarked objects to be coalesced and filled?
-  uint old_coalesce_and_fill_candidates();
+  uint last_old_region_index();
 
   // Fill in buffer with all of the old-collection regions that were identified at the end of the most recent old-gen
   // mark to require their unmarked objects to be coalesced and filled.  The buffer array must have at least
-  // old_coalesce_and_fill_candidates() entries, or memory may be corrupted when this function overwrites the
+  // last_old_region_index() entries, or memory may be corrupted when this function overwrites the
   // end of the array.
   void get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
 
