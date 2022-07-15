@@ -43,6 +43,7 @@ private:
   //  _region_data of the next candidate region to be selected for evacuation.
   // if (_generation->generation_mode() != OLD) these two variables are
   //  not used.
+  uint _start_old_collection_candidate;
   uint _last_old_collection_candidate;
   uint _next_old_collection_candidate;
   uint _last_old_region;
@@ -135,6 +136,8 @@ public:
 
   virtual bool is_experimental() override;
 
+ private:
+  void slide_pinned_regions_to_front();
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHOLDHEURISTICS_HPP
