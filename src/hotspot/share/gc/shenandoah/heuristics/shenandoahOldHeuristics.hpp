@@ -36,16 +36,34 @@ class ShenandoahOldHeuristics : public ShenandoahHeuristics {
 
 private:
 
-  // if (_generation->generation_mode() == OLD) _last_old_collection_candidate
-  //  represent the number of regions selected for collection following the
-  //  most recently completed old-gen mark that have not yet been selected
-  //  for evacuation and _next_collection_candidate is the index within
-  //  _region_data of the next candidate region to be selected for evacuation.
-  // if (_generation->generation_mode() != OLD) these two variables are
-  //  not used.
-  uint _start_old_collection_candidate;
+  static uint NOT_FOUND;
+
+  // After final marking of the old generation, this heuristic will select
+  // a set of candidate regions to be included in subsequent mixed collections.
+  // These members are used to keep track of which candidate regions have yet
+  // to be added to a mixed collection. There is also some special handling
+  // for pinned regions.
+
+  // This points to the first candidate of the current mixed collection. This
+  // is only used for an assertion when handling pinned regions.
+  uint _start_candidate;
+
+  // Pinned regions may not be included in the collection set. Any old regions
+  // which were pinned at the time when old regions were added to the mixed
+  // collection will have their pointers shifted down so that they are at the
+  // front of the line for the next mixed collection.
+  uint _first_pinned_candidate;
+
+  // This is the index of the last region which is above the garbage threshold.
+  // No regions after this will be considered for inclusion in a mixed cset.
   uint _last_old_collection_candidate;
+
+  // This index points to the front of the line of candidates to be added to the
+  // mixed collection set. It is updated as regions are added to the collection set.
   uint _next_old_collection_candidate;
+
+  // This is the last index in the array of old regions which were active at
+  // the end of old final mark.
   uint _last_old_region;
 
   // This can be the 'static' or 'adaptive' heuristic.

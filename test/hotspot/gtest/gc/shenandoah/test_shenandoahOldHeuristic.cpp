@@ -189,4 +189,84 @@ TEST_VM_F(ShenandoahOldHeuristicTest, skip_pinned_regions) {
   // likely to become unpinned by the next mixed collection cycle.
   EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g3);
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 1UL);
+
+  // Simulate another mixed collection after making region 2 unpinned. This time,
+  // the now unpinned region should be added to the collection set.
+  make_unpinned(2);
+  _collection_set->clear();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g2);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
+}
+
+TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_first) {
+  SKIP_IF_NOT_SHENANDOAH();
+
+  // Create three old regions with enough garbage to be collected.
+  size_t g1 = make_garbage_above_threshold(1);
+  size_t g2 = make_garbage_above_threshold(2);
+  size_t g3 = make_garbage_above_threshold(3);
+
+  make_pinned(1);
+  _heuristics->prepare_for_old_collections();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g2 + g3);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 1UL);
+
+  make_unpinned(1);
+  _collection_set->clear();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g1);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
+}
+
+TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_last) {
+  SKIP_IF_NOT_SHENANDOAH();
+
+  // Create three old regions with enough garbage to be collected.
+  size_t g1 = make_garbage_above_threshold(1);
+  size_t g2 = make_garbage_above_threshold(2);
+  size_t g3 = make_garbage_above_threshold(3);
+
+  make_pinned(3);
+  _heuristics->prepare_for_old_collections();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g2);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 1UL);
+
+  make_unpinned(3);
+  _collection_set->clear();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g3);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
+}
+
+TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
+  SKIP_IF_NOT_SHENANDOAH();
+
+  // Create three old regions with enough garbage to be collected.
+  size_t g1 = make_garbage_above_threshold(1);
+  size_t g2 = make_garbage_above_threshold(2);
+  size_t g3 = make_garbage_above_threshold(3);
+
+  make_pinned(1);
+  make_pinned(3);
+  _heuristics->prepare_for_old_collections();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g2);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 2UL);
+
+  make_unpinned(1);
+  make_unpinned(3);
+  _collection_set->clear();
+  _heuristics->prime_collection_set(_collection_set);
+
+  EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g3);
+  EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
