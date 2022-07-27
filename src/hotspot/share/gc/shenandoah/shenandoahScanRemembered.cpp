@@ -148,9 +148,9 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
 
 
 size_t ShenandoahRegionChunkIterator::calc_group_size() {
-  // First group does roughly half of heap, one region at a time.  
+  // First group does roughly half of heap, one region at a time.
   // Second group does roughly one quarter of heap, half of a region at a time, and so on.
-  // Last group does the remnant of heap, one _smallest_chunk_size at a time.  
+  // Last group does the remnant of heap, one _smallest_chunk_size at a time.
   // Round down.
   return _heap->num_regions() / 2;
 }
@@ -237,7 +237,7 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
       assert (last_group_size * chunk_span == unspanned_heap_size, "Chunks must precisely span regions");
       num_chunks += last_group_size;
       return num_chunks;
-    }      
+    }
   }
   return num_chunks;
 }
@@ -281,7 +281,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
 {
   size_t words_in_region = ShenandoahHeapRegion::region_size_words();
   size_t group_span = _first_group_chunk_size * _group_size;
-  
+
   _region_index[0] = 0;
   _group_offset[0] = 0;
   for (size_t i = 1; i < _num_groups; i++) {

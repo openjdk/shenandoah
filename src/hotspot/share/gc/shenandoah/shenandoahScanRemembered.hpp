@@ -1047,7 +1047,6 @@ private:
   // than _smallest_chunk_size, which is 32 KB.
 
   // Under normal circumstances, no configuration needs more than _maximum_groups (default value of 16).
-  // 
 
   static const size_t _maximum_groups = 16;
 

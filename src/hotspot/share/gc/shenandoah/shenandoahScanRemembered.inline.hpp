@@ -848,7 +848,7 @@ inline bool ShenandoahRegionChunkIterator::next(work_chunk *assignment) {
   size_t regions_spanned_by_chunk_offset = offset_of_this_chunk / region_size_words;
   size_t region_index = group_region_index + regions_spanned_by_chunk_offset;
   size_t offset_within_region = offset_of_this_chunk % region_size_words;
-  
+
   assignment->_r = _heap->get_region(region_index);
   assignment->_chunk_offset = offset_within_region;
   assignment->_chunk_size = group_chunk_size;
