@@ -1022,11 +1022,11 @@ public:
   void roots_do(OopIterateClosure* cl);
 };
 
-typedef struct ChunkOfRegion {
+struct ShenandoahRegionChunk {
   ShenandoahHeapRegion *_r;
   size_t _chunk_offset;          // HeapWordSize offset
   size_t _chunk_size;            // HeapWordSize qty
-} work_chunk;
+};
 
 class ShenandoahRegionChunkIterator : public StackObj {
 private:
@@ -1089,7 +1089,7 @@ public:
 
   // Fills in assignment with next chunk of work and returns true iff there is more work.
   // Otherwise, returns false.  This is multi-thread-safe.
-  inline bool next(work_chunk *assignment);
+  inline bool next(struct ShenandoahRegionChunk *assignment);
 
   // This is *not* MT safe. However, in the absence of multithreaded access, it
   // can be used to determine if there is more work to do.

@@ -2556,7 +2556,7 @@ private:
       // After this thread has exhausted its traditional update-refs work, it continues with updating refs within remembered set.
       // The remembered set workload is better balanced between threads, so threads that are "behind" can catch up with other
       // threads during this phase, allowing all threads to work more effectively in parallel.
-      work_chunk assignment;
+      struct ShenandoahRegionChunk assignment;
       bool have_work = _work_chunks->next(&assignment);
       RememberedScanner* scanner = _heap->card_scan();
       while (have_work) {

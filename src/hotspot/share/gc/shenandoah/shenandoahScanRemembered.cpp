@@ -115,7 +115,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
 
   // set up thread local closure for shen ref processor
   _rp->set_mark_closure(worker_id, &cl);
-  work_chunk assignment;
+  struct ShenandoahRegionChunk assignment;
   bool has_work = _work_list->next(&assignment);
   while (has_work) {
 #ifdef ENABLE_REMEMBERED_SET_CANCELLATION
@@ -243,32 +243,8 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
 }
 
 ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(size_t worker_count) :
-    _heap(ShenandoahHeap::heap()),
-    _group_size(calc_group_size()),
-    _first_group_chunk_size(calc_first_group_chunk_size()),
-    _num_groups(calc_num_groups()),
-    _total_chunks(calc_total_chunks()),
-    _index(0)
+    ShenandoahRegionChunkIterator(ShenandoahHeap::heap(), worker_count)
 {
-  assert(_smallest_chunk_size ==
-         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster,
-         "_smallest_chunk_size is not valid");
-
-  size_t words_in_region = ShenandoahHeapRegion::region_size_words();
-  size_t group_span = _first_group_chunk_size * _group_size;
-
-  _region_index[0] = 0;
-  _group_offset[0] = 0;
-  for (size_t i = 1; i < _num_groups; i++) {
-    _region_index[i] = _region_index[i-1] + (_group_offset[i-1] + group_span) / words_in_region;
-    _group_offset[i] = (_group_offset[i-1] + group_span) % words_in_region;
-    group_span /= 2;
-  }
-  // Not necessary, but keeps things tidy
-  for (size_t i = _num_groups; i < _maximum_groups; i++) {
-    _region_index[i] = 0;
-    _group_offset[i] = 0;
-  }
 }
 
 ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* heap, size_t worker_count) :
@@ -279,6 +255,10 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     _total_chunks(calc_total_chunks()),
     _index(0)
 {
+  assert(_smallest_chunk_size ==
+         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster,
+         "_smallest_chunk_size is not valid");
+
   size_t words_in_region = ShenandoahHeapRegion::region_size_words();
   size_t group_span = _first_group_chunk_size * _group_size;
 

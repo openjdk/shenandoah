@@ -821,7 +821,7 @@ inline bool ShenandoahRegionChunkIterator::has_next() const {
   return _index < _total_chunks;
 }
 
-inline bool ShenandoahRegionChunkIterator::next(work_chunk *assignment) {
+inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *assignment) {
   if (_index > _total_chunks) {
     return false;
   }
