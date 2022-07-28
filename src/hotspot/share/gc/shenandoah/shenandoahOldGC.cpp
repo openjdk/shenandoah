@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. or its affiliates. All rights reserved.
+ * Copyright (c) 2022, Amazon.com, Inc. or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,12 +39,6 @@
 
 ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption) :
     ShenandoahConcurrentGC(generation, false), _allow_preemption(allow_preemption) {
-}
-
-void ShenandoahOldGC::start_old_evacuations() {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
-  old_heuristics->start_old_evacuations();
 }
 
 // Final mark for old-gen is different than for young or old, so we
@@ -151,9 +145,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // for any young collections (or allocation failures) that interrupt the old
   // collection.
   vmop_entry_final_roots(false);
-
-  // Prepare for old evacuations (actual evacuations will happen on subsequent young collects).
-  start_old_evacuations();
 
   return true;
 }

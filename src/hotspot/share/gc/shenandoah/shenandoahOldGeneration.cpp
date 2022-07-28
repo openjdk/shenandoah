@@ -219,7 +219,14 @@ void ShenandoahOldGeneration::prepare_gc() {
   entry_coalesce_and_fill();
 
   // Now that we have made the old generation parseable, it is safe to reset the mark bitmap.
-  ShenandoahGeneration::prepare_gc();
+  {
+    static const char* msg = "Concurrent reset (OLD)";
+    ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_reset_old);
+    ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
+                                ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
+                                msg);
+    ShenandoahGeneration::prepare_gc();
+  }
 }
 
 bool ShenandoahOldGeneration::entry_coalesce_and_fill() {

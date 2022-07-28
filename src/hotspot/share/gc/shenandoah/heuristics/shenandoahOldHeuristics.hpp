@@ -87,10 +87,6 @@ public:
   // Return true iff the collection set is primed with at least one old-gen region.
   bool prime_collection_set(ShenandoahCollectionSet* set);
 
-  // Having coalesced and filled all old-gen heap regions that are not part of the old-gen collection set, begin
-  // evacuating the collection set.
-  void start_old_evacuations();
-
   // How many old-collection candidates have not yet been processed?
   uint unprocessed_old_collection_candidates();
 

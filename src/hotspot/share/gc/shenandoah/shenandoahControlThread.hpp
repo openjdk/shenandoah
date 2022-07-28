@@ -183,6 +183,9 @@ public:
  private:
   static const char* gc_mode_name(GCMode mode);
   void notify_control_thread();
+
+  void service_concurrent_cycle(const ShenandoahHeap* heap, ShenandoahGeneration* generation, GCCause::Cause &cause,
+                                bool do_old_gc_bootstrap);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONTROLTHREAD_HPP

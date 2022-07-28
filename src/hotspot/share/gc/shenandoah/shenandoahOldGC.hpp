@@ -41,7 +41,6 @@ class ShenandoahOldGC : public ShenandoahConcurrentGC {
 
  private:
 
-  void start_old_evacuations();
   ShenandoahSharedFlag& _allow_preemption;
 };
 

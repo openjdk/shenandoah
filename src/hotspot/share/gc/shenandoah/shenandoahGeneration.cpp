@@ -61,7 +61,7 @@ class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
   ShenandoahMarkingContext* const _ctx;
  public:
   ShenandoahResetBitmapTask() :
-     _heap(ShenandoahHeap::heap()),
+    _heap(ShenandoahHeap::heap()),
     _ctx(_heap->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* region) {

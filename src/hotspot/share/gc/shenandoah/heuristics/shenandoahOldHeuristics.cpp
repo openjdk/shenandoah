@@ -31,6 +31,7 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "utilities/quickSort.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 
 uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
@@ -110,12 +111,15 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
                  byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes),
                  byte_size_in_proper_unit(collected_old_bytes), proper_unit_for_byte_size(collected_old_bytes));
   }
+
+  if (unprocessed_old_collection_candidates() == 0) {
+    ((ShenandoahOldGeneration*)_generation)->transition_to(ShenandoahOldGeneration::IDLE);
+  }
+
   return (included_old_regions > 0);
 }
 
 void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
-
-
   // Find the leftmost unpinned region. The region in this slot will have been
   // added to the cset, so we can use it to hold pointers to regions that were
   // pinned when the cset was chosen.
@@ -248,6 +252,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t candidates_garbage = 0;
   _last_old_region = (uint)cand_idx;
   _last_old_collection_candidate = (uint)cand_idx;
+  _next_old_collection_candidate = 0;
 
   for (size_t i = 0; i < cand_idx; i++) {
     candidates_garbage += candidates[i]._garbage;
@@ -267,11 +272,12 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
                _last_old_collection_candidate,
                byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
                byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage));
-}
 
-void ShenandoahOldHeuristics::start_old_evacuations() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  _next_old_collection_candidate = 0;
+  if (unprocessed_old_collection_candidates() == 0) {
+    ((ShenandoahOldGeneration*)_generation)->transition_to(ShenandoahOldGeneration::IDLE);
+  } else {
+    ((ShenandoahOldGeneration*)_generation)->transition_to(ShenandoahOldGeneration::WAITING);
+  }
 }
 
 uint ShenandoahOldHeuristics::last_old_collection_candidate_index() {
