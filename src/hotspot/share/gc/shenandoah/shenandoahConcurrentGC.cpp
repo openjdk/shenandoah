@@ -638,7 +638,6 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
   _generation->set_concurrent_mark_in_progress(true);
 
-  // XXX: What does this do?
   start_mark();
 
   if (_do_old_gc_bootstrap) {

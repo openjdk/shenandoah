@@ -47,7 +47,9 @@ void ShenandoahMark::end_mark() {
   // Tell the sweeper that we finished a marking cycle.
   // Unlike other GCs, we do not arm the nmethods
   // when marking terminates.
-  Continuations::on_gc_marking_cycle_finish();
+  if (!ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress()) {
+    Continuations::on_gc_marking_cycle_finish();
+  }
 }
 
 ShenandoahMarkRefsSuperClosure::ShenandoahMarkRefsSuperClosure(ShenandoahObjToScanQueue* q,  ShenandoahReferenceProcessor* rp, ShenandoahObjToScanQueue* old_q) :

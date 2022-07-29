@@ -284,7 +284,6 @@ void ShenandoahConcurrentMark::finish_mark() {
   _generation->set_concurrent_mark_in_progress(false);
   _generation->set_mark_complete();
 
-  //XXX: What is this?
   end_mark();
 }
 
