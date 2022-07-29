@@ -255,12 +255,12 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   _next_old_collection_candidate = 0;
 
   for (size_t i = 0; i < cand_idx; i++) {
-    candidates_garbage += candidates[i]._garbage;
     if (candidates[i]._garbage < garbage_threshold) {
       // Candidates are sorted in decreasing order of garbage, so no regions after this will be above the threshold
       _last_old_collection_candidate = (uint)i;
       break;
     }
+    candidates_garbage += candidates[i]._garbage;
   }
 
   // Note that we do not coalesce and fill occupied humongous regions
@@ -317,12 +317,13 @@ uint ShenandoahOldHeuristics::last_old_region_index() {
   return _last_old_region;
 }
 
-void ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
+unsigned int ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
   uint end = _last_old_region;
   uint index = _next_old_collection_candidate;
   while (index < end) {
     *buffer++ = _region_data[index++]._region;
   }
+  return _last_old_region - _next_old_collection_candidate;
 }
 
 void ShenandoahOldHeuristics::abandon_collection_candidates() {

@@ -109,7 +109,7 @@ public:
   // mark to require their unmarked objects to be coalesced and filled.  The buffer array must have at least
   // last_old_region_index() entries, or memory may be corrupted when this function overwrites the
   // end of the array.
-  void get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
+  unsigned int get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
 
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being
   // held by this heuristic for supplying mixed collections.
