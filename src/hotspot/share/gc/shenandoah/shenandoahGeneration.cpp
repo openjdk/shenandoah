@@ -446,6 +446,12 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       old_evacuated_committed = old_evacuation_reserve;
     } else if (old_evacuated_committed < old_evacuation_reserve) {
       // This may happen if the old-gen collection consumes less than full budget.
+
+      // If we shrink old_evacuation_reserve by more than a region size, we can expand regions_available_to_loan
+      size_t old_evac_regions_unused =
+        ((old_evacuation_reserve - old_evacuated_committed) + region_size_bytes - 1) / region_size_bytes;
+      regions_available_to_loan += old_evac_regions_unused;
+
       old_evacuation_reserve = old_evacuated_committed;
       heap->set_old_evac_reserve(old_evacuation_reserve);
     }
@@ -504,8 +510,9 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     // "all the rest" of old-gen memory into the promotion reserve, we'll have nothing left to loan to young-gen
     // during the evac and update phases of GC.  So we "limit" the sizes of the promotion budget to be the smaller of:
     //
-    //  1. old_gen->available - (old_evacuation_committed + old_bytes_loaned_for_young_evac + consumed_by_advance_promotion)
-    //  2. young bytes reserved for evacuation
+    //  1. old_gen->available - (old_evacuation_committed + old_bytes_loaned_for_young_evac + consumed_by_advance_promotion
+    //                           + old_bytes_[already]_ reserved_for_alloc_supplement)
+    //  2. young bytes reserved for evacuation (we can't promote more than young is evacuating)
 
     assert(old_available > old_evacuated_committed, "Cannot evacuate more than available");
     assert(old_available > old_evacuated_committed + old_bytes_loaned_for_young_evac,
@@ -516,8 +523,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                                           consumed_by_advance_promotion + old_bytes_reserved_for_alloc_supplement),
            "Cannot loan for alloc supplement more than available");
 
-    size_t promotion_reserve = old_available - (old_evacuated_committed + consumed_by_advance_promotion +
-                                                old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement);
+    size_t promotion_reserve = regions_available_to_loan * region_size_bytes;
+    assert(promotion_reserve <= old_available - (old_evacuated_committed + consumed_by_advance_promotion +
+                                                 old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement),
+           "Byte reserves do not match region reserves");
 
     // We experimented with constraining promoted_reserve to be no larger than 4 times the size of previously_promoted,
     // but this constraint was too limiting, resulting in failure of legitimate promotions.  This was tried before we
@@ -552,6 +561,11 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
     promotion_reserve += consumed_by_advance_promotion;
     heap->set_promoted_reserve(promotion_reserve);
+
+    size_t promotion_regions = (promotion_reserve + region_size_bytes - 1) / region_size_bytes;
+    assert(regions_available_to_loan >= promotion_regions, "Promoting more regions than memory is available");
+    regions_available_to_loan -= promotion_regions;
+
     heap->reset_promoted_expended();
     if (collection_set->get_old_bytes_reserved_for_evacuation() == 0) {
       // Setting old evacuation reserve to zero denotes that there is no old-gen evacuation in this pass.
@@ -615,7 +629,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                   byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
                   byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available));
 
-    assert(old_available > old_evacuation_reserve + promotion_reserve + old_bytes_loaned_for_young_evac + allocation_supplement,
+    assert(old_available >= old_evacuation_reserve + promotion_reserve + old_bytes_loaned_for_young_evac + allocation_supplement,
            "old_available must be larger than accumulated reserves");
 
     size_t regular_promotion = promotion_reserve - consumed_by_advance_promotion;
