@@ -213,73 +213,6 @@ void ShenandoahGeneration::prepare_gc() {
   parallel_heap_region_iterate(&cl);
 }
 
-void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahCollectionSet* collection_set = heap->collection_set();
-  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-
-  assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
-  {
-    ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
-                            ShenandoahPhaseTimings::degen_gc_final_update_region_states);
-    ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
-    parallel_heap_region_iterate(&cl);
-
-    if (generation_mode() == YOUNG) {
-      // We always need to update the watermark for old regions. If there
-      // are mixed collections pending, we also need to synchronize the
-      // pinned status for old regions. Since we are already visiting every
-      // old region here, go ahead and sync the pin status too.
-      ShenandoahFinalMarkUpdateRegionStateClosure old_cl(nullptr);
-      heap->old_generation()->parallel_heap_region_iterate(&old_cl);
-    }
-
-    heap->assert_pinned_region_status();
-  }
-
-  {
-    size_t old_regions_loaned_for_young_evac, regions_available_to_loan, minimum_evacuation_reserve, consumed_by_advance_promotion;
-    bool* preselected_regions = nullptr;
-    if (heap->mode()->is_generational()) {
-      preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
-      for (unsigned int i = 0; i < heap->num_regions(); i++) {
-        preselected_regions[i] = false;
-      }
-    }
-
-    ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
-                            ShenandoahPhaseTimings::degen_gc_choose_cset);
-
-    ShenandoahHeapLocker locker(heap->lock());
-    collection_set->clear();
-    // TODO: young_available can include available (between top() and end()) within each young region that is not
-    // part of the collection set.  Making this memory available to the young_evacuation_reserve allows a larger
-    // young collection set to be chosen when available memory is under extreme pressure.  Implementing this "improvement"
-    // is tricky, because the incremental construction of the collection set actually changes the amount of memory
-    // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
-    // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
-    // GC is evacuating and updating references.
-
-    // Budgeting parameters to compute_evacuation_budgets are passed by reference.
-    compute_evacuation_budgets(heap, preselected_regions, collection_set, old_regions_loaned_for_young_evac,
-                               regions_available_to_loan, minimum_evacuation_reserve, consumed_by_advance_promotion);
-    _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
-    if (!collection_set->is_empty()) {
-      adjust_evacuation_budgets(heap, collection_set, old_regions_loaned_for_young_evac, regions_available_to_loan,
-                                minimum_evacuation_reserve, consumed_by_advance_promotion);
-    }
-    // otherwise, this is an abbreviated cycle and we make no use of evacuation budgets.
-  }
-
-  {
-    ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
-                            ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
-    ShenandoahHeapLocker locker(heap->lock());
-    heap->free_set()->rebuild();
-  }
-}
-
 void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
                                                       ShenandoahCollectionSet* collection_set,
                                                       size_t &old_regions_loaned_for_young_evac, size_t &regions_available_to_loan,
@@ -697,6 +630,73 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                        byte_size_in_proper_unit(excess), proper_unit_for_byte_size(excess));
   }
   // else, not generational: no evacuation budget adjustments required
+}
+
+void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahCollectionSet* collection_set = heap->collection_set();
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+
+  assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
+  assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
+  {
+    ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
+                            ShenandoahPhaseTimings::degen_gc_final_update_region_states);
+    ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
+    parallel_heap_region_iterate(&cl);
+
+    if (generation_mode() == YOUNG) {
+      // We always need to update the watermark for old regions. If there
+      // are mixed collections pending, we also need to synchronize the
+      // pinned status for old regions. Since we are already visiting every
+      // old region here, go ahead and sync the pin status too.
+      ShenandoahFinalMarkUpdateRegionStateClosure old_cl(nullptr);
+      heap->old_generation()->parallel_heap_region_iterate(&old_cl);
+    }
+
+    heap->assert_pinned_region_status();
+  }
+
+  {
+    size_t old_regions_loaned_for_young_evac, regions_available_to_loan, minimum_evacuation_reserve, consumed_by_advance_promotion;
+    bool* preselected_regions = nullptr;
+    if (heap->mode()->is_generational()) {
+      preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
+      for (unsigned int i = 0; i < heap->num_regions(); i++) {
+        preselected_regions[i] = false;
+      }
+    }
+
+    ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
+                            ShenandoahPhaseTimings::degen_gc_choose_cset);
+
+    ShenandoahHeapLocker locker(heap->lock());
+    collection_set->clear();
+    // TODO: young_available can include available (between top() and end()) within each young region that is not
+    // part of the collection set.  Making this memory available to the young_evacuation_reserve allows a larger
+    // young collection set to be chosen when available memory is under extreme pressure.  Implementing this "improvement"
+    // is tricky, because the incremental construction of the collection set actually changes the amount of memory
+    // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
+    // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
+    // GC is evacuating and updating references.
+
+    // Budgeting parameters to compute_evacuation_budgets are passed by reference.
+    compute_evacuation_budgets(heap, preselected_regions, collection_set, old_regions_loaned_for_young_evac,
+                               regions_available_to_loan, minimum_evacuation_reserve, consumed_by_advance_promotion);
+    _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
+    if (!collection_set->is_empty()) {
+      adjust_evacuation_budgets(heap, collection_set, old_regions_loaned_for_young_evac, regions_available_to_loan,
+                                minimum_evacuation_reserve, consumed_by_advance_promotion);
+    }
+    // otherwise, this is an abbreviated cycle and we make no use of evacuation budgets.
+  }
+
+  {
+    ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
+                            ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
+    ShenandoahHeapLocker locker(heap->lock());
+    heap->free_set()->rebuild();
+  }
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {

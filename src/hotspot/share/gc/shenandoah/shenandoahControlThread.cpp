@@ -543,8 +543,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
 
 bool ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* generation, GCCause::Cause cause) {
 
-  assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress(),
-         "Old mark or mixed-evac prep should be in progress");
+  assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress(), "Old mark should be in progress");
   log_debug(gc)("Resuming old generation with " UINT32_FORMAT " marking tasks queued.", generation->task_queues()->tasks());
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -982,7 +981,7 @@ const char* ShenandoahControlThread::gc_mode_name(ShenandoahControlThread::GCMod
     case concurrent_normal: return "normal";
     case stw_degenerated:   return "degenerated";
     case stw_full:          return "full";
-    case servicing_old:       return "old mark";
+    case servicing_old:     return "old";
     default:                return "unknown";
   }
 }
