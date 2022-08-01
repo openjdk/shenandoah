@@ -148,10 +148,13 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
 
 
 size_t ShenandoahRegionChunkIterator::calc_group_size() {
-  // First group does roughly half of heap, one region at a time.
-  // Second group does roughly one quarter of heap, half of a region at a time, and so on.
-  // Last group does the remnant of heap, one _smallest_chunk_size at a time.
-  // Round down.
+  // The group size s calculated from the number of regions.  Every group except the last processes the same number of chunks.
+  // The last group processes however many chunks are required to finish the total scanning effort.  The chunk sizes are
+  // different for each group.  The intention is that the first group processes roughly half of the heap, the second processes
+  // a quarter of the remaining heap, the third processes an eight of what remains and so on.  The smallest chunk size
+  // is represented by _smallest_chunk_size.  We do not divide work any smaller than this.  
+  //
+  // Note that N/2 + N/4 + N/8 + N/16 + ...  sums to N if expanded to infinite terms.
   return _heap->num_regions() / 2;
 }
 
@@ -203,7 +206,7 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
   size_t region_size_words = ShenandoahHeapRegion::region_size_words();
   size_t unspanned_heap_size = _heap->num_regions() * region_size_words;
   size_t num_chunks = 0;
-  size_t num_groups = 0;
+  size_t spanned_groups = 0;
   size_t cumulative_group_span = 0;
   size_t current_group_span = _first_group_chunk_size * _group_size;
   size_t smallest_group_span = _smallest_chunk_size * _group_size;
@@ -211,9 +214,12 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
     if (current_group_span <= unspanned_heap_size) {
       unspanned_heap_size -= current_group_span;
       num_chunks += _group_size;
-      num_groups++;
+      spanned_groups++;
 
-      if (num_groups >= _num_groups) {
+      // _num_groups is the number of groups required to span the configured heap size.  We are not allowed
+      // to change the number of groups.  The last group is responsible for spanning all chunks not spanned
+      // by previously processed groups.
+      if (spanned_groups >= _num_groups) {
         // The last group has more than _group_size entries.
         size_t chunk_span = current_group_span / _group_size;
         size_t extra_chunks = unspanned_heap_size / chunk_span;
