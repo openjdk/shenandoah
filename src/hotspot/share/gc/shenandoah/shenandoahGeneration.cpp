@@ -413,6 +413,8 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   }
 }
 
+#undef KELVIN_VERBOSE
+
 // Having chosen the collection set, adjust the budgets for generatioal mode based on its composition.  Note
 // that young_generation->available() now knows about recently discovered immediate garbage.
 void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
@@ -430,6 +432,13 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     size_t old_available = old_generation->available();
     size_t young_available = young_generation->available() + immediate_garbage;
 
+#ifdef KELVIN_VERBOSE
+    printf("adjust_evacuation_budget(old_available: " SIZE_FORMAT ", old_regions_loaned_for_young_evac: " SIZE_FORMAT
+           ", regions_available_to_loan: " SIZE_FORMAT ", minimum_evac_reserve: " SIZE_FORMAT
+           ", consumed_by_advance_promotion: " SIZE_FORMAT "\n",
+           old_available, old_regions_loaned_for_young_evac, regions_available_to_loan, minimum_evacuation_reserve,
+           consumed_by_advance_promotion);
+#endif
     assert(consumed_by_advance_promotion >= collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste,
            "Advance promotion should be at least young_bytes_to_be_promoted * ShenandoahEvacWaste");
 
@@ -438,6 +447,12 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
            consumed_by_advance_promotion, (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
 
     collection_set->abandon_preselected();
+
+#ifdef KELVIN_VERBOSE
+    printf("old_evacuated_commited: " SIZE_FORMAT ", old_evacuation_reserve: " SIZE_FORMAT "\n",
+           old_evacuated_committed, old_evacuation_reserve);
+#endif
+
     if (old_evacuated_committed > old_evacuation_reserve) {
       // This should only happen due to round-off errors when enforcing ShenandoahEvacWaste
       assert(old_evacuated_committed <= (33 * old_evacuation_reserve) / 32,
@@ -451,6 +466,11 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       size_t old_evac_regions_unused =
         ((old_evacuation_reserve - old_evacuated_committed) + region_size_bytes - 1) / region_size_bytes;
       regions_available_to_loan += old_evac_regions_unused;
+
+#ifdef KELVIN_VERBOSE
+      printf("adding " SIZE_FORMAT " unused old_evac_regions to yield regions_available_to_loan: " SIZE_FORMAT "\n",
+             old_evac_regions_unused, regions_available_to_loan);
+#endif
 
       old_evacuation_reserve = old_evacuated_committed;
       heap->set_old_evac_reserve(old_evacuation_reserve);
@@ -475,13 +495,28 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
       // Undo the previous loan
       regions_available_to_loan += old_regions_loaned_for_young_evac;
+#ifdef KELVIN_VERBOSE
+      printf("Undoing young_evac loan of " SIZE_FORMAT " regions, yielding regions_available_to_loan: " SIZE_FORMAT "\n",
+             old_regions_loaned_for_young_evac, regions_available_to_loan);
+#endif
+
       old_regions_loaned_for_young_evac = revised_loan_for_young_evacuation;
+
       // And make a new loan
       assert(regions_available_to_loan > old_regions_loaned_for_young_evac, "Cannot loan regions that we do not have");
-      regions_available_to_loan -= old_regions_loaned_for_young_evac;
+      regions_available_to_loan -= revised_loan_for_young_evacuation;
+
+#ifdef KELVIN_VERBOSE
+      printf("Making new young_evac loan of " SIZE_FORMAT " regions, yielding regions_available_to_loan: " SIZE_FORMAT "\n",
+             old_regions_loaned_for_young_evac, regions_available_to_loan);
+#endif
     } else {
       // Undo the prevous loan
       regions_available_to_loan += old_regions_loaned_for_young_evac;
+#ifdef KELVIN_VERBOSE
+      printf("Undoing young_evac loan of " SIZE_FORMAT " regions, yielding regions_available_to_loan: " SIZE_FORMAT " and no replacement loan\n",
+             old_regions_loaned_for_young_evac, regions_available_to_loan);
+#endif
       old_regions_loaned_for_young_evac = 0;
     }
 
@@ -503,6 +538,14 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       regions_available_to_loan -= excess_regions;
       old_bytes_reserved_for_alloc_supplement = excess_regions * region_size_bytes;
       old_regions_reserved_for_alloc_supplement = excess_regions;
+
+#ifdef KELVIN_VERBOSE
+      printf("To assure minimum_evacuation_reserve, setting aside " SIZE_FORMAT
+             " as old_regions_reserved_for_alloc_supplement, old_regions_reserved_for_alloc_supplement: " SIZE_FORMAT "\n",
+             old_regions_reserved_for_alloc_supplement, regions_available_to_loan);
+#endif
+
+
     }
 
     // Limit promoted_reserve so that we can set aside memory to be loaned from old-gen to young-gen.  This
@@ -524,6 +567,18 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
            "Cannot loan for alloc supplement more than available");
 
     size_t promotion_reserve = regions_available_to_loan * region_size_bytes;
+
+#ifdef KELVIN_VERBOSE
+    size_t uncommitted_old_available = old_available - (old_evacuated_committed + consumed_by_advance_promotion +
+                                                        old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement);
+
+    printf("promotion_reserve calculated as: " SIZE_FORMAT ", old_available: " SIZE_FORMAT ", old_evacuated_committed: "
+           SIZE_FORMAT ", consumed_by_advance_promotion: " SIZE_FORMAT ", old_bytes_loaned_for_young_evac: " SIZE_FORMAT
+           ", old_bytes_reserved_for_alloc_supplement: " SIZE_FORMAT ", uncommitted old available: " SIZE_FORMAT "\n",
+           promotion_reserve, old_available, old_evacuated_committed, consumed_by_advance_promotion,
+           old_bytes_loaned_for_young_evac, old_bytes_reserved_for_alloc_supplement, uncommitted_old_available);
+#endif
+
     assert(promotion_reserve <= old_available - (old_evacuated_committed + consumed_by_advance_promotion +
                                                  old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement),
            "Byte reserves do not match region reserves");
@@ -548,6 +603,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       // collection set, including anticipated waste.  There's no benefit in using a larger promotion_reserve.
       // young_evacuation_reserve_used does not include live memory within tenure-aged regions.
       promotion_reserve = young_evacuated_reserve_used;
+#ifdef KELVIN_VERBOSE
+      printf("Shrinking promotion_reserve to match young_evacuated_reserve_used: " SIZE_FORMAT "\n",
+             promotion_reserve);
+#endif
     }
 
     assert(old_available >= (promotion_reserve + old_evacuated_committed + old_bytes_loaned_for_young_evac +
@@ -560,11 +619,20 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                   old_regions_loaned_for_young_evac * region_size_bytes, old_bytes_reserved_for_alloc_supplement);
 
     promotion_reserve += consumed_by_advance_promotion;
+
+#ifdef KELVIN_VERBOSE
+    printf("After adding in consumed_by_advance_promotion, final promotion_reserve: " SIZE_FORMAT "\n",
+           promotion_reserve);
+#endif
     heap->set_promoted_reserve(promotion_reserve);
 
     size_t promotion_regions = (promotion_reserve + region_size_bytes - 1) / region_size_bytes;
     assert(regions_available_to_loan >= promotion_regions, "Promoting more regions than memory is available");
     regions_available_to_loan -= promotion_regions;
+#ifdef KELVIN_VERBOSE
+    printf("After rounding up, promotion_regions: " SIZE_FORMAT ", regions_available_to_loan: " SIZE_FORMAT "\n",
+           promotion_regions, regions_available_to_loan);
+#endif
 
     heap->reset_promoted_expended();
     if (collection_set->get_old_bytes_reserved_for_evacuation() == 0) {
@@ -594,6 +662,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     size_t young_regions_evacuated = collection_set->get_young_region_count();
     size_t regions_for_runway = 0;
     size_t already_loaned_regions = old_regions_loaned_for_young_evac + old_regions_reserved_for_alloc_supplement;
+#ifdef KELVIN_VERBOSE
+    printf("young_regions_evacuated: " SIZE_FORMAT ", already_loaned_regions: " SIZE_FORMAT "\n",
+           young_regions_evacuated, already_loaned_regions);
+#endif
     if (already_loaned_regions == 0) {
       regions_for_runway = young_regions_evacuated;
     } else if (young_regions_evacuated > already_loaned_regions) {
@@ -601,6 +673,9 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     } else {
       regions_for_runway = 0;
     }
+#ifdef KELVIN_VERBOSE
+    printf("regions_for_runway: " SIZE_FORMAT "\n", regions_for_runway);
+#endif
 
     if (regions_available_to_loan > regions_for_runway) {
       regions_available_to_loan -= regions_for_runway;
@@ -609,7 +684,17 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       regions_available_to_loan = 0;
     }
 
+#ifdef KELVIN_VERBOSE
+    printf("After adjustments, regions_for_runway: " SIZE_FORMAT ", regions_available_to_loan: " SIZE_FORMAT "\n",
+           regions_for_runway, regions_available_to_loan);
+#endif
+
     size_t allocation_supplement = regions_for_runway * region_size_bytes + old_bytes_reserved_for_alloc_supplement;
+
+#ifdef KELVIN_VERBOSE
+    printf("Final alloc supplement: " SIZE_FORMAT "\n", allocation_supplement);
+#endif
+
     heap->set_alloc_supplement_reserve(allocation_supplement);
 
     // TODO: young_available, which feeds into alloc_budget_evac_and_update is lacking memory available within
@@ -628,6 +713,13 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                   byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
                   byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
                   byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available));
+
+#ifdef KELVIN_VERBOSE
+    printf("Before final assertion: old_available " SIZE_FORMAT ", old_allocation_reserve: " SIZE_FORMAT
+           ", promotion_reserve: " SIZE_FORMAT ", old_bytes_loaned_for_young_evac: " SIZE_FORMAT
+           ", allocation_supplement: " SIZE_FORMAT "\n",
+           old_available, old_evacuation_reserve, promotion_reserve, old_bytes_loaned_for_young_evac, allocation_supplement);
+#endif
 
     assert(old_available >= old_evacuation_reserve + promotion_reserve + old_bytes_loaned_for_young_evac + allocation_supplement,
            "old_available must be larger than accumulated reserves");
