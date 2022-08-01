@@ -146,13 +146,12 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
   }
 }
 
-
 size_t ShenandoahRegionChunkIterator::calc_group_size() {
   // The group size s calculated from the number of regions.  Every group except the last processes the same number of chunks.
   // The last group processes however many chunks are required to finish the total scanning effort.  The chunk sizes are
   // different for each group.  The intention is that the first group processes roughly half of the heap, the second processes
   // a quarter of the remaining heap, the third processes an eight of what remains and so on.  The smallest chunk size
-  // is represented by _smallest_chunk_size.  We do not divide work any smaller than this.  
+  // is represented by _smallest_chunk_size.  We do not divide work any smaller than this.
   //
   // Note that N/2 + N/4 + N/8 + N/16 + ...  sums to N if expanded to infinite terms.
   return _heap->num_regions() / 2;
