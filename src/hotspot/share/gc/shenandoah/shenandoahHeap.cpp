@@ -641,6 +641,12 @@ bool ShenandoahHeap::doing_mixed_evacuations() {
   return old_heuristics()->unprocessed_old_collection_candidates() > 0;
 }
 
+bool ShenandoahHeap::is_old_bitmap_stable() const {
+  ShenandoahOldGeneration::State state = ((ShenandoahOldGeneration*) old_generation())->state();
+  return state != ShenandoahOldGeneration::MARKING
+      && state != ShenandoahOldGeneration::BOOTSTRAPPING;
+}
+
 bool ShenandoahHeap::is_gc_generation_young() const {
   return _gc_generation != NULL && _gc_generation->generation_mode() == YOUNG;
 }

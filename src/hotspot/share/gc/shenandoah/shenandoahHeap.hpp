@@ -171,7 +171,7 @@ public:
   ShenandoahOldHeuristics* old_heuristics();
 
   bool doing_mixed_evacuations();
-
+  bool is_old_bitmap_stable() const;
   bool is_gc_generation_young() const;
 
 // ---------- Initialization, termination, identification, printing routines

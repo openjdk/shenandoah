@@ -266,7 +266,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   size_t collectable_garbage = immediate_garbage + candidates_garbage;
-  log_info(gc)("Old-Gen Collectable Regions: " UINT32_FORMAT
+  log_info(gc)("Old-Gen Collectable Regions: " UINT32_FORMAT ", "
                "Collectable Garbage: " SIZE_FORMAT "%s, "
                "Immediate Garbage: " SIZE_FORMAT "%s",
                _last_old_collection_candidate,
