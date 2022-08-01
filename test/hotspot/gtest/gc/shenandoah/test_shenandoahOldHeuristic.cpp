@@ -104,7 +104,7 @@ class ShenandoahOldHeuristicTest : public ::testing::Test {
 
 TEST_VM_F(ShenandoahOldHeuristicTest, select_no_old_regions) {
   SKIP_IF_NOT_SHENANDOAH();
-  
+
   _heuristics->prepare_for_old_collections();
   EXPECT_EQ(0U, _heuristics->last_old_region_index());
   EXPECT_EQ(0U, _heuristics->last_old_collection_candidate_index());
