@@ -25,17 +25,16 @@
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
-#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
-#include "utilities/quickSort.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
+#include "utilities/quickSort.hpp"
 
 uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
-ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
+ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
   ShenandoahHeuristics(generation),
   _start_candidate(0),
   _first_pinned_candidate(NOT_FOUND),
@@ -43,7 +42,8 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahGeneration* generatio
   _next_old_collection_candidate(0),
   _last_old_region(0),
   _trigger_heuristic(trigger_heuristic),
-  _promotion_failed(false)
+  _promotion_failed(false),
+  _old_generation(generation)
 {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
 }
@@ -65,7 +65,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
-  size_t old_evacuation_budget = (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste);
+  size_t old_evacuation_budget = (size_t) ((double) heap->get_old_evac_reserve() / ShenandoahEvacWaste);
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
   size_t lost_evacuation_capacity = 0;
   log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
@@ -113,7 +113,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
 
   if (unprocessed_old_collection_candidates() == 0) {
-    ((ShenandoahOldGeneration*)_generation)->transition_to(ShenandoahOldGeneration::IDLE);
+    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   }
 
   return (included_old_regions > 0);
@@ -274,9 +274,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
                byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage));
 
   if (unprocessed_old_collection_candidates() == 0) {
-    ((ShenandoahOldGeneration*)_generation)->transition_to(ShenandoahOldGeneration::IDLE);
+    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   } else {
-    ((ShenandoahOldGeneration*)_generation)->transition_to(ShenandoahOldGeneration::WAITING);
+    _old_generation->transition_to(ShenandoahOldGeneration::WAITING);
   }
 }
 
@@ -308,12 +308,10 @@ ShenandoahHeapRegion* ShenandoahOldHeuristics::next_old_collection_candidate() {
 }
 
 void ShenandoahOldHeuristics::consume_old_collection_candidate() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   _next_old_collection_candidate++;
 }
 
 uint ShenandoahOldHeuristics::last_old_region_index() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   return _last_old_region;
 }
 

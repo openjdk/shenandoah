@@ -29,8 +29,8 @@
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 
 class ShenandoahCollectionSet;
-class ShenandoahGeneration;
 class ShenandoahHeapRegion;
+class ShenandoahOldGeneration;
 
 class ShenandoahOldHeuristics : public ShenandoahHeuristics {
 
@@ -72,12 +72,15 @@ private:
   // Flag is set when promotion failure is detected (by gc thread), cleared when old generation collection begins (by control thread)
   volatile bool _promotion_failed;
 
+  // Keep a pointer to our generation that we can use without down casting a protected member from the base class.
+  ShenandoahOldGeneration* _old_generation;
+
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
                                                      size_t free) override;
 
 public:
-  ShenandoahOldHeuristics(ShenandoahGeneration* generation, ShenandoahHeuristics* trigger_heuristic);
+  ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahHeuristics* trigger_heuristic);
 
   virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) override;
 

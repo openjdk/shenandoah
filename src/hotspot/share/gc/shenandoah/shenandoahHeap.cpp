@@ -642,7 +642,7 @@ bool ShenandoahHeap::doing_mixed_evacuations() {
 }
 
 bool ShenandoahHeap::is_old_bitmap_stable() const {
-  ShenandoahOldGeneration::State state = ((ShenandoahOldGeneration*) old_generation())->state();
+  ShenandoahOldGeneration::State state = _old_generation->state();
   return state != ShenandoahOldGeneration::MARKING
       && state != ShenandoahOldGeneration::BOOTSTRAPPING;
 }
@@ -1032,7 +1032,7 @@ void ShenandoahHeap::cancel_old_gc() {
   assert(_old_generation != NULL, "Should only have mixed collections in generation mode.");
   log_info(gc)("Terminating old gc cycle.");
 
-  ((ShenandoahOldGeneration*) _old_generation)->transition_to(ShenandoahOldGeneration::IDLE);
+  _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   // Stop marking
   old_generation()->cancel_marking();
   // Stop coalescing undead objects
@@ -2879,7 +2879,7 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
 }
 
 void ShenandoahHeap::transfer_old_pointers_from_satb() {
-  ((ShenandoahOldGeneration*) _old_generation)->transfer_pointers_from_satb();
+  _old_generation->transfer_pointers_from_satb();
 }
 
 template<>

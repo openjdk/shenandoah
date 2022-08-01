@@ -473,7 +473,7 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
 
 void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap* heap, GCCause::Cause &cause) {
 
-  ShenandoahOldGeneration* old_generation = (ShenandoahOldGeneration*)heap->old_generation();
+  ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
 
   GCIdMark gc_id_mark;

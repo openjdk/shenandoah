@@ -52,6 +52,7 @@ class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahGeneration;
 class ShenandoahYoungGeneration;
+class ShenandoahOldGeneration;
 class ShenandoahHeuristics;
 class ShenandoahOldHeuristics;
 class ShenandoahMarkingContext;
@@ -520,7 +521,7 @@ public:
 private:
   ShenandoahYoungGeneration* _young_generation;
   ShenandoahGeneration*      _global_generation;
-  ShenandoahGeneration*      _old_generation;
+  ShenandoahOldGeneration*   _old_generation;
 
   ShenandoahControlThread*   _control_thread;
   ShenandoahRegulatorThread* _regulator_thread;
@@ -538,7 +539,7 @@ private:
 public:
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
-  ShenandoahGeneration*      old_generation()    const { return _old_generation;    }
+  ShenandoahOldGeneration*   old_generation()    const { return _old_generation;    }
   ShenandoahGeneration*      generation_for(ShenandoahRegionAffiliation affiliation) const;
 
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }

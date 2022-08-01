@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
@@ -478,7 +479,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                                                      size_t minimum_evacuation_reserve, size_t consumed_by_advance_promotion) {
   if (heap->mode()->is_generational()) {
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-    ShenandoahGeneration* old_generation = heap->old_generation();
+    ShenandoahOldGeneration* old_generation = heap->old_generation();
     ShenandoahYoungGeneration* young_generation = heap->young_generation();
     size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
     size_t old_evacuated_committed = (size_t) (ShenandoahEvacWaste * old_evacuated);
