@@ -1032,7 +1032,6 @@ void ShenandoahHeap::cancel_old_gc() {
   assert(_old_generation != NULL, "Should only have mixed collections in generation mode.");
   log_info(gc)("Terminating old gc cycle.");
 
-  _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   // Stop marking
   old_generation()->cancel_marking();
   // Stop coalescing undead objects
@@ -1041,6 +1040,8 @@ void ShenandoahHeap::cancel_old_gc() {
   old_heuristics()->abandon_collection_candidates();
   // Remove old generation access to young generation mark queues
   young_generation()->set_old_gen_task_queues(nullptr);
+  // Transition to IDLE now.
+  _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
 }
 
 bool ShenandoahHeap::is_old_gc_active() {

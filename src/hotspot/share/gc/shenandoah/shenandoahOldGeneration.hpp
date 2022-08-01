@@ -29,6 +29,7 @@
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
+class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
  public:
@@ -82,7 +83,13 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
     IDLE, FILLING, BOOTSTRAPPING, MARKING, WAITING
   };
 
+  static const char* state_name(State state);
+
   void transition_to(State new_state);
+
+#ifdef ASSERT
+  bool validate_transition(State new_state);
+#endif
 
   State state() const {
     return _state;
@@ -93,7 +100,7 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   bool coalesce_and_fill();
 
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
-
+  ShenandoahOldHeuristics* _old_heuristics;
   State _state;
 };
 

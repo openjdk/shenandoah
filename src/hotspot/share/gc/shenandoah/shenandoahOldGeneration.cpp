@@ -30,6 +30,7 @@
 #include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahAggressiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahCompactHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahStaticHeuristics.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
@@ -45,6 +46,7 @@
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
 
@@ -262,8 +264,8 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   workers->run_task(&task);
   if (task.is_completed()) {
     // Remember that we're done with coalesce-and-fill.
-    transition_to(BOOTSTRAPPING);
     heap->set_prepare_for_old_mark_in_progress(false);
+    transition_to(BOOTSTRAPPING);
     return true;
   } else {
     log_debug(gc)("Suspending coalesce-and-fill of old heap regions");
@@ -317,12 +319,61 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
   }
 }
 
+const char* ShenandoahOldGeneration::state_name(State state) {
+  switch (state) {
+    case IDLE:          return "Idle";
+    case FILLING:       return "Coalescing";
+    case BOOTSTRAPPING: return "Bootstrapping";
+    case MARKING:       return "Marking";
+    case WAITING:       return "Waiting";
+    default:
+      ShouldNotReachHere();
+      return "Unknown";
+  }
+}
+
 void ShenandoahOldGeneration::transition_to(State new_state) {
   if (_state != new_state) {
-    log_info(gc)("Old generation transition from %d to %d", _state, new_state);
+    log_info(gc)("Old generation transition from %s to %s", state_name(_state), state_name(new_state));
+    assert(validate_transition(new_state), "Invalid state transition.");
     _state = new_state;
   }
 }
+
+#ifdef ASSERT
+bool ShenandoahOldGeneration::validate_transition(State new_state) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  switch (new_state) {
+    case IDLE:
+      assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become idle during old mark.");
+      assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot become idle with collection candidates");
+      assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot become idle while making old generation parseable.");
+      assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become idle when setup for bootstrapping.");
+      return true;
+    case FILLING:
+      assert(_state == IDLE, "Cannot begin filling without first being idle.");
+      assert(heap->is_prepare_for_old_mark_in_progress(), "Should be preparing for old mark now.");
+      return true;
+    case BOOTSTRAPPING:
+      assert(_state == FILLING, "Cannot reset bitmap without making old regions parseable.");
+      // assert(heap->young_generation()->old_gen_task_queues() != nullptr, "Cannot bootstrap without old mark queues.");
+      assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot still be making old regions parseable.");
+      return true;
+    case MARKING:
+      assert(_state == BOOTSTRAPPING, "Must have finished bootstrapping before marking.");
+      assert(heap->young_generation()->old_gen_task_queues() != nullptr, "Young generation needs old mark queues.");
+      assert(heap->is_concurrent_old_mark_in_progress(), "Should be marking old now.");
+      return true;
+    case WAITING:
+      assert(_state == MARKING, "Cannot have old collection candidates without first marking.");
+      assert(_old_heuristics->unprocessed_old_collection_candidates() > 0, "Must have collection candidates here.");
+      return true;
+    default:
+      ShouldNotReachHere();
+      return false;
+  }
+}
+#endif
 
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
   assert(ShenandoahOldGCHeuristics != NULL, "ShenandoahOldGCHeuristics should not equal NULL");
@@ -339,7 +390,8 @@ ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahM
     return NULL;
   }
   trigger->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
-  _heuristics = new ShenandoahOldHeuristics(this, trigger);
+  _old_heuristics = new ShenandoahOldHeuristics(this, trigger);
+  _heuristics = _old_heuristics;
   return _heuristics;
 }
 
