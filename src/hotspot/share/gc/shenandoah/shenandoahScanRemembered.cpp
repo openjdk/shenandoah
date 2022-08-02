@@ -45,7 +45,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
 
   _byte_map_base = _byte_map - (uintptr_t(_whole_heap_base) >> _card_shift);
 
-  _overreach_map = (uint8_t *) malloc(total_card_count);
+  _overreach_map = (uint8_t *) os::malloc(total_card_count, mtGC);
   _overreach_map_base = (_overreach_map -
                          (uintptr_t(_whole_heap_base) >> _card_shift));
 
@@ -55,7 +55,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
 }
 
 ShenandoahDirectCardMarkRememberedSet::~ShenandoahDirectCardMarkRememberedSet() {
-  free(_overreach_map);
+  os::free(_overreach_map);
 }
 
 void ShenandoahDirectCardMarkRememberedSet::initialize_overreach(size_t first_cluster, size_t count) {
