@@ -853,7 +853,7 @@ size_t ShenandoahGeneration::adjusted_available() const {
 }
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
-  heuristics()->record_success_concurrent(false);
+  heuristics()->record_success_concurrent(abbreviated);
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();
 }
 
