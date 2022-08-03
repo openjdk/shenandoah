@@ -560,7 +560,7 @@ public:
     _rs = rs;
     // TODO: We don't really need object_starts entries for every card entry.  We only need these for
     // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
-    object_starts = (crossing_info *) os::malloc(rs->total_cards() * sizeof(crossing_info), mtGC);
+    object_starts = (crossing_info *) ::malloc(rs->total_cards() * sizeof(crossing_info));
     if (object_starts == nullptr)
       fatal("Insufficient memory for initializing heap");
     for (size_t i = 0; i < rs->total_cards(); i++)
