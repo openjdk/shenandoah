@@ -48,6 +48,7 @@
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "prims/jvmtiTagMap.hpp"
+#include "runtime/threads.hpp"
 #include "utilities/events.hpp"
 
 class ShenandoahFlushAllSATB : public ThreadClosure {
