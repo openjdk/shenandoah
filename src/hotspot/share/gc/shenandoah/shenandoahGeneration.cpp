@@ -449,7 +449,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     collection_set->abandon_preselected();
 
 #ifdef KELVIN_VERBOSE
-    printf("old_evacuated_commited: " SIZE_FORMAT ", old_evacuation_reserve: " SIZE_FORMAT "\n",
+    printf("old_evacuated_committed: " SIZE_FORMAT ", old_evacuation_reserve: " SIZE_FORMAT "\n",
            old_evacuated_committed, old_evacuation_reserve);
 #endif
 
@@ -462,9 +462,9 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     } else if (old_evacuated_committed < old_evacuation_reserve) {
       // This may happen if the old-gen collection consumes less than full budget.
 
-      // If we shrink old_evacuation_reserve by more than a region size, we can expand regions_available_to_loan
-      size_t old_evac_regions_unused =
-        ((old_evacuation_reserve - old_evacuated_committed) + region_size_bytes - 1) / region_size_bytes;
+      // If we shrink old_evacuation_reserve by more than a region size, we can expand regions_available_to_loan.
+      // Can only give back regions that are fully unused, so round down.
+      size_t old_evac_regions_unused = (old_evacuation_reserve - old_evacuated_committed) / region_size_bytes;
       regions_available_to_loan += old_evac_regions_unused;
 
 #ifdef KELVIN_VERBOSE
@@ -541,7 +541,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
 #ifdef KELVIN_VERBOSE
       printf("To assure minimum_evacuation_reserve, setting aside " SIZE_FORMAT
-             " as old_regions_reserved_for_alloc_supplement, old_regions_reserved_for_alloc_supplement: " SIZE_FORMAT "\n",
+             " as old_regions_reserved_for_alloc_supplement, regions_available_to_loan: " SIZE_FORMAT "\n",
              old_regions_reserved_for_alloc_supplement, regions_available_to_loan);
 #endif
 
@@ -572,11 +572,12 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     size_t uncommitted_old_available = old_available - (old_evacuated_committed + consumed_by_advance_promotion +
                                                         old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement);
 
-    printf("promotion_reserve calculated as: " SIZE_FORMAT ", old_available: " SIZE_FORMAT ", old_evacuated_committed: "
+    printf("promotion_reserve calculated as: " SIZE_FORMAT " old_available: " SIZE_FORMAT 
+           ", uncommitted old available: " SIZE_FORMAT ", old_evacuated_committed: "
            SIZE_FORMAT ", consumed_by_advance_promotion: " SIZE_FORMAT ", old_bytes_loaned_for_young_evac: " SIZE_FORMAT
-           ", old_bytes_reserved_for_alloc_supplement: " SIZE_FORMAT ", uncommitted old available: " SIZE_FORMAT "\n",
-           promotion_reserve, old_available, old_evacuated_committed, consumed_by_advance_promotion,
-           old_bytes_loaned_for_young_evac, old_bytes_reserved_for_alloc_supplement, uncommitted_old_available);
+           ", old_bytes_reserved_for_alloc_supplement: " SIZE_FORMAT "\n",
+           promotion_reserve, old_available, uncommitted_old_available, old_evacuated_committed, consumed_by_advance_promotion,
+           old_bytes_loaned_for_young_evac, old_bytes_reserved_for_alloc_supplement);
 #endif
 
     assert(promotion_reserve <= old_available - (old_evacuated_committed + consumed_by_advance_promotion +

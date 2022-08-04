@@ -96,9 +96,18 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
       _young_bytes_to_promote += r->get_live_data_bytes();
     }
   } else if (r->affiliation() == OLD_GENERATION) {
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+    printf("Adding old region " SIZE_FORMAT " to collection set wth live data: " SIZE_FORMAT " and garbage: " SIZE_FORMAT "\n",
+           r->index(), r->get_live_data_bytes(), r->garbage());
+#endif
     _old_region_count++;
     _old_bytes_to_evacuate += r->get_live_data_bytes();
     _old_garbage += r->garbage();
+#ifdef KELVIN_VERBOSE
+    printf("After old region added, count: " SIZE_FORMAT ", old_bytes_to_evacuate: " SIZE_FORMAT ", old_garbage: " SIZE_FORMAT "\n",
+           _old_region_count, _old_bytes_to_evacuate, _old_garbage);
+#endif
   }
 
   _region_count++;
@@ -127,9 +136,10 @@ void ShenandoahCollectionSet::clear() {
   _current_index = 0;
 
   _young_region_count = 0;
-  _old_region_count = 0;
   _young_bytes_to_evacuate = 0;
   _young_bytes_to_promote = 0;
+
+  _old_region_count = 0;
   _old_bytes_to_evacuate = 0;
 
   _has_old_regions = false;
