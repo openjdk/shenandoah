@@ -36,7 +36,9 @@ uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
   ShenandoahHeuristics(generation),
+#ifdef ASSERT
   _start_candidate(0),
+#endif
   _first_pinned_candidate(NOT_FOUND),
   _last_old_collection_candidate(0),
   _next_old_collection_candidate(0),
@@ -266,12 +268,10 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   size_t collectable_garbage = immediate_garbage + candidates_garbage;
-  log_info(gc)("Old-Gen Collectable Regions: " UINT32_FORMAT ", "
-               "Collectable Garbage: " SIZE_FORMAT "%s, "
-               "Immediate Garbage: " SIZE_FORMAT "%s",
-               _last_old_collection_candidate,
-               byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
-               byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage));
+  log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s over " UINT32_FORMAT " regions, "
+               "Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
+               byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage), _last_old_collection_candidate,
+               byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage), immediate_regions);
 
   if (unprocessed_old_collection_candidates() == 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
@@ -281,12 +281,10 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 }
 
 uint ShenandoahOldHeuristics::last_old_collection_candidate_index() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   return _last_old_collection_candidate;
 }
 
 uint ShenandoahOldHeuristics::unprocessed_old_collection_candidates() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
   return _last_old_collection_candidate - _next_old_collection_candidate;
 }
 
@@ -311,7 +309,7 @@ void ShenandoahOldHeuristics::consume_old_collection_candidate() {
   _next_old_collection_candidate++;
 }
 
-uint ShenandoahOldHeuristics::last_old_region_index() {
+uint ShenandoahOldHeuristics::last_old_region_index() const {
   return _last_old_region;
 }
 
@@ -347,8 +345,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   // Cannot start a new old-gen GC until previous one has finished.
   //
   // Future refinement: under certain circumstances, we might be more sophisticated about this choice.
-  // For example, we could choose to abandon the previous old collection before it has completed evacuations,
-  // but this would require that we coalesce and fill all garbage within unevacuated collection-set regions.
+  // For example, we could choose to abandon the previous old collection before it has completed evacuations.
   if (unprocessed_old_collection_candidates() > 0) {
     return false;
   }

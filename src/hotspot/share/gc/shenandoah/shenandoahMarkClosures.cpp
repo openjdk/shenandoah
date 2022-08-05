@@ -38,6 +38,11 @@ ShenandoahFinalMarkUpdateRegionStateClosure::ShenandoahFinalMarkUpdateRegionStat
 void ShenandoahFinalMarkUpdateRegionStateClosure::heap_region_do(ShenandoahHeapRegion* r) {
   if (r->is_active()) {
     if (_ctx != nullptr) {
+      // _ctx may be null when this closure is used to sync only the pin status
+      // update the watermark of old regions. For old regions we cannot reset
+      // the TAMS because we rely on that to keep promoted objects alive after
+      // old marking is complete.
+
       // All allocations past TAMS are implicitly live, adjust the region data.
       // Bitmaps/TAMS are swapped at this point, so we need to poll complete bitmap.
       HeapWord *tams = _ctx->top_at_mark_start(r);
@@ -67,9 +72,7 @@ void ShenandoahFinalMarkUpdateRegionStateClosure::heap_region_do(ShenandoahHeapR
     r->set_update_watermark_at_safepoint(r->top());
   } else {
     assert(!r->has_live(), "Region " SIZE_FORMAT " should have no live data", r->index());
-    if (_ctx != nullptr) {
-      assert(_ctx->top_at_mark_start(r) == r->top(),
+    assert(_ctx == nullptr || _ctx->top_at_mark_start(r) == r->top(),
              "Region " SIZE_FORMAT " should have correct TAMS", r->index());
-    }
   }
 }

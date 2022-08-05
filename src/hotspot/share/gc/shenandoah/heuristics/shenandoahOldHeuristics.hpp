@@ -40,26 +40,33 @@ private:
 
   // After final marking of the old generation, this heuristic will select
   // a set of candidate regions to be included in subsequent mixed collections.
-  // These members are used to keep track of which candidate regions have yet
-  // to be added to a mixed collection. There is also some special handling
-  // for pinned regions.
+  // The regions are sorted into a `_region_data` array (declared in base
+  // class) in decreasing order of garbage. The heuristic will give priority
+  // to regions containing more garbage.
+
+  // The following members are used to keep track of which candidate regions
+  // have yet to be added to a mixed collection. There is also some special
+  // handling for pinned regions, described further below.
 
   // This points to the first candidate of the current mixed collection. This
   // is only used for an assertion when handling pinned regions.
-  uint _start_candidate;
+  debug_only(uint _start_candidate);
 
   // Pinned regions may not be included in the collection set. Any old regions
   // which were pinned at the time when old regions were added to the mixed
-  // collection will have their pointers shifted down so that they are at the
-  // front of the line for the next mixed collection.
+  // collection will have been skipped. These regions are still contain garbage,
+  // so we want to include them at the start of the list of candidates for the
+  // _next_ mixed collection cycle. This variable is the index of the _first_
+  // old region which is pinned when the mixed collection set is formed.
   uint _first_pinned_candidate;
 
   // This is the index of the last region which is above the garbage threshold.
-  // No regions after this will be considered for inclusion in a mixed cset.
+  // No regions after this will be considered for inclusion in a mixed collection
+  // set.
   uint _last_old_collection_candidate;
 
-  // This index points to the front of the line of candidates to be added to the
-  // mixed collection set. It is updated as regions are added to the collection set.
+  // This index points to the first candidate in line to be added to the mixed
+  // collection set. It is updated as regions are added to the collection set.
   uint _next_old_collection_candidate;
 
   // This is the last index in the array of old regions which were active at
@@ -69,7 +76,8 @@ private:
   // This can be the 'static' or 'adaptive' heuristic.
   ShenandoahHeuristics* _trigger_heuristic;
 
-  // Flag is set when promotion failure is detected (by gc thread), cleared when old generation collection begins (by control thread)
+  // Flag is set when promotion failure is detected (by gc thread), and cleared when
+  // old generation collection begins (by control thread).
   volatile bool _promotion_failed;
 
   // Keep a pointer to our generation that we can use without down casting a protected member from the base class.
@@ -106,7 +114,7 @@ public:
 
   // How many old-collection regions were identified at the end of the most recent old-gen mark to require their
   // unmarked objects to be coalesced and filled?
-  uint last_old_region_index();
+  uint last_old_region_index() const;
 
   // Fill in buffer with all of the old-collection regions that were identified at the end of the most recent old-gen
   // mark to require their unmarked objects to be coalesced and filled.  The buffer array must have at least

@@ -342,6 +342,49 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 }
 
 #ifdef ASSERT
+// This diagram depicts the expected state transitions for marking the old generation
+// and preparing for old collections. When a young generation cycle executes, the
+// remembered set scan must visit objects in old regions. Visiting an object which
+// has become dead on previous old cycles will result in crashes. To avoid visiting
+// such objects, the remembered set scan will use the old generation mark bitmap when
+// possible. It is _not_ possible to use the old generation bitmap when old marking
+// is active (bitmap is not complete). For this reason, the old regions are made
+// parseable _before_ the old generation bitmap is reset. The diagram does not depict
+// global and full collections, both of which cancel any old generation activity.
+//
+//                              +-----------------+
+//               +------------> |      IDLE       |
+//               |   +--------> |                 |
+//               |   |          +-----------------+
+//               |   |            |
+//               |   |            | Begin Old Mark
+//               |   |            v
+//               |   |          +-----------------+     +--------------------+
+//               |   |          |     FILLING     | <-> |      YOUNG GC      |
+//               |   |          |                 |     | (RSet Uses Bitmap) |
+//               |   |          +-----------------+     +--------------------+
+//               |   |            |
+//               |   |            | Reset Bitmap
+//               |   |            v
+//               |   |          +-----------------+
+//               |   |          |    BOOTSTRAP    |
+//               |   |          |                 |
+//               |   |          +-----------------+
+//               |   |            |
+//               |   |            | Continue Marking
+//               |   |            v
+//               |   |          +-----------------+     +----------------------+
+//               |   |          |    MARKING      | <-> |       YOUNG GC       |
+//               |   +----------|                 |     | (RSet Parses Region) |
+//               |              +-----------------+     +----------------------+
+//               |                |
+//               |                | Has Candidates
+//               |                v
+//               |              +-----------------+
+//               |              |     WAITING     |
+//               +------------- |                 |
+//                              +-----------------+
+//
 bool ShenandoahOldGeneration::validate_transition(State new_state) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   switch (new_state) {
@@ -397,6 +440,6 @@ ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahM
 }
 
 void ShenandoahOldGeneration::record_success_concurrent(bool abbreviated) {
-  heuristics()->record_success_concurrent(false);
+  heuristics()->record_success_concurrent(abbreviated);
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_old();
 }
