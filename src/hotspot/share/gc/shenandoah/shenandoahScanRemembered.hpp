@@ -45,9 +45,14 @@
 //               many references are held within the objects that span a
 //               DIRTY card's memory, and on the size of the object
 //               that spans the end of a DIRTY card's memory (because
-//               that object will be scanned in its entirety). For these
-//               reasons, it is advisable for the multiple worker threads
-//               to be flexible in the number of clusters to be
+//               that object, if it's not an array, may need to be scanned in
+//               its entirety, when the object is imprecisely dirtied. Imprecise
+//               dirtying is when the card corresponding to the object header
+//               is dirtied, rather than the card on which the updated field lives).
+//               TODO CHECK AND CORRECT THIS: ysr
+//               To allow better balancing of work among parallel workers, especially
+//               in the absence of cluster claiming, it is advisable for the multiple
+//               worker threads to be flexible in the number of clusters to be
 //               processed by each thread.
 //
 // A cluster represents a "natural" quantum of work to be performed by
@@ -55,7 +60,10 @@
 // The notion of cluster is similar to the notion of stripe in the
 // implementation of parallel GC card scanning.  However, a cluster is
 // typically smaller than a stripe, enabling finer grain division of
-// labor between multiple threads.
+// labor between multiple threads, and potentially better load balancing
+// when dirty cards are not uniformly distributed in the heap, as is often
+// the case with generational workloads where more recently promoted objects
+// may be dirtied more frequently that older objects.
 //
 // For illustration, consider the following possible JVM configurations:
 //
@@ -63,28 +71,28 @@
 //     RegionSize is 128 MB
 //     Span of a card entry is 512 B
 //     Each card table entry consumes 1 B
-//     Assume one long word of card table entries represents a cluster.
+//     Assume one long word (8 B)of the card table represents a cluster.
 //       This long word holds 8 card table entries, spanning a
-//       total of 4KB
-//     The number of clusters per region is 128 MB / 4 KB = 32K
+//       total of 8*512 B = 4 KB of the heap
+//     The number of clusters per region is 128 MB / 4 KB = 32 K
 //
 //   Scenario 2:
 //     RegionSize is 128 MB
 //     Span of each card entry is 128 B
 //     Each card table entry consumes 1 bit
-//     Assume one int word of card tables represents a cluster.
-//       This int word holds 32 card table entries, spanning a
-//       total of 4KB
-//     The number of clusters per region is 128 MB / 4 KB = 32K
+//     Assume one int word (4 B) of the card table represents a cluster.
+//       This int word holds 32 b/1 b = 32 card table entries, spanning a
+//       total of 32 * 128 B = 4 KB of the heap
+//     The number of clusters per region is 128 MB / 4 KB = 32 K
 //
 //   Scenario 3:
 //     RegionSize is 128 MB
 //     Span of each card entry is 512 B
 //     Each card table entry consumes 1 bit
-//     Assume one long word of card tables represents a cluster.
-//       This long word holds 64 card table entries, spanning a
-//       total of 32 KB
-//     The number of clusters per region is 128 MB / 32 KB = 4K
+//     Assume one long word (8 B) of card table represents a cluster.
+//       This long word holds 64 b/ 1 b = 64 card table entries, spanning a
+//       total of 64 * 512 B = 32 KB of the heap
+//     The number of clusters per region is 128 MB / 32 KB = 4 K
 //
 // At the start of a new young-gen concurrent mark pass, the gang of
 // Shenandoah worker threads collaborate in performing the following
@@ -99,21 +107,6 @@
 //    (an instance of ShenandoahDirectCardMarkRememberedSet or an instance
 //     of a to-be-implemented ShenandoahBufferWithSATBRememberedSet)
 //
-//  for each ShenandoahHeapRegion old_region in the whole heap
-//    determine the cluster number of the first cluster belonging
-//      to that region
-//    for each cluster contained within that region
-//      Assure that exactly one worker thread initializes each
-//      cluster of overreach memory by invoking:
-//
-//        rs->initialize_overreach(cluster_no, cluster_count)
-//
-//      in separate threads.  (Divide up the clusters so that
-//      different threads are responsible for initializing different
-//      clusters.  Initialization cost is essentially identical for
-//      each cluster.)
-//
-//  Next, we repeat the process for invocations of process_clusters.
 //  for each ShenandoahHeapRegion old_region in the whole heap
 //    determine the cluster number of the first cluster belonging
 //      to that region
@@ -134,18 +127,17 @@
 //           clusters contain mostly clean cards
 //        b) some clusters contain mostly primitive data and other
 //           clusters contain mostly reference data
-//        c) some clusters are spanned by very large objects that
-//           begin in some other cluster.  When a large object
+//        c) some clusters are spanned by very large non-array objects that
+//           begin in some other cluster.  When a large non-array object
 //           beginning in a preceding cluster spans large portions of
-//           this cluster, the processing of this cluster gets a
-//           "free ride" because the thread responsible for processing
-//           the cluster that holds the object's header does the
-//           processing.
+//           this cluster, then because of imprecise dirtying, the
+//           portion of the object in this cluster may be clean, but
+//           will need to be processed by the worker responsible for
+//           this cluster, potentially increasing its work.
 //        d) in the case that the end of this cluster is spanned by a
-//           very large object, the processing of this cluster will
-//           be responsible for examining the entire object,
-//           potentially requiring this thread to process large amounts
-//           of memory pertaining to other clusters.
+//           very large non-array object, the worker for this cluster will
+//           be responsible for processing the portion of the object
+//           in this cluster.
 //
 // Though an initial division of labor between marking threads may
 // assign equal numbers of clusters to be scanned by each thread, it
@@ -177,30 +169,10 @@
 //    on to work on other tasks associated with root scanning until such
 //    time as all clusters have been examined.
 //
-//  Once all clusters have been processed, the gang of GC worker
-//  threads collaborate to merge the overreach data.
-//
-//  for each ShenandoahHeapRegion old_region in the whole heap
-//    determine the cluster number of the first cluster belonging
-//      to that region
-//    for each cluster contained within that region
-//      Assure that exactly one worker thread initializes each
-//      cluster of overreach memory by invoking:
-//
-//        rs->merge_overreach(cluster_no, cluster_count)
-//
-//      in separate threads.  (Divide up the clusters so that
-//      different threads are responsible for merging different
-//      clusters.  Merging cost is essentially identical for
-//      each cluster.)
-//
-// Though remembered set scanning is designed to run concurrently with
-// mutator threads, the current implementation of remembered set
-// scanning runs in parallel during a GC safepoint.  Furthermore, the
+// Remembered set scanning is designed to run concurrently with
+// mutator threads, with multiple concurrent workers. Furthermore, the
 // current implementation of remembered set scanning never clears a
-// card once it has been marked.  Since the current implementation
-// never clears marked pages, the current implementation does not
-// invoke initialize_overreach() or merge_overreach().
+// card once it has been marked.
 //
 // These limitations will be addressed in future enhancements to the
 // existing implementation.
@@ -242,8 +214,6 @@ private:
   HeapWord *_whole_heap_end;
   uint8_t *_byte_map;           // Points to first entry within the card table
   uint8_t *_byte_map_base;      // Points to byte_map minus the bias computed from address of heap memory
-  uint8_t *_overreach_map;      // Points to first entry within the overreach card table
-  uint8_t *_overreach_map_base; // Points to overreach_map minus the bias computed from address of heap memory
 
   uint64_t _wide_clean_value;
 
@@ -263,22 +233,12 @@ public:
   void mark_card_as_clean(size_t card_index);
   void mark_read_card_as_clean(size_t card_index);
   void mark_range_as_clean(size_t card_index, size_t num_cards);
-  void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  void mark_overreach_card_as_dirty(void *p);
   size_t cluster_count();
-
-  // Called by multiple GC threads at start of concurrent mark and evacuation phases.  Each parallel GC thread typically
-  // initializes a different subranges of all overreach entries.
-  void initialize_overreach(size_t first_cluster, size_t count);
-
-  // Called by GC thread at end of concurrent mark or evacuation phase.  Each parallel GC thread typically merges different
-  // subranges of all overreach entries.
-  void merge_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
@@ -902,16 +862,12 @@ public:
   void mark_card_as_clean(size_t card_index);
   void mark_read_card_as_clean(size_t card_index) { _rs->mark_read_card_clean(card_index); }
   void mark_range_as_clean(size_t card_index, size_t num_cards);
-  void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  void mark_overreach_card_as_dirty(void *p);
   size_t cluster_count();
-  void initialize_overreach(size_t first_cluster, size_t count);
-  void merge_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   void swap_remset() { _rs->swap_remset(); }
