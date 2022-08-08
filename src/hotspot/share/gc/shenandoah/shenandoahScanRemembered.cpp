@@ -99,9 +99,13 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
       }
       scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent);
     }
+#ifdef ENABLE_REMEMBERED_SET_CANCELLATION
+    // This check is currently disabled to avoid crashes that occur
+    // when we try to cancel remembered set scanning
     if (heap->check_cancelled_gc_and_yield(_is_concurrent)) {
       return;
     }
+#endif
   }
 }
 
