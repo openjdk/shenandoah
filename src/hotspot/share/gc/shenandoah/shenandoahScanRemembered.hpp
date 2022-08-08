@@ -49,7 +49,7 @@
 //               its entirety, when the object is imprecisely dirtied. Imprecise
 //               dirtying is when the card corresponding to the object header
 //               is dirtied, rather than the card on which the updated field lives).
-//               TODO CHECK AND CORRECT THIS: ysr
+//               TODO CHECK AND CORRECT THIS, IT SEEMS WISHY-WASHY: ysr
 //               To allow better balancing of work among parallel workers, especially
 //               in the absence of cluster claiming, it is advisable for the multiple
 //               worker threads to be flexible in the number of clusters to be
@@ -534,26 +534,6 @@ public:
 
   // There is one entry within the object_starts array for each card entry.
   //
-  // In the most recent implementation of ShenandoahScanRemembered::process_clusters(),
-  // there is no need for the get_crossing_object_start() method function, so there is no
-  // need to maintain the following information.  The comment is left in place for now in
-  // case we find it necessary to add support for this service at a later time.
-  //
-  // Bits 0x7fff: If no object starts within this card region, the
-  //              remaining bits of the object_starts array represent
-  //              the absolute word offset within the enclosing
-  //              cluster's memory of the starting address for the
-  //              object that spans the start of this card region's
-  //              memory.  If the spanning object begins in memory
-  //              that precedes this card region's cluster, the value
-  //              stored in these bits is the special value 0x7fff.
-  //              (Note that the maximum value required to represent a
-  //              spanning object from within the current cluster is
-  //              ((63 * 64) - 8), which equals 0x0fbf.
-  //
-  // In the absence of the need to support get_crossing_object_start(),
-  // here is discussion of performance:
-  //
   //  Suppose multiple garbage objects are coalesced during GC sweep
   //  into a single larger "free segment".  As each two objects are
   //  coalesced together, the start information pertaining to the second
@@ -942,13 +922,6 @@ public:
   template <typename ClosureType>
   inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
                                          HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent);
-
-
-  template <typename ClosureType>
-  inline void process_region(ShenandoahHeapRegion* region, ClosureType *cl, bool is_concurrent);
-
-  template <typename ClosureType>
-  inline void process_region(ShenandoahHeapRegion* region, ClosureType *cl, bool use_write_table, bool is_concurrent);
 
   template <typename ClosureType>
   inline void process_region_slice(ShenandoahHeapRegion* region, size_t offset, size_t clusters, HeapWord* end_of_range,

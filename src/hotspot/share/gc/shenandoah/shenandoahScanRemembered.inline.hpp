@@ -674,24 +674,6 @@ ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHe
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void
-ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *region, ClosureType *cl, bool is_concurrent) {
-  process_region(region, cl, false, is_concurrent);
-}
-
-template<typename RememberedSet>
-template <typename ClosureType>
-inline void
-ShenandoahScanRemembered<RememberedSet>::process_region(ShenandoahHeapRegion *region, ClosureType *cl,
-                                                        bool use_write_table, bool is_concurrent) {
-  size_t cluster_size =
-    CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
-  size_t clusters = ShenandoahHeapRegion::region_size_words() / cluster_size;
-  process_region_slice(region, 0, clusters, region->end(), cl, use_write_table, is_concurrent);
-}
-
-template<typename RememberedSet>
-template <typename ClosureType>
-inline void
 ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegion *region, size_t start_offset, size_t clusters,
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
                                                               bool is_concurrent) {
