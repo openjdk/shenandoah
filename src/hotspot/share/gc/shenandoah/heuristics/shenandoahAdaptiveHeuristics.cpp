@@ -123,7 +123,11 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
             add_region = true;
             old_cur_cset = new_cset;
           }
-        } else if (cset->is_preselected(idx)) {
+        } else if (cset->is_preselected(r->index())) {
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+          printf("GLOBAL: Preselected region " SIZE_FORMAT " added to cset, age is: %d\n", r->index(), r->age());
+#endif
           assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
           // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
           // This region has been pre-selected and its impact on promotion reserve is already accounted for.
@@ -170,8 +174,12 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
         size_t region_garbage = r->garbage();
         size_t new_garbage = cur_young_garbage + region_garbage;
         bool add_region = false;
+
         if (!r->is_old()) {
-          if (cset->is_preselected(idx)) {
+          if (cset->is_preselected(r->index())) {
+#ifdef KELVIN_VERBOSE
+            printf("YOUNG or MIXED: Preselected region " SIZE_FORMAT " added to cset, age is: %d\n", r->index(), r->age());
+#endif
             assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
             // Entire region will be promoted, This region does not impact young-gen evacuation reserve.  Memory has already
             // been set aside to hold evacuation results as advance_promotion_reserve.
