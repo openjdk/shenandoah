@@ -84,17 +84,8 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* region = heap->get_region(i);
       if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-        printf("Considering preselection of [" SIZE_FORMAT "], age is: %d\n", region->index(), region->age());
-#endif
         size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahEvacWaste);
         if (old_consumed + promotion_need < old_available) {
-#ifdef KELVIN_VERBOSE
-          printf("Preselecte region " SIZE_FORMAT " because old_consumed (" SIZE_FORMAT ") + promotion_need (" SIZE_FORMAT 
-                 ") < old_available (" SIZE_FORMAT ")\n",
-                 region->index(), old_consumed, promotion_need, old_available);
-#endif
           old_consumed += promotion_need;
           preselected_regions[i] = true;
         }
@@ -137,7 +128,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    assert(i == region->index(), "Expecting region to match get_region() argument");
     if (!in_generation(region)) {
       continue;
     }
@@ -159,10 +149,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
         if (is_generational && collection_set->is_preselected(i)) {
-#ifdef KELVIN_VERBOSE
-          printf("Biasing preselected region [" SIZE_FORMAT "] from garbage: " SIZE_FORMAT " to " SIZE_FORMAT "\n",
-                 region->index(), garbage, ShenandoahHeapRegion::region_size_bytes());
-#endif
           // If region is preselected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
           garbage = ShenandoahHeapRegion::region_size_bytes();
         }
