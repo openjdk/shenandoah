@@ -599,8 +599,9 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           // Card is dirty but has no object.  Card will have been scanned during scan of a previous cluster.
           card_index++;
         }
-      } else if (has_object) {
-        // Card is clean but has object.
+	assert(last_dirty && dirty_run > 0, "Control point invariant");
+      } else {
+	// clean card
 	stats->increment_clean_card_cnt();
 	if (last_clean) {
           clean_run++;
@@ -611,70 +612,74 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           clean_run = 1;
         }
 
-        // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
-        // or if it reaches into the next cluster.
-        size_t start_offset = _scc->get_last_start(card_index);
-        HeapWord *card_start = _rs->addr_for_card_index(card_index);
-        HeapWord *p = card_start + start_offset;
-        oop obj = cast_to_oop(p);
+	if (has_object) {
+          // Card is clean but has object.
+          // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
+          // or if it reaches into the next cluster.
+          size_t start_offset = _scc->get_last_start(card_index);
+          HeapWord *card_start = _rs->addr_for_card_index(card_index);
+          HeapWord *p = card_start + start_offset;
+          oop obj = cast_to_oop(p);
 
-        size_t last_card;
-        if (!ctx || ctx->is_marked(obj)) {
-          HeapWord *nextp = p + obj->size();
+          size_t last_card;
+          if (!ctx || ctx->is_marked(obj)) {
+            HeapWord *nextp = p + obj->size();
 
-          // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
-          // failure if nextp points to end of heap.
-          last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
+            // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
+            // failure if nextp points to end of heap.
+            last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
 
-          bool reaches_next_cluster = (last_card > end_card_index);
-          bool spans_dirty_within_this_cluster = false;
+            bool reaches_next_cluster = (last_card > end_card_index);
+            bool spans_dirty_within_this_cluster = false;
 
-          if (!reaches_next_cluster) {
-            size_t span_card;
-            for (span_card = card_index+1; span_card <= last_card; span_card++)
-              if ((write_table)? _rs->is_write_card_dirty(span_card): _rs->is_card_dirty(span_card)) {
-                spans_dirty_within_this_cluster = true;
-                break;
+            if (!reaches_next_cluster) {
+              for (size_t span_card = card_index+1; span_card <= last_card; span_card++) {
+                if ((write_table)? _rs->is_write_card_dirty(span_card): _rs->is_card_dirty(span_card)) {
+                  spans_dirty_within_this_cluster = true;
+                  break;
+                }
               }
-          }
-
-          // TODO: only iterate over this object if it spans dirty within this cluster or within following clusters.
-          // Code as written is known not to examine a zombie object because either the object is marked, or we are
-          // not using the mark-context to differentiate objects, so the object is known to have been coalesced and
-          // filled if it is not "live".
-
-          if (reaches_next_cluster || spans_dirty_within_this_cluster) {
-            if (obj->is_objArray()) {
-              objArrayOop array = objArrayOop(obj);
-              int len = array->length();
-              array->oop_iterate_range(cl, 0, len);
-            } else if (obj->is_instance()) {
-              obj->oop_iterate(cl);
-            } else {
-              // Case 3: Primitive array. Do nothing, no oops there. We use the same
-              // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-              // We skip iterating over the klass pointer since we know that
-              // Universe::TypeArrayKlass never moves.
-              assert (obj->is_typeArray(), "should be type array");
             }
-          }
-        } else {
-          // The object that spans end of this clean card is not marked, so no need to scan it or its
-          // unmarked neighbors.  Containing region r is initialized above.
-          HeapWord* tams = ctx->top_at_mark_start(r);
-          HeapWord* nextp;
-          if (p >= tams) {
-            nextp = p + obj->size();
+
+            // TODO: only iterate over this object if it spans dirty within this cluster or within following clusters.
+            // Code as written is known not to examine a zombie object because either the object is marked, or we are
+            // not using the mark-context to differentiate objects, so the object is known to have been coalesced and
+            // filled if it is not "live".
+
+            if (reaches_next_cluster || spans_dirty_within_this_cluster) {
+              if (obj->is_objArray()) {
+                objArrayOop array = objArrayOop(obj);
+                int len = array->length();
+                array->oop_iterate_range(cl, 0, len);
+              } else if (obj->is_instance()) {
+                obj->oop_iterate(cl);
+              } else {
+                // Case 3: Primitive array. Do nothing, no oops there. We use the same
+                // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
+                // We skip iterating over the klass pointer since we know that
+                // Universe::TypeArrayKlass never moves.
+                assert (obj->is_typeArray(), "should be type array");
+              }
+            }
           } else {
-            nextp = ctx->get_next_marked_addr(p, tams);
+            // The object that spans end of this clean card is not marked, so no need to scan it or its
+            // unmarked neighbors.  Containing region r is initialized above.
+            HeapWord* tams = ctx->top_at_mark_start(r);
+            HeapWord* nextp;
+            if (p >= tams) {
+              nextp = p + obj->size();
+            } else {
+              nextp = ctx->get_next_marked_addr(p, tams);
+            }
+            last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
           }
-          last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
-        }
-        // Increment card_index to account for the spanning object, even if we didn't scan it.
-        card_index = (last_card > card_index)? last_card: card_index + 1;
-      } else {
-        // Card is clean and has no object.  No need to clean this card.
-        card_index++;
+          // Increment card_index to account for the spanning object, even if we didn't scan it.
+          card_index = (last_card > card_index)? last_card: card_index + 1;
+        } else {
+          // Card is clean and has no object.  No need to clean this card.
+          card_index++;
+	}
+	assert(last_clean && clean_run > 0, "Control point invariant");
       }
       assert((last_dirty == !last_clean) && ((last_dirty && dirty_run > 0) || (last_clean && clean_run > 0)),
            "dirty/clean run stats inconsistent");
