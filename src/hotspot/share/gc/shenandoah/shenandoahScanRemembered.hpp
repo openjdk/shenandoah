@@ -687,18 +687,24 @@ public:
 
 class ShenandoahCardStats: public CHeapObj<mtGC> {
 private:
+  const uint _worker_id;
   size_t _total_card_cnt;
   size_t _dirty_card_cnt;
+  size_t _max_dirty_run;
   size_t _clean_card_cnt;
+  size_t _max_clean_run;
   size_t _obj_cnt;
   size_t _oop_cnt;
   size_t _proc_oop_cnt;
 
 public:
-  ShenandoahCardStats() :
+  ShenandoahCardStats(uint worker_id) :
+    _worker_id(worker_id),
     _total_card_cnt(0),
     _dirty_card_cnt(0),
+    _max_dirty_run(0),
     _clean_card_cnt(0),
+    _max_clean_run(0),
     _obj_cnt(0),
     _oop_cnt(0),
     _proc_oop_cnt(0) { }
@@ -718,6 +724,16 @@ public:
   void increment_obj_cnt()        { _obj_cnt++;        }
   void increment_oop_cnt()        { _oop_cnt++;        }
   void increment_proc_oop_cnt()   { _proc_oop_cnt++;   }
+  void update_max_dirty_run(size_t run) {
+    if (run > _max_dirty_run) {
+      _max_dirty_run = run;
+    }
+  }
+  void update_max_clean_run(size_t run) {
+    if (run > _max_clean_run) {
+      _max_clean_run = run;
+    }
+  }
 
   size_t total_card_cnt() { return _total_card_cnt; }
   size_t dirty_card_cnt() { return _dirty_card_cnt; }
@@ -725,6 +741,8 @@ public:
   size_t obj_cnt()        { return _obj_cnt;        }
   size_t oop_cnt()        { return _oop_cnt;        }
   size_t proc_oop_cnt()   { return _proc_oop_cnt;   }
+
+  inline void log() const;
 };
 
 // ShenandoahScanRemembered is a concrete class representing the
@@ -754,7 +772,7 @@ private:
   ShenandoahCardStats** allocate_card_stats(int max_workers) {
     ShenandoahCardStats** card_stats = NEW_C_HEAP_ARRAY(ShenandoahCardStats*, max_workers, mtGC);
     for (int i = 0; i < max_workers; i++) {
-      card_stats[i] = new ShenandoahCardStats();
+      card_stats[i] = new ShenandoahCardStats(i);
     }
     return card_stats;
   }

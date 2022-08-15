@@ -495,22 +495,29 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
     ctx = nullptr;
   }
 
-  size_t card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
+  size_t cur_cluster = first_cluster;
+  size_t cur_count = count;
+  size_t card_index = cur_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
   HeapWord* start_of_range = _rs->addr_for_card_index(card_index);
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
-  while (count-- > 0) {
+  while (cur_count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
-    card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
+    card_index = cur_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
-    first_cluster++;
+    cur_cluster++;
     size_t next_card_index = 0;
+    bool last_dirty = false;
+    bool last_clean = false;
+    size_t dirty_run = 1;
+    size_t clean_run = 1;
+
     while (card_index < end_card_index) {
       stats->increment_total_card_cnt();
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
-        count = 0;
+        cur_count = 0;
         card_index = end_card_index;
         break;
       }
@@ -519,6 +526,14 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
       if (is_dirty) {
 	// Stats
 	stats->increment_dirty_card_cnt();
+	if (last_dirty) {
+	  dirty_run++;
+        } else {
+	  stats->update_max_clean_run(clean_run);
+	  last_clean = false;
+	  last_dirty = true;
+	  dirty_run = 1;
+	}
 
         size_t prev_card_index = card_index;
         if (has_object) {
@@ -587,6 +602,14 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
       } else if (has_object) {
         // Card is clean but has object.
 	stats->increment_clean_card_cnt();
+	if (last_clean) {
+          clean_run++;
+        } else {
+          stats->update_max_dirty_run(dirty_run);
+	  last_dirty = false;
+	  last_clean = true;
+          clean_run = 1;
+        }
 
         // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
         // or if it reaches into the next cluster.
@@ -653,8 +676,19 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
         // Card is clean and has no object.  No need to clean this card.
         card_index++;
       }
+      assert((last_dirty == !last_clean) && ((last_dirty && dirty_run > 0) || (last_clean && clean_run > 0)),
+           "dirty/clean run stats inconsistent");
+    }
+    assert(!(last_dirty || last_clean) || (last_dirty && dirty_run > 0) || (last_clean && clean_run > 0),
+           "dirty/clean run stats inconsistent");
+    if (last_dirty) {
+      stats->update_max_dirty_run(dirty_run);
+    } else if (last_clean) {
+      stats->update_max_clean_run(clean_run);
     }
   }
+  stats->log();
+  stats->clear();
 }
 
 // Given that this range of clusters is known to span a humongous object spanned by region r, scan the
@@ -817,6 +851,13 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   assignment->_chunk_size = group_chunk_size;
 
   return true;
+}
+
+inline void ShenandoahCardStats::log() const {
+  log_info(gc,remset)("Worker %u card stats: total " SIZE_FORMAT ", dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+                      " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "), objs " SIZE_FORMAT ", oops " SIZE_FORMAT "(proc " SIZE_FORMAT ")",
+                      _worker_id, _total_card_cnt, _dirty_card_cnt, _max_dirty_run,
+                      _clean_card_cnt, _max_clean_run, _obj_cnt, _oop_cnt, _proc_oop_cnt);
 }
 
 #endif   // SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
