@@ -77,6 +77,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
   ShenandoahMarkRefsClosure<YOUNG> cl(q, _rp, old);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   RememberedScanner* scanner = heap->card_scan();
+  ShenandoahCardStats* stats = scanner->card_stats(worker_id);
 
   // set up thread local closure for shen ref processor
   _rp->set_mark_closure(worker_id, &cl);
@@ -97,7 +98,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
       if (end_of_range > region->top()) {
         end_of_range = region->top();
       }
-      scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent);
+      scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent, stats);
     }
 #ifdef ENABLE_REMEMBERED_SET_CANCELLATION
     // This check is currently disabled to avoid crashes that occur

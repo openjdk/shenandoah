@@ -297,15 +297,7 @@ public:
 // The API services represent a compromise between efficiency and
 // convenience.
 //
-// In the initial implementation, we assume that scanning of card
-// table entries occurs only while the JVM is at a safe point.  Thus,
-// there is no synchronization required between GC threads that are
-// scanning card-table entries and marking certain entries that were
-// previously dirty as clean, and mutator threads which would possibly
-// be marking certain card-table entries as dirty.
-//
-// There is however a need to implement concurrency control and memory
-// coherency between multiple GC threads that scan the remembered set
+// Multiple GC threads that scan the remembered set
 // in parallel.  The desire is to divide the complete scanning effort
 // into multiple clusters of work that can be independently processed
 // by individual threads without need for synchronizing efforts
@@ -314,93 +306,32 @@ public:
 // of Parallel GC.
 //
 // Complexity arises when an object to be scanned crosses the boundary
-// between adjacent cluster regions.  Here is the protocol that is
-// followed:
+// between adjacent cluster regions.  Here is the protocol that we currently
+// follow:
 //
-//  1. We implement a supplemental data structure known as the overreach
-//     card table.  The thread that is responsible for scanning each
-//     cluster of card-table entries is granted exclusive access to
-//     modify the associated card-table entries.  In the case that a
-//     thread scans a very large object that reaches into one or more
-//     following clusters, that thread has exclusive access to the
-//     overreach card table for all of the entries belonging to the
-//     following clusters that are spanned by this large object.
-//     After all clusters have been scanned, the scanning threads
-//     briefly synchronize to merge the contents of the overreach
-//     entries with the traditional card table entries using logical-
-//     and operations.
-//  2. Every object is scanned in its "entirety" by the thread that is
-//     responsible for the cluster that holds its starting address.
-//     Entirety is in quotes because there are various situations in
-//     which some portions of the object will not be scanned by this
-//     thread:
-//     a) If an object spans multiple card regions, all of which are
-//        contained within the same cluster, the scanning thread
-//        consults the existing card-table entries and does not scan
-//        portions of the object that are not currently dirty.
-//     b) For any cluster that is spanned in its entirety by a very
-//        large object, the GC thread that scans this object assumes
-//        full responsibility for maintenance of the associated
-//        card-table entries.
-//     c) If a cluster is partially spanned by an object originating
-//        in a preceding cluster, the portion of the object that
-//        partially spans the following cluster is scanned in its
-//        entirety (because the thread that is responsible for
-//        scanning the object cannot rely upon the card-table entries
-//        associated with the following cluster).  Whenever references
-//        to young-gen memory are found within the scanned data, the
-//        associated overreach card table entries are marked as dirty
-//        by the scanning thread.
-//  3. If a cluster is spanned in its entirety by an object that
-//     originates within a preceding cluster's memory, the thread
-//     assigned to examine this cluster does absolutely nothing.  The
-//     thread assigned to scan the cluster that holds the object's
-//     starting address takes full responsibility for scanning the
-//     entire object and updating the associated card-table entries.
-//  4. If a cluster is spanned partially by an object that originates
-//     within a preceding cluster's memory, the thread assigned to
-//     examine this cluster marks the card-table entry as clean for
-//     each card table that is fully spanned by this overreaching
-//     object.  If a card-table entry's memory is partially spanned
-//     by the overreaching object, the thread sets the card-table
-//     entry to clean if it was previously dirty and if the portion
-//     of the card-table entry's memory that is not spanned by the
-//     overreaching object does not hold pointers to young-gen
-//     memory.
-//  5. While examining a particular card belonging to a particular
-//     cluster, if an object reaches beyond the end of its card
-//     memory, the thread "scans" all portions of the object that
-//     correspond to DIRTY card entries within the current cluster and
-//     all portions of the object that reach into following clustesr.
-//     After this object is scanned, continue scanning with the memory
-//     that follows this object if this memory pertains to the same
-//     cluster.  Otherwise, consider this cluster's memory to have
-//     been fully examined.
+//  1. The thread responsible for scanning the cards in a cluster modifies
+//     the associated card-table entries. Only cards that are dirty are
+//     processed, except as described below for the case of objects that
+//     straddle more than one card.
+//  2. Object Arrays are precisely dirtied, so only the portion of the obj-array
+//     that overlaps the range of dirty cards in its cluster are scanned
+//     by each worker thread. This holds for portions of obj-arrays that extend
+//     over clusters processed by different workers, with each worked responsible
+//     for scanning the portion of the obj-array overlapping the dirty cards in
+//     its cluster.
+//  3. Non-array objects are precisely dirtied by the interpreter and the compilers
+//     (why? Are offsets of a field in an object that expensive to determine?).
+//     For such objects that extend over multiple cards, or even multiple clusters,
+//     the entire object is scanned by the worker that processes the (dirty) card on
+//     which the object's header lies. However, GC workers then precisley dirty the
+//     cards in the body of this object, thus making the subsequent scans potentially
+//     less expensive. This is achieved by means of marking the card "younger-gen-val",
+//     indicating the presence of an intergenerational pointer on the card on which the
+//     intergenerational pointer is found. GC threads always maintain this value
+//     in preference to "dirty-card-val" for cards with intergenerational pointers.
 //
-// Discussion:
-//  Though this design results from careful consideration of multiple
-//  design objectives, it is subject to various criticisms.  Some
-//  discussion of the design choices is provided here:
-//
-//  1. Note that remembered sets are a heuristic technique to avoid
-//     the need to scan all of old-gen memory with each young-gen
-//     collection.  If we sometimes scan a bit more memory than is
-//     absolutely necessary, that should be considered a reasonable
-//     compromise.  This compromise is already present in the sizing
-//     of card table memory areas.  Note that a single dirty pointer
-//     within a 512-byte card region forces the "unnecessary" scanning
-//     of 63 = ((512 - 8 = 504) / 8) pointers.
-//  2. One undesirable aspect of this design is that we sometimes have
-//     to scan large amounts of memory belonging to very large
-//     objects, even for parts of the very large object that do not
-//     correspond to dirty card table entries.  Note that this design
-//     limits the amount of non-dirty scanning that might have to
-//     be performed for these very large objects.  In particular, only
-//     the last part of the very large object that extends into but
-//     does not completely span a particular cluster is unnecessarily
-//     scanned.  Thus, for each very large object, the maximum
-//     over-scan is the size of memory spanned by a single cluster.
-//  3. The representation of pointer location descriptive information
+//  A possible criticism:
+//  C. The representation of pointer location descriptive information
 //     within Klass representations is not designed for efficient
 //     "random access".  An alternative approach to this design would
 //     be to scan very large objects multiple times, once for each
@@ -430,36 +361,22 @@ public:
 //     represent old-gen memory, the card regions that span the
 //     boundary between these neighboring heap regions will be
 //     consecutively numbered.
-//  3. (A corollary) In the case that an old-gen object spans the
+//  3. (A corollary) In the case that an old-gen object straddles the
 //     boundary between two heap regions, the card regions that
 //     correspond to the span of this object will be consecutively
 //     numbered.
-
-
+//
 // ShenandoahCardCluster abstracts access to the remembered set
 // and also keeps track of crossing map information to allow efficient
 // resolution of object start addresses.
 //
 // ShenandoahCardCluster supports all of the services of
 // RememberedSet, plus it supports register_object() and lookup_object().
-//
-// There are two situations under which we need to know the location
-// at which the object spanning the start of a particular card-table
-// memory region begins:
-//
-// 1. When we begin to scan dirty card memory that is not the
-//    first card region within a cluster, and the object that
-//    crosses into this card memory was not previously scanned,
-//    we need to find where that object starts so we can scan it.
-//    (Asides: if the objects starts within a previous cluster, it
-//     has already been scanned.  If the object starts within this
-//     cluster and it spans at least one card region that is dirty
-//     and precedes this card region within the cluster, then it has
-//     already been scanned.)
-// 2. When we are otherwise done scanning a complete cluster, if the
-//    last object within the cluster reaches into the following
-//    cluster, we need to scan this object.  Thus, we need to find
-//    its starting location.
+// Note that we only need to register the start addresses of the object that
+// overlays the first address of a card; we need to do this for every card.
+// In other words, register_object() checks if the object crosses a card boundary,
+// and updates the offset value for each card that the object crosses into.
+// For objects that don't straddle cards, nothing needs to be done.
 //
 // The RememberedSet template parameter is intended to represent either
 //     ShenandoahDirectCardMarkRememberedSet, or a to-be-implemented
@@ -768,6 +685,48 @@ public:
 
 };
 
+class ShenandoahCardStats: public CHeapObj<mtGC> {
+private:
+  size_t _total_card_cnt;
+  size_t _dirty_card_cnt;
+  size_t _clean_card_cnt;
+  size_t _obj_cnt;
+  size_t _oop_cnt;
+  size_t _proc_oop_cnt;
+
+public:
+  ShenandoahCardStats() :
+    _total_card_cnt(0),
+    _dirty_card_cnt(0),
+    _clean_card_cnt(0),
+    _obj_cnt(0),
+    _oop_cnt(0),
+    _proc_oop_cnt(0) { }
+
+  void clear() {
+    _total_card_cnt = 0;
+    _dirty_card_cnt = 0;
+    _clean_card_cnt = 0;
+    _obj_cnt = 0;
+    _oop_cnt = 0;
+    _proc_oop_cnt = 0;
+  }
+
+  void increment_total_card_cnt() { _total_card_cnt++; }
+  void increment_dirty_card_cnt() { _dirty_card_cnt++; }
+  void increment_clean_card_cnt() { _clean_card_cnt++; }
+  void increment_obj_cnt()        { _obj_cnt++;        }
+  void increment_oop_cnt()        { _oop_cnt++;        }
+  void increment_proc_oop_cnt()   { _proc_oop_cnt++;   }
+
+  size_t total_card_cnt() { return _total_card_cnt; }
+  size_t dirty_card_cnt() { return _dirty_card_cnt; }
+  size_t clean_card_cnt() { return _clean_card_cnt; }
+  size_t obj_cnt()        { return _obj_cnt;        }
+  size_t oop_cnt()        { return _oop_cnt;        }
+  size_t proc_oop_cnt()   { return _proc_oop_cnt;   }
+};
+
 // ShenandoahScanRemembered is a concrete class representing the
 // ability to scan the old-gen remembered set for references to
 // objects residing in young-gen memory.
@@ -788,9 +747,17 @@ template<typename RememberedSet>
 class ShenandoahScanRemembered: public CHeapObj<mtGC> {
 
 private:
-
   RememberedSet* _rs;
   ShenandoahCardCluster<RememberedSet>* _scc;
+  ShenandoahCardStats** _card_stats;
+
+  ShenandoahCardStats** allocate_card_stats(int max_workers) {
+    ShenandoahCardStats** card_stats = NEW_C_HEAP_ARRAY(ShenandoahCardStats*, max_workers, mtGC);
+    for (int i = 0; i < max_workers; i++) {
+      card_stats[i] = new ShenandoahCardStats();
+    }
+    return card_stats;
+  }
 
 public:
   // How to instantiate this object?
@@ -808,9 +775,10 @@ public:
   //     ShenandoahScanRememberd<ShenandoahBufferWithSATBRememberedSet>(rs);
 
 
-  ShenandoahScanRemembered(RememberedSet *rs) {
+  ShenandoahScanRemembered(RememberedSet *rs, int max_workers) {
     _rs = rs;
     _scc = new ShenandoahCardCluster<RememberedSet>(rs);
+    _card_stats = allocate_card_stats(max_workers);
   }
 
   ~ShenandoahScanRemembered() {
@@ -849,6 +817,9 @@ public:
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
   size_t cluster_count();
 
+  // Card statistics
+  ShenandoahCardStats* card_stats(int worker_id) { return _card_stats[worker_id]; }
+
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   void swap_remset() { _rs->swap_remset(); }
 
@@ -881,51 +852,55 @@ public:
   // clear the cards to clean, and clear the object_starts info to no objects
   void mark_range_as_empty(HeapWord *addr, size_t length_in_words);
 
-  // process_clusters() scans a portion of the remembered set during a JVM
-  // safepoint as part of the root scanning activities that serve to
-  // initiate concurrent scanning and concurrent evacuation.  Multiple
-  // threads may scan different portions of the remembered set by
-  // making parallel invocations of process_clusters() with each
-  // invocation scanning different clusters of the remembered set.
+  // process_clusters() scans a portion of the remembered set
+  // to scan roots from old gen into young to identify live objects
+  // in the young generation. Several worker threads scan different
+  // portions of the remembered set by making parallel invocations
+  // of process_clusters() with each invocation scanning different
+  // "clusters" of the remembered set.
   //
   // An invocation of process_clusters() examines all of the
-  // intergenerational references spanned by count clusters starting
-  // with first_cluster.  The oops argument is assumed to represent a
-  // thread-local OopClosure into which addresses of intergenerational
-  // pointer values will be accumulated for the purposes of root scanning.
+  // intergenerational references spanned by `count` clusters starting
+  // with `first_cluster`.  The `oops` argument is a worker-thread-local
+  // OopClosure that is applied to all "valid" references in the remembered set.
   //
-  // A side effect of executing process_clusters() is to update the card
-  // table entries, marking dirty cards as clean if they no longer
-  // hold references to young-gen memory.  (THIS IS NOT YET IMPLEMENTED.)
+  // A side-effect of executing process_clusters() is to update the remembered
+  // set entries (e.g. marking dirty cards clean if they no longer
+  // hold references to young-gen memory).
   //
-  // The implementation of process_clusters() is designed to efficiently
-  // minimize work in the large majority of cases for which the
-  // associated cluster has very few dirty card-table entries.
+  // An implementation of process_clusters() may choose to efficiently
+  // address more typical scenarios in the structure of remembered sets. E.g.
+  // in the generational setting, one might expect remembered sets to be very sparse
+  // (low mutation rates in the old generation leading to sparse dirty cards,
+  // each with very few intergenerational pointers). Specific implementations
+  // may choose to degrade gracefully as the sparsity assumption fails to hold,
+  // such as when there are sudden spikes in (premature) promotion or in the
+  // case of an underprovisioned, poorly-tuned, or poorly-shaped heap.
   //
-  // At initialization of concurrent marking, invoke process_clusters with
-  // ClosureType equal to ShenandoahInitMarkRootsClosure.
+  // At the start of a concurrent young generation marking cycle, we invoke process_clusters
+  // with ClosureType ShenandoahInitMarkRootsClosure.
   //
-  // At initialization of concurrent evacuation, invoke process_clusters with
-  // ClosureType equal to ShenandoahEvacuateUpdateRootsClosure.
+  // At the start of a concurrent evacuation phase, we invoke process_clusters with
+  // ClosureType ShenandoahEvacuateUpdateRootsClosure.
 
   // This is big enough it probably shouldn't be in-lined.  On the other hand, there are only a few places this
-  // code is called from, so it might as well be in-lined.  The "real" reason I'm inlining at the moment is because
+  // code is called from, so it might well be in-lined.  The "real" reason I'm inlining at the moment is because
   // the template expansions were making it difficult for the link/loader to resolve references to the template-
   // parameterized implementations of this service.
   template <typename ClosureType>
-  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent);
+  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, ShenandoahCardStats* stats);
 
   template <typename ClosureType>
   inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
-                               bool use_write_table, bool is_concurrent);
+                               bool use_write_table, bool is_concurrent, ShenandoahCardStats* stats);
 
   template <typename ClosureType>
   inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
-                                         HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent);
+                                         HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent, ShenandoahCardStats* stats);
 
   template <typename ClosureType>
   inline void process_region_slice(ShenandoahHeapRegion* region, size_t offset, size_t clusters, HeapWord* end_of_range,
-                                   ClosureType *cl, bool use_write_table, bool is_concurrent);
+                                   ClosureType *cl, bool use_write_table, bool is_concurrent, ShenandoahCardStats* stats);
 
   // To Do:
   //  Create subclasses of ShenandoahInitMarkRootsClosure and
@@ -1034,6 +1009,7 @@ class ShenandoahScanRememberedTask : public WorkerTask {
   ShenandoahReferenceProcessor* _rp;
   ShenandoahRegionChunkIterator* _work_list;
   bool _is_concurrent;
+
  public:
   ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
                                ShenandoahObjToScanQueueSet* old_queue_set,
