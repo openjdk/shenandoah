@@ -456,8 +456,8 @@ template<typename RememberedSet>
 template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, bool is_concurrent, ShenandoahCardStats* stats) {
-  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, stats);
+                                                          ClosureType *cl, bool is_concurrent, uint worker_id) {
+  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, worker_id);
 }
 
 // Process all objects starting within count clusters beginning with first_cluster for which the start address is
@@ -472,7 +472,7 @@ template<typename RememberedSet>
 template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, bool write_table, bool is_concurrent, ShenandoahCardStats* stats) {
+                                                          ClosureType *cl, bool write_table, bool is_concurrent, uint worker_id) {
 
   // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
   // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
@@ -502,6 +502,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
+  ShenandoahCardStats stats;
   while (cur_count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
@@ -515,7 +516,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
     size_t clean_run = 1;
 
     while (card_index < end_card_index) {
-      stats->increment_total_card_cnt();
+      stats.increment_total_card_cnt();
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
         cur_count = 0;
         card_index = end_card_index;
@@ -525,11 +526,11 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
       bool has_object = _scc->has_object(card_index);
       if (is_dirty) {
 	// Stats
-	stats->increment_dirty_card_cnt();
+	stats.increment_dirty_card_cnt();
 	if (last_dirty) {
 	  dirty_run++;
         } else {
-	  stats->update_max_clean_run(clean_run);
+	  stats.update_max_clean_run(clean_run);
 	  last_clean = false;
 	  last_dirty = true;
 	  dirty_run = 1;
@@ -602,11 +603,11 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
 	assert(last_dirty && dirty_run > 0, "Control point invariant");
       } else {
 	// clean card
-	stats->increment_clean_card_cnt();
+	stats.increment_clean_card_cnt();
 	if (last_clean) {
           clean_run++;
         } else {
-          stats->update_max_dirty_run(dirty_run);
+          stats.update_max_dirty_run(dirty_run);
 	  last_dirty = false;
 	  last_clean = true;
           clean_run = 1;
@@ -687,13 +688,12 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
     assert(!(last_dirty || last_clean) || (last_dirty && dirty_run > 0) || (last_clean && clean_run > 0),
            "dirty/clean run stats inconsistent");
     if (last_dirty) {
-      stats->update_max_dirty_run(dirty_run);
+      stats.update_max_dirty_run(dirty_run);
     } else if (last_clean) {
-      stats->update_max_clean_run(clean_run);
+      stats.update_max_clean_run(clean_run);
     }
   }
-  stats->log();
-  stats->clear();
+  stats.log(worker_id);
 }
 
 // Given that this range of clusters is known to span a humongous object spanned by region r, scan the
@@ -703,7 +703,7 @@ template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
                                                                     HeapWord *end_of_range, ClosureType *cl, bool write_table,
-                                                                    bool is_concurrent, ShenandoahCardStats* stats) {
+                                                                    bool is_concurrent, uint worker_id) {
   ShenandoahHeapRegion* start_region = r->humongous_start_region();
   HeapWord* p = start_region->bottom();
   oop obj = cast_to_oop(p);
@@ -723,7 +723,7 @@ template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegion *region, size_t start_offset, size_t clusters,
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
-                                                              bool is_concurrent, ShenandoahCardStats* stats) {
+                                                              bool is_concurrent, uint worker_id) {
   HeapWord *start_of_range = region->bottom() + start_offset;
   size_t cluster_size =
     CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
@@ -770,9 +770,9 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
   if (start_of_range < end_of_range) {
     if (region->is_humongous()) {
       ShenandoahHeapRegion* start_region = region->humongous_start_region();
-      process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, stats);
+      process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, worker_id);
     } else {
-      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, stats);
+      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, worker_id);
     }
   }
 }
@@ -796,7 +796,6 @@ ShenandoahScanRemembered<RememberedSet>::addr_for_cluster(size_t cluster_no) {
 template<typename RememberedSet>
 inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahCardStats* stats = card_stats(0);
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
     if (region->is_old() && region->is_active() && !region->is_cset()) {
@@ -811,9 +810,9 @@ inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure*
       // Remembered set scanner
       if (region->is_humongous()) {
         process_humongous_clusters(region->humongous_start_region(), start_cluster_no, num_clusters, end_of_range, cl,
-                                   false /* is_write_table */, false /* is_concurrent */, stats);
+                                   false /* is_write_table */, false /* is_concurrent */);
       } else {
-        process_clusters(start_cluster_no, num_clusters, end_of_range, cl, false /* is_concurrent */, stats);
+        process_clusters(start_cluster_no, num_clusters, end_of_range, cl, false /* is_concurrent */);
       }
     }
   }
@@ -858,10 +857,10 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   return true;
 }
 
-inline void ShenandoahCardStats::log() const {
+inline void ShenandoahCardStats::log(uint worker_id) const {
   log_info(gc,remset)("Worker %u card stats: total " SIZE_FORMAT ", dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
                       " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "), objs " SIZE_FORMAT ", oops " SIZE_FORMAT "(proc " SIZE_FORMAT ")",
-                      _worker_id, _total_card_cnt, _dirty_card_cnt, _max_dirty_run,
+                      worker_id, _total_card_cnt, _dirty_card_cnt, _max_dirty_run,
                       _clean_card_cnt, _max_clean_run, _obj_cnt, _oop_cnt, _proc_oop_cnt);
 }
 

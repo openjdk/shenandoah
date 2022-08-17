@@ -231,7 +231,7 @@ jint ShenandoahHeap::initialize() {
     ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
     size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize) - 1;
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
-    _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs, _max_workers);
+    _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
@@ -2564,7 +2564,6 @@ private:
       // threads during this phase, allowing all threads to work more effectively in parallel.
       struct ShenandoahRegionChunk assignment;
       RememberedScanner* scanner = _heap->card_scan();
-      ShenandoahCardStats* stats = scanner->card_stats(worker_id);
 
       while (!_heap->check_cancelled_gc_and_yield(CONCURRENT) && _work_chunks->next(&assignment)) {
 	// Keep grabging next workchunk to process until finished or asked to yield
@@ -2660,7 +2659,7 @@ private:
                 CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
               size_t clusters = assignment._chunk_size / cluster_size;
               assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
-              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT, stats);
+              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT, worker_id);
             }
           }
           if (ShenandoahPacing && (start_of_range < end_of_range)) {

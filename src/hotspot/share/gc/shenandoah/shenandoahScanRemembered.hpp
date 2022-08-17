@@ -687,7 +687,6 @@ public:
 
 class ShenandoahCardStats: public CHeapObj<mtGC> {
 private:
-  const uint _worker_id;
   size_t _total_card_cnt;
   size_t _dirty_card_cnt;
   size_t _max_dirty_run;
@@ -698,8 +697,7 @@ private:
   size_t _proc_oop_cnt;
 
 public:
-  ShenandoahCardStats(uint worker_id) :
-    _worker_id(worker_id),
+  ShenandoahCardStats() :
     _total_card_cnt(0),
     _dirty_card_cnt(0),
     _max_dirty_run(0),
@@ -708,15 +706,6 @@ public:
     _obj_cnt(0),
     _oop_cnt(0),
     _proc_oop_cnt(0) { }
-
-  void clear() {
-    _total_card_cnt = 0;
-    _dirty_card_cnt = 0;
-    _clean_card_cnt = 0;
-    _obj_cnt = 0;
-    _oop_cnt = 0;
-    _proc_oop_cnt = 0;
-  }
 
   void increment_total_card_cnt() { _total_card_cnt++; }
   void increment_dirty_card_cnt() { _dirty_card_cnt++; }
@@ -742,7 +731,7 @@ public:
   size_t oop_cnt()        { return _oop_cnt;        }
   size_t proc_oop_cnt()   { return _proc_oop_cnt;   }
 
-  inline void log() const;
+  inline void log(uint worker_id = 0) const;
 };
 
 // ShenandoahScanRemembered is a concrete class representing the
@@ -767,15 +756,6 @@ class ShenandoahScanRemembered: public CHeapObj<mtGC> {
 private:
   RememberedSet* _rs;
   ShenandoahCardCluster<RememberedSet>* _scc;
-  ShenandoahCardStats** _card_stats;
-
-  ShenandoahCardStats** allocate_card_stats(int max_workers) {
-    ShenandoahCardStats** card_stats = NEW_C_HEAP_ARRAY(ShenandoahCardStats*, max_workers, mtGC);
-    for (int i = 0; i < max_workers; i++) {
-      card_stats[i] = new ShenandoahCardStats(i);
-    }
-    return card_stats;
-  }
 
 public:
   // How to instantiate this object?
@@ -793,10 +773,9 @@ public:
   //     ShenandoahScanRememberd<ShenandoahBufferWithSATBRememberedSet>(rs);
 
 
-  ShenandoahScanRemembered(RememberedSet *rs, int max_workers) {
+  ShenandoahScanRemembered(RememberedSet *rs) {
     _rs = rs;
     _scc = new ShenandoahCardCluster<RememberedSet>(rs);
-    _card_stats = allocate_card_stats(max_workers);
   }
 
   ~ShenandoahScanRemembered() {
@@ -834,9 +813,6 @@ public:
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
   size_t cluster_count();
-
-  // Card statistics
-  ShenandoahCardStats* card_stats(int worker_id) { return _card_stats[worker_id]; }
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   void swap_remset() { _rs->swap_remset(); }
@@ -906,19 +882,19 @@ public:
   // the template expansions were making it difficult for the link/loader to resolve references to the template-
   // parameterized implementations of this service.
   template <typename ClosureType>
-  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, ShenandoahCardStats* stats);
+  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, uint worker_id = 0);
 
   template <typename ClosureType>
   inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
-                               bool use_write_table, bool is_concurrent, ShenandoahCardStats* stats);
+                               bool use_write_table, bool is_concurrent, uint worker_id = 0);
 
   template <typename ClosureType>
   inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
-                                         HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent, ShenandoahCardStats* stats);
+                                         HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent, uint worker_id = 0);
 
   template <typename ClosureType>
   inline void process_region_slice(ShenandoahHeapRegion* region, size_t offset, size_t clusters, HeapWord* end_of_range,
-                                   ClosureType *cl, bool use_write_table, bool is_concurrent, ShenandoahCardStats* stats);
+                                   ClosureType *cl, bool use_write_table, bool is_concurrent, uint worker_id);
 
   // To Do:
   //  Create subclasses of ShenandoahInitMarkRootsClosure and
