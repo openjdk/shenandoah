@@ -692,9 +692,8 @@ private:
   size_t _max_dirty_run;
   size_t _clean_card_cnt;
   size_t _max_clean_run;
-  size_t _obj_cnt;
-  size_t _oop_cnt;
-  size_t _proc_oop_cnt;
+  size_t _dirty_obj_cnt;
+  size_t _clean_obj_cnt;
 
 public:
   ShenandoahCardStats() :
@@ -703,16 +702,15 @@ public:
     _max_dirty_run(0),
     _clean_card_cnt(0),
     _max_clean_run(0),
-    _obj_cnt(0),
-    _oop_cnt(0),
-    _proc_oop_cnt(0) { }
+    _dirty_obj_cnt(0),
+    _clean_obj_cnt(0)
+  { }
 
   void increment_total_card_cnt() { _total_card_cnt++; }
   void increment_dirty_card_cnt() { _dirty_card_cnt++; }
   void increment_clean_card_cnt() { _clean_card_cnt++; }
-  void increment_obj_cnt()        { _obj_cnt++;        }
-  void increment_oop_cnt()        { _oop_cnt++;        }
-  void increment_proc_oop_cnt()   { _proc_oop_cnt++;   }
+  void increment_obj_dirty_cnt()  { _dirty_obj_cnt++;  }
+  void increment_obj_clean_cnt()  { _clean_obj_cnt++;  }
   void update_max_dirty_run(size_t run) {
     if (run > _max_dirty_run) {
       _max_dirty_run = run;
@@ -727,9 +725,8 @@ public:
   size_t total_card_cnt() { return _total_card_cnt; }
   size_t dirty_card_cnt() { return _dirty_card_cnt; }
   size_t clean_card_cnt() { return _clean_card_cnt; }
-  size_t obj_cnt()        { return _obj_cnt;        }
-  size_t oop_cnt()        { return _oop_cnt;        }
-  size_t proc_oop_cnt()   { return _proc_oop_cnt;   }
+  size_t dirty_obj_cnt()  { return _dirty_obj_cnt;  }
+  size_t clean_obj_cnt()  { return _clean_obj_cnt;  }
 
   inline void log(uint worker_id = 0) const;
 };

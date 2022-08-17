@@ -560,6 +560,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           p += start_offset;
           while (p < endp) {
             oop obj = cast_to_oop(p);
+	    stats.increment_obj_dirty_cnt();
 
             // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
             if (!ctx || ctx->is_marked(obj)) {
@@ -625,6 +626,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           size_t last_card;
           if (!ctx || ctx->is_marked(obj)) {
             HeapWord *nextp = p + obj->size();
+	    stats.increment_obj_clean_cnt();
 
             // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
             // failure if nextp points to end of heap.
@@ -859,9 +861,9 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
 
 inline void ShenandoahCardStats::log(uint worker_id) const {
   log_info(gc,remset)("Worker %u card stats: total " SIZE_FORMAT ", dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
-                      " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "), objs " SIZE_FORMAT ", oops " SIZE_FORMAT "(proc " SIZE_FORMAT ")",
+                      " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "), dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT,
                       worker_id, _total_card_cnt, _dirty_card_cnt, _max_dirty_run,
-                      _clean_card_cnt, _max_clean_run, _obj_cnt, _oop_cnt, _proc_oop_cnt);
+                      _clean_card_cnt, _max_clean_run, _dirty_obj_cnt, _clean_obj_cnt);
 }
 
 #endif   // SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
