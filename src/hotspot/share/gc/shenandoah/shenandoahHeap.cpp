@@ -527,6 +527,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _pacer(NULL),
   _verifier(NULL),
   _phase_timings(NULL),
+  _evac_tracker(new ShenandoahEvacuationTracker()),
   _monitoring_support(NULL),
   _memory_pool(NULL),
   _young_gen_memory_pool(NULL),
@@ -1728,6 +1729,10 @@ void ShenandoahHeap::print_tracing_info() const {
     ls.cr();
 
     shenandoah_policy()->print_gc_stats(&ls);
+
+    ls.cr();
+
+    evac_tracker()->print_global_on(&ls);
 
     ls.cr();
     ls.cr();
