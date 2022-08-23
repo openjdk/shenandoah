@@ -527,7 +527,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _pacer(NULL),
   _verifier(NULL),
   _phase_timings(NULL),
-  _evac_tracker(new ShenandoahEvacuationTracker(ConcGCThreads)),
+  _evac_tracker(new ShenandoahEvacuationTracker(MAX2(ConcGCThreads, ParallelGCThreads))),
   _monitoring_support(NULL),
   _memory_pool(NULL),
   _young_gen_memory_pool(NULL),
