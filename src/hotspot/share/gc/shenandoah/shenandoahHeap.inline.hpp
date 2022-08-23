@@ -517,8 +517,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   }
 
   // Copy the object:
-  ShenandoahEvacuationStats& stats = thread->is_Java_thread() ? _evac_tracker->mutators() : _evac_tracker->workers();
-  stats.begin_evacuation(size * HeapWordSize);
+  _evac_tracker->begin_evacuation(thread, size * HeapWordSize);
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
   oop copy_val = cast_to_oop(copy);
@@ -533,7 +532,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
-    stats.end_evacuation(size * HeapWordSize);
+    _evac_tracker->end_evacuation(thread, size * HeapWordSize);
     if (mode()->is_generational() && target_gen == OLD_GENERATION) {
       handle_old_evacuation(copy, size, from_region->is_young());
     }

@@ -37,7 +37,9 @@ class ShenandoahEvacuationStats {
  public:
   ShenandoahEvacuationStats();
   void begin_evacuation(size_t bytes);
+  void begin_worker_evacuation(size_t bytes);
   void end_evacuation(size_t bytes);
+  void end_worker_evacuation(size_t bytes);
 
   void print_on(outputStream* st) const;
   void accumulate(const ShenandoahEvacuationStats& other);
@@ -46,14 +48,17 @@ class ShenandoahEvacuationStats {
 
 class ShenandoahEvacuationTracker : public CHeapObj<mtGC> {
  private:
-  ShenandoahEvacuationStats _workers_cycle;
-  ShenandoahEvacuationStats _mutators_cycle;
-  ShenandoahEvacuationStats _workers_global;
-  ShenandoahEvacuationStats _mutators_global;
+  ShenandoahEvacuationStats* _workers_cycle;
+  ShenandoahEvacuationStats  _mutators_cycle;
+  ShenandoahEvacuationStats  _workers_global;
+  ShenandoahEvacuationStats  _mutators_global;
+  uint _max_workers;
 
  public:
-  ShenandoahEvacuationStats& workers() { return _workers_cycle; }
-  ShenandoahEvacuationStats& mutators() { return _mutators_cycle; }
+  explicit ShenandoahEvacuationTracker(uint max_workers);
+
+  void begin_evacuation(Thread* thread, size_t bytes);
+  void end_evacuation(Thread* thread, size_t bytes);
 
   void print_cycle_on(outputStream* st) const;
   void print_global_on(outputStream* st) const;
