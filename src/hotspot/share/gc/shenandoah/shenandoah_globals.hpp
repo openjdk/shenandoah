@@ -250,6 +250,13 @@
           "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
           "(%p replaced with pid)")                                         \
                                                                             \
+  product(uintx, ShenandoahLogFileCount, 5, "This setting defines the file "\
+          "count of for the log rotation. Defaulted to be 5 and maximum of 1000.")\
+          range(1, 1000)                                                    \
+                                                                            \
+  product(size_t, ShenandoahLogFileSize, 20 * M, "This setting defines the "\
+          "file size of for the log rotation. Defaulted to be 20 * M.")     \
+                                                                            \
   product(uintx, ShenandoahControlIntervalMin, 1, EXPERIMENTAL,             \
           "The minimum sleep interval for the control loop that drives "    \
           "the cycles. Lower values would increase GC responsiveness "      \
