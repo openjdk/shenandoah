@@ -33,13 +33,10 @@
 #include "runtime/perfData.inline.hpp"
 
 // Log file output to capture Shenandoah GC data.
-class LogFileStreamOutput;
 
 class ShenandoahLogFileOutput : public CHeapObj<mtClass> {
 private:
     static const char* const FileOpenMode;
-    static const char* const FileCountOptionKey;
-    static const char* const FileSizeOptionKey;
     static const char* const PidFilenamePlaceholder;
     static const char* const TimestampFilenamePlaceholder;
     static const char* const TimestampFormat;

@@ -207,8 +207,10 @@ void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
         errstream->print_cr("Error opening log file '%s': %s", _file_name, os::strerror(errno));
         _file_name = make_file_name("./shenandoahSnapshots_pid%p.log", _pid_str, _vm_start_time_str);
         _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
-        errstream->print_cr("Writing to default log file: %s", _file_name);
-        return;
+        if (_stream != NULL) {
+            errstream->print_cr("Writing to default log file: %s", _file_name);
+            return;
+        } 
     }
     if (_file_count == 0 && is_regular_file(_file_name)) {
         os::ftruncate(os::get_fileno(_stream), 0);
@@ -216,15 +218,15 @@ void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
     return;
 }
 
-class RotationLocker : public StackObj {
+class ShenandoahRotationLocker : public StackObj {
     Semaphore& _sem;
 
 public:
-    RotationLocker(Semaphore& sem) : _sem(sem) {
+    ShenandoahRotationLocker(Semaphore& sem) : _sem(sem) {
         sem.wait();
     }
 
-    ~RotationLocker() {
+    ~ShenandoahRotationLocker() {
         _sem.signal();
     }
 };
@@ -288,7 +290,7 @@ void ShenandoahLogFileOutput::force_rotate() {
         return;
     }
 
-    RotationLocker lock(_rotation_semaphore);
+    ShenandoahRotationLocker lock(_rotation_semaphore);
     rotate();
 }
 
