@@ -205,14 +205,8 @@ void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
     _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
     if (_stream == NULL) {
         errstream->print_cr("Error opening log file '%s': %s", _file_name, os::strerror(errno));
-        _file_name = make_file_name("./shenandoahSnapshots_pid%p.log", _pid_str, _vm_start_time_str);
-        _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
-        if (_stream != NULL) {
-            errstream->print_cr("Writing to default log file: %s", _file_name);
-            return;
-        } else {
-            vm_exit_during_initialization();
-        }
+        vm_exit_during_initialization();
+        assert(_stream != NULL, "JVM exits because log file cannot be written.");
     }
     if (_file_count == 0 && is_regular_file(_file_name)) {
         os::ftruncate(os::get_fileno(_stream), 0);
