@@ -211,8 +211,7 @@ void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
             errstream->print_cr("Writing to default log file: %s", _file_name);
             return;
         } else {
-            errstream->print_cr("Cannot open log file: %s", _file_name);
-            return;
+            vm_exit_during_initialization();
         }
     }
     if (_file_count == 0 && is_regular_file(_file_name)) {
@@ -239,6 +238,10 @@ int ShenandoahLogFileOutput::write_snapshot(PerfLongVariable** regions,
                                             PerfLongVariable* status,
                                             size_t num_regions,
                                             size_t region_size, size_t protocol_version) {
+  if (_stream == NULL) {
+      // An error has occurred with this output, avoid writing to it.
+      return 0;
+  }
   int written = 0;
 
   FileLocker flocker(_stream);
