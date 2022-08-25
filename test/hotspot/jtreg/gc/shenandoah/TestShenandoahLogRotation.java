@@ -42,7 +42,7 @@
 
    public class TestShenandoahLogRotation {
 
-       static final long TARGET_MB = Long.getLong("target", 1); // 2 Gb allocation
+       static final long TARGET_MB = Long.getLong("target", 1);
 
        static volatile Object sink;
 
@@ -62,7 +62,7 @@
                    smallFilesNumber++;
                }
            }
-           // Expect one more log file since the number-of-files doesn't include the active log file
+           // Expect one more log file since the ShenandoahLogFileCount doesn't include the active log file
            int expectedNumberOfFiles = 4;
            if (files.length != expectedNumberOfFiles) {
                throw new Error("There are " + files.length + " logs instead of the expected " + expectedNumberOfFiles + " " + files[0].getAbsolutePath());

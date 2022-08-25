@@ -210,7 +210,10 @@ void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
         if (_stream != NULL) {
             errstream->print_cr("Writing to default log file: %s", _file_name);
             return;
-        } 
+        } else {
+            errstream->print_cr("Cannot open log file: %s", _file_name);
+            return;
+        }
     }
     if (_file_count == 0 && is_regular_file(_file_name)) {
         os::ftruncate(os::get_fileno(_stream), 0);

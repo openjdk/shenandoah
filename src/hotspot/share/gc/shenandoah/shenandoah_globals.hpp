@@ -250,12 +250,14 @@
           "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
           "(%p replaced with pid)")                                         \
                                                                             \
-  product(uintx, ShenandoahLogFileCount, 5, "This setting defines the file "\
-          "count of for the log rotation. Defaulted to be 5 and maximum of 1000.")\
+  product(uintx, ShenandoahLogFileCount, 5, "Defines the maximum number of "\
+          "log files. Default is 5, maximum is 1000. Only includes rotated/"\
+          "archived files. Doesn't include active log file.")               \
           range(1, 1000)                                                    \
                                                                             \
-  product(size_t, ShenandoahLogFileSize, 20 * M, "This setting defines the "\
-          "file size of for the log rotation. Defaulted to be 20 * M.")     \
+  product(size_t, ShenandoahLogFileSize, 20 * M, "Defines the maximum size "\
+          "of the log file. Files over this size will be rotated. Default " \
+          "is 20MB.")                                                       \
                                                                             \
   product(uintx, ShenandoahControlIntervalMin, 1, EXPERIMENTAL,             \
           "The minimum sleep interval for the control loop that drives "    \
