@@ -32,6 +32,7 @@
 #include "runtime/perfData.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/defaultStream.hpp"
+#include "utilities/formatBuffer.hpp"
 
 #include "gc/shenandoah/shenandoahLogFileOutput.hpp"
 
@@ -187,31 +188,27 @@ void ShenandoahLogFileOutput::initialize(outputStream* errstream) {
 
     if (_file_count > 0 && file_exist) {
         if (!is_regular_file(_file_name)) {
-            errstream->print_cr("Unable to log to file %s with log file rotation: "
-                                "%s is not a regular file",
-                                _file_name, _file_name);
-            return;
+            vm_exit_during_initialization(err_msg("Unable to log to file %s with log file rotation: "
+                                                   "%s is not a regular file", _file_name, _file_name));
         }
         _current_file = next_file_number(_file_name,
                                          _file_count_max_digits,
                                          _file_count,
                                          errstream);
         if (_current_file == UINT_MAX) {
-            return;
+            vm_exit_during_initialization("Current file reaches the maximum for integer. Unable to initialize the log output.");
         }
         archive();
         increment_file_count();
     }
     _stream = os::fopen(_file_name, ShenandoahLogFileOutput::FileOpenMode);
     if (_stream == NULL) {
-        errstream->print_cr("Error opening log file '%s': %s", _file_name, os::strerror(errno));
-        vm_exit_during_initialization();
-        assert(_stream != NULL, "JVM exits because log file cannot be written.");
+        vm_exit_during_initialization(err_msg("Error opening log file '%s': %s",
+                                              _file_name, os::strerror(errno)));
     }
     if (_file_count == 0 && is_regular_file(_file_name)) {
         os::ftruncate(os::get_fileno(_stream), 0);
     }
-    return;
 }
 
 class ShenandoahRotationLocker : public StackObj {
