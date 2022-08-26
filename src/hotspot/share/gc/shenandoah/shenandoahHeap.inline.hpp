@@ -551,8 +551,53 @@ inline bool ShenandoahHeap::clear_old_evacuation_failure() {
   return _old_gen_oom_evac.try_unset();
 }
 
+bool ShenandoahHeap::is_in(const void* p) const {
+  HeapWord* heap_base = (HeapWord*) base();
+  HeapWord* last_region_end = heap_base + ShenandoahHeapRegion::region_size_words() * num_regions();
+  return p >= heap_base && p < last_region_end;
+}
+
+inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
+  if (!mode()->is_generational()) {
+    // everything is the same single generation
+    return true;
+  }
+
+  if (active_generation() == NULL) {
+    // no collection is happening, only expect this to be called
+    // when concurrent processing is active, but that could change
+    return false;
+  }
+
+  return check_is_in_active_generation(active_generation(), obj);
+}
+
+inline bool ShenandoahHeap::is_in_young(const void* p) const {
+  return is_in(p) && (_affiliations[heap_region_index_containing(p)] == ShenandoahRegionAffiliation::YOUNG_GENERATION);
+}
+
+inline bool ShenandoahHeap::is_in_old(const void* p) const {
+  return is_in(p) && (_affiliations[heap_region_index_containing(p)] == ShenandoahRegionAffiliation::OLD_GENERATION);
+}
+
 inline bool ShenandoahHeap::is_old(oop obj) const {
   return is_gc_generation_young() && is_in_old(obj);
+}
+
+inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(const ShenandoahHeapRegion *r) {
+  return (ShenandoahRegionAffiliation) _affiliations[r->index()];
+}
+
+inline void ShenandoahHeap::set_affiliation(ShenandoahHeapRegion* r, ShenandoahRegionAffiliation new_affiliation) {
+  _affiliations[r->index()] = (uint8_t) new_affiliation;
+}
+
+inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(size_t index) {
+  return (ShenandoahRegionAffiliation) _affiliations[index];
+}
+
+inline void ShenandoahHeap::set_affiliation(size_t index, ShenandoahRegionAffiliation new_affiliation) {
+  _affiliations[index] = (uint8_t) new_affiliation;
 }
 
 inline bool ShenandoahHeap::requires_marking(const void* entry) const {
