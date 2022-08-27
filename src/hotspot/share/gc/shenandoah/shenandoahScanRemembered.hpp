@@ -1008,6 +1008,9 @@ struct ShenandoahRegionChunk {
 
 class ShenandoahRegionChunkIterator : public StackObj {
 private:
+  // The largest chunk size is 1 GB, measured in words.  Otherwise, remembered set scanning may become too unbalanced.
+  static const size_t _maximum_chunk_size_words = 1024 * 1024 * 1024 / HeapWordSize;
+
   // smallest_chunk_size is 64 words per card *
   // ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster.
   // This is computed from CardTable::card_size_in_words() *

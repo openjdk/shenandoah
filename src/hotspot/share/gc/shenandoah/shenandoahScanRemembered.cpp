@@ -92,6 +92,11 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
     log_debug(gc)("ShenandoahScanRememberedTask::do_work(%u), processing slice of region "
                   SIZE_FORMAT " at offset " SIZE_FORMAT ", size: " SIZE_FORMAT,
                   worker_id, region->index(), assignment._chunk_offset, assignment._chunk_size);
+#undef KELVIN_DESPERATION
+#ifdef KELVIN_DESPERATION
+    printf("%u: r: " SIZE_FORMAT ", off: " SIZE_FORMAT ", size: " SIZE_FORMAT ": ",
+           worker_id, region->index(), assignment._chunk_offset, assignment._chunk_size);
+#endif
     if (region->affiliation() == OLD_GENERATION) {
       size_t cluster_size =
         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
@@ -103,26 +108,54 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
       if (end_of_range > region->top()) {
         end_of_range = region->top();
       }
+#ifdef KELVIN_DESPERATION
+      printf("[%u:" SIZE_FORMAT "] slicing ... ", worker_id, region->index());
+      fflush(stdout);
+#endif
       scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent);
+#ifdef KELVIN_DESPERATION
+      printf("sliced [%u:" SIZE_FORMAT "]\n", worker_id, region->index());
+      fflush(stdout);
+#endif
     }
+#ifdef KELVIN_DESPERATION
+    else {
+      printf("[%u:" SIZE_FORMAT "] ignoring %c\n", worker_id, region->index(), (region->affiliation() == YOUNG_GENERATION)? 'Y': 'F');
+      fflush(stdout);
+    }
+#endif
+
     has_work = _work_list->next(&assignment);
   }
+#ifdef KELVIN_DESPERATION
+  printf("%u: done\n", worker_id);
+  fflush(stdout);
+#endif
 }
 
 size_t ShenandoahRegionChunkIterator::calc_group_size() {
-  // The group size s calculated from the number of regions.  Every group except the last processes the same number of chunks.
+  // The group size is calculated from the number of regions.  Every group except the last processes the same number of chunks.
   // The last group processes however many chunks are required to finish the total scanning effort.  The chunk sizes are
   // different for each group.  The intention is that the first group processes roughly half of the heap, the second processes
   // a quarter of the remaining heap, the third processes an eight of what remains and so on.  The smallest chunk size
   // is represented by _smallest_chunk_size.  We do not divide work any smaller than this.
   //
   // Note that N/2 + N/4 + N/8 + N/16 + ...  sums to N if expanded to infinite terms.
-  return _heap->num_regions() / 2;
+  size_t group_size = _heap->num_regions() / 2;
+  if (ShenandoahHeapRegion::region_size_words() > _maximum_chunk_size_words) {
+    assert(ShenandoahHeapRegion::region_size_words() % _maximum_chunk_size_words == 0,
+           "Heap region size must be multiple of maximum chunk size");
+    group_size *= ShenandoahHeapRegion::region_size_words() / _maximum_chunk_size_words;
+  }
+  return group_size;
 }
 
 size_t ShenandoahRegionChunkIterator::calc_first_group_chunk_size() {
-  size_t words_in_region = ShenandoahHeapRegion::region_size_words();
-  return words_in_region;
+  size_t words_in_first_chunk = ShenandoahHeapRegion::region_size_words();
+  if (words_in_first_chunk > _maximum_chunk_size_words) {
+    words_in_first_chunk = _maximum_chunk_size_words;
+  }
+  return words_in_first_chunk;
 }
 
 size_t ShenandoahRegionChunkIterator::calc_num_groups() {
