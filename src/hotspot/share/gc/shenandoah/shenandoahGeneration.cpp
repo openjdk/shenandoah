@@ -23,12 +23,13 @@
  */
 
 #include "precompiled.hpp"
-
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
@@ -61,7 +62,7 @@ class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
   ShenandoahMarkingContext* const _ctx;
  public:
   ShenandoahResetBitmapTask() :
-     _heap(ShenandoahHeap::heap()),
+    _heap(ShenandoahHeap::heap()),
     _ctx(_heap->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* region) {
@@ -204,21 +205,12 @@ void ShenandoahGeneration::merge_write_table() {
   heap->old_generation()->parallel_heap_region_iterate(&task);
 }
 
-void ShenandoahGeneration::prepare_gc(bool do_old_gc_bootstrap) {
+void ShenandoahGeneration::prepare_gc() {
   // Reset mark bitmap for this generation (typically young)
   reset_mark_bitmap();
-  if (do_old_gc_bootstrap) {
-    // Reset mark bitmap for old regions also.  Note that do_old_gc_bootstrap is only true if this generation is YOUNG.
-    ShenandoahHeap::heap()->old_generation()->reset_mark_bitmap();
-  }
-
   // Capture Top At Mark Start for this generation (typically young)
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_heap_region_iterate(&cl);
-  if (do_old_gc_bootstrap) {
-    // Capture top at mark start for both old-gen regions also.  Note that do_old_gc_bootstrap is only true if generation is YOUNG.
-    ShenandoahHeap::heap()->old_generation()->parallel_heap_region_iterate(&cl);
-  }
 }
 
 void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
@@ -420,7 +412,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                                                      size_t minimum_evacuation_reserve, size_t consumed_by_advance_promotion) {
   if (heap->mode()->is_generational()) {
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-    ShenandoahGeneration* old_generation = heap->old_generation();
+    ShenandoahOldGeneration* old_generation = heap->old_generation();
     ShenandoahYoungGeneration* young_generation = heap->young_generation();
     size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
     size_t old_evacuated_committed = (size_t) (ShenandoahEvacWaste * old_evacuated);
@@ -438,6 +430,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
            consumed_by_advance_promotion, (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
 
     collection_set->abandon_preselected();
+
     if (old_evacuated_committed > old_evacuation_reserve) {
       // This should only happen due to round-off errors when enforcing ShenandoahEvacWaste
       assert(old_evacuated_committed <= (33 * old_evacuation_reserve) / 32,
@@ -446,6 +439,11 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       old_evacuated_committed = old_evacuation_reserve;
     } else if (old_evacuated_committed < old_evacuation_reserve) {
       // This may happen if the old-gen collection consumes less than full budget.
+
+      // If we shrink old_evacuation_reserve by more than a region size, we can expand regions_available_to_loan.
+      // Can only give back regions that are fully unused, so round down.
+      size_t old_evac_regions_unused = (old_evacuation_reserve - old_evacuated_committed) / region_size_bytes;
+      regions_available_to_loan += old_evac_regions_unused;
       old_evacuation_reserve = old_evacuated_committed;
       heap->set_old_evac_reserve(old_evacuation_reserve);
     }
@@ -470,9 +468,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       // Undo the previous loan
       regions_available_to_loan += old_regions_loaned_for_young_evac;
       old_regions_loaned_for_young_evac = revised_loan_for_young_evacuation;
+
       // And make a new loan
       assert(regions_available_to_loan > old_regions_loaned_for_young_evac, "Cannot loan regions that we do not have");
-      regions_available_to_loan -= old_regions_loaned_for_young_evac;
+      regions_available_to_loan -= revised_loan_for_young_evacuation;
     } else {
       // Undo the prevous loan
       regions_available_to_loan += old_regions_loaned_for_young_evac;
@@ -504,8 +503,9 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     // "all the rest" of old-gen memory into the promotion reserve, we'll have nothing left to loan to young-gen
     // during the evac and update phases of GC.  So we "limit" the sizes of the promotion budget to be the smaller of:
     //
-    //  1. old_gen->available - (old_evacuation_committed + old_bytes_loaned_for_young_evac + consumed_by_advance_promotion)
-    //  2. young bytes reserved for evacuation
+    //  1. old_gen->available - (old_evacuation_committed + old_bytes_loaned_for_young_evac + consumed_by_advance_promotion
+    //                           + old_bytes_[already]_ reserved_for_alloc_supplement)
+    //  2. young bytes reserved for evacuation (we can't promote more than young is evacuating)
 
     assert(old_available > old_evacuated_committed, "Cannot evacuate more than available");
     assert(old_available > old_evacuated_committed + old_bytes_loaned_for_young_evac,
@@ -516,8 +516,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                                           consumed_by_advance_promotion + old_bytes_reserved_for_alloc_supplement),
            "Cannot loan for alloc supplement more than available");
 
-    size_t promotion_reserve = old_available - (old_evacuated_committed + consumed_by_advance_promotion +
-                                                old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement);
+    size_t promotion_reserve = regions_available_to_loan * region_size_bytes;
+    assert(promotion_reserve <= old_available - (old_evacuated_committed + consumed_by_advance_promotion +
+                                                 old_bytes_loaned_for_young_evac + old_bytes_reserved_for_alloc_supplement),
+           "Byte reserves do not match region reserves");
 
     // We experimented with constraining promoted_reserve to be no larger than 4 times the size of previously_promoted,
     // but this constraint was too limiting, resulting in failure of legitimate promotions.  This was tried before we
@@ -552,6 +554,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
     promotion_reserve += consumed_by_advance_promotion;
     heap->set_promoted_reserve(promotion_reserve);
+
+    size_t promotion_regions = (promotion_reserve + region_size_bytes - 1) / region_size_bytes;
+    assert(regions_available_to_loan >= promotion_regions, "Promoting more regions than memory is available");
+    regions_available_to_loan -= promotion_regions;
     heap->reset_promoted_expended();
     if (collection_set->get_old_bytes_reserved_for_evacuation() == 0) {
       // Setting old evacuation reserve to zero denotes that there is no old-gen evacuation in this pass.
@@ -615,7 +621,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                   byte_size_in_proper_unit(old_evacuated), proper_unit_for_byte_size(old_evacuated),
                   byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available));
 
-    assert(old_available > old_evacuation_reserve + promotion_reserve + old_bytes_loaned_for_young_evac + allocation_supplement,
+    assert(old_available >= old_evacuation_reserve + promotion_reserve + old_bytes_loaned_for_young_evac + allocation_supplement,
            "old_available must be larger than accumulated reserves");
 
     size_t regular_promotion = promotion_reserve - consumed_by_advance_promotion;
@@ -649,17 +655,20 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
-                                         ShenandoahPhaseTimings::degen_gc_final_update_region_states);
+                            ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
-
     parallel_heap_region_iterate(&cl);
-    heap->assert_pinned_region_status();
 
     if (generation_mode() == YOUNG) {
-      // Also capture update_watermark for old-gen regions.
-      ShenandoahCaptureUpdateWaterMarkForOld old_cl(complete_marking_context());
+      // We always need to update the watermark for old regions. If there
+      // are mixed collections pending, we also need to synchronize the
+      // pinned status for old regions. Since we are already visiting every
+      // old region here, go ahead and sync the pin status too.
+      ShenandoahFinalMarkUpdateRegionStateClosure old_cl(nullptr);
       heap->old_generation()->parallel_heap_region_iterate(&old_cl);
     }
+
+    heap->assert_pinned_region_status();
   }
 
   {
@@ -791,6 +800,7 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   ShenandoahReferenceProcessor* rp = ref_processor();
   ShenandoahRegionChunkIterator work_list(nworkers);
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &work_list, is_concurrent);
+  heap->assert_gc_workers(nworkers);
   heap->workers()->run_task(&task);
 }
 
@@ -855,4 +865,14 @@ size_t ShenandoahGeneration::adjusted_available() const {
   size_t in_use = used();
   size_t capacity = _adjusted_capacity;
   return in_use > capacity ? 0 : capacity - in_use;
+}
+
+void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
+  heuristics()->record_success_concurrent(abbreviated);
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();
+}
+
+void ShenandoahGeneration::record_success_degenerated() {
+  heuristics()->record_success_degenerated();
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_degenerated();
 }

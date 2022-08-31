@@ -121,10 +121,9 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     TASKQUEUE_STATS_ONLY(_mark.task_queues()->reset_taskqueue_stats());
 
     // Concurrent remembered set scanning
-    if (_generation->generation_mode() == YOUNG) {
-      ShenandoahConcurrentPhase gc_phase("Concurrent remembered set scanning", ShenandoahPhaseTimings::init_scan_rset);
-      _generation->scan_remembered_set(true /* is_concurrent */);
-    }
+    entry_scan_remembered_set();
+    // When RS scanning yields, we will need a check_cancellation_and_abort()
+    // degeneration point here.
 
     // Concurrent mark roots
     entry_mark_roots();
@@ -258,7 +257,7 @@ void ShenandoahConcurrentGC::vmop_entry_init_mark() {
   ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::init_mark_gross);
 
   heap->try_inject_alloc_failure();
-  VM_ShenandoahInitMark op(this, _do_old_gc_bootstrap);
+  VM_ShenandoahInitMark op(this);
   VMThread::execute(&op); // jump to entry_init_mark() under safepoint
 }
 
@@ -371,6 +370,23 @@ void ShenandoahConcurrentGC::entry_reset() {
 
   heap->try_inject_alloc_failure();
   op_reset();
+}
+
+void ShenandoahConcurrentGC::entry_scan_remembered_set() {
+  if (_generation->generation_mode() == YOUNG) {
+    ShenandoahHeap* const heap = ShenandoahHeap::heap();
+    TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+    const char* msg = "Concurrent remembered set scanning";
+    ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::init_scan_rset);
+    EventMark em("%s", msg);
+
+    ShenandoahWorkerScope scope(heap->workers(),
+                                ShenandoahWorkerPolicy::calc_workers_for_rs_scanning(),
+                                msg);
+
+    heap->try_inject_alloc_failure();
+    _generation->scan_remembered_set(true /* is_concurrent */);
+  }
 }
 
 void ShenandoahConcurrentGC::entry_mark_roots() {
@@ -567,7 +583,7 @@ void ShenandoahConcurrentGC::op_reset() {
   if (ShenandoahPacing) {
     heap->pacer()->setup_for_reset();
   }
-  _generation->prepare_gc(_do_old_gc_bootstrap);
+  _generation->prepare_gc();
 }
 
 class ShenandoahInitMarkUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -642,10 +658,13 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
   if (_do_old_gc_bootstrap) {
     // Update region state for both young and old regions
+    // TODO: We should be able to pull this out of the safepoint for the bootstrap
+    // cycle. The top of an old region will only move when a GC cycle evacuates
+    // objects into it. When we start an old cycle, we know that nothing can touch
+    // the top of old regions.
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
     ShenandoahInitMarkUpdateRegionStateClosure cl;
     heap->parallel_heap_region_iterate(&cl);
-    heap->old_generation()->parallel_heap_region_iterate(&cl);
   } else {
     // Update region state for only young regions
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_update_region_states);
