@@ -36,6 +36,11 @@
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 
 inline size_t
+ShenandoahDirectCardMarkRememberedSet::last_valid_index() {
+  return _card_table->last_valid_index();
+}
+
+inline size_t
 ShenandoahDirectCardMarkRememberedSet::total_cards() {
   return _total_card_count;
 }
@@ -261,6 +266,10 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
 
 template<typename RememberedSet>
 inline size_t
+ShenandoahScanRemembered<RememberedSet>::last_valid_index() { return _rs->last_valid_index(); }
+
+template<typename RememberedSet>
+inline size_t
 ShenandoahScanRemembered<RememberedSet>::total_cards() { return _rs->total_cards(); }
 
 template<typename RememberedSet>
@@ -391,9 +400,9 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
     //        cannot use card_index_for_addr(base_addr + offset) because it asserts arg < end of whole heap
     size_t end_card_index = index + offset / CardTable::card_size_in_words();
 
-    if (end_card_index > index) {
+    if (end_card_index > index && end_card_index < _rs->last_valid_index()) {
       // If there is a following object registered on the next card, it should begin where this object ends.
-      if ((base_addr + offset < _rs->whole_heap_end()) && _scc->has_object(end_card_index) &&
+      if (_scc->has_object(end_card_index) &&
           ((addr_for_card_index(end_card_index) + _scc->get_first_start(end_card_index)) != (base_addr + offset))) {
         return false;
       }
