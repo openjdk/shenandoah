@@ -243,8 +243,6 @@ private:
   HeapWord *_whole_heap_end;
   uint8_t *_byte_map;           // Points to first entry within the card table
   uint8_t *_byte_map_base;      // Points to byte_map minus the bias computed from address of heap memory
-  uint8_t *_overreach_map;      // Points to first entry within the overreach card table
-  uint8_t *_overreach_map_base; // Points to overreach_map minus the bias computed from address of heap memory
 
   uint64_t _wide_clean_value;
 
@@ -264,22 +262,12 @@ public:
   void mark_card_as_clean(size_t card_index);
   void mark_read_card_as_clean(size_t card_index);
   void mark_range_as_clean(size_t card_index, size_t num_cards);
-  void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  void mark_overreach_card_as_dirty(void *p);
   size_t cluster_count();
-
-  // Called by multiple GC threads at start of concurrent mark and evacuation phases.  Each parallel GC thread typically
-  // initializes a different subranges of all overreach entries.
-  void initialize_overreach(size_t first_cluster, size_t count);
-
-  // Called by GC thread at end of concurrent mark or evacuation phase.  Each parallel GC thread typically merges different
-  // subranges of all overreach entries.
-  void merge_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
@@ -560,16 +548,19 @@ public:
     _rs = rs;
     // TODO: We don't really need object_starts entries for every card entry.  We only need these for
     // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
-    object_starts = (crossing_info *) ::malloc(rs->total_cards() * sizeof(crossing_info));
-    if (object_starts == nullptr)
+    object_starts = NEW_C_HEAP_ARRAY(crossing_info, rs->total_cards(), mtGC);
+    if (object_starts == nullptr) {
       fatal("Insufficient memory for initializing heap");
-    for (size_t i = 0; i < rs->total_cards(); i++)
+    }
+    for (size_t i = 0; i < rs->total_cards(); i++) {
       object_starts[i].short_word = 0;
+    }
   }
 
   ~ShenandoahCardCluster() {
-    if (object_starts != nullptr)
-      free(object_starts);
+    if (object_starts != nullptr) {
+      FREE_C_HEAP_ARRAY(crossing_info, object_starts);
+    }
     object_starts = nullptr;
   }
 
@@ -903,16 +894,12 @@ public:
   void mark_card_as_clean(size_t card_index);
   void mark_read_card_as_clean(size_t card_index) { _rs->mark_read_card_clean(card_index); }
   void mark_range_as_clean(size_t card_index, size_t num_cards);
-  void mark_overreach_card_as_dirty(size_t card_index);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  void mark_overreach_card_as_dirty(void *p);
   size_t cluster_count();
-  void initialize_overreach(size_t first_cluster, size_t count);
-  void merge_overreach(size_t first_cluster, size_t count);
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   void swap_remset() { _rs->swap_remset(); }
