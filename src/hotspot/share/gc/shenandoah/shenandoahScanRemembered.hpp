@@ -212,7 +212,6 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 #include "memory/iterator.hpp"
-#include "runtime/os.hpp"
 
 class ShenandoahReferenceProcessor;
 class ShenandoahConcurrentMark;
