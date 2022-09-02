@@ -543,18 +543,13 @@ public:
     // TODO: We don't really need object_starts entries for every card entry.  We only need these for
     // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
     object_starts = NEW_C_HEAP_ARRAY(crossing_info, rs->total_cards(), mtGC);
-    if (object_starts == nullptr) {
-      fatal("Insufficient memory for initializing heap");
-    }
     for (size_t i = 0; i < rs->total_cards(); i++) {
       object_starts[i].short_word = 0;
     }
   }
 
   ~ShenandoahCardCluster() {
-    if (object_starts != nullptr) {
-      FREE_C_HEAP_ARRAY(crossing_info, object_starts);
-    }
+    FREE_C_HEAP_ARRAY(crossing_info, object_starts);
     object_starts = nullptr;
   }
 
