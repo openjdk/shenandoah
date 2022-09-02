@@ -89,16 +89,17 @@ private:
   PerfLongVariable* _status;
   volatile jlong _last_sample_millis;
 
-  uint _count = 0;
-public:
-  ShenandoahHeapRegionCounters();
-  ~ShenandoahHeapRegionCounters();
-  void update();
   void write_snapshot(PerfLongVariable** regions,
                       PerfLongVariable* ts,
                       PerfLongVariable* status,
                       size_t num_regions,
                       size_t region_size, size_t protocolVersion);
+
+  uint _count = 0;
+public:
+  ShenandoahHeapRegionCounters();
+  ~ShenandoahHeapRegionCounters();
+  void update();
 
 private:
   static jlong encode_heap_status(ShenandoahHeap* heap) ;

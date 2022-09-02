@@ -21,8 +21,6 @@
  * questions.
  *
  */
-
-#include <logging/logStream.hpp>
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/shenandoahGeneration.hpp"
@@ -30,6 +28,7 @@
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionCounters.hpp"
+#include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/perfData.inline.hpp"
@@ -81,12 +80,13 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
 ShenandoahHeapRegionCounters::~ShenandoahHeapRegionCounters() {
   if (_name_space != NULL) FREE_C_HEAP_ARRAY(char, _name_space);
 }
+
 void ShenandoahHeapRegionCounters::write_snapshot(PerfLongVariable** regions,
                                              PerfLongVariable* ts,
                                              PerfLongVariable* status,
                                              size_t num_regions,
                                              size_t region_size, size_t protocol_version) {
-    LogTarget(Info, gc, region) lt;
+    LogTarget(Debug, gc, region) lt;
     if (lt.is_enabled()) {
         ResourceMark rm;
         LogStream ls(lt);
@@ -134,9 +134,7 @@ void ShenandoahHeapRegionCounters::update() {
         }
 
         // If logging enabled, dump current region snapshot to log file
-        if (ShenandoahRegionSampling) {
-            write_snapshot(_regions_data, _timestamp, _status, num_regions, rs >> 10, VERSION_NUMBER);
-        }
+        write_snapshot(_regions_data, _timestamp, _status, num_regions, rs >> 10, VERSION_NUMBER);
       }
     }
   }
