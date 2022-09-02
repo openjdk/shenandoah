@@ -27,7 +27,6 @@
 
 #include "memory/allocation.hpp"
 #include "logging/logFileStreamOutput.hpp"
-#include "gc/shenandoah/shenandoahLogFileOutput.hpp"
 
 /**
  * This provides the following in JVMStat:
@@ -91,11 +90,15 @@ private:
   volatile jlong _last_sample_millis;
 
   uint _count = 0;
-  ShenandoahLogFileOutput* _log_file;
 public:
   ShenandoahHeapRegionCounters();
   ~ShenandoahHeapRegionCounters();
   void update();
+  void write_snapshot(PerfLongVariable** regions,
+                      PerfLongVariable* ts,
+                      PerfLongVariable* status,
+                      size_t num_regions,
+                      size_t region_size, size_t protocolVersion);
 
 private:
   static jlong encode_heap_status(ShenandoahHeap* heap) ;
