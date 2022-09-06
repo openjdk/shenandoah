@@ -86,21 +86,21 @@ void ShenandoahHeapRegionCounters::write_snapshot(PerfLongVariable** regions,
                                              PerfLongVariable* status,
                                              size_t num_regions,
                                              size_t region_size, size_t protocol_version) {
-    LogTarget(Debug, gc, region) lt;
-    if (lt.is_enabled()) {
-        ResourceMark rm;
-        LogStream ls(lt);
+  LogTarget(Debug, gc, region) lt;
+  if (lt.is_enabled()) {
+    ResourceMark rm;
+    LogStream ls(lt);
 
-        ls.print_cr("%li %li %lu %lu %lu",
-                    ts->get_value(), status->get_value(), num_regions, region_size, protocol_version);
-        if (num_regions > 0) {
-            ls.print("%li", regions[0]->get_value());
-        }
-        for (uint i = 1; i < num_regions; ++i) {
-            ls.print(" %li", regions[i]->get_value());
-        }
-        ls.cr();
+    ls.print_cr("%li %li %lu %lu %lu",
+            ts->get_value(), status->get_value(), num_regions, region_size, protocol_version);
+    if (num_regions > 0) {
+      ls.print("%li", regions[0]->get_value());
     }
+    for (uint i = 1; i < num_regions; ++i) {
+      ls.print(" %li", regions[i]->get_value());
+    }
+    ls.cr();
+  }
 }
 
 void ShenandoahHeapRegionCounters::update() {
