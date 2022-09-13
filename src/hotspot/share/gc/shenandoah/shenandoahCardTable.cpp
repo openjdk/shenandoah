@@ -64,7 +64,7 @@ void ShenandoahCardTable::initialize() {
   resize_covered_region(_whole_heap);
 }
 
-bool ShenandoahCardTable::is_in_young(oop obj) const {
+bool ShenandoahCardTable::is_in_young(const void* obj) const {
   return ShenandoahHeap::heap()->is_in_young(obj);
 }
 
