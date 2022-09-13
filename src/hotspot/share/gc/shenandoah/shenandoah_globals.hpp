@@ -241,9 +241,6 @@
           "the samples. Higher values provide more fidelity, at expense "   \
           "of more sampling overhead.")                                     \
                                                                             \
-  product(bool, ShenandoahLogRegionSampling, false,                         \
-          "Save region sampling stream to ShenandoahRegionSamplingFile")    \
-                                                                            \
   product(ccstr, ShenandoahRegionSamplingFile,                              \
           "./shenandoahSnapshots_pid%p.log",                                \
           "If ShenandoahLogRegionSampling is on, save sampling data stream "\
