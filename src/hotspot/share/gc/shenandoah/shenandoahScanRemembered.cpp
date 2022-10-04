@@ -41,8 +41,6 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
   _byte_map = _card_table->byte_for_index(0);
 
   _whole_heap_base = _card_table->addr_for(_byte_map);
-  _whole_heap_end = _whole_heap_base + total_card_count * CardTable::card_size();
-
   _byte_map_base = _byte_map - (uintptr_t(_whole_heap_base) >> _card_shift);
 
   assert(total_card_count % ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster == 0, "Invalid card count.");

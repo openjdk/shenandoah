@@ -178,12 +178,12 @@
 // existing implementation.
 
 #include <stdint.h>
-#include "memory/iterator.hpp"
 #include "gc/shared/workerThread.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
+#include "memory/iterator.hpp"
 
 class ShenandoahReferenceProcessor;
 class ShenandoahConcurrentMark;
@@ -211,11 +211,8 @@ private:
   size_t _total_card_count;
   size_t _cluster_count;
   HeapWord *_whole_heap_base;   // Points to first HeapWord of data contained within heap memory
-  HeapWord *_whole_heap_end;
   uint8_t *_byte_map;           // Points to first entry within the card table
   uint8_t *_byte_map_base;      // Points to byte_map minus the bias computed from address of heap memory
-
-  uint64_t _wide_clean_value;
 
 public:
   // count is the number of cards represented by the card table.
@@ -223,6 +220,7 @@ public:
   ~ShenandoahDirectCardMarkRememberedSet();
 
   // Card index is zero-based relative to _byte_map.
+  size_t last_valid_index();
   size_t total_cards();
   size_t card_index_for_addr(HeapWord *p);
   HeapWord *addr_for_card_index(size_t card_index);
@@ -256,9 +254,6 @@ public:
       write_table_ptr++;
     }
   }
-
-  HeapWord* whole_heap_base() { return _whole_heap_base; }
-  HeapWord* whole_heap_end() { return _whole_heap_end; }
 
   // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
   // in parallel threads, each invocation processing one entire HeapRegion at a time.  Processing of a region
@@ -436,16 +431,14 @@ public:
     _rs = rs;
     // TODO: We don't really need object_starts entries for every card entry.  We only need these for
     // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
-    object_starts = (crossing_info *) malloc(rs->total_cards() * sizeof(crossing_info));
-    if (object_starts == nullptr)
-      fatal("Insufficient memory for initializing heap");
-    for (size_t i = 0; i < rs->total_cards(); i++)
+    object_starts = NEW_C_HEAP_ARRAY(crossing_info, rs->total_cards(), mtGC);
+    for (size_t i = 0; i < rs->total_cards(); i++) {
       object_starts[i].short_word = 0;
+    }
   }
 
   ~ShenandoahCardCluster() {
-    if (object_starts != nullptr)
-      free(object_starts);
+    FREE_C_HEAP_ARRAY(crossing_info, object_starts);
     object_starts = nullptr;
   }
 
@@ -794,6 +787,7 @@ public:
 
 
   // Card index is zero-based relative to first spanned card region.
+  size_t last_valid_index();
   size_t total_cards();
   size_t card_index_for_addr(HeapWord *p);
   HeapWord *addr_for_card_index(size_t card_index);
