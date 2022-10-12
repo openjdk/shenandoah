@@ -46,7 +46,7 @@ void ShenandoahCardTable::initialize() {
 
   log_trace(gc, barrier)("ShenandoahCardTable::ShenandoahCardTable: ");
   log_trace(gc, barrier)("    &_read_byte_map[0]: " INTPTR_FORMAT "  &_read_byte_map[_last_valid_index]: " INTPTR_FORMAT,
-                  p2i(&_read_byte_map[0]), p2i(&_read_byte_map[_last_valid_index]));
+                  p2i(&_read_byte_map[0]), p2i(&_read_byte_map[last_valid_index()]));
   log_trace(gc, barrier)("    _read_byte_map_base: " INTPTR_FORMAT, p2i(_read_byte_map_base));
 
   // TODO: As currently implemented, we do not swap pointers between _read_byte_map and _write_byte_map
@@ -79,7 +79,7 @@ bool ShenandoahCardTable::is_dirty(MemRegion mr) {
 }
 
 size_t ShenandoahCardTable::last_valid_index() {
-  return _last_valid_index;
+  return CardTable::last_valid_index();
 }
 
 void ShenandoahCardTable::clear() {
