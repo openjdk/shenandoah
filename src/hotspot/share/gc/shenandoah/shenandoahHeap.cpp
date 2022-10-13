@@ -230,7 +230,7 @@ jint ShenandoahHeap::initialize() {
   if (mode()->is_generational()) {
     ShenandoahDirectCardMarkRememberedSet *rs;
     ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
-    size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize) - 1;
+    size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
   }
