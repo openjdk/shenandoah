@@ -215,10 +215,10 @@ void ShenandoahGeneration::prepare_gc() {
 
 void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
                                                       ShenandoahCollectionSet* collection_set,
-                                                      size_t &minimum_evacuation_reserve, size_t &consumed_by_advance_promotion) {
+                                                      size_t &consumed_by_advance_promotion) {
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t regions_available_to_loan = 0;
-  minimum_evacuation_reserve = ShenandoahOldCompactionReserve * region_size_bytes;
+  size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * region_size_bytes;
   size_t old_regions_loaned_for_young_evac = 0;
   consumed_by_advance_promotion = 0;
   if (heap->mode()->is_generational()) {
@@ -418,7 +418,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
 // that young_generation->available() now knows about recently discovered immediate garbage.
 
 void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
-                                                     size_t minimum_evacuation_reserve, size_t consumed_by_advance_promotion) {
+                                                     size_t consumed_by_advance_promotion) {
   // We may find that old_evacuation_reserve and/or loaned_for_young_evacuation are not fully consumed, in which case we may
   //  be able to increase regions_available_to_loan
 
@@ -448,9 +448,8 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     size_t young_available = young_generation->available() + immediate_garbage;
     size_t loaned_regions = 0;
 #ifdef KELVIN_NOISE
-    log_info(gc)("adjust_evac_budgets(old_available: " SIZE_FORMAT
-                 ", minimum_evacuation_reserve: " SIZE_FORMAT ", consumed_by_advance_promotion: " SIZE_FORMAT ")",
-                 old_available, minimum_evacuation_reserve, consumed_by_advance_promotion);
+    log_info(gc)("adjust_evac_budgets(old_available: " SIZE_FORMAT ", consumed_by_advance_promotion: " SIZE_FORMAT ")",
+                 old_available, consumed_by_advance_promotion);
 #endif
 
     size_t available_loan_remnant = 0; // loaned memory that is not yet dedicated to any particular budget
@@ -575,20 +574,12 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                  working_old_available, regions_available_to_loan);
 #endif
 
-    // Assure that old_evacuated_committed + old_bytes_loaned_for_young_evac >= minimum_evacuation_reserve
+    // Assure that old_evacuated_committed + old_bytes_loaned_for_young_evac >= the minimum evacuation reserve
     // in order to prevent promotion reserve from violating minimum evacuation reserve.
     size_t old_regions_reserved_for_alloc_supplement = 0;
     size_t old_bytes_reserved_for_alloc_supplement = 0;
     size_t reserved_bytes_for_future_old_evac = 0;
-#ifdef  KELVIN_TODO
-    // Remove all mention of minimum_evacuation_reserve.  I don't think it serves any valuable purpose.
-    // Also, remove use of adjustments_to_loaned_regions.  I think I no longer use this, because I recompute from
-    // raw data values.
 
-    // mimimum_evacuation_reserve is the old-gen memory which must be available during the subsequent mixed evacuation
-    // to receive the results of old-gen evacuation.  Note that all of the memory loaned for young-evac and contained
-    // within old-gen regions selected for the current collection set will be available to fulfill the minimum_evacuation_reserve.
-#endif
     old_bytes_reserved_for_alloc_supplement = available_loan_remnant;
     available_loan_remnant = 0;
 
@@ -888,7 +879,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   }
 
   {
-    size_t minimum_evacuation_reserve, consumed_by_advance_promotion;
+    size_t consumed_by_advance_promotion;
     bool* preselected_regions = nullptr;
     if (heap->mode()->is_generational()) {
       preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
@@ -911,11 +902,10 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // GC is evacuating and updating references.
 
     // Budgeting parameters to compute_evacuation_budgets are passed by reference.
-    compute_evacuation_budgets(heap, preselected_regions, collection_set,
-                               minimum_evacuation_reserve, consumed_by_advance_promotion);
+    compute_evacuation_budgets(heap, preselected_regions, collection_set, consumed_by_advance_promotion);
     _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
     if (!collection_set->is_empty()) {
-      adjust_evacuation_budgets(heap, collection_set, minimum_evacuation_reserve, consumed_by_advance_promotion);
+      adjust_evacuation_budgets(heap, collection_set, consumed_by_advance_promotion);
     }
     // otherwise, this is an abbreviated cycle and we make no use of evacuation budgets.
   }
