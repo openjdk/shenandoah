@@ -843,6 +843,8 @@ private:
 
   void try_inject_alloc_failure();
   bool should_inject_alloc_failure();
+
+  void report_promotion_failure(Thread* thread, size_t size);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
