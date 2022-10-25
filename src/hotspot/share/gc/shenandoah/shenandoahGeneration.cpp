@@ -368,15 +368,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     size_t net_available_old_regions =
       (old_generation->available() - old_evacuation_reserve - consumed_by_advance_promotion) / region_size_bytes;
 
-#define KELVIN_NOISE
-#ifdef KELVIN_NOISE
-    log_info(gc)("Consumed by advance_promotion_reserve: " SIZE_FORMAT ", max allowance: " SIZE_FORMAT
-                 ", required_reserve: " SIZE_FORMAT
-                 ", old_evacuation_reserve: " SIZE_FORMAT ", old_available: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT,
-                 consumed_by_advance_promotion, old_generation->available() - old_evacuation_reserve - required_evacuation_reserve,
-                 required_evacuation_reserve, old_evacuation_reserve, old_generation->available(),
-                 old_evacuation_reserve);
-#endif
    if (regions_available_to_loan > net_available_old_regions) {
       regions_available_to_loan = net_available_old_regions;
     }
@@ -447,11 +438,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     size_t old_available = old_generation->available();
     size_t young_available = young_generation->available() + immediate_garbage;
     size_t loaned_regions = 0;
-#ifdef KELVIN_NOISE
-    log_info(gc)("adjust_evac_budgets(old_available: " SIZE_FORMAT ", consumed_by_advance_promotion: " SIZE_FORMAT ")",
-                 old_available, consumed_by_advance_promotion);
-#endif
-
     size_t available_loan_remnant = 0; // loaned memory that is not yet dedicated to any particular budget
 
     assert(consumed_by_advance_promotion >= collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste,
@@ -474,10 +460,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
       old_evacuation_reserve = old_evacuated_committed;
       heap->set_old_evac_reserve(old_evacuation_reserve);
     }
-#ifdef KELVIN_NOISE
-    log_info(gc)(" ... old_evac_reserve: " SIZE_FORMAT ", loaned_regions: " SIZE_FORMAT,
-                 old_evacuation_reserve, loaned_regions);
-#endif
 
     // Recompute old_regions_loaned_for_young_evac because young-gen collection set may not need all the memory
     // originally reserved.
@@ -560,20 +542,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     // And also subtract out the regions loaned for young evacuation
     working_old_available -= old_regions_loaned_for_young_evac * region_size_bytes;
 
-#ifdef KELVIN_NOISE
-    log_info(gc)(" ... note young_evacuated_reserve_used: " SIZE_FORMAT ", of young_available: " SIZE_FORMAT
-                 ", fragmented_old_total: " SIZE_FORMAT,
-                 young_evacuated_reserve_used, young_available, fragmented_old_total);
-
-    log_info(gc)(" ... having loaned " SIZE_FORMAT " old regions for young evac, old_available reduced by: " SIZE_FORMAT
-                 ", which is future alloc supplement: " SIZE_FORMAT " plus old_bytes_loaned_for_young_evac: " SIZE_FORMAT
-                 ", old_evacuated_committed: " SIZE_FORMAT ", advance promotion reserve: " SIZE_FORMAT
-                 ", working_old_available: " SIZE_FORMAT ", regions_available_to_loan: " SIZE_FORMAT,
-                 old_regions_loaned_for_young_evac, old_regions_loaned_for_young_evac * region_size_bytes,
-                 available_loan_remnant, old_bytes_loaned_for_young_evac, old_evacuated_committed, consumed_by_advance_promotion,
-                 working_old_available, regions_available_to_loan);
-#endif
-
     // Assure that old_evacuated_committed + old_bytes_loaned_for_young_evac >= the minimum evacuation reserve
     // in order to prevent promotion reserve from violating minimum evacuation reserve.
     size_t old_regions_reserved_for_alloc_supplement = 0;
@@ -591,14 +559,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     size_t future_evac_reserve_regions = old_regions_loaned_for_young_evac + collection_set->get_old_region_count();
     size_t collected_regions = collection_set->get_young_region_count();
 
-#ifdef KELVIN_NOISE
-    log_info(gc)(" ... old_regions_loaned_for_young_evac: " SIZE_FORMAT ", collected old regions: " SIZE_FORMAT
-                 ", collected_regions: " SIZE_FORMAT,
-                 old_regions_loaned_for_young_evac, collection_set->get_old_region_count(), collected_regions);
-#endif
-
     if (future_evac_reserve_regions < ShenandoahOldCompactionReserve) {
-
       // Require that we loan more memory for holding young evacuations to assure that we have adequate reserves to receive
       // old-gen evacuations during subsequent collections.  Loaning this memory for an allocation supplement does not
       // satisfy our needs because newly allocated objects are not necessarily counter-balanced by reclaimed collection
@@ -606,10 +567,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
       // Put this memory into reserve by identifying it as old_regions_loaned_for_young_evac
       size_t additional_regions_to_loan = ShenandoahOldCompactionReserve - future_evac_reserve_regions;
-
-#ifdef KELVIN_NOISE
-      log_info(gc)(" ... additional_regions_to_loan: " SIZE_FORMAT, additional_regions_to_loan);
-#endif
 
       // We can loan additional regions to be repaid from the anticipated recycling of young collection set regions
       // provided that these regions are currently available within old-gen memory.
@@ -624,32 +581,16 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
         collected_regions_to_loan = 0;
       }
 
-#ifdef KELVIN_NOISE
-      log_info(gc)(" ... intending to loan " SIZE_FORMAT " regions, still have additional_regions_to_loan: " SIZE_FORMAT,
-                   collected_regions_to_loan, additional_regions_to_loan);
-#endif
-
       if (collected_regions_to_loan > 0) {
         // We're evacuating at least this many regions, it's ok to use these regions for allocation supplement since
         // we'll be able to repay the loan at end of this GC pass, assuming the regions are available.
         if (collected_regions_to_loan > regions_available_to_loan) {
-#ifdef KELVIN_NOISE
-          log_info(gc)(" ... shrinking loaned regions to: " SIZE_FORMAT " due to limit on regions_available_to_loan",
-                       regions_available_to_loan);
-#endif
           collected_regions_to_loan = regions_available_to_loan;
         }
         old_bytes_reserved_for_alloc_supplement += collected_regions_to_loan * region_size_bytes;
         regions_available_to_loan -= collected_regions_to_loan;
         loaned_regions += collected_regions_to_loan;
         working_old_available -= collected_regions_to_loan * region_size_bytes;
-#ifdef KELVIN_NOISE
-        log_info(gc)(" ... having enforced minimum old evac reserve, old_bytes_reserved_for_alloc_supplement: " SIZE_FORMAT
-                     ", collected_regions_to_loan: " SIZE_FORMAT ", regions_available_to_loan: " SIZE_FORMAT
-                     ", loaned_regions: " SIZE_FORMAT ", working_old_available: " SIZE_FORMAT,
-                     old_bytes_reserved_for_alloc_supplement, collected_regions_to_loan, regions_available_to_loan,
-                     loaned_regions, working_old_available);
-#endif
       }
 
       // If there's still memory that we want to exclude from the current promotion reserve, but we are unable to loan
@@ -687,32 +628,13 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
           working_old_available = 0;
         }
         fragmented_old_total = 0;
-
-#ifdef KELVIN_NOISE
-          log_info(gc)(" ... having failed to supplement allocation, we are reserving " SIZE_FORMAT
-                       " bytes for future old evac, leaving working_old_available: " SIZE_FORMAT
-                       ", having zeroed fragmented_old_total, working_old_available: " SIZE_FORMAT,
-                       reserved_bytes_for_future_old_evac, working_old_available, working_old_available);
-#endif
-
       }
-
-
     }
 
     // Establish young_evac_reserve so that this young-gen memory is not used for new allocations, allowing the memory
     // to be returned to old-gen as soon as the current collection set regions are reclaimed.
     heap->set_young_evac_reserve(young_evacuated_reserve_used);
 
-#ifdef KELVIN_NOISE
-    log_info(gc)(" ... after enforcing minimum future old evac reserve, working_old_available: " SIZE_FORMAT
-                 ", old regions loaned for young evac: "  SIZE_FORMAT
-                 ", old_bytes_reserved_for_alloc_supplement: " SIZE_FORMAT 
-                 ", reserved_bytes_for_future_old_evac: " SIZE_FORMAT
-                 ", regions_available_to_loan: " SIZE_FORMAT,
-                 working_old_available, old_regions_loaned_for_young_evac,
-                 old_bytes_reserved_for_alloc_supplement, reserved_bytes_for_future_old_evac, regions_available_to_loan);
-#endif
     // Limit promoted_reserve so that we can set aside memory to be loaned from old-gen to young-gen.  This
     // value is not "critical".  If we underestimate, certain promotions will simply be deferred.  If we put
     // "all the rest" of old-gen memory into the promotion reserve, we'll have nothing left to loan to young-gen
@@ -762,14 +684,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                   ", old loaned for young evacuation: " SIZE_FORMAT ", old reserved for alloc supplement: " SIZE_FORMAT,
                   old_generation->available(), promotion_reserve, old_evacuated_committed, consumed_by_advance_promotion,
                   old_regions_loaned_for_young_evac * region_size_bytes, old_bytes_reserved_for_alloc_supplement);
-
-#ifdef KELVIN_NOISE
-    log_info(gc)(" ... opportunistic promotion_reserve: " SIZE_FORMAT ", consumed_by_advance_promotion: " SIZE_FORMAT
-                 ", loaned_regions: " SIZE_FORMAT ", working_old_available: " SIZE_FORMAT
-                 ", regions_available_to_loan: " SIZE_FORMAT,
-                 promotion_reserve, consumed_by_advance_promotion, loaned_regions, working_old_available,
-                 regions_available_to_loan);
-#endif
 
     promotion_reserve += consumed_by_advance_promotion;
     heap->set_promoted_reserve(promotion_reserve);
