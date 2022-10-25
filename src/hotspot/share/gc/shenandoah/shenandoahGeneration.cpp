@@ -213,7 +213,8 @@ void ShenandoahGeneration::prepare_gc() {
   parallel_heap_region_iterate(&cl);
 }
 
-void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
+// KELVIN added trailing space on line below to force pipeline tests
+void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions, 
                                                       ShenandoahCollectionSet* collection_set,
                                                       size_t &consumed_by_advance_promotion) {
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
