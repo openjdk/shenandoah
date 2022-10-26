@@ -398,6 +398,8 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
     heap->pacer()->flush_stats_to_cycle();
   }
 
+  ShenandoahCycleStats evac_stats = heap->evac_tracker()->flush_cycle_to_global();
+
   // Print GC stats for current cycle
   {
     LogTarget(Info, gc, stats) lt;
@@ -405,7 +407,7 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
       ResourceMark rm;
       LogStream ls(lt);
       heap->phase_timings()->print_cycle_on(&ls);
-      heap->evac_tracker()->print_cycle_on(&ls);
+      ShenandoahEvacTracker::print_cycle_on(&ls, evac_stats.workers, evac_stats.mutators);
       if (ShenandoahPacing) {
         heap->pacer()->print_cycle_on(&ls);
       }
@@ -414,7 +416,7 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
 
   // Commit statistics to globals
   heap->phase_timings()->flush_cycle_to_global();
-  heap->evac_tracker()->flush_cycle_to_global();
+
 }
 
 // Young and old concurrent cycles are initiated by the regulator. Implicit
