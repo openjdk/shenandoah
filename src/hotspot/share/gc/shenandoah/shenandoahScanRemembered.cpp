@@ -92,11 +92,6 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
     log_debug(gc)("ShenandoahScanRememberedTask::do_work(%u), processing slice of region "
                   SIZE_FORMAT " at offset " SIZE_FORMAT ", size: " SIZE_FORMAT,
                   worker_id, region->index(), assignment._chunk_offset, assignment._chunk_size);
-#undef KELVIN_DESPERATION
-#ifdef KELVIN_DESPERATION
-    printf("%u: r: " SIZE_FORMAT ", off: " SIZE_FORMAT ", size: " SIZE_FORMAT ": ",
-           worker_id, region->index(), assignment._chunk_offset, assignment._chunk_size);
-#endif
     if (region->affiliation() == OLD_GENERATION) {
       size_t cluster_size =
         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
@@ -108,29 +103,10 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
       if (end_of_range > region->top()) {
         end_of_range = region->top();
       }
-#ifdef KELVIN_DESPERATION
-      printf("[%u:" SIZE_FORMAT "] slicing ... ", worker_id, region->index());
-      fflush(stdout);
-#endif
       scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent);
-#ifdef KELVIN_DESPERATION
-      printf("sliced [%u:" SIZE_FORMAT "]\n", worker_id, region->index());
-      fflush(stdout);
-#endif
     }
-#ifdef KELVIN_DESPERATION
-    else {
-      printf("[%u:" SIZE_FORMAT "] ignoring %c\n", worker_id, region->index(), (region->affiliation() == YOUNG_GENERATION)? 'Y': 'F');
-      fflush(stdout);
-    }
-#endif
-
     has_work = _work_list->next(&assignment);
   }
-#ifdef KELVIN_DESPERATION
-  printf("%u: done\n", worker_id);
-  fflush(stdout);
-#endif
 }
 
 size_t ShenandoahRegionChunkIterator::calc_group_size() {

@@ -506,18 +506,6 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
-#undef KELVIN_NOISE
-#ifdef KELVIN_NOISE
-  if (!write_table) {
-    size_t word_offset = start_of_range - r->bottom();
-    size_t region_offset = word_offset / 2097152;
-    word_offset -= region_offset * 2097152;
-    printf("C{r:" SIZE_FORMAT ", roff: " SIZE_FORMAT ", woff: " SIZE_FORMAT ", size:" SIZE_FORMAT "}",
-           r->index(), region_offset, word_offset, end_of_range - start_of_range);
-    fflush(stdout);
-  }
-#endif
-
   while (count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
@@ -690,16 +678,6 @@ ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHe
   size_t first_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
   HeapWord* first_cluster_addr = _rs->addr_for_card_index(first_card_index);
   size_t spanned_words = count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster * CardTable::card_size_in_words();
-#ifdef KELVIN_NOISE
-  if (!write_table) {
-    size_t word_offset = first_cluster_addr - r->bottom();
-    size_t region_offset = word_offset / 2097152;
-    word_offset -= region_offset * 2097152;
-    printf("H{r:" SIZE_FORMAT ", roff: " SIZE_FORMAT ", woff: " SIZE_FORMAT ", size:" SIZE_FORMAT "}",
-           r->index(), region_offset, word_offset, spanned_words);
-    fflush(stdout);
-  }
-#endif
   start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, write_table, is_concurrent);
 }
 
@@ -778,16 +756,6 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
       process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     }
   }
-#ifdef KELVIN_NOISE
-  else {
-    size_t word_offset = start_of_range - region->bottom();
-    size_t region_offset = word_offset / 2097152;
-    word_offset -= region_offset * 2097152;
-    printf("*{r:" SIZE_FORMAT ", roff: " SIZE_FORMAT ", woff: " SIZE_FORMAT ", size:0}",
-           region->index(), region_offset, word_offset);
-    fflush(stdout);
-  }
-#endif
 }
 
 template<typename RememberedSet>
