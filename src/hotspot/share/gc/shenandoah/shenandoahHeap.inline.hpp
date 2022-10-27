@@ -532,7 +532,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
-    _evac_tracker->end_evacuation(thread, size * HeapWordSize);
+    _evac_tracker->end_evacuation(thread, size * HeapWordSize, ShenandoahHeap::get_object_age(copy_val));
     if (mode()->is_generational() && target_gen == OLD_GENERATION) {
       handle_old_evacuation(copy, size, from_region->is_young());
     }
@@ -588,6 +588,11 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   } else {
     obj->set_mark(w);
   }
+}
+
+uint ShenandoahHeap::get_object_age(oop obj) {
+  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
+  return w.age();
 }
 
 inline bool ShenandoahHeap::clear_old_evacuation_failure() {

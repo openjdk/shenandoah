@@ -830,6 +830,7 @@ public:
   size_t trash_humongous_region_at(ShenandoahHeapRegion *r);
 
   static inline void increase_object_age(oop obj, uint additional_age);
+  static inline uint get_object_age(oop obj);
 
   void transfer_old_pointers_from_satb();
 private:

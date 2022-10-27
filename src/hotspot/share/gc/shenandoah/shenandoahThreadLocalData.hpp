@@ -65,7 +65,7 @@ private:
   bool   _plab_allows_promotion; // If false, no more promotion by this thread during this evacuation phase.
   bool   _plab_retries_enabled;
 
-  ShenandoahEvacuationStats _evacuation_stats;
+  ShenandoahEvacuationStats* _evacuation_stats;
 
   ShenandoahThreadLocalData() :
     _gc_state(0),
@@ -81,7 +81,8 @@ private:
     _plab_promoted(0),
     _plab_preallocated_promoted(0),
     _plab_allows_promotion(true),
-    _plab_retries_enabled(true) {
+    _plab_retries_enabled(true),
+    _evacuation_stats(new ShenandoahEvacuationStats()) {
   }
 
   ~ShenandoahThreadLocalData() {
@@ -92,6 +93,10 @@ private:
       ShenandoahHeap::heap()->retire_plab(_plab);
       delete _plab;
     }
+
+    // TODO: Preserve these stats somewhere for mutator threads.
+    delete _evacuation_stats;
+    _evacuation_stats = nullptr;
   }
 
   static ShenandoahThreadLocalData* data(Thread* thread) {
@@ -146,15 +151,15 @@ public:
   }
 
   static void begin_evacuation(Thread* thread, size_t bytes) {
-    data(thread)->_evacuation_stats.begin_evacuation(bytes);
+    data(thread)->_evacuation_stats->begin_evacuation(bytes);
   }
 
-  static void end_evacuation(Thread* thread, size_t bytes) {
-    data(thread)->_evacuation_stats.end_evacuation(bytes);
+  static void end_evacuation(Thread* thread, size_t bytes, uint age) {
+    data(thread)->_evacuation_stats->end_evacuation(bytes, age);
   }
 
   static ShenandoahEvacuationStats* evacuation_stats(Thread* thread) {
-    return &data(thread)->_evacuation_stats;
+    return data(thread)->_evacuation_stats;
   }
 
   static PLAB* plab(Thread* thread) {
