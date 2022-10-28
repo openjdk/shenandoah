@@ -64,7 +64,7 @@ void ShenandoahEvacuationStats::reset() {
 void ShenandoahEvacuationStats::print_on(outputStream* st) {
   size_t abandoned_size = _bytes_attempted - _bytes_completed;
   size_t abandoned_count = _evacuations_attempted - _evacuations_completed;
-  st->print("Evacuated " SIZE_FORMAT "%s across " SIZE_FORMAT " objects, "
+  st->print_cr("Evacuated " SIZE_FORMAT "%s across " SIZE_FORMAT " objects, "
             "abandoned " SIZE_FORMAT "%s across " SIZE_FORMAT " objects.",
             byte_size_in_proper_unit(_bytes_completed),
             proper_unit_for_byte_size(_bytes_completed), _evacuations_completed,
