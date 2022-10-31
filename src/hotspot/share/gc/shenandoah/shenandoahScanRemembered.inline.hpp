@@ -814,27 +814,45 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   // convert to zero-based indexing
   new_index--;
 
-  size_t group_no = new_index / _group_size;
-  if (group_no + 1 > _num_groups) {
-    group_no = _num_groups - 1;
-  }
+  size_t group_no;
+  for (group_no = 0; new_index >= _group_entries[group_no]; group_no++)
+    ;
+
+  assert(group_no < _num_groups, "Cannot have group no greater or equal to _num_groups");
 
   // All size computations measured in HeapWord
   size_t region_size_words = ShenandoahHeapRegion::region_size_words();
   size_t group_region_index = _region_index[group_no];
   size_t group_region_offset = _group_offset[group_no];
 
-  size_t index_within_group = new_index - (group_no * _group_size);
-  size_t group_chunk_size = _first_group_chunk_size >> group_no;
+  size_t index_within_group = (group_no == 0)? new_index: new_index - _group_entries[group_no - 1];
+  size_t group_chunk_size = _group_chunk_size[group_no];
   size_t offset_of_this_chunk = group_region_offset + index_within_group * group_chunk_size;
   size_t regions_spanned_by_chunk_offset = offset_of_this_chunk / region_size_words;
-  size_t region_index = group_region_index + regions_spanned_by_chunk_offset;
   size_t offset_within_region = offset_of_this_chunk % region_size_words;
+
+  size_t region_index = group_region_index + regions_spanned_by_chunk_offset;
 
   assignment->_r = _heap->get_region(region_index);
   assignment->_chunk_offset = offset_within_region;
   assignment->_chunk_size = group_chunk_size;
 
+#define KELVIN_NOISE
+#ifdef KELVIN_NOISE
+  log_info(gc, ergo)("Remset new_index: " SIZE_FORMAT ", group_no: " SIZE_FORMAT
+                     ", index_within_group: " SIZE_FORMAT
+                     ", offset_of_this_chunk: " SIZE_FORMAT
+                     ", regions_spanned_by_chunk_offset: " SIZE_FORMAT 
+                     ", offset_within_region: " SIZE_FORMAT
+                     ", region_index: " SIZE_FORMAT,
+                     new_index, group_no, index_within_group, offset_of_this_chunk, regions_spanned_by_chunk_offset,
+                     offset_within_region, region_index);
+  log_info(gc, ergo)("  ... group_no: " SIZE_FORMAT ", region_index: " SIZE_FORMAT
+                     ", region_offset: " SIZE_FORMAT ", group_chunk_size: " SIZE_FORMAT
+                     ", chunk(region: " SIZE_FORMAT ", chunk_offset: " SIZE_FORMAT ", chunk_size: " SIZE_FORMAT,
+                     group_no, group_region_index, group_region_offset, group_chunk_size,
+                     region_index, assignment->_chunk_offset, assignment->_chunk_size);
+#endif
   return true;
 }
 
