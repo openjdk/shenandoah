@@ -496,7 +496,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
     // Recompute regions_available_to_loan based on possible changes to old_regions_loaned_for_young_evac and
     // old_evacuation_reserve.
-    
+
     // Any decrease in old_regions_loaned_for_young_evac are immediately available to be loaned
     // However, a change to old_evacuation_reserve() is not necessarily available to loan, because this memory may
     // reside within many fragments scattered throughout old-gen.
