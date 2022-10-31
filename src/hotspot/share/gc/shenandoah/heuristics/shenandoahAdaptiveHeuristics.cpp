@@ -363,8 +363,8 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   if (allocation_headroom < min_threshold) {
     log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
                  _generation->name(),
-                 byte_size_in_proper_unit(available),     proper_unit_for_byte_size(available),
-                 byte_size_in_proper_unit(min_threshold), proper_unit_for_byte_size(min_threshold));
+                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                 byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
     return true;
   }
 
@@ -375,8 +375,8 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     if (allocation_headroom < init_threshold) {
       log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
                    _generation->name(), _gc_times_learned + 1, max_learn,
-                   byte_size_in_proper_unit(available),      proper_unit_for_byte_size(available),
-                   byte_size_in_proper_unit(init_threshold), proper_unit_for_byte_size(init_threshold));
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
       return true;
     }
   }
