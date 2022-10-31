@@ -255,7 +255,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
   assert(_num_groups <= _maximum_groups,
          "The number of remembered set scanning groups must be less than or equal to maximum groups");
 
-#define KELVIN_NOISE
+#undef KELVIN_NOISE
 #ifdef KELVIN_NOISE
   log_info(gc, ergo)("ChunkIterator::<init> regular_group_size: " SIZE_FORMAT
                      ", first_group_chunk_size: " SIZE_FORMAT

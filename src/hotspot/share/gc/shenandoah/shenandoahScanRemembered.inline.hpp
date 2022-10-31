@@ -837,7 +837,7 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   assignment->_chunk_offset = offset_within_region;
   assignment->_chunk_size = group_chunk_size;
 
-#define KELVIN_NOISE
+#undef KELVIN_NOISE
 #ifdef KELVIN_NOISE
   log_info(gc, ergo)("Remset new_index: " SIZE_FORMAT ", group_no: " SIZE_FORMAT
                      ", index_within_group: " SIZE_FORMAT
