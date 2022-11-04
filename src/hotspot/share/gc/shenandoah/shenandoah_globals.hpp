@@ -96,7 +96,7 @@
           "collector accepts. In percents of heap region size.")            \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahOldGarbageThreshold, 25, EXPERIMENTAL,           \
+  product(uintx, ShenandoahOldGarbageThreshold, 10, EXPERIMENTAL,           \
           "How much garbage an old region has to contain before it would "  \
           "be taken for collection.")                                       \
           range(0,100)                                                      \
@@ -152,7 +152,7 @@
           "to learn application and GC performance.")                       \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahImmediateThreshold, 90, EXPERIMENTAL,            \
+  product(uintx, ShenandoahImmediateThreshold, 70, EXPERIMENTAL,            \
           "The cycle may shortcut when enough garbage can be reclaimed "    \
           "from the immediate garbage (completely garbage regions). "       \
           "In percents of total garbage found. Setting this threshold "     \
@@ -525,10 +525,6 @@
           "for the purpose of supporting compaction of old-gen "            \
           "memory.  Otherwise, old-gen memory cannot be compacted.")        \
           range(0, 128)                                                     \
-                                                                            \
-  product(bool, ShenandoahPromoteTenuredObjects, true, DIAGNOSTIC,          \
-          "Turn on/off evacuating individual tenured young objects "        \
-          " to the old generation.")                                        \
                                                                             \
   product(bool, ShenandoahAllowOldMarkingPreemption, true, DIAGNOSTIC,      \
           "Allow young generation collections to suspend concurrent"        \
