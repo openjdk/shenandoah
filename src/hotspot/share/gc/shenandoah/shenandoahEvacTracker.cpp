@@ -96,7 +96,7 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
     }
   }
   st->print("Regions: ");
-  region_ages.print_on(st, MaxTenuringThreshold);
+  region_ages.print_on(st, InitialTenuringThreshold);
 }
 
 class ShenandoahStatAggregator : public ThreadClosure {
