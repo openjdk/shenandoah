@@ -86,7 +86,7 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
   st->print("Mutators: ");
   mutators->print_on(st);
   st->cr();
-  
+
   AgeTable region_ages(false);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (uint i = 0; i < heap->num_regions(); ++i) {
