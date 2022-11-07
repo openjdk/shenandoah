@@ -255,8 +255,8 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
   assert(_num_groups <= _maximum_groups,
          "The number of remembered set scanning groups must be less than or equal to maximum groups");
 
-#undef KELVIN_NOISE
-#ifdef KELVIN_NOISE
+#undef KELVIN_NOISY
+#ifdef KELVIN_NOISY
   log_info(gc, ergo)("ChunkIterator::<init> regular_group_size: " SIZE_FORMAT
                      ", first_group_chunk_size: " SIZE_FORMAT
                      ", num_groups: " SIZE_FORMAT
@@ -265,8 +265,6 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
 #endif
 
   size_t words_in_region = ShenandoahHeapRegion::region_size_words();
-  size_t group_span = _first_group_chunk_size_b4_rebalance * _regular_group_size;
-
   _region_index[0] = 0;
   _group_offset[0] = 0;
   if (words_in_region > _maximum_chunk_size_words) {
@@ -281,13 +279,12 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     }
     _group_entries[0] = num_chunks;
     _group_chunk_size[0] = _maximum_chunk_size_words;
-    group_span = current_group_span;
   } else {
     _group_entries[0] = _regular_group_size;
     _group_chunk_size[0] = _first_group_chunk_size_b4_rebalance;
   }
 
-#ifdef KELVIN_NOISE
+#ifdef KELVIN_NOISY
   log_info(gc, ergo)("ChunkIterator::<init> for group[0], group_entries " SIZE_FORMAT
                      ", chunk_size: " SIZE_FORMAT
                      ", region_index: " SIZE_FORMAT
@@ -295,15 +292,18 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
                      _group_entries[0], _group_chunk_size[0], _region_index[0], _group_offset[0]);
 #endif
 
+  size_t previous_group_span = _group_entries[0] * _group_chunk_size[0];
   for (size_t i = 1; i < _num_groups; i++) {
     size_t previous_group_entries = (i == 1)? _group_entries[0]: (_group_entries[i-1] - _group_entries[i-2]);
-    size_t previous_group_span = previous_group_entries * _group_chunk_size[i-1];
-    _region_index[i] = _region_index[i-1] + previous_group_span / words_in_region;
-    _group_offset[i] = (_group_offset[i-1] + previous_group_span) % words_in_region;
-    _group_entries[i] = _group_entries[i-1] + _regular_group_size;
     _group_chunk_size[i] = _group_chunk_size[i-1] / 2;
-    group_span /= 2;
-#ifdef KELVIN_NOISE
+    size_t chunks_in_group = _regular_group_size;
+    size_t this_group_span = _group_chunk_size[i] * chunks_in_group;
+    size_t total_span_of_groups = previous_group_span + this_group_span;
+    _region_index[i] = previous_group_span / words_in_region;
+    _group_offset[i] = previous_group_span % words_in_region;
+    _group_entries[i] = _group_entries[i-1] + _regular_group_size;
+    previous_group_span = total_span_of_groups;
+#ifdef KELVIN_NOISY
     log_info(gc, ergo)("ChunkIterator::<init> for group[" SIZE_FORMAT "], group_entries " SIZE_FORMAT
                        ", chunk_size: " SIZE_FORMAT
                        ", region_index: " SIZE_FORMAT
@@ -311,11 +311,16 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
                        i, _group_entries[i], _group_chunk_size[i], _region_index[i], _group_offset[i]);
 #endif
   }
-  if (_group_entries[_num_groups-1] < _total_chunks - 1) {
+  if (_group_entries[_num_groups-1] < _total_chunks) {
+    assert((_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1] + previous_group_span == 
+           heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
+           ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
     _group_entries[_num_groups-1] = _total_chunks;
-#ifdef KELVIN_NOISE
+
+#ifdef KELVIN_NOISY
     size_t i = _num_groups-1;
-    log_info(gc, ergo)("ChunkIterator::<init> for group[" SIZE_FORMAT "], group_entries " SIZE_FORMAT
+    log_info(gc, ergo)("Updating _group_entries for last group:\nChunkIterator::<init> for group[" SIZE_FORMAT
+                       "], group_entries " SIZE_FORMAT
                        ", chunk_size: " SIZE_FORMAT
                        ", region_index: " SIZE_FORMAT
                        ", group_offset: " SIZE_FORMAT,
