@@ -27,6 +27,7 @@
 
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shenandoah/shenandoahGC.hpp"
+#include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "memory/allocation.hpp"
 #include "utilities/ostream.hpp"
@@ -52,13 +53,12 @@ private:
   size_t _explicit_full;
   size_t _implicit_concurrent;
   size_t _implicit_full;
+  size_t _cycle_counter;
   size_t _degen_points[ShenandoahGC::_DEGENERATED_LIMIT];
 
   ShenandoahSharedFlag _in_shutdown;
-
+  ShenandoahMmuTracker _mmu_tracker;
   ShenandoahTracer* _tracer;
-
-  size_t _cycle_counter;
 
 public:
   ShenandoahCollectorPolicy();

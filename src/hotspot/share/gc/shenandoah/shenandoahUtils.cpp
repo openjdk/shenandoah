@@ -67,7 +67,6 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
   );
 }
 
-
 ShenandoahGCSession::~ShenandoahGCSession() {
 
   _generation->heuristics()->record_cycle_end();
