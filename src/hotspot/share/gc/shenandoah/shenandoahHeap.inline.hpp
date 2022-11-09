@@ -569,21 +569,26 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
     return false;
   }
 
-  if (is_in(obj)) {
-    size_t index = heap_region_containing(obj)->index();
-    switch (_affiliations[index]) {
-    case ShenandoahRegionAffiliation::FREE:
-      return false;
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return (active_generation() == (ShenandoahGeneration*) young_generation()) || (active_generation() == global_generation());
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return (active_generation() == (ShenandoahGeneration*) old_generation()) || (active_generation() == global_generation());
-    default:
-      assert(false, "Bad affiliation for region " SIZE_FORMAT, index);
-    }
+  assert(is_in(obj), "only check if is in active generation for objects (" PTR_FORMAT ") in heap", p2i(obj));
+  assert((active_generation() == (ShenandoahGeneration*) old_generation) ||
+	 (active_generation() == (ShenandoahGeneration*) young_generation) ||
+	 (active_generation() == global_generation(), "Active generation must be old, young, or global");
+
+  size_t index = heap_region_containing(obj)->index();
+  switch (_affiliations[index]) {
+  case ShenandoahRegionAffiliation::FREE:
+    // Free regions are in Old, Young, Global
+    return true;
+  case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+    // Young regions are in young_generation and global_generation, not in old_generation
+    return (active_generation() != (ShenandoahGeneration*) old_generation());
+  case ShenandoahRegionAffiliation::OLD_GENERATION:
+    // Old regions are in old_generation and global_generation, not in young_generation
+    return (active_generation() != (ShenandoahGeneration*) young_generation());
+  default:
+    assert(false, "Bad affiliation for region " SIZE_FORMAT, index);
+    return false;
   }
-  // Also handles default, which should not happen
-  return false;
 }
 
 inline bool ShenandoahHeap::is_in_young(const void* p) const {
