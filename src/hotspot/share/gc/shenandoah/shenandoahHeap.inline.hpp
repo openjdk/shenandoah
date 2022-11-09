@@ -569,7 +569,21 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
     return false;
   }
 
-  return check_is_in_active_generation(active_generation(), obj);
+  if (is_in(obj)) {
+    size_t index = heap_region_containing(obj)->index();
+    switch (_affiliations[index]) {
+    case ShenandoahRegionAffiliation::FREE:
+      return false;
+    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+      return (active_generation() == (ShenandoahGeneration*) young_generation()) || (active_generation() == global_generation());
+    case ShenandoahRegionAffiliation::OLD_GENERATION:
+      return (active_generation() == (ShenandoahGeneration*) old_generation()) || (active_generation() == global_generation());
+    default:
+      assert(false, "Bad affiliation for region " SIZE_FORMAT, index);
+    }
+  }
+  // Also handles default, which should not happen
+  return false;
 }
 
 inline bool ShenandoahHeap::is_in_young(const void* p) const {

@@ -606,8 +606,6 @@ private:
   bool prepare_aux_bitmap_for_iteration();
   void reclaim_aux_bitmap_for_iteration();
 
-  bool check_is_in_active_generation(ShenandoahGeneration* active_generation, oop obj) const;
-
 // ---------- Generic interface hooks
 // Minor things that super-interface expects us to implement to play nice with
 // the rest of runtime. Some of the things here are not required to be implemented,

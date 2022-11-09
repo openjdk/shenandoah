@@ -3204,8 +3204,3 @@ ShenandoahGeneration* ShenandoahHeap::generation_for(ShenandoahRegionAffiliation
   ShouldNotReachHere();
   return nullptr;
 }
-
-// KELVIN wants to fix this: but seems the only way to make compiler happy for now.
-bool ShenandoahHeap::check_is_in_active_generation(ShenandoahGeneration* active_generation, oop obj) const {
-  return active_generation->contains(obj);
-}
