@@ -31,14 +31,12 @@ class Thread;
 
 class ShenandoahMmuTracker {
 
-  double _initial_gc_time_s;
   double _initial_time_s;
-
-  double gc_thread_time_seconds();
-  double process_time_seconds();
 
  public:
   explicit ShenandoahMmuTracker();
+  static double gc_thread_time_seconds();
+  static double process_time_seconds();
   void update();
 };
 

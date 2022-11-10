@@ -24,6 +24,8 @@
 
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "runtime/os.hpp"
 #include "logging/log.hpp"
 
@@ -53,20 +55,23 @@ double ShenandoahMmuTracker::process_time_seconds() {
   return 0.0;
 }
 
-ShenandoahMmuTracker::ShenandoahMmuTracker() :
-  _initial_gc_time_s(0.0), _initial_time_s(0.0) {
+ShenandoahMmuTracker::ShenandoahMmuTracker() : _initial_time_s(0.0) {
 }
 
 void ShenandoahMmuTracker::update() {
-  double total_gc_time_s = gc_thread_time_seconds();
-  double total_time_s = process_time_seconds();
-  if (_initial_time_s != 0.0 && _initial_gc_time_s != 0.0) {
-    double elapsed_gc_s = total_gc_time_s - _initial_gc_time_s;
-    double elapsed_s = total_time_s - _initial_time_s;
-    double mmu = ((elapsed_s - elapsed_gc_s) / elapsed_s) * 100;
-    log_info(gc)("Usr+Sys process: %.3f gc threads = %.3f, mmu = %.2f%%", elapsed_s, elapsed_gc_s, mmu);
-  }
 
-  _initial_gc_time_s = total_gc_time_s;
-  _initial_time_s = total_time_s;
+  double process_time_s = process_time_seconds();
+
+  if (_initial_time_s != 0.0) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    double old_time_s = heap->old_generation()->reset_collection_time();
+    double young_time_s = heap->young_generation()->reset_collection_time();
+    double global_time_s = heap->global_generation()->reset_collection_time();
+    double thread_time_s = old_time_s + young_time_s + global_time_s;
+    double elapsed_process_time_s = process_time_s - _initial_time_s;
+    double mmu = ((elapsed_process_time_s - thread_time_s) / elapsed_process_time_s) * 100;
+    log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%",
+                 elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu);
+  }
+  _initial_time_s = process_time_s;
 }

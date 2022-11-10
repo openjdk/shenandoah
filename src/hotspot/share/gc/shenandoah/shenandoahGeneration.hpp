@@ -46,6 +46,8 @@ private:
 
   ShenandoahReferenceProcessor* const _ref_processor;
 
+  double _collection_thread_time_s;
+
 protected:
   // Usage
   size_t _affiliated_region_count;
@@ -173,6 +175,9 @@ private:
 
   virtual void record_success_concurrent(bool abbreviated);
   virtual void record_success_degenerated();
+
+  virtual void add_collection_time(double time_seconds);
+  double reset_collection_time();
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP

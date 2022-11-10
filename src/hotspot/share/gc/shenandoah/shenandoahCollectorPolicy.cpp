@@ -85,7 +85,6 @@ void ShenandoahCollectorPolicy::record_degenerated_upgrade_to_full() {
 
 void ShenandoahCollectorPolicy::record_success_concurrent() {
   _success_concurrent_gcs++;
-  _mmu_tracker.update();
 }
 
 void ShenandoahCollectorPolicy::record_mixed_cycle() {
@@ -94,12 +93,10 @@ void ShenandoahCollectorPolicy::record_mixed_cycle() {
 
 void ShenandoahCollectorPolicy::record_abbreviated_cycle() {
   _abbreviated_cycles++;
-  _mmu_tracker.update();
 }
 
 void ShenandoahCollectorPolicy::record_success_old() {
   _success_old_gcs++;
-  _mmu_tracker.update();
 }
 
 void ShenandoahCollectorPolicy::record_interrupted_old() {
@@ -108,12 +105,10 @@ void ShenandoahCollectorPolicy::record_interrupted_old() {
 
 void ShenandoahCollectorPolicy::record_success_degenerated() {
   _success_degenerated_gcs++;
-  _mmu_tracker.update();
 }
 
 void ShenandoahCollectorPolicy::record_success_full() {
   _success_full_gcs++;
-  _mmu_tracker.update();
 }
 
 size_t ShenandoahCollectorPolicy::cycle_counter() const {

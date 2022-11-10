@@ -44,7 +44,8 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
   _heap(ShenandoahHeap::heap()),
   _generation(generation),
   _timer(_heap->gc_timer()),
-  _tracer(_heap->tracer()) {
+  _tracer(_heap->tracer()),
+  _gc_thread_time_baseline(0.0) {
   assert(!ShenandoahGCPhase::is_current_phase_valid(), "No current GC phase");
 
   _heap->set_gc_cause(cause);
@@ -52,7 +53,7 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
   _timer->register_gc_start();
   _tracer->report_gc_start(cause, _timer->gc_start());
   _heap->trace_heap_before_gc(_tracer);
-
+  _gc_thread_time_baseline = ShenandoahMmuTracker::gc_thread_time_seconds();
   _heap->shenandoah_policy()->record_cycle_start();
   generation->heuristics()->record_cycle_start();
   _trace_cycle.initialize(_heap->cycle_memory_manager(), cause,
@@ -68,8 +69,10 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
 }
 
 ShenandoahGCSession::~ShenandoahGCSession() {
-
+  double thread_time = ShenandoahMmuTracker::gc_thread_time_seconds() - _gc_thread_time_baseline;
   _generation->heuristics()->record_cycle_end();
+  _generation->add_collection_time(thread_time);
+
   if (_heap->mode()->is_generational() &&
       ((_generation->generation_mode() == GLOBAL) || _heap->upgraded_to_full())) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well

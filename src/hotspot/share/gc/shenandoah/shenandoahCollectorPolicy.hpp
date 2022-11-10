@@ -57,7 +57,6 @@ private:
   size_t _degen_points[ShenandoahGC::_DEGENERATED_LIMIT];
 
   ShenandoahSharedFlag _in_shutdown;
-  ShenandoahMmuTracker _mmu_tracker;
   ShenandoahTracer* _tracer;
 
 public:

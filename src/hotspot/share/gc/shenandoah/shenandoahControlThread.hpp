@@ -29,6 +29,7 @@
 #include "gc/shared/concurrentGCThread.hpp"
 #include "gc/shenandoah/shenandoahGC.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "runtime/task.hpp"
@@ -53,6 +54,17 @@ public:
   virtual void task();
 };
 
+class ShenandoahMmuTask : public PeriodicTask {
+ private:
+  ShenandoahMmuTracker _mmu_tracker;
+ public:
+  ShenandoahMmuTask() : PeriodicTask(5000) {}
+
+  virtual void task() override {
+    _mmu_tracker.update();
+  }
+};
+
 class ShenandoahControlThread: public ConcurrentGCThread {
   friend class VMStructs;
 
@@ -66,6 +78,7 @@ private:
   Monitor _regulator_lock;
   ShenandoahPeriodicTask _periodic_task;
   ShenandoahPeriodicPacerNotify _periodic_pacer_notify_task;
+  ShenandoahMmuTask _periodic_mmu_task;
 
 public:
   typedef enum {
