@@ -1008,8 +1008,12 @@ struct ShenandoahRegionChunk {
 
 class ShenandoahRegionChunkIterator : public StackObj {
 private:
-  // The largest chunk size is 1 MiB, measured in words.  Otherwise, remembered set scanning may become too unbalanced.
-  static const size_t _maximum_chunk_size_words = (1024 * 1024) / HeapWordSize;
+  // The largest chunk size is 4 MiB, measured in words.  Otherwise, remembered set scanning may become too unbalanced.
+  // If the largest chunk size is too small, there is too much overhead sifting out assignments to individual worker threads.
+  static const size_t _maximum_chunk_size_words = (4 * 1024 * 1024) / HeapWordSize;
+
+  static const size_t _clusters_in_smallest_chunk = 4;
+  static const size_t _assumed_words_in_card = 64;
 
   // smallest_chunk_size is 4 clusters (i.e. 128 KiB).  Note that there are 64 words per card and there are 64 cards per
   // cluster.  Each cluster spans 128 KiB.
@@ -1017,8 +1021,8 @@ private:
   //      ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   // We can't perform this computation here, because of encapsulation and initialization constraints.  We paste
   // the magic number here, and assert that this number matches the intended computation in constructor.
-  static const size_t _smallest_chunk_size_words =
-    4 * 64 * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+  static const size_t _smallest_chunk_size_words = (_clusters_in_smallest_chunk * _assumed_words_in_card *
+                                                    ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster);
 
   // The total remembered set scanning effort is divided into chunks of work that are assigned to individual worker tasks.
   // The chunks of assigned work are divided into groups, where the size of the typical group (_regular_group_size) is half the
@@ -1032,7 +1036,13 @@ private:
   // The first group "effectively" processes chunks of size 1 MiB (or smaller for smaller region sizes).
   // The last group processes chunks of size 128 KiB.  There are four groups total.
 
-  static const size_t _maximum_groups = 4;
+  // group[0] is 4 MiB chunk size (_maximum_chunk_size_words)
+  // group[1] is 2 MiB chunk size
+  // group[2] is 1 MiB chunk size
+  // group[3] is 512 KiB chunk size
+  // group[4] is 256 KiB chunk size
+  // group[5] is 128 Kib shunk size (_smallest_chunk_size_words = 4 * 64 * 64
+  static const size_t _maximum_groups = 6;
 
   const ShenandoahHeap* _heap;
 

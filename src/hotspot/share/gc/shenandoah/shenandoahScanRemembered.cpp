@@ -249,11 +249,13 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     _total_chunks(calc_total_chunks()),
     _index(0)
 {
-  assert(_smallest_chunk_size_words ==
-         4 * CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster,
-         "_smallest_chunk_size is not valid");
+  assert(_smallest_chunk_size_words == _clusters_in_smallest_chunk * CardTable::card_size_in_words()
+         * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster, "_smallest_chunk_size is not valid");
   assert(_num_groups <= _maximum_groups,
          "The number of remembered set scanning groups must be less than or equal to maximum groups");
+  assert(_smallest_chunk_size_words << (_maximum_groups - 1) == _maximum_chunk_size_words,
+         "Maximum number of groups needs to span maximum chunk size to smallest chunk size");
+         
 
 #undef KELVIN_NOISY
 #ifdef KELVIN_NOISY
