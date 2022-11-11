@@ -181,8 +181,18 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
   size_t current_group_span = _first_group_chunk_size_b4_rebalance * _regular_group_size;
   size_t smallest_group_span = _smallest_chunk_size_words * _regular_group_size;
 
-  // The first group gets special handling because the first chunk size can be no larger than _largets_chunk_size_words
+  // Tyhe first group gets special handling because the first chunk size can be no larger than _largets_chunk_size_words
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  log_info(gc, ergo)("calc_total_chunks(): region_size_words: " SIZE_FORMAT ", num_regions: " SIZE_FORMAT
+                     ", unspanned_heap_size: " SIZE_FORMAT
+                     ", _first_group_chunk_size_b4_rebalance: " SIZE_FORMAT ", _smallest_chunk_size_words: " SIZE_FORMAT
+                     ", _maximum_chunk_size_words: " SIZE_FORMAT
+                     ", _regular_group_size: " SIZE_FORMAT ", _num_groups: " SIZE_FORMAT,
+                     region_size_words, _heap->num_regions(), unspanned_heap_size, _first_group_chunk_size_b4_rebalance,
+                     _smallest_chunk_size_words, _maximum_chunk_size_words, _regular_group_size, _num_groups);
 
+#endif
   if (region_size_words > _maximum_chunk_size_words) {
     // In the case that we shrink the first group's chunk size, certain other groups will also be subsumed within the first group
     size_t effective_chunk_size = _first_group_chunk_size_b4_rebalance;
@@ -191,13 +201,29 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
       unspanned_heap_size -= current_group_span;
       effective_chunk_size /= 2;
       current_group_span /= 2;
+#ifdef KELVIN_VERBOSE
+      log_info(gc, ergo)(" region_size > max_chunk_size: num_chunks: " SIZE_FORMAT
+                         ", unspanned_heap_size: " SIZE_FORMAT ", effective_chunk_size: " SIZE_FORMAT
+                         ", current_group_span: " SIZE_FORMAT,
+                         num_chunks, unspanned_heap_size, effective_chunk_size, current_group_span);
+#endif
     }
   } else {
     num_chunks = _regular_group_size;
+    unspanned_heap_size -= current_group_span;
     current_group_span /= 2;
+#ifdef KELVIN_VERBOSE
+    log_info(gc, ergo)(" region_size <= max_chunk_size: num_chunks: " SIZE_FORMAT
+                       ", current_group_span: " SIZE_FORMAT, num_chunks, current_group_span);
+#endif
   }
   size_t spanned_groups = 1;
   while (unspanned_heap_size > 0) {
+#ifdef KELVIN_VERBOSE
+    log_info(gc, ergo)(" unspanned_heap_size: " SIZE_FORMAT ", spanned_groups: " SIZE_FORMAT ", current_group_span: " SIZE_FORMAT,
+                       unspanned_heap_size, spanned_groups, current_group_span);
+#endif
+
     if (current_group_span <= unspanned_heap_size) {
       unspanned_heap_size -= current_group_span;
       num_chunks += _regular_group_size;
@@ -212,6 +238,9 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
         size_t extra_chunks = unspanned_heap_size / chunk_span;
         assert (extra_chunks * chunk_span == unspanned_heap_size, "Chunks must precisely span regions");
         num_chunks += extra_chunks;
+#ifdef KELVIN_VERBOSE
+        log_info(gc, ergo)("  returning " SIZE_FORMAT, num_chunks);
+#endif
         return num_chunks;
       } else if (current_group_span <= smallest_group_span) {
         // We cannot introduce new groups because we've reached the lower bound on group size.  So this last
@@ -220,6 +249,9 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
         size_t extra_chunks = unspanned_heap_size / chunk_span;
         assert (extra_chunks * chunk_span == unspanned_heap_size, "Chunks must precisely span regions");
         num_chunks += extra_chunks;
+#ifdef KELVIN_VERBOSE
+        log_info(gc, ergo)("  returning " SIZE_FORMAT, num_chunks);
+#endif
         return num_chunks;
       } else {
         current_group_span /= 2;
@@ -230,9 +262,15 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
       size_t last_group_size = unspanned_heap_size / chunk_span;
       assert (last_group_size * chunk_span == unspanned_heap_size, "Chunks must precisely span regions");
       num_chunks += last_group_size;
+#ifdef KELVIN_VERBOSE
+      log_info(gc, ergo)("  returning " SIZE_FORMAT, num_chunks);
+#endif
       return num_chunks;
     }
   }
+#ifdef KELVIN_VERBOSE
+  log_info(gc, ergo)("  returning " SIZE_FORMAT, num_chunks);
+#endif
   return num_chunks;
 }
 
@@ -257,8 +295,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
          "Maximum number of groups needs to span maximum chunk size to smallest chunk size");
          
 
-#undef KELVIN_NOISY
-#ifdef KELVIN_NOISY
+#ifdef KELVIN_VERBOSE
   log_info(gc, ergo)("ChunkIterator::<init> regular_group_size: " SIZE_FORMAT
                      ", first_group_chunk_size: " SIZE_FORMAT
                      ", num_groups: " SIZE_FORMAT
@@ -286,7 +323,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     _group_chunk_size[0] = _first_group_chunk_size_b4_rebalance;
   }
 
-#ifdef KELVIN_NOISY
+#ifdef KELVIN_VERBOSE
   log_info(gc, ergo)("ChunkIterator::<init> for group[0], group_entries " SIZE_FORMAT
                      ", chunk_size: " SIZE_FORMAT
                      ", region_index: " SIZE_FORMAT
@@ -305,7 +342,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     _group_offset[i] = previous_group_span % words_in_region;
     _group_entries[i] = _group_entries[i-1] + _regular_group_size;
     previous_group_span = total_span_of_groups;
-#ifdef KELVIN_NOISY
+#ifdef KELVIN_VERBOSE
     log_info(gc, ergo)("ChunkIterator::<init> for group[" SIZE_FORMAT "], group_entries " SIZE_FORMAT
                        ", chunk_size: " SIZE_FORMAT
                        ", region_index: " SIZE_FORMAT
@@ -318,8 +355,9 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
            heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
            ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
     _group_entries[_num_groups-1] = _total_chunks;
+    previous_group_span += (_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1];
 
-#ifdef KELVIN_NOISY
+#ifdef KELVIN_VERBOSE
     size_t i = _num_groups-1;
     log_info(gc, ergo)("Updating _group_entries for last group:\nChunkIterator::<init> for group[" SIZE_FORMAT
                        "], group_entries " SIZE_FORMAT
@@ -329,6 +367,8 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
                        i, _group_entries[i], _group_chunk_size[i], _region_index[i], _group_offset[i]);
 #endif
   }
+  assert(previous_group_span == heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
+         ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
 
   // Not necessary, but keeps things tidy
   for (size_t i = _num_groups; i < _maximum_groups; i++) {
