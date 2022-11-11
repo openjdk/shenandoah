@@ -26,18 +26,24 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHMMUTRACKER_HPP
 
 #include "memory/iterator.hpp"
+#include "runtime/mutex.hpp"
 
-class Thread;
+class ShenandoahGeneration;
 
 class ShenandoahMmuTracker {
 
-  double _initial_time_s;
+  double _initial_collector_time_s;
+  double _initial_process_time_s;
+  double _initial_verify_collector_time_s;
+  Monitor _mmu_lock;
 
  public:
   explicit ShenandoahMmuTracker();
   static double gc_thread_time_seconds();
   static double process_time_seconds();
-  void update();
+  void record(ShenandoahGeneration* generation);
+  void report();
+  void initialize();
 };
 
 

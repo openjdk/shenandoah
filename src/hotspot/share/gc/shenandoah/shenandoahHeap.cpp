@@ -632,6 +632,7 @@ void ShenandoahHeap::post_initialize() {
     _safepoint_workers->set_initialize_gclab();
   }
 
+  _mmu_tracker.initialize();
   JFR_ONLY(ShenandoahJFRSupport::register_jfr_type_serializers());
 }
 
@@ -1747,6 +1748,7 @@ void ShenandoahHeap::prepare_for_verify() {
 
 void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
   tcl->do_thread(_control_thread);
+  tcl->do_thread(_regulator_thread);
   workers()->threads_do(tcl);
   if (_safepoint_workers != NULL) {
     _safepoint_workers->threads_do(tcl);
@@ -1776,6 +1778,33 @@ void ShenandoahHeap::print_tracing_info() const {
     ls.cr();
     ls.cr();
   }
+}
+
+void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
+  set_gc_cause(cause);
+  set_gc_generation(generation);
+
+  shenandoah_policy()->record_cycle_start();
+  generation->heuristics()->record_cycle_start();
+
+  // When a cycle starts, attribute any thread activity when the collector
+  // is idle to the global generation.
+  _mmu_tracker.record(global_generation());
+}
+
+void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
+  generation->heuristics()->record_cycle_end();
+
+  if (mode()->is_generational() &&
+      ((generation->generation_mode() == GLOBAL) || upgraded_to_full())) {
+    // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
+    young_generation()->heuristics()->record_cycle_end();
+    old_generation()->heuristics()->record_cycle_end();
+  }
+  set_gc_cause(GCCause::_no_gc);
+
+  // When a cycle ends, the thread activity is attributed to the respective generation
+  _mmu_tracker.record(generation);
 }
 
 void ShenandoahHeap::verify(VerifyOption vo) {

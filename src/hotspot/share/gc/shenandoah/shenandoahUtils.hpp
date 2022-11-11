@@ -49,7 +49,7 @@ private:
   ShenandoahGeneration* const _generation;
   GCTimer*  const _timer;
   GCTracer* const _tracer;
-  double _gc_thread_time_baseline;
+
   TraceMemoryManagerStats _trace_cycle;
 public:
   ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation);

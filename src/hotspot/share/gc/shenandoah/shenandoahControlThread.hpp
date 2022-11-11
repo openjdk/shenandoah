@@ -61,7 +61,7 @@ class ShenandoahMmuTask : public PeriodicTask {
   ShenandoahMmuTask() : PeriodicTask(5000) {}
 
   virtual void task() override {
-    _mmu_tracker.update();
+    _mmu_tracker.report();
   }
 };
 

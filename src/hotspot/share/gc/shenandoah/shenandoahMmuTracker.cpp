@@ -34,7 +34,9 @@ class ThreadTimeAccumulator : public ThreadClosure {
   size_t total_time;
   ThreadTimeAccumulator() : total_time(0) {}
   virtual void do_thread(Thread* thread) override {
-    total_time += os::thread_cpu_time(thread);
+    size_t time = os::thread_cpu_time(thread);
+    log_info(gc)("%s: " SIZE_FORMAT "ns.", thread->name(), time);
+    total_time += time;
   }
 };
 
@@ -55,23 +57,44 @@ double ShenandoahMmuTracker::process_time_seconds() {
   return 0.0;
 }
 
-ShenandoahMmuTracker::ShenandoahMmuTracker() : _initial_time_s(0.0) {
+ShenandoahMmuTracker::ShenandoahMmuTracker() :
+  _initial_collector_time_s(0.0),
+  _initial_process_time_s(0.0),
+  _mmu_lock(Mutex::nosafepoint - 2, "ShenandoahMMU_lock", false) {
 }
 
-void ShenandoahMmuTracker::update() {
+void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
+  MonitorLocker lock(&_mmu_lock, Mutex::_no_safepoint_check_flag);
+  double collector_time_s = gc_thread_time_seconds();
+  double elapsed_gc_time_s = collector_time_s - _initial_collector_time_s;
+  generation->add_collection_time(elapsed_gc_time_s);
+  _initial_collector_time_s = collector_time_s;
+}
 
+void ShenandoahMmuTracker::report() {
+  MonitorLocker lock(&_mmu_lock, Mutex::_no_safepoint_check_flag);
   double process_time_s = process_time_seconds();
+  double elapsed_process_time_s = process_time_s - _initial_process_time_s;
+  _initial_process_time_s = process_time_s;
 
-  if (_initial_time_s != 0.0) {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    double old_time_s = heap->old_generation()->reset_collection_time();
-    double young_time_s = heap->young_generation()->reset_collection_time();
-    double global_time_s = heap->global_generation()->reset_collection_time();
-    double thread_time_s = old_time_s + young_time_s + global_time_s;
-    double elapsed_process_time_s = process_time_s - _initial_time_s;
-    double mmu = ((elapsed_process_time_s - thread_time_s) / elapsed_process_time_s) * 100;
-    log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%",
-                 elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu);
-  }
-  _initial_time_s = process_time_s;
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  double old_time_s = heap->old_generation()->reset_collection_time();
+  double young_time_s = heap->young_generation()->reset_collection_time();
+  double global_time_s = heap->global_generation()->reset_collection_time();
+  double thread_time_s = old_time_s + young_time_s + global_time_s;
+
+  double verify_time_s = gc_thread_time_seconds();
+  double verify_elapsed = verify_time_s - _initial_verify_collector_time_s;
+  _initial_verify_collector_time_s = verify_time_s;
+
+  double mmu = ((elapsed_process_time_s - thread_time_s) / elapsed_process_time_s) * 100;
+  double verify_mmu = ((elapsed_process_time_s - verify_elapsed) / elapsed_process_time_s) * 100;
+  log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%, VERIFY = %.3f, mmu = %.2f%%",
+               elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu, verify_elapsed, verify_mmu);
+}
+
+void ShenandoahMmuTracker::initialize() {
+  _initial_process_time_s = process_time_seconds();
+  _initial_collector_time_s = gc_thread_time_seconds();
+  _initial_verify_collector_time_s = _initial_collector_time_s;
 }
