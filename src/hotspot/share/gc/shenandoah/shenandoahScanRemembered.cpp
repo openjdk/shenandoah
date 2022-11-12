@@ -346,16 +346,17 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     log_info(gc, ergo)("ChunkIterator::<init> for group[" SIZE_FORMAT "], group_entries " SIZE_FORMAT
                        ", chunk_size: " SIZE_FORMAT
                        ", region_index: " SIZE_FORMAT
-                       ", group_offset: " SIZE_FORMAT,
-                       i, _group_entries[i], _group_chunk_size[i], _region_index[i], _group_offset[i]);
+                       ", group_offset: " SIZE_FORMAT
+		       ", total_span_of_groups: " SIZE_FORMAT,
+                       i, _group_entries[i], _group_chunk_size[i], _region_index[i], _group_offset[i], total_span_of_groups);
 #endif
   }
   if (_group_entries[_num_groups-1] < _total_chunks) {
     assert((_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1] + previous_group_span == 
            heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
            ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
-    _group_entries[_num_groups-1] = _total_chunks;
     previous_group_span += (_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1];
+    _group_entries[_num_groups-1] = _total_chunks;
 
 #ifdef KELVIN_VERBOSE
     size_t i = _num_groups-1;
@@ -363,10 +364,17 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
                        "], group_entries " SIZE_FORMAT
                        ", chunk_size: " SIZE_FORMAT
                        ", region_index: " SIZE_FORMAT
-                       ", group_offset: " SIZE_FORMAT,
-                       i, _group_entries[i], _group_chunk_size[i], _region_index[i], _group_offset[i]);
+                       ", group_offset: " SIZE_FORMAT
+		       ", total_span_of_groups: " SIZE_FORMAT,
+                       i, _group_entries[i], _group_chunk_size[i], _region_index[i], _group_offset[i], previous_group_span);
 #endif
   }
+
+#ifdef KELVIN_VERBOSE
+  log_info(gc, ergo)("previous_group_span: " SIZE_FORMAT ", total heap size: " SIZE_FORMAT,
+		     previous_group_span, heap->num_regions() * words_in_region);
+#endif
+
   assert(previous_group_span == heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
          ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
 
