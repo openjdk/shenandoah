@@ -376,7 +376,8 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
 #endif
 
   assert(previous_group_span == heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
-         ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
+         ") do not span total heap regions (" SIZE_FORMAT "): " SIZE_FORMAT " does not equal " SIZE_FORMAT,
+	 _total_chunks, _heap->num_regions(), previous_group_span, heap->num_regions() * words_in_region);
 
   // Not necessary, but keeps things tidy
   for (size_t i = _num_groups; i < _maximum_groups; i++) {
