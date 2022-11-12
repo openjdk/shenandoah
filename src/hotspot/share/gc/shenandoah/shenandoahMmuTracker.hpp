@@ -27,6 +27,7 @@
 
 #include "memory/iterator.hpp"
 #include "runtime/mutex.hpp"
+#include "utilities/numberSeq.hpp"
 
 class ShenandoahGeneration;
 
@@ -35,12 +36,15 @@ class ShenandoahMmuTracker {
   double _initial_collector_time_s;
   double _initial_process_time_s;
   double _initial_verify_collector_time_s;
+
   Monitor _mmu_lock;
+  TruncatedSeq _mmu_average;
 
  public:
-  explicit ShenandoahMmuTracker();
   static double gc_thread_time_seconds();
   static double process_time_seconds();
+
+  explicit ShenandoahMmuTracker();
   void record(ShenandoahGeneration* generation);
   void report();
   void initialize();

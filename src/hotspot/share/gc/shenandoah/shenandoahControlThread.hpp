@@ -58,7 +58,7 @@ class ShenandoahMmuTask : public PeriodicTask {
  private:
   ShenandoahMmuTracker _mmu_tracker;
  public:
-  ShenandoahMmuTask() : PeriodicTask(5000) {}
+  ShenandoahMmuTask() : PeriodicTask(GCPauseIntervalMillis) {}
 
   virtual void task() override {
     _mmu_tracker.report();

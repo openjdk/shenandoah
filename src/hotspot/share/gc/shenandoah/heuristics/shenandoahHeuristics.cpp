@@ -57,7 +57,8 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
   _last_cycle_end(0),
   _gc_times_learned(0),
   _gc_time_penalties(0),
-  _gc_time_history(new TruncatedSeq(10, ShenandoahAdaptiveDecayFactor)),
+  _gc_cycle_time_history(new TruncatedSeq(10, ShenandoahAdaptiveDecayFactor)),
+  _gc_idle_time_history(new TruncatedSeq(10, ShenandoahAdaptiveDecayFactor)),
   _live_memory_last_cycle(0),
   _live_memory_penultimate_cycle(0),
   _metaspace_oom()
@@ -250,6 +251,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
 void ShenandoahHeuristics::record_cycle_start() {
   _cycle_start = os::elapsedTime();
+  _gc_idle_time_history->add(elapsed_idle_time());
 }
 
 void ShenandoahHeuristics::record_cycle_end() {
@@ -302,7 +304,7 @@ void ShenandoahHeuristics::record_success_concurrent(bool abbreviated) {
   _successful_cycles_in_a_row++;
 
   if (!(abbreviated && ShenandoahAdaptiveIgnoreShortCycles)) {
-    _gc_time_history->add(time_since_last_gc());
+    _gc_cycle_time_history->add(elapsed_cycle_time());
     _gc_times_learned++;
   }
 
@@ -361,8 +363,16 @@ void ShenandoahHeuristics::initialize() {
   // Nothing to do by default.
 }
 
-double ShenandoahHeuristics::time_since_last_gc() const {
+double ShenandoahHeuristics::elapsed_cycle_time() const {
   return os::elapsedTime() - _cycle_start;
+}
+
+double ShenandoahHeuristics::elapsed_idle_time() const {
+  return os::elapsedTime() - _last_cycle_end;
+}
+
+double ShenandoahHeuristics::average_idle_time() {
+  return _gc_idle_time_history->davg();
 }
 
 bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
