@@ -836,23 +836,6 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   assignment->_r = _heap->get_region(region_index);
   assignment->_chunk_offset = offset_within_region;
   assignment->_chunk_size = group_chunk_size;
-
-#undef KELVIN_NOISE
-#ifdef KELVIN_NOISE
-  log_info(gc, ergo)("Remset new_index: " SIZE_FORMAT ", group_no: " SIZE_FORMAT
-                     ", index_within_group: " SIZE_FORMAT
-                     ", offset_of_this_chunk: " SIZE_FORMAT
-                     ", regions_spanned_by_chunk_offset: " SIZE_FORMAT 
-                     ", offset_within_region: " SIZE_FORMAT
-                     ", region_index: " SIZE_FORMAT,
-                     new_index, group_no, index_within_group, offset_of_this_chunk, regions_spanned_by_chunk_offset,
-                     offset_within_region, region_index);
-  log_info(gc, ergo)("  ... group_no: " SIZE_FORMAT ", region_index: " SIZE_FORMAT
-                     ", region_offset: " SIZE_FORMAT ", group_chunk_size: " SIZE_FORMAT
-                     ", chunk(region: " SIZE_FORMAT ", chunk_offset: " SIZE_FORMAT ", chunk_size: " SIZE_FORMAT,
-                     group_no, group_region_index, group_region_offset, group_chunk_size,
-                     region_index, assignment->_chunk_offset, assignment->_chunk_size);
-#endif
   return true;
 }
 
