@@ -353,8 +353,12 @@ jint ShenandoahHeap::initialize() {
   }
 
   _regions = NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, _num_regions, mtGC);
-  _affiliations = NEW_C_HEAP_ARRAY(uint8_t, _num_regions, mtGC);
-  _free_set = new ShenandoahFreeSet(this, _num_regions);
+  if (mode()->is_generational()) {
+    _affiliations = NEW_C_HEAP_ARRAY(uint8_t, _num_regions, mtGC);
+  } else {
+    _affiliations = NULL;
+  }
+  _Free_set = new ShenandoahFreeSet(this, _num_regions);
 
   {
     ShenandoahHeapLocker locker(lock());
