@@ -269,6 +269,7 @@ private:
   bool      _heap_region_special;
   size_t    _num_regions;
   ShenandoahHeapRegion** _regions;
+  uint8_t* _affiliations;       // Holds array of enum ShenandoahRegionAffiliation
   ShenandoahRegionIterator _update_refs_iterator;
 
 public:
@@ -614,12 +615,18 @@ public:
   AdaptiveSizePolicy* size_policy() shenandoah_not_implemented_return(NULL);
   bool is_maximal_no_gc() const shenandoah_not_implemented_return(false);
 
-  bool is_in(const void* p) const;
+  inline bool is_in(const void* p) const;
 
-  bool is_in_active_generation(oop obj) const;
-  bool is_in_young(const void* p) const;
-  bool is_in_old(const void* p) const;
+  inline bool is_in_active_generation(oop obj) const;
+  inline bool is_in_young(const void* p) const;
+  inline bool is_in_old(const void* p) const;
   inline bool is_old(oop pobj) const;
+
+  inline ShenandoahRegionAffiliation region_affiliation(const ShenandoahHeapRegion* r);
+  inline void set_affiliation(ShenandoahHeapRegion* r, ShenandoahRegionAffiliation new_affiliation);
+
+  inline ShenandoahRegionAffiliation region_affiliation(size_t index);
+  inline void set_affiliation(size_t index, ShenandoahRegionAffiliation new_affiliation);
 
   bool requires_barriers(stackChunkOop obj) const;
 
