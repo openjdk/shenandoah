@@ -358,7 +358,7 @@ jint ShenandoahHeap::initialize() {
   } else {
     _affiliations = NULL;
   }
-  _Free_set = new ShenandoahFreeSet(this, _num_regions);
+  _free_set = new ShenandoahFreeSet(this, _num_regions);
 
   {
     ShenandoahHeapLocker locker(lock());
