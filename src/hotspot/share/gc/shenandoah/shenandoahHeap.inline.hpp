@@ -607,6 +607,7 @@ inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(const Shen
 }
 
 inline void ShenandoahHeap::set_affiliation(ShenandoahHeapRegion* r, ShenandoahRegionAffiliation new_affiliation) {
+  shenandoah_assert_heaplocked_or_safepoint();
   _affiliations[r->index()] = (uint8_t) new_affiliation;
 }
 
