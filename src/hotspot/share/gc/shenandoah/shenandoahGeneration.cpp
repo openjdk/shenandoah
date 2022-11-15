@@ -989,6 +989,18 @@ size_t ShenandoahGeneration::adjusted_available() const {
   return in_use > capacity ? 0 : capacity - in_use;
 }
 
+void ShenandoahGeneration::increase_capacity(size_t increment) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  _max_capacity += increment;
+  _soft_max_capacity += increment;
+}
+
+void ShenandoahGeneration::decrease_capacity(size_t decrement) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  _max_capacity -= decrement;
+  _soft_max_capacity -= decrement;
+}
+
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
   heuristics()->record_success_concurrent(abbreviated);
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();

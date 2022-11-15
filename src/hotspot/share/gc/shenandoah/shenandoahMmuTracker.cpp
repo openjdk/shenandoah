@@ -35,7 +35,7 @@ class ThreadTimeAccumulator : public ThreadClosure {
   ThreadTimeAccumulator() : total_time(0) {}
   virtual void do_thread(Thread* thread) override {
     size_t time = os::thread_cpu_time(thread);
-    log_info(gc)("%s: " SIZE_FORMAT "ns.", thread->name(), time);
+    // log_info(gc)("%s: " SIZE_FORMAT "ns.", thread->name(), time);
     total_time += time;
   }
 };
@@ -97,11 +97,36 @@ void ShenandoahMmuTracker::report() {
   double mmu = ((elapsed_process_time_s - thread_time_s) / elapsed_process_time_s) * 100;
   double verify_mmu = ((elapsed_process_time_s - verify_elapsed) / elapsed_process_time_s) * 100;
   _mmu_average.add(verify_mmu);
-  log_info(gc)("Average MMU = %.3f", _mmu_average.davg());
-  log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%, VERIFY = %.3f, mmu = %.2f%%",
-               elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu, verify_elapsed, verify_mmu);
-  log_info(gc)("Mean time between collections: YOUNG = %.3fs, OLD = %.3fs, GLOBAL = %.3fs",
-               young_mtb, old_mtb, global_mtb);
+
+  if (_mmu_average.davg() < double(GCTimeRatio)) {
+    log_info(gc)("Average MMU = %.3f", _mmu_average.davg());
+    log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%, VERIFY = %.3f, mmu = %.2f%%",
+                 elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu, verify_elapsed, verify_mmu);
+    log_info(gc)("Mean time between collections: YOUNG = %.3fs, OLD = %.3fs, GLOBAL = %.3fs",
+                 young_mtb, old_mtb, global_mtb);
+    if (old_time_s > young_time_s) {
+      transfer_capacity(young, old);
+    } else {
+      transfer_capacity(old, young);
+    }
+  }
+}
+
+void ShenandoahMmuTracker::transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to) {
+  ShenandoahHeapLocker locker(ShenandoahHeap::heap()->lock());
+
+  size_t available_regions = from->free_unaffiliated_regions();
+  if (available_regions <= 0) {
+    log_info(gc)("%s has no regions available for transfer to %s", from->name(), to->name());
+    return;
+  }
+
+  size_t regions_to_transfer = MAX2(1UL, size_t(double(available_regions) * RESIZE_FACTOR));
+  size_t bytes_to_transfer = regions_to_transfer * ShenandoahHeapRegion::region_size_bytes();
+  log_info(gc)("Transfer " SIZE_FORMAT "%s from %s to %s", byte_size_in_proper_unit(bytes_to_transfer),
+               proper_unit_for_byte_size(bytes_to_transfer), from->name(), to->name());
+  from->decrease_capacity(bytes_to_transfer);
+  to->increase_capacity(bytes_to_transfer);
 }
 
 void ShenandoahMmuTracker::initialize() {

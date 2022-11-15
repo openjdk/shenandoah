@@ -171,7 +171,7 @@ public:
 
   double elapsed_cycle_time() const;
   double elapsed_idle_time() const;
-  double average_idle_time();
+  virtual double average_idle_time() const;
 
   void save_last_live_memory(size_t live_memory);
   size_t get_last_live_memory();

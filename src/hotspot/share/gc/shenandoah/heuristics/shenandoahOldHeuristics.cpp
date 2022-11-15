@@ -399,6 +399,10 @@ bool ShenandoahOldHeuristics::should_unload_classes() {
   return _trigger_heuristic->should_unload_classes();
 }
 
+double ShenandoahOldHeuristics::average_idle_time() const {
+  return _trigger_heuristic->average_idle_time();
+}
+
 const char* ShenandoahOldHeuristics::name() {
   static char name[128];
   jio_snprintf(name, sizeof(name), "%s (OLD)", _trigger_heuristic->name());

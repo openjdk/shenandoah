@@ -29,6 +29,8 @@
 #include "runtime/mutex.hpp"
 #include "utilities/numberSeq.hpp"
 
+static const double RESIZE_FACTOR = .1;
+
 class ShenandoahGeneration;
 
 class ShenandoahMmuTracker {
@@ -48,6 +50,8 @@ class ShenandoahMmuTracker {
   void record(ShenandoahGeneration* generation);
   void report();
   void initialize();
+
+  void transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);
 };
 
 
