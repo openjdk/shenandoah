@@ -607,7 +607,11 @@ inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(const Shen
 }
 
 inline void ShenandoahHeap::set_affiliation(ShenandoahHeapRegion* r, ShenandoahRegionAffiliation new_affiliation) {
-  shenandoah_assert_heaplocked_or_safepoint();
+#ifdef ASSERT
+  if (new_affiliation != ShenandoahRegionAffiliation::FREE) {
+    shenandoah_assert_heaplocked_or_safepoint();
+  }
+#endif
   _affiliations[r->index()] = (uint8_t) new_affiliation;
 }
 
@@ -616,6 +620,11 @@ inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(size_t ind
 }
 
 inline void ShenandoahHeap::set_affiliation(size_t index, ShenandoahRegionAffiliation new_affiliation) {
+#ifdef ASSERT
+  if (new_affiliation != ShenandoahRegionAffiliation::FREE) {
+    shenandoah_assert_heaplocked_or_safepoint();
+  }
+#endif
   _affiliations[index] = (uint8_t) new_affiliation;
 }
 

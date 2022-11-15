@@ -112,7 +112,8 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation a
 // Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned.  This implements
 // behavior previously performed as a side effect of make_regular_bypass().
 void ShenandoahHeapRegion::make_young_maybe() {
- switch (_state) {
+  shenandoah_assert_heaplocked();
+  switch (_state) {
    case _empty_uncommitted:
    case _empty_committed:
    case _cset:
@@ -661,6 +662,7 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 
 void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  shenandoah_assert_heaplocked();
 
   if (affiliation() == YOUNG_GENERATION) {
     heap->young_generation()->decrease_used(used());
