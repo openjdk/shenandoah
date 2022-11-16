@@ -269,7 +269,7 @@ private:
   bool      _heap_region_special;
   size_t    _num_regions;
   ShenandoahHeapRegion** _regions;
-  uint8_t* _affiliations;       // Holds array of enum ShenandoahRegionAffiliation
+  uint8_t* _affiliations;       // Holds array of enum ShenandoahRegionAffiliation, including FREE status in non-generational mode
   ShenandoahRegionIterator _update_refs_iterator;
 
 public:
