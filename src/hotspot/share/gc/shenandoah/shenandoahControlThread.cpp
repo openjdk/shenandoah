@@ -28,6 +28,7 @@
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahControlThread.hpp"
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
+#include "gc/shenandoah/shenandoahEvacTracker.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
@@ -53,10 +54,10 @@
 
 ShenandoahControlThread::ShenandoahControlThread() :
   ConcurrentGCThread(),
-  _alloc_failure_waiters_lock(Mutex::safepoint - 1, "ShenandoahAllocFailureGC_lock", true),
-  _gc_waiters_lock(Mutex::safepoint - 1, "ShenandoahRequestedGC_lock", true),
-  _control_lock(Mutex::nosafepoint - 1, "ShenandoahControlGC_lock", true),
-  _regulator_lock(Mutex::nosafepoint - 1, "ShenandoahRegulatorGC_lock", true),
+  _alloc_failure_waiters_lock(Mutex::safepoint - 2, "ShenandoahAllocFailureGC_lock", true),
+  _gc_waiters_lock(Mutex::safepoint - 2, "ShenandoahRequestedGC_lock", true),
+  _control_lock(Mutex::nosafepoint - 2, "ShenandoahControlGC_lock", true),
+  _regulator_lock(Mutex::nosafepoint - 2, "ShenandoahRegulatorGC_lock", true),
   _periodic_task(this),
   _requested_gc_cause(GCCause::_no_cause_specified),
   _requested_generation(GenerationMode::GLOBAL),
@@ -64,7 +65,7 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _degen_generation(NULL),
   _allocs_seen(0),
   _mode(none) {
-
+  set_name("Shenandoah Control Thread");
   reset_gc_id();
   create_and_start();
   _periodic_task.enroll();
@@ -398,6 +399,8 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
     heap->pacer()->flush_stats_to_cycle();
   }
 
+  ShenandoahCycleStats evac_stats = heap->evac_tracker()->flush_cycle_to_global();
+
   // Print GC stats for current cycle
   {
     LogTarget(Info, gc, stats) lt;
@@ -405,6 +408,8 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
       ResourceMark rm;
       LogStream ls(lt);
       heap->phase_timings()->print_cycle_on(&ls);
+      ShenandoahEvacuationTracker::print_evacuations_on(&ls, &evac_stats.workers,
+                                                             &evac_stats.mutators);
       if (ShenandoahPacing) {
         heap->pacer()->print_cycle_on(&ls);
       }
@@ -413,6 +418,7 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
 
   // Commit statistics to globals
   heap->phase_timings()->flush_cycle_to_global();
+
 }
 
 // Young and old concurrent cycles are initiated by the regulator. Implicit
@@ -773,6 +779,7 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
   assert(GCCause::is_user_requested_gc(cause) ||
          GCCause::is_serviceability_requested_gc(cause) ||
          cause == GCCause::_metadata_GC_clear_soft_refs ||
+         cause == GCCause::_codecache_GC_aggressive ||
          cause == GCCause::_codecache_GC_threshold ||
          cause == GCCause::_full_gc_alot ||
          cause == GCCause::_wb_full_gc ||
@@ -953,16 +960,6 @@ void ShenandoahControlThread::update_gc_id() {
 
 size_t ShenandoahControlThread::get_gc_id() {
   return Atomic::load(&_gc_id);
-}
-
-void ShenandoahControlThread::print() const {
-  print_on(tty);
-}
-
-void ShenandoahControlThread::print_on(outputStream* st) const {
-  st->print("Shenandoah Concurrent Thread");
-  Thread::print_on(st);
-  st->cr();
 }
 
 void ShenandoahControlThread::start() {

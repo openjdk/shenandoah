@@ -230,7 +230,7 @@ jint ShenandoahHeap::initialize() {
   if (mode()->is_generational()) {
     ShenandoahDirectCardMarkRememberedSet *rs;
     ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
-    size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize) - 1;
+    size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
   }
@@ -528,6 +528,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _pacer(NULL),
   _verifier(NULL),
   _phase_timings(NULL),
+  _evac_tracker(new ShenandoahEvacuationTracker()),
   _monitoring_support(NULL),
   _memory_pool(NULL),
   _young_gen_memory_pool(NULL),
@@ -849,6 +850,43 @@ void ShenandoahHeap::handle_old_evacuation_failure() {
 
 void ShenandoahHeap::handle_promotion_failure() {
   old_heuristics()->handle_promotion_failure();
+}
+
+void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
+  // We squelch excessive reports to reduce noise in logs.  Squelch enforcement is not "perfect" because
+  // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static
+  // last_report_epoch and this_epoch_report_count variables.
+  const uint MaxReportsPerEpoch = 4;
+  static uint last_report_epoch = 0;
+  static uint epoch_report_count = 0;
+
+  size_t promotion_reserve;
+  size_t promotion_expended;
+
+  size_t gc_id = control_thread()->get_gc_id();
+
+  if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
+    {
+      // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
+      ShenandoahHeapLocker locker(lock());
+      promotion_reserve = get_promoted_reserve();
+      promotion_expended = get_promoted_expended();
+    }
+    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+    size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
+    const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
+
+    log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
+                       ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
+                       size, plab == nullptr? "no": "yes",
+                       words_remaining, promote_enabled, promotion_reserve, promotion_expended);
+    if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
+      log_info(gc, ergo)("Squelching additional promotion failure reports for epoch %d", last_report_epoch);
+    } else if (gc_id != last_report_epoch) {
+      last_report_epoch = gc_id;;
+      epoch_report_count = 1;
+    }
+  }
 }
 
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
@@ -1708,6 +1746,7 @@ void ShenandoahHeap::prepare_for_verify() {
 }
 
 void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
+  tcl->do_thread(_control_thread);
   workers()->threads_do(tcl);
   if (_safepoint_workers != NULL) {
     _safepoint_workers->threads_do(tcl);
@@ -1729,6 +1768,10 @@ void ShenandoahHeap::print_tracing_info() const {
     ls.cr();
 
     shenandoah_policy()->print_gc_stats(&ls);
+
+    ls.cr();
+
+    evac_tracker()->print_global_on(&ls);
 
     ls.cr();
     ls.cr();
@@ -1765,7 +1808,7 @@ private:
         // There may be dead oops in weak roots in concurrent root phase, do not touch them.
         return;
       }
-      obj = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
+      obj = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(obj);
 
       assert(oopDesc::is_oop(obj), "must be a valid oop");
       if (!_bitmap->is_marked(obj)) {
@@ -1875,7 +1918,7 @@ private:
         // There may be dead oops in weak roots in concurrent root phase, do not touch them.
         return;
       }
-      obj = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
+      obj = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(obj);
 
       assert(oopDesc::is_oop(obj), "Must be a valid oop");
       if (_bitmap->par_mark(obj)) {
@@ -2371,10 +2414,6 @@ void ShenandoahHeap::register_nmethod(nmethod* nm) {
 
 void ShenandoahHeap::unregister_nmethod(nmethod* nm) {
   ShenandoahCodeRoots::unregister_nmethod(nm);
-}
-
-void ShenandoahHeap::flush_nmethod(nmethod* nm) {
-  ShenandoahCodeRoots::flush_nmethod(nm);
 }
 
 oop ShenandoahHeap::pin_object(JavaThread* thr, oop o) {

@@ -344,7 +344,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
 
   ShenandoahRegionAffiliation target_gen = r->affiliation();
   if (mode()->is_generational() && ShenandoahHeap::heap()->is_gc_generation_young() &&
-      target_gen == YOUNG_GENERATION && ShenandoahPromoteTenuredObjects) {
+      target_gen == YOUNG_GENERATION) {
     markWord mark = p->mark();
     if (mark.is_marked()) {
       // Already forwarded.
@@ -394,32 +394,31 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
            break;
         }
         case OLD_GENERATION: {
-           if (ShenandoahUsePLAB) {
-             PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-             if (plab != nullptr) {
-               has_plab = true;
-             }
-             copy = allocate_from_plab(thread, size, is_promotion);
-             if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
-                 ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
-               // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve or because
-               // the requested object does not fit within the current plab but the plab still has an "abundance" of memory,
-               // where abundance is defined as >= PLAB::min_size().  In the former case, we try resetting the desired
-               // PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
 
-               // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
-               // this particular allocation to be shared.
-               if (plab->words_remaining() < PLAB::min_size()) {
-                 ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
-                 copy = allocate_from_plab(thread, size, is_promotion);
-                 // If we still get nullptr, we'll try a shared allocation below.
-                 if (copy == nullptr) {
-                   // If retry fails, don't continue to retry until we have success (probably in next GC pass)
-                   ShenandoahThreadLocalData::disable_plab_retries(thread);
-                 }
+           PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+           if (plab != nullptr) {
+             has_plab = true;
+           }
+           copy = allocate_from_plab(thread, size, is_promotion);
+           if ((copy == nullptr) && (size < ShenandoahThreadLocalData::plab_size(thread)) &&
+               ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
+             // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve or because
+             // the requested object does not fit within the current plab but the plab still has an "abundance" of memory,
+             // where abundance is defined as >= PLAB::min_size().  In the former case, we try resetting the desired
+             // PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
+
+             // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
+             // this particular allocation to be shared.
+             if (plab->words_remaining() < PLAB::min_size()) {
+               ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
+               copy = allocate_from_plab(thread, size, is_promotion);
+               // If we still get nullptr, we'll try a shared allocation below.
+               if (copy == nullptr) {
+                 // If retry fails, don't continue to retry until we have success (probably in next GC pass)
+                 ShenandoahThreadLocalData::disable_plab_retries(thread);
                }
-               // else, copy still equals nullptr.  this causes shared allocation below, preserving this plab for future needs.
              }
+             // else, copy still equals nullptr.  this causes shared allocation below, preserving this plab for future needs.
            }
            break;
         }
@@ -451,55 +450,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       assert(mode()->is_generational(), "Should only be here in generational mode.");
       if (from_region->is_young()) {
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
-
-        // We squelch excessive reports to reduce noise in logs.  Squelch enforcement is not "perfect" because
-        // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static
-        // last_report_epoch and this_epoch_report_count variables.
-        const uint MaxReportsPerEpoch = 4;
-        static uint last_report_epoch = 0;
-        static uint epoch_report_count = 0;
-        PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-        size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
-        const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
-        size_t promotion_reserve;
-        size_t promotion_expended;
-        // We can only query GCId::current() if current thread is a named thread.  If current thread is not a
-        // named thread, then we don't even try to squelch the promotion failure report, we don't update the
-        // the last_report_epoch, and we don't increment the epoch_report_count
-        if (thread->is_Named_thread()) {
-          uint gc_id = GCId::current();
-          if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
-            {
-              // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
-              ShenandoahHeapLocker locker(lock());
-              promotion_reserve = get_promoted_reserve();
-              promotion_expended = get_promoted_expended();
-            }
-            log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
-                               ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
-                               size, plab == nullptr? "no": "yes",
-                               words_remaining, promote_enabled, promotion_reserve, promotion_expended);
-            if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
-              log_info(gc, ergo)("Squelching additional promotion failure reports for epoch %d\n", last_report_epoch);
-            } else if (gc_id != last_report_epoch) {
-              last_report_epoch = gc_id;;
-              epoch_report_count = 1;
-            }
-          }
-        } else if (epoch_report_count < MaxReportsPerEpoch) {
-          // Unnamed threads are much less common than named threads.  In the rare case that an unnamed thread experiences
-          // a promotion failure before a named thread within a given epoch, the report for the unnamed thread will be squelched.
-          {
-            // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
-            ShenandoahHeapLocker locker(lock());
-            promotion_reserve = get_promoted_reserve();
-            promotion_expended = get_promoted_expended();
-          }
-          log_info(gc, ergo)("Promotion failed (unfiltered), size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
-                             ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
-                             size, plab == nullptr? "no": "yes",
-                             words_remaining, promote_enabled, promotion_reserve, promotion_expended);
-        }
+        report_promotion_failure(thread, size);
         handle_promotion_failure();
         return NULL;
       } else {
@@ -517,6 +468,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   }
 
   // Copy the object:
+  _evac_tracker->begin_evacuation(thread, size * HeapWordSize);
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
   oop copy_val = cast_to_oop(copy);
@@ -531,6 +483,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
+    _evac_tracker->end_evacuation(thread, size * HeapWordSize, ShenandoahHeap::get_object_age(copy_val));
     if (mode()->is_generational() && target_gen == OLD_GENERATION) {
       handle_old_evacuation(copy, size, from_region->is_young());
     }
@@ -586,6 +539,11 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   } else {
     obj->set_mark(w);
   }
+}
+
+uint ShenandoahHeap::get_object_age(oop obj) {
+  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
+  return w.age();
 }
 
 inline bool ShenandoahHeap::clear_old_evacuation_failure() {
