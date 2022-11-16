@@ -606,11 +606,31 @@ inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(const Shen
   return (ShenandoahRegionAffiliation) _affiliations[r->index()];
 }
 
+inline void ShenandoahHeap::assert_lock_for_affiliation(ShenandoahRegionAffiliation orig_affiliation,
+                                                        ShenandoahRegionAffiliation new_affiliation) {
+  // A lock is required when changing from FREE to NON-FREE.  Though it may be possible to elide the lock when
+  // transitioning from in-use to FREE, the current implementation uses a lock for this transition.  A lock is
+  // not required to change from YOUNG to OLD (i.e. when promoting humongous region).
+  //
+  //         new_affiliation is:     FREE   YOUNG   OLD
+  //  orig_affiliation is:  FREE      X       L      L
+  //                       YOUNG      L       X
+  //                         OLD      L       X      X
+  //  X means state transition won't happen (so don't care)
+  //  L means lock should be held
+  //  Blank means no lock required because affiliation visibility will not be required until subsequent safepoint
+  //
+  // Note: during full GC, all transitions between states are possible.  During Full GC, we should be in a safepoint.
+
+  if ((orig_affiliation == ShenandoahRegionAffiliation::FREE) || (new_affiliation == ShenandoahRegionAffiliation::FREE)) {
+    extern bool _is_at_shenandoah_safepoint();
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+  }
+}
+
 inline void ShenandoahHeap::set_affiliation(ShenandoahHeapRegion* r, ShenandoahRegionAffiliation new_affiliation) {
 #ifdef ASSERT
-  if (new_affiliation != ShenandoahRegionAffiliation::FREE) {
-    shenandoah_assert_heaplocked_or_safepoint();
-  }
+  assert_lock_for_affiliation(region_affiliation(r), new_affiliation);
 #endif
   _affiliations[r->index()] = (uint8_t) new_affiliation;
 }
@@ -621,9 +641,7 @@ inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(size_t ind
 
 inline void ShenandoahHeap::set_affiliation(size_t index, ShenandoahRegionAffiliation new_affiliation) {
 #ifdef ASSERT
-  if (new_affiliation != ShenandoahRegionAffiliation::FREE) {
-    shenandoah_assert_heaplocked_or_safepoint();
-  }
+  assert_lock_for_affiliation(region_affiliation(index), new_affiliation);
 #endif
   _affiliations[index] = (uint8_t) new_affiliation;
 }

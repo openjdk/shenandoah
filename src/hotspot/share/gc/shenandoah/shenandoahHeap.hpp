@@ -601,6 +601,9 @@ private:
   void stw_process_weak_roots(bool full_gc);
   void stw_weak_refs(bool full_gc);
 
+  inline void assert_lock_for_affiliation(ShenandoahRegionAffiliation orig_affiliation,
+                                          ShenandoahRegionAffiliation new_affiliation);
+
   // Heap iteration support
   void scan_roots_for_iteration(ShenandoahScanObjectStack* oop_stack, ObjectIterateScanRootClosure* oops);
   bool prepare_aux_bitmap_for_iteration();
