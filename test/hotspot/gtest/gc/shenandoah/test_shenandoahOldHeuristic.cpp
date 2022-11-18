@@ -20,8 +20,8 @@
 // interval - you can expect trouble. These tests will also not run in a build
 // with asserts enabled because they use APIs that expect to run on a safepoint.
 #ifdef ASSERT
-#define SKIP_IF_NOT_SHENANDOAH()          \
-  tty->print_cr("skipped (debug build)" ) \
+#define SKIP_IF_NOT_SHENANDOAH()           \
+  tty->print_cr("skipped (debug build)" ); \
   return;
 #else
 #define SKIP_IF_NOT_SHENANDOAH() \
