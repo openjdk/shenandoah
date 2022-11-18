@@ -51,9 +51,13 @@ class ShenandoahOldHeuristicTest : public ::testing::Test {
   ShenandoahCollectionSet* _collection_set;
 
   ShenandoahOldHeuristicTest()
-    : _heap(ShenandoahHeap::heap()),
-      _heuristics(_heap->old_heuristics()),
-      _collection_set(_heap->collection_set()) {
+    : _heap(nullptr),
+      _heuristics(nullptr),
+      _collection_set(nullptr) {
+    SKIP_IF_NOT_SHENANDOAH();
+    _heap = ShenandoahHeap::heap();
+    _heuristics = _heap->old_heuristics();
+    _collection_set = _heap->collection_set();
     ShenandoahHeapLocker locker(_heap->lock());
     ShenandoahResetRegions reset;
     _heap->heap_region_iterate(&reset);
