@@ -64,7 +64,7 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
         __ andi(t0, t0, ShenandoahHeap::HAS_FORWARDED);
         __ beqz(t0, done);
       } else {
-        __ andi(t0, t0, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::MARKING);
+        __ andi(t0, t0, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
         __ beqz(t0, done);
       }
 
