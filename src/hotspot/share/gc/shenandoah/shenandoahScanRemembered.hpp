@@ -1006,6 +1006,17 @@ struct ShenandoahRegionChunk {
   size_t _chunk_size;            // HeapWordSize qty
 };
 
+// ShenandoahRegionChunkIterator divides the total remembered set scanning effort into assignments (ShenandoahRegionChunks)
+// that are assigned one at a time to worker threads.  Note that the effort required to scan a range of memory is not
+// necessarily a linear function of the size of the range.  Some memory ranges hold only a small number of live objects.
+// Some ranges hold primarily primitive (non-pointer data).  We start with larger assignment sizes because larger assignments
+// can be processed with less coordination effort.  We expect that the GC worker threads that receive more difficult assignments
+// will work longer on those assignments.  Meanwhile, other worker will threads repeatedly accept and complete multiple
+// easier assignments.  As the total amount of work remaining to be completed decreases, we decrease the size of assignments
+// given to individual threads.  This reduces the likelihood that significant imbalance between worker thread assignments
+// will be introduced when there is less meaningful work to be performed by the remaining worker threads while they wait for
+// worker threads with difficult assignments to finish.
+
 class ShenandoahRegionChunkIterator : public StackObj {
 private:
   // The largest chunk size is 4 MiB, measured in words.  Otherwise, remembered set scanning may become too unbalanced.
