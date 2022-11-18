@@ -114,9 +114,9 @@ size_t ShenandoahRegionChunkIterator::calc_regular_group_size() {
   // N/2 of total heap size.  The second group processes N/4 of total heap size.  The third group processes N/2 of total heap
   // size, and so on.  Note that N/2 + N/4 + N/8 + N/16 + ...  sums to N if expanded to infinite terms.
   //
-  // The normal group size is the number of regions / 2, with the normal 
-
-  // In the case that the region_size_words is greater than _maximum_chunk_size_words, the first group_size is 
+  // The normal group size is the number of regions / 2.
+  //
+  // In the case that the region_size_words is greater than _maximum_chunk_size_words, the first group_size is
   // larger than the normal group size because each chunk in the group will be smaller than the region size.
   //
   // The last group also has more than the normal entries because it finishes the total scanning effort.  The chunk sizes are
@@ -181,7 +181,7 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
   size_t current_group_span = _first_group_chunk_size_b4_rebalance * _regular_group_size;
   size_t smallest_group_span = _smallest_chunk_size_words * _regular_group_size;
 
-  // Tyhe first group gets special handling because the first chunk size can be no larger than _largets_chunk_size_words
+  // The first group gets special handling because the first chunk size can be no larger than _largest_chunk_size_words
   if (region_size_words > _maximum_chunk_size_words) {
     // In the case that we shrink the first group's chunk size, certain other groups will also be subsumed within the first group
     size_t effective_chunk_size = _first_group_chunk_size_b4_rebalance;
@@ -289,7 +289,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     previous_group_span = total_span_of_groups;
   }
   if (_group_entries[_num_groups-1] < _total_chunks) {
-    assert((_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1] + previous_group_span == 
+    assert((_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1] + previous_group_span ==
            heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
            ") do not span total heap regions (" SIZE_FORMAT ")", _total_chunks, _heap->num_regions());
     previous_group_span += (_total_chunks - _group_entries[_num_groups-1]) * _group_chunk_size[_num_groups-1];
@@ -297,7 +297,7 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
   }
   assert(previous_group_span == heap->num_regions() * words_in_region, "Total region chunks (" SIZE_FORMAT
          ") do not span total heap regions (" SIZE_FORMAT "): " SIZE_FORMAT " does not equal " SIZE_FORMAT,
-	 _total_chunks, _heap->num_regions(), previous_group_span, heap->num_regions() * words_in_region);
+         _total_chunks, _heap->num_regions(), previous_group_span, heap->num_regions() * words_in_region);
 
   // Not necessary, but keeps things tidy
   for (size_t i = _num_groups; i < _maximum_groups; i++) {
