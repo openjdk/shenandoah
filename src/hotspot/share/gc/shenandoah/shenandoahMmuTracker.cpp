@@ -112,21 +112,47 @@ void ShenandoahMmuTracker::report() {
   }
 }
 
-void ShenandoahMmuTracker::transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to) {
+size_t percentage_of_heap(size_t bytes) {
+  size_t heap_capacity = ShenandoahHeap::heap()->max_capacity();
+  assert(bytes > heap_capacity, "Must be less than total capacity");
+  return size_t(100.0 * double(bytes) / double(heap_capacity));
+}
+
+bool ShenandoahMmuTracker::transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to) {
   ShenandoahHeapLocker locker(ShenandoahHeap::heap()->lock());
 
   size_t available_regions = from->free_unaffiliated_regions();
   if (available_regions <= 0) {
     log_info(gc)("%s has no regions available for transfer to %s", from->name(), to->name());
-    return;
+    return false;
   }
 
   size_t regions_to_transfer = MAX2(1UL, size_t(double(available_regions) * RESIZE_FACTOR));
   size_t bytes_to_transfer = regions_to_transfer * ShenandoahHeapRegion::region_size_bytes();
+  if (from->generation_mode() == YOUNG) {
+    size_t new_young_size = from->max_capacity() - bytes_to_transfer;
+    if (percentage_of_heap(new_young_size) < ShenandoahMinYoungSize) {
+      log_info(gc)("Cannot transfer " SIZE_FORMAT "%s from young with capacity: " SIZE_FORMAT "%s",
+                   byte_size_in_proper_unit(bytes_to_transfer), proper_unit_for_byte_size(bytes_to_transfer),
+                   byte_size_in_proper_unit(from->max_capacity()), proper_unit_for_byte_size(from->max_capacity()));
+      return false;
+    }
+  } else {
+    assert(to->generation_mode() == YOUNG, "Can only transfer between young and old.");
+    size_t new_young_size = to->max_capacity() + bytes_to_transfer;
+    if (percentage_of_heap(new_young_size) > ShenandoahMaxYoungSize) {
+      log_info(gc)("Cannot transfer " SIZE_FORMAT "%s to young with capacity: " SIZE_FORMAT "%s",
+                   byte_size_in_proper_unit(bytes_to_transfer), proper_unit_for_byte_size(bytes_to_transfer),
+                   byte_size_in_proper_unit(to->max_capacity()), proper_unit_for_byte_size(to->max_capacity()));
+      return false;
+    }
+  }
+
   log_info(gc)("Transfer " SIZE_FORMAT "%s from %s to %s", byte_size_in_proper_unit(bytes_to_transfer),
                proper_unit_for_byte_size(bytes_to_transfer), from->name(), to->name());
   from->decrease_capacity(bytes_to_transfer);
   to->increase_capacity(bytes_to_transfer);
+  return true;
 }
 
 void ShenandoahMmuTracker::initialize() {

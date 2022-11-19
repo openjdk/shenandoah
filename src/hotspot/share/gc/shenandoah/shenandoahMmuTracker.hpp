@@ -51,7 +51,7 @@ class ShenandoahMmuTracker {
   void report();
   void initialize();
 
-  void transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);
+  bool transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);
 };
 
 

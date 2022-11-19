@@ -1781,6 +1781,7 @@ void ShenandoahHeap::print_tracing_info() const {
 }
 
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
+  log_info(gc)("on_cycle_start: %s", generation->name());
   set_gc_cause(cause);
   set_gc_generation(generation);
 
@@ -1793,6 +1794,7 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 }
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
+  log_info(gc)("on_cycle_end: %s", generation->name());
   generation->heuristics()->record_cycle_end();
 
   if (mode()->is_generational() &&

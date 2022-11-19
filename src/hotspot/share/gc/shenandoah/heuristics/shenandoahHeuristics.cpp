@@ -371,7 +371,7 @@ double ShenandoahHeuristics::elapsed_idle_time() const {
   return os::elapsedTime() - _last_cycle_end;
 }
 
-double ShenandoahHeuristics::average_idle_time() {
+double ShenandoahHeuristics::average_idle_time() const {
   return _gc_idle_time_history->davg();
 }
 
