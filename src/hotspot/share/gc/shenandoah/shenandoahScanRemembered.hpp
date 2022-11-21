@@ -680,48 +680,94 @@ public:
 
 class ShenandoahCardStats: public CHeapObj<mtGC> {
 private:
-  size_t _total_card_cnt;
+  bool _last_dirty;
+  bool _last_clean;
+
   size_t _dirty_card_cnt;
-  size_t _max_dirty_run;
   size_t _clean_card_cnt;
+
+  size_t _dirty_run;
+  size_t _clean_run;
+
+  size_t _max_dirty_run;
   size_t _max_clean_run;
+
   size_t _dirty_obj_cnt;
   size_t _clean_obj_cnt;
 
+  size_t _dirty_scan_cnt;
+  size_t _clean_scan_cnt;
+
 public:
   ShenandoahCardStats() :
-    _total_card_cnt(0),
+    _last_dirty(false),
+    _last_clean(false),
     _dirty_card_cnt(0),
-    _max_dirty_run(0),
     _clean_card_cnt(0),
+    _dirty_run(0),
+    _clean_run(0),
+    _max_dirty_run(0),
     _max_clean_run(0),
     _dirty_obj_cnt(0),
-    _clean_obj_cnt(0)
+    _clean_obj_cnt(0),
+    _dirty_scan_cnt(0),
+    _clean_scan_cnt(0)
   { }
 
-  void increment_total_card_cnt() { _total_card_cnt++; }
-  void increment_dirty_card_cnt() { _dirty_card_cnt++; }
-  void increment_clean_card_cnt() { _clean_card_cnt++; }
-  void increment_obj_dirty_cnt()  { _dirty_obj_cnt++;  }
-  void increment_obj_clean_cnt()  { _clean_obj_cnt++;  }
-  void update_max_dirty_run(size_t run) {
-    if (run > _max_dirty_run) {
-      _max_dirty_run = run;
-    }
-  }
-  void update_max_clean_run(size_t run) {
-    if (run > _max_clean_run) {
-      _max_clean_run = run;
+  inline void increment_card_cnt(bool dirty) {
+    if (dirty) {
+      if (_last_dirty) {
+        assert(_dirty_run > 0 && _clean_run == 0 && _last_clean == 0, "Error");
+        _dirty_run++;
+      } else {
+        update_run();
+        _last_dirty = true;
+	_dirty_run = 1;
+      }
+    } else { // clean
+      if (_last_clean) {
+        assert(_clean_run > 0 && _dirty_run == 0 && _last_dirty == 0, "Error");
+        _clean_run++;
+      } else {
+        update_run();
+        _last_clean = true;
+        _clean_run = 1;
+      }
     }
   }
 
-  size_t total_card_cnt() { return _total_card_cnt; }
-  size_t dirty_card_cnt() { return _dirty_card_cnt; }
-  size_t clean_card_cnt() { return _clean_card_cnt; }
-  size_t dirty_obj_cnt()  { return _dirty_obj_cnt;  }
-  size_t clean_obj_cnt()  { return _clean_obj_cnt;  }
+  inline void increment_obj_cnt(bool dirty)  {
+    assert(!dirty || (_last_dirty && _dirty_run > 0), "Error");
+    assert(dirty  || (_last_clean && _clean_run > 0), "Error");
+    dirty ? _dirty_obj_cnt++ : _clean_obj_cnt++;
+  }
 
-  inline void log(uint worker_id = 0) const;
+  inline void increment_scan_cnt(bool dirty) {
+    assert(!dirty || (_last_dirty && _dirty_run > 0), "Error");
+    assert(dirty  || (_last_clean && _clean_run > 0), "Error");
+    dirty ? _dirty_scan_cnt++ : _clean_scan_cnt++;
+  }
+
+  inline void update_run() {
+    assert(!(_last_dirty || _last_clean) || (_last_dirty && _dirty_run > 0) || (_last_clean && _clean_run > 0),
+           "dirty/clean run stats inconsistent");
+    assert(_dirty_run == 0 || _clean_run == 0, "Both shouldn't be non-zero");
+    if (_dirty_run > _max_dirty_run) {
+      assert(_last_dirty, "Error");
+      _max_dirty_run = _dirty_run;
+    } else if (_clean_run > _max_clean_run) {
+      assert(_last_clean, "Error");
+      _max_clean_run = _clean_run;
+    }
+    _dirty_card_cnt += _dirty_run;
+    _clean_card_cnt += _clean_run;
+    _dirty_run = 0;
+    _clean_run = 0;
+    _last_dirty = 0;
+    _last_clean = 0;
+  }
+
+  inline void log(uint worker_id) const;
 };
 
 // ShenandoahScanRemembered is a concrete class representing the

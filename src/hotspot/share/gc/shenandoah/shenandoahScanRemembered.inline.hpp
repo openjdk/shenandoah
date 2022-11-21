@@ -35,6 +35,13 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 
+#define COLLECT_STATS 1
+#ifdef COLLECT_STATS
+#define STATS(x) x
+#else
+#define STATS(x) 
+#endif
+
 inline size_t
 ShenandoahDirectCardMarkRememberedSet::last_valid_index() {
   return _card_table->last_valid_index();
@@ -511,7 +518,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
-  ShenandoahCardStats stats;
+  STATS(ShenandoahCardStats stats;)
   while (cur_count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
@@ -519,13 +526,8 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     cur_cluster++;
     size_t next_card_index = 0;
-    bool last_dirty = false;
-    bool last_clean = false;
-    size_t dirty_run = 1;
-    size_t clean_run = 1;
 
     while (card_index < end_card_index) {
-      stats.increment_total_card_cnt();
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
         cur_count = 0;
         card_index = end_card_index;
@@ -533,18 +535,8 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
       }
       bool is_dirty = (write_table)? is_write_card_dirty(card_index): is_card_dirty(card_index);
       bool has_object = _scc->has_object(card_index);
+      STATS(stats.increment_card_cnt(is_dirty);)
       if (is_dirty) {
-	// Stats
-	stats.increment_dirty_card_cnt();
-	if (last_dirty) {
-	  dirty_run++;
-        } else {
-	  stats.update_max_clean_run(clean_run);
-	  last_clean = false;
-	  last_dirty = true;
-	  dirty_run = 1;
-	}
-
         size_t prev_card_index = card_index;
         if (has_object) {
           // Scan all objects that start within this card region.
@@ -569,7 +561,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           p += start_offset;
           while (p < endp) {
             oop obj = cast_to_oop(p);
-	    stats.increment_obj_dirty_cnt();
+	    STATS(stats.increment_obj_cnt(is_dirty);)
 
             // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
             if (!ctx || ctx->is_marked(obj)) {
@@ -581,8 +573,10 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
+	        STATS(stats.increment_scan_cnt(is_dirty);)
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
+	        STATS(stats.increment_scan_cnt(is_dirty);)
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -610,19 +604,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           // Card is dirty but has no object.  Card will have been scanned during scan of a previous cluster.
           card_index++;
         }
-	assert(last_dirty && dirty_run > 0, "Control point invariant");
       } else {
-	// clean card
-	stats.increment_clean_card_cnt();
-	if (last_clean) {
-          clean_run++;
-        } else {
-          stats.update_max_dirty_run(dirty_run);
-	  last_dirty = false;
-	  last_clean = true;
-          clean_run = 1;
-        }
-
 	if (has_object) {
           // Card is clean but has object.
           // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
@@ -635,7 +617,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           size_t last_card;
           if (!ctx || ctx->is_marked(obj)) {
             HeapWord *nextp = p + obj->size();
-	    stats.increment_obj_clean_cnt();
+	    STATS(stats.increment_obj_cnt(is_dirty);)
 
             // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
             // failure if nextp points to end of heap. Must also not attempt to read past last
@@ -665,8 +647,10 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
+	        STATS(stats.increment_scan_cnt(is_dirty);)
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
+	        STATS(stats.increment_scan_cnt(is_dirty);)
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -693,20 +677,11 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           // Card is clean and has no object.  No need to clean this card.
           card_index++;
 	}
-	assert(last_clean && clean_run > 0, "Control point invariant");
       }
-      assert((last_dirty == !last_clean) && ((last_dirty && dirty_run > 0) || (last_clean && clean_run > 0)),
-           "dirty/clean run stats inconsistent");
     }
-    assert(!(last_dirty || last_clean) || (last_dirty && dirty_run > 0) || (last_clean && clean_run > 0),
-           "dirty/clean run stats inconsistent");
-    if (last_dirty) {
-      stats.update_max_dirty_run(dirty_run);
-    } else if (last_clean) {
-      stats.update_max_clean_run(clean_run);
-    }
+    STATS(stats.update_run();)
   }
-  stats.log(worker_id);
+  STATS(stats.log(worker_id);)
 }
 
 // Given that this range of clusters is known to span a humongous object spanned by region r, scan the
@@ -871,10 +846,13 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
 }
 
 inline void ShenandoahCardStats::log(uint worker_id) const {
-  log_info(gc,remset)("Worker %u card stats: total " SIZE_FORMAT ", dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
-                      " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "), dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT,
-                      worker_id, _total_card_cnt, _dirty_card_cnt, _max_dirty_run,
-                      _clean_card_cnt, _max_clean_run, _dirty_obj_cnt, _clean_obj_cnt);
+	log_info(gc,remset)("Worker %u card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+			" clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+			" dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT ","
+			" dirty scans " SIZE_FORMAT ", clean scans " SIZE_FORMAT,
+			worker_id,
+			_dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
+			_dirty_obj_cnt, _clean_obj_cnt,
+			_dirty_scan_cnt, _clean_scan_cnt);
 }
-
 #endif   // SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
