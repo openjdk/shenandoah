@@ -35,13 +35,6 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 
-#define COLLECT_STATS 1
-#ifdef COLLECT_STATS
-#define STATS(x) x
-#else
-#define STATS(x) 
-#endif
-
 inline size_t
 ShenandoahDirectCardMarkRememberedSet::last_valid_index() {
   return _card_table->last_valid_index();
@@ -470,8 +463,7 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 
 template<typename RememberedSet>
 template <typename ClosureType>
-inline void
-ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
+void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
                                                           ClosureType *cl, bool is_concurrent, uint worker_id) {
   process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, worker_id);
 }
@@ -486,9 +478,8 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
 // degenerated execution.
 template<typename RememberedSet>
 template <typename ClosureType>
-inline void
-ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, bool write_table, bool is_concurrent, uint worker_id) {
+void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
+                                                               ClosureType *cl, bool write_table, bool is_concurrent, uint worker_id) {
 
   // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
   // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
@@ -518,7 +509,10 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
-  STATS(ShenandoahCardStats stats;)
+#ifdef COLLECT_GS_CARD_STATS
+  ShenandoahCardStats stats(GenShenCardStats_lock, ShenandoahCardCluster<RememberedSet>::CardsPerCluster, _card_stats);
+#endif
+
   while (cur_count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
     // but require more overhead for checking.
@@ -535,7 +529,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
       }
       bool is_dirty = (write_table)? is_write_card_dirty(card_index): is_card_dirty(card_index);
       bool has_object = _scc->has_object(card_index);
-      STATS(stats.increment_card_cnt(is_dirty);)
+      GS_CARD_STATS(stats.increment_card_cnt(is_dirty);)
       if (is_dirty) {
         size_t prev_card_index = card_index;
         if (has_object) {
@@ -561,7 +555,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           p += start_offset;
           while (p < endp) {
             oop obj = cast_to_oop(p);
-	    STATS(stats.increment_obj_cnt(is_dirty);)
+	    GS_CARD_STATS(stats.increment_obj_cnt(is_dirty);)
 
             // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
             if (!ctx || ctx->is_marked(obj)) {
@@ -573,10 +567,10 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
-	        STATS(stats.increment_scan_cnt(is_dirty);)
+	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
-	        STATS(stats.increment_scan_cnt(is_dirty);)
+	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -617,7 +611,7 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           size_t last_card;
           if (!ctx || ctx->is_marked(obj)) {
             HeapWord *nextp = p + obj->size();
-	    STATS(stats.increment_obj_cnt(is_dirty);)
+	    GS_CARD_STATS(stats.increment_obj_cnt(is_dirty);)
 
             // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
             // failure if nextp points to end of heap. Must also not attempt to read past last
@@ -647,10 +641,10 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
-	        STATS(stats.increment_scan_cnt(is_dirty);)
+	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
-	        STATS(stats.increment_scan_cnt(is_dirty);)
+	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -678,10 +672,9 @@ ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, 
           card_index++;
 	}
       }
-    }
-    STATS(stats.update_run();)
-  }
-  STATS(stats.log(worker_id);)
+    } // end of a range of cards in current cluster
+    GS_CARD_STATS(stats.update_run();)
+  } // end of all clusters
 }
 
 // Given that this range of clusters is known to span a humongous object spanned by region r, scan the
@@ -782,7 +775,7 @@ ShenandoahScanRemembered<RememberedSet>::addr_for_cluster(size_t cluster_no) {
 
 // This is used only for debug verification so don't worry about making the scan parallel.
 template<typename RememberedSet>
-inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
+void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
@@ -805,6 +798,17 @@ inline void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure*
     }
   }
 }
+
+#ifdef COLLECT_GS_CARD_STATS
+template<typename RememberedSet>
+void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
+  for (int i = 0; i < 11; i++) {
+    log_info(gc, remset)("Card Stats Histo: %2d %18s: [ %8.2f %8.2f %8.2f %8.2f %8.2f ]",
+      i, _card_stats_name[i], _card_stats[i].percentile(0), _card_stats[i].percentile(25), _card_stats[i].percentile(50),
+      _card_stats[i].percentile(75), _card_stats[i].maximum());
+  }
+}
+#endif
 
 inline bool ShenandoahRegionChunkIterator::has_next() const {
   return _index < _total_chunks;
@@ -843,16 +847,5 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   assignment->_chunk_size = group_chunk_size;
 
   return true;
-}
-
-inline void ShenandoahCardStats::log(uint worker_id) const {
-	log_info(gc,remset)("Worker %u card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
-			" clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
-			" dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT ","
-			" dirty scans " SIZE_FORMAT ", clean scans " SIZE_FORMAT,
-			worker_id,
-			_dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
-			_dirty_obj_cnt, _clean_obj_cnt,
-			_dirty_scan_cnt, _clean_scan_cnt);
 }
 #endif   // SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP

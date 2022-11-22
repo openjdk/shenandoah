@@ -26,6 +26,15 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
 
+#include "runtime/mutexLocker.hpp"
+
+// #define COLLECT_GS_CARD_STATS 1
+#ifdef COLLECT_GS_CARD_STATS
+#define GS_CARD_STATS(x) x
+#else
+#define GS_CARD_STATS(x) 
+#endif
+
 // Terminology used within this source file:
 //
 // Card Entry:   This is the information that identifies whether a
@@ -680,6 +689,10 @@ public:
 
 class ShenandoahCardStats: public CHeapObj<mtGC> {
 private:
+  Mutex* _lock;
+  size_t _cards_in_cluster;
+  HdrSeq* _global_card_stats;
+
   bool _last_dirty;
   bool _last_clean;
 
@@ -698,8 +711,13 @@ private:
   size_t _dirty_scan_cnt;
   size_t _clean_scan_cnt;
 
+  size_t _alternation_cnt;
+
 public:
-  ShenandoahCardStats() :
+  ShenandoahCardStats(Mutex* lock, size_t cards_in_cluster, HdrSeq* card_stats) :
+    _lock(lock),
+    _cards_in_cluster(cards_in_cluster),
+    _global_card_stats(card_stats),
     _last_dirty(false),
     _last_clean(false),
     _dirty_card_cnt(0),
@@ -711,25 +729,32 @@ public:
     _dirty_obj_cnt(0),
     _clean_obj_cnt(0),
     _dirty_scan_cnt(0),
-    _clean_scan_cnt(0)
+    _clean_scan_cnt(0),
+    _alternation_cnt(0)
   { }
 
   inline void increment_card_cnt(bool dirty) {
-    if (dirty) {
+    if (dirty) { // dirty card
       if (_last_dirty) {
         assert(_dirty_run > 0 && _clean_run == 0 && _last_clean == 0, "Error");
         _dirty_run++;
       } else {
-        update_run();
+        if (_last_clean) {
+	  _alternation_cnt++;
+	}
+        update_run(false);
         _last_dirty = true;
 	_dirty_run = 1;
       }
-    } else { // clean
+    } else { // clean card
       if (_last_clean) {
         assert(_clean_run > 0 && _dirty_run == 0 && _last_dirty == 0, "Error");
         _clean_run++;
       } else {
-        update_run();
+	if (_last_dirty) {
+          _alternation_cnt++;
+	}
+        update_run(false);
         _last_clean = true;
         _clean_run = 1;
       }
@@ -748,7 +773,7 @@ public:
     dirty ? _dirty_scan_cnt++ : _clean_scan_cnt++;
   }
 
-  inline void update_run() {
+  void update_run(bool cluster = true) {
     assert(!(_last_dirty || _last_clean) || (_last_dirty && _dirty_run > 0) || (_last_clean && _clean_run > 0),
            "dirty/clean run stats inconsistent");
     assert(_dirty_run == 0 || _clean_run == 0, "Both shouldn't be non-zero");
@@ -761,13 +786,63 @@ public:
     }
     _dirty_card_cnt += _dirty_run;
     _clean_card_cnt += _clean_run;
+
+    // Update common stats: TODO: make this more efficient by avoiding lock
+    {
+      MutexLocker mu(_lock, Mutex::_no_safepoint_check_flag);
+
+      assert(_dirty_run <= _cards_in_cluster, "Error");
+      assert(_clean_run <= _cards_in_cluster, "Error");
+      // Update global stats for distribution of dirty/clean run lengths
+      _global_card_stats[0].add((double)_dirty_run*100/(double)_cards_in_cluster);
+      _global_card_stats[1].add((double)_clean_run*100/(double)_cards_in_cluster);
+  
+      if (cluster) {
+        assert(_dirty_card_cnt <= _cards_in_cluster, "Error");
+        assert(_clean_card_cnt <= _cards_in_cluster, "Error");
+
+        // Update global stats for distribution of dirty/clean card %ge
+	assert(_cards_in_cluster == 64, "Error");
+        _global_card_stats[2].add((double)_dirty_card_cnt*100/(double)_cards_in_cluster);
+        _global_card_stats[3].add((double)_clean_card_cnt*100/(double)_cards_in_cluster);
+  
+        // Update global stats for max run distribution as dirty/clean card %ge
+        _global_card_stats[4].add((double)_max_dirty_run*100/(double)_cards_in_cluster);
+        _global_card_stats[5].add((double)_max_clean_run*100/(double)_cards_in_cluster);
+
+	// Update global stats for dirty & clean objects
+	_global_card_stats[6].add(_dirty_obj_cnt);
+	_global_card_stats[7].add(_clean_obj_cnt);
+	_global_card_stats[8].add(_dirty_scan_cnt);
+	_global_card_stats[9].add(_clean_scan_cnt);
+
+	_global_card_stats[10].add(_alternation_cnt);
+      }
+    }
+
+    if (cluster) {
+      // reset the stats for the next cluster
+      _dirty_card_cnt = 0;
+      _clean_card_cnt = 0;
+
+      _max_dirty_run = 0;
+      _max_clean_run = 0;
+      
+      _dirty_obj_cnt = 0;
+      _clean_obj_cnt = 0;
+      
+      _dirty_scan_cnt = 0;
+      _clean_scan_cnt = 0;
+
+      _alternation_cnt = 0;
+    }
     _dirty_run = 0;
     _clean_run = 0;
     _last_dirty = 0;
     _last_clean = 0;
   }
 
-  inline void log(uint worker_id) const;
+  void log(uint worker_id) const;
 };
 
 // ShenandoahScanRemembered is a concrete class representing the
@@ -793,6 +868,19 @@ private:
   RememberedSet* _rs;
   ShenandoahCardCluster<RememberedSet>* _scc;
 
+  GS_CARD_STATS(Mutex* GenShenCardStats_lock;)  // ysr: needs cleanup...
+  GS_CARD_STATS(HdrSeq _card_stats[11];)  // ysr: needs cleanup...
+
+#ifdef COLLECT_GS_CARD_STATS
+  const char* _card_stats_name[11] = {
+   "dirty_run", "clean_run",
+   "dirty_cards", "clean_cards",
+   "max_dirty_run", "max_clean_run",
+   "dirty_objs", "clean_objs",
+   "dirty_scans", "clean_scans",
+   "alternations"};
+#endif
+												 //
 public:
   // How to instantiate this object?
   //   ShenandoahDirectCardMarkRememberedSet *rs =
@@ -812,6 +900,10 @@ public:
   ShenandoahScanRemembered(RememberedSet *rs) {
     _rs = rs;
     _scc = new ShenandoahCardCluster<RememberedSet>(rs);
+
+#ifdef COLLECT_GS_CARD_STATS
+    GenShenCardStats_lock = new Mutex(Mutex::nosafepoint - 2, "GenShenCardStats_lock", true);
+#endif
   }
 
   ~ShenandoahScanRemembered() {
@@ -919,14 +1011,14 @@ public:
   // the template expansions were making it difficult for the link/loader to resolve references to the template-
   // parameterized implementations of this service.
   template <typename ClosureType>
-  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, uint worker_id = 0);
+  void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, uint worker_id = 0);
 
   template <typename ClosureType>
-  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
+  void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
                                bool use_write_table, bool is_concurrent, uint worker_id = 0);
 
   template <typename ClosureType>
-  inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
+  void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
                                          HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent, uint worker_id = 0);
 
   template <typename ClosureType>
@@ -955,6 +1047,8 @@ public:
   //  implementations will want to update this value each time they
   //  cross one of these boundaries.
   void roots_do(OopIterateClosure* cl);
+
+  GS_CARD_STATS(void log_card_stats();)
 };
 
 struct ShenandoahRegionChunk {

@@ -30,6 +30,7 @@
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
+#include "logging/log.hpp"
 
 ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(ShenandoahCardTable* card_table, size_t total_card_count) {
   _heap = ShenandoahHeap::heap();
@@ -45,6 +46,17 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
 
   assert(total_card_count % ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster == 0, "Invalid card count.");
   assert(total_card_count > 0, "Card count cannot be zero.");
+}
+
+void ShenandoahCardStats::log(uint worker_id) const {
+  log_info(gc,remset)("Worker %u card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+    " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+    " dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT ","
+    " dirty scans " SIZE_FORMAT ", clean scans " SIZE_FORMAT,
+    worker_id,
+    _dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
+    _dirty_obj_cnt, _clean_obj_cnt,
+    _dirty_scan_cnt, _clean_scan_cnt);
 }
 
 ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,

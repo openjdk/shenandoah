@@ -71,24 +71,24 @@ void HdrSeq::add(double val) {
   int bucket = -MagMinimum + mag;
   int sub_bucket = (int) (v * ValBuckets);
 
-  // Defensively saturate for product bits:
+  // Defensively saturate for product bits: TODO: ysr, removed the asserts
   if (bucket < 0) {
-    assert (false, "bucket index (%d) underflow for value (%8.2f)", bucket, val);
+    // assert (false, "bucket index (%d) underflow for value (%8.2f)", bucket, val);
     bucket = 0;
   }
 
   if (bucket >= MagBuckets) {
-    assert (false, "bucket index (%d) overflow for value (%8.2f)", bucket, val);
+    // assert (false, "bucket index (%d) overflow for value (%8.2f)", bucket, val);
     bucket = MagBuckets - 1;
   }
 
   if (sub_bucket < 0) {
-    assert (false, "sub-bucket index (%d) underflow for value (%8.2f)", sub_bucket, val);
+    // assert (false, "sub-bucket index (%d) underflow for value (%8.2f)", sub_bucket, val);
     sub_bucket = 0;
   }
 
   if (sub_bucket >= ValBuckets) {
-    assert (false, "sub-bucket index (%d) overflow for value (%8.2f)", sub_bucket, val);
+    // assert (false, "sub-bucket index (%d) overflow for value (%8.2f)", sub_bucket, val);
     sub_bucket = ValBuckets - 1;
   }
 
