@@ -48,12 +48,11 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
   assert(total_card_count > 0, "Card count cannot be zero.");
 }
 
-void ShenandoahCardStats::log(uint worker_id) const {
-  log_info(gc,remset)("Worker %u card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+void ShenandoahCardStats::log() const {
+  log_info(gc,remset)("Card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
     " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
     " dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT ","
     " dirty scans " SIZE_FORMAT ", clean scans " SIZE_FORMAT,
-    worker_id,
     _dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
     _dirty_obj_cnt, _clean_obj_cnt,
     _dirty_scan_cnt, _clean_scan_cnt);
@@ -107,7 +106,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
       if (end_of_range > region->top()) {
         end_of_range = region->top();
       }
-      scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent, worker_id);
+      scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent);
     }
 #ifdef ENABLE_REMEMBERED_SET_CANCELLATION
     // This check is currently disabled to avoid crashes that occur

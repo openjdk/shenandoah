@@ -464,8 +464,8 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 template<typename RememberedSet>
 template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, bool is_concurrent, uint worker_id) {
-  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, worker_id);
+                                                          ClosureType *cl, bool is_concurrent) {
+  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent);
 }
 
 // Process all objects starting within count clusters beginning with first_cluster for which the start address is
@@ -479,7 +479,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 template<typename RememberedSet>
 template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                               ClosureType *cl, bool write_table, bool is_concurrent, uint worker_id) {
+                                                               ClosureType *cl, bool write_table, bool is_concurrent) {
 
   // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
   // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
@@ -521,7 +521,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     cur_cluster++;
     size_t next_card_index = 0;
 
-    while (card_index < end_card_index) {
+    while (card_index < end_card_index) {    // TODO: understand why end_of_range is needed.
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
         cur_count = 0;
         card_index = end_card_index;
@@ -684,7 +684,7 @@ template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
                                                                     HeapWord *end_of_range, ClosureType *cl, bool write_table,
-                                                                    bool is_concurrent, uint worker_id) {
+                                                                    bool is_concurrent) {
   ShenandoahHeapRegion* start_region = r->humongous_start_region();
   HeapWord* p = start_region->bottom();
   oop obj = cast_to_oop(p);
@@ -704,7 +704,7 @@ template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegion *region, size_t start_offset, size_t clusters,
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
-                                                              bool is_concurrent, uint worker_id) {
+                                                              bool is_concurrent) {
   HeapWord *start_of_range = region->bottom() + start_offset;
   size_t cluster_size =
     CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
@@ -751,9 +751,9 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
   if (start_of_range < end_of_range) {
     if (region->is_humongous()) {
       ShenandoahHeapRegion* start_region = region->humongous_start_region();
-      process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, worker_id);
+      process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     } else {
-      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, worker_id);
+      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     }
   }
 }

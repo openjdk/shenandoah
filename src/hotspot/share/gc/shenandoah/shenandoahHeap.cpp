@@ -2676,7 +2676,7 @@ private:
                 CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
               size_t clusters = assignment._chunk_size / cluster_size;
               assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
-              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT, worker_id);
+              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT);
             }
           }
           if (ShenandoahPacing && (start_of_range < end_of_range)) {
