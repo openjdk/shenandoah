@@ -464,8 +464,8 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 template<typename RememberedSet>
 template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, bool is_concurrent) {
-  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent);
+                                                          ClosureType *cl, bool is_concurrent, uint worker_id) {
+  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, worker_id);
 }
 
 // Process all objects starting within count clusters beginning with first_cluster for which the start address is
@@ -479,7 +479,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 template<typename RememberedSet>
 template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                               ClosureType *cl, bool write_table, bool is_concurrent) {
+                                                               ClosureType *cl, bool write_table, bool is_concurrent, uint worker_id) {
 
   // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
   // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
@@ -510,7 +510,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
 #ifdef COLLECT_GS_CARD_STATS
-  ShenandoahCardStats stats(GenShenCardStats_lock, ShenandoahCardCluster<RememberedSet>::CardsPerCluster, _card_stats);
+  ShenandoahCardStats stats(ShenandoahCardCluster<RememberedSet>::CardsPerCluster, card_stats(worker_id));
 #endif
 
   while (cur_count-- > 0) {
@@ -703,7 +703,7 @@ template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegion *region, size_t start_offset, size_t clusters,
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
-                                                              bool is_concurrent) {
+                                                              bool is_concurrent, uint worker_id) {
   HeapWord *start_of_range = region->bottom() + start_offset;
   size_t cluster_size =
     CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
@@ -752,7 +752,7 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
       ShenandoahHeapRegion* start_region = region->humongous_start_region();
       process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     } else {
-      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
+      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, worker_id);
     }
   }
 }
@@ -792,7 +792,7 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
         process_humongous_clusters(region->humongous_start_region(), start_cluster_no, num_clusters, end_of_range, cl,
                                    false /* is_write_table */, false /* is_concurrent */);
       } else {
-        process_clusters(start_cluster_no, num_clusters, end_of_range, cl, false /* is_concurrent */);
+        process_clusters(start_cluster_no, num_clusters, end_of_range, cl, false /* is_concurrent */, 0);
       }
     }
   }
@@ -801,10 +801,20 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
 #ifdef COLLECT_GS_CARD_STATS
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
+  for (uint i = 0; i < ConcGCThreads; i++) {
+    log_card_stats(i);
+  }
+}
+
+template<typename RememberedSet>
+void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
+  HdrSeq* worker_card_stats = card_stats(worker_id);
   for (int i = 0; i < 11; i++) {
-    log_info(gc, remset)("Card Stats Histo: %2d %18s: [ %8.2f %8.2f %8.2f %8.2f %8.2f ]",
-      i, _card_stats_name[i], _card_stats[i].percentile(0), _card_stats[i].percentile(25), _card_stats[i].percentile(50),
-      _card_stats[i].percentile(75), _card_stats[i].maximum());
+    log_info(gc, remset)("Worker %u Card Stats Histo: %2d %18s: [ %8.2f %8.2f %8.2f %8.2f %8.2f ]",
+      worker_id, i, _card_stats_name[i],
+      worker_card_stats[i].percentile(0), worker_card_stats[i].percentile(25),
+      worker_card_stats[i].percentile(50), worker_card_stats[i].percentile(75),
+      worker_card_stats[i].maximum());
   }
 }
 #endif
