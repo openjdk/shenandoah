@@ -896,8 +896,11 @@ public:
     _rs = rs;
     _scc = new ShenandoahCardCluster<RememberedSet>(rs);
 #ifdef COLLECT_GS_CARD_STATS
-    _card_stats = NEW_C_HEAP_ARRAY(HdrSeq*, ConcGCThreads, mtGC);
-    for (uint i = 0; i < ConcGCThreads; i++) {
+    // We allocate ParallelGCThreads worth even though we usually only
+    // use up to ConcGCThreads, because degenerate collections may employ
+    // ParallelGCThreads for remembered set scanning.
+    _card_stats = NEW_C_HEAP_ARRAY(HdrSeq*, ParallelGCThreads, mtGC);
+    for (uint i = 0; i < ParallelGCThreads; i++) {
       _card_stats[i] = new HdrSeq[11];   // TODO: ysr: don't use hard-wired constants
     }
 #endif
@@ -906,7 +909,7 @@ public:
   ~ShenandoahScanRemembered() {
     delete _scc;
 #ifdef COlLECT_GS_CARD_STATS
-    for (uint i = 0; i < ConcGCThreads; i++) {
+    for (uint i = 0; i < ParallelGCThreads; i++) {
       delete _card_stats[i];
     }
     FREE_C_HEAP_ARRAY(HdrSeq*, _card_stats);
@@ -915,7 +918,7 @@ public:
   }
 
   HdrSeq* card_stats(uint worker_id) {
-    assert(worker_id < ConcGCThreads, "Error");
+    assert(worker_id < ParallelGCThreads, "Error");
     return _card_stats[worker_id];
   }
 

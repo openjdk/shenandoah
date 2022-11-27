@@ -801,7 +801,7 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
 #ifdef COLLECT_GS_CARD_STATS
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
-  for (uint i = 0; i < ConcGCThreads; i++) {
+  for (uint i = 0; i < ParallelGCThreads; i++) {
     log_card_stats(i);
   }
 }
@@ -809,9 +809,10 @@ void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
   HdrSeq* worker_card_stats = card_stats(worker_id);
+  log_info(gc, remset)("Worker %u Card Stats Histo: ", worker_id);
   for (int i = 0; i < 11; i++) {
-    log_info(gc, remset)("Worker %u Card Stats Histo: %2d %18s: [ %8.2f %8.2f %8.2f %8.2f %8.2f ]",
-      worker_id, i, _card_stats_name[i],
+    log_info(gc, remset)("%18s: [ %8.2f %8.2f %8.2f %8.2f %8.2f ]",
+      _card_stats_name[i],
       worker_card_stats[i].percentile(0), worker_card_stats[i].percentile(25),
       worker_card_stats[i].percentile(50), worker_card_stats[i].percentile(75),
       worker_card_stats[i].maximum());
