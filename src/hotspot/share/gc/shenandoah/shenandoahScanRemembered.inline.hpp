@@ -810,7 +810,7 @@ template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
   HdrSeq* worker_card_stats = card_stats(worker_id);
   log_info(gc, remset)("Worker %u Card Stats Histo: ", worker_id);
-  for (int i = 0; i < 11; i++) {
+  for (int i = 0; i < MAX_CARD_STAT_TYPE; i++) {
     log_info(gc, remset)("%18s: [ %8.2f %8.2f %8.2f %8.2f %8.2f ]",
       _card_stats_name[i],
       worker_card_stats[i].percentile(0), worker_card_stats[i].percentile(25),

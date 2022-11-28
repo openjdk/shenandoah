@@ -771,72 +771,7 @@ public:
     dirty ? _dirty_scan_cnt++ : _clean_scan_cnt++;
   }
 
-  void update_run(bool cluster = true) {
-    assert(!(_last_dirty || _last_clean) || (_last_dirty && _dirty_run > 0) || (_last_clean && _clean_run > 0),
-           "dirty/clean run stats inconsistent");
-    assert(_dirty_run == 0 || _clean_run == 0, "Both shouldn't be non-zero");
-    if (_dirty_run > _max_dirty_run) {
-      assert(_last_dirty, "Error");
-      _max_dirty_run = _dirty_run;
-    } else if (_clean_run > _max_clean_run) {
-      assert(_last_clean, "Error");
-      _max_clean_run = _clean_run;
-    }
-    _dirty_card_cnt += _dirty_run;
-    _clean_card_cnt += _clean_run;
-
-    // Update local stats
-    {
-      assert(_dirty_run <= _cards_in_cluster, "Error");
-      assert(_clean_run <= _cards_in_cluster, "Error");
-      // Update global stats for distribution of dirty/clean run lengths
-      _local_card_stats[0].add((double)_dirty_run*100/(double)_cards_in_cluster);
-      _local_card_stats[1].add((double)_clean_run*100/(double)_cards_in_cluster);
-  
-      if (cluster) {
-        assert(_dirty_card_cnt <= _cards_in_cluster, "Error");
-        assert(_clean_card_cnt <= _cards_in_cluster, "Error");
-
-        // Update global stats for distribution of dirty/clean card %ge
-	assert(_cards_in_cluster == 64, "Error");
-        _local_card_stats[2].add((double)_dirty_card_cnt*100/(double)_cards_in_cluster);
-        _local_card_stats[3].add((double)_clean_card_cnt*100/(double)_cards_in_cluster);
-  
-        // Update global stats for max run distribution as dirty/clean card %ge
-        _local_card_stats[4].add((double)_max_dirty_run*100/(double)_cards_in_cluster);
-        _local_card_stats[5].add((double)_max_clean_run*100/(double)_cards_in_cluster);
-
-	// Update global stats for dirty & clean objects
-	_local_card_stats[6].add(_dirty_obj_cnt);
-	_local_card_stats[7].add(_clean_obj_cnt);
-	_local_card_stats[8].add(_dirty_scan_cnt);
-	_local_card_stats[9].add(_clean_scan_cnt);
-
-	_local_card_stats[10].add(_alternation_cnt);
-      }
-    }
-
-    if (cluster) {
-      // reset the stats for the next cluster
-      _dirty_card_cnt = 0;
-      _clean_card_cnt = 0;
-
-      _max_dirty_run = 0;
-      _max_clean_run = 0;
-      
-      _dirty_obj_cnt = 0;
-      _clean_obj_cnt = 0;
-      
-      _dirty_scan_cnt = 0;
-      _clean_scan_cnt = 0;
-
-      _alternation_cnt = 0;
-    }
-    _dirty_run = 0;
-    _clean_run = 0;
-    _last_dirty = 0;
-    _last_clean = 0;
-  }
+  void update_run(bool cluster = true);
 
   void log() const;
 };
@@ -857,6 +792,23 @@ public:
 // in the range from 0 to (numRegions() - 1) inclusive.
 //
 
+#ifdef COLLECT_GS_CARD_STATS
+typedef  enum CardStatType {
+    DIRTY_RUN = 0,
+    CLEAN_RUN = 1,
+    DIRTY_CARDS = 2,
+    CLEAN_CARDS = 3,
+    MAX_DIRTY_RUN = 4,
+    MAX_CLEAN_RUN = 5,
+    DIRTY_OBJS = 6,
+    CLEAN_OBJS = 7,
+    DIRTY_SCANS = 8,
+    CLEAN_SCANS= 9,
+    ALTERNATIONS = 10,
+    MAX_CARD_STAT_TYPE = 11
+} CardStatType;
+#endif
+
 template<typename RememberedSet>
 class ShenandoahScanRemembered: public CHeapObj<mtGC> {
 
@@ -867,7 +819,7 @@ private:
   GS_CARD_STATS(HdrSeq** _card_stats;)
 
 #ifdef COLLECT_GS_CARD_STATS
-  const char* _card_stats_name[11] = {
+  const char* _card_stats_name[MAX_CARD_STAT_TYPE] = {
    "dirty_run", "clean_run",
    "dirty_cards", "clean_cards",
    "max_dirty_run", "max_clean_run",
@@ -901,7 +853,7 @@ public:
     // ParallelGCThreads for remembered set scanning.
     _card_stats = NEW_C_HEAP_ARRAY(HdrSeq*, ParallelGCThreads, mtGC);
     for (uint i = 0; i < ParallelGCThreads; i++) {
-      _card_stats[i] = new HdrSeq[11];   // TODO: ysr: don't use hard-wired constants
+      _card_stats[i] = new HdrSeq[MAX_CARD_STAT_TYPE];
     }
 #endif
   }
