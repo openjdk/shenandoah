@@ -28,7 +28,8 @@
 
 #include "runtime/mutexLocker.hpp"
 
-#define COLLECT_GS_CARD_STATS 1
+// Uncomment the line below to enable card stats
+// #define COLLECT_GS_CARD_STATS 1
 #ifdef COLLECT_GS_CARD_STATS
 #define GS_CARD_STATS(x) x
 #else
@@ -687,6 +688,7 @@ public:
 
 };
 
+#ifdef COLLECT_GS_CARD_STATS
 class ShenandoahCardStats: public CHeapObj<mtGC> {
 private:
   size_t _cards_in_cluster;
@@ -792,7 +794,6 @@ public:
 // in the range from 0 to (numRegions() - 1) inclusive.
 //
 
-#ifdef COLLECT_GS_CARD_STATS
 typedef  enum CardStatType {
     DIRTY_RUN = 0,
     CLEAN_RUN = 1,
@@ -869,10 +870,12 @@ public:
 #endif
   }
 
+#ifdef COlLECT_GS_CARD_STATS
   HdrSeq* card_stats(uint worker_id) {
     assert(worker_id < ParallelGCThreads, "Error");
     return _card_stats[worker_id];
   }
+#endif
 
   // TODO:  We really don't want to share all of these APIs with arbitrary consumers of the ShenandoahScanRemembered abstraction.
   // But in the spirit of quick and dirty for the time being, I'm going to go ahead and publish everything for right now.  Some
