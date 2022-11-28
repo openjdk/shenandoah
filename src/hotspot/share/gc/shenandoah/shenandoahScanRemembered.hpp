@@ -29,7 +29,7 @@
 #include "runtime/mutexLocker.hpp"
 
 // Uncomment the line below to enable card stats
-// #define COLLECT_GS_CARD_STATS 1
+#define COLLECT_GS_CARD_STATS 1
 #ifdef COLLECT_GS_CARD_STATS
 #define GS_CARD_STATS(x) x
 #else
@@ -861,7 +861,7 @@ public:
 
   ~ShenandoahScanRemembered() {
     delete _scc;
-#ifdef COlLECT_GS_CARD_STATS
+#ifdef COLLECT_GS_CARD_STATS
     for (uint i = 0; i < ParallelGCThreads; i++) {
       delete _card_stats[i];
     }
@@ -870,7 +870,7 @@ public:
 #endif
   }
 
-#ifdef COlLECT_GS_CARD_STATS
+#ifdef COLLECT_GS_CARD_STATS
   HdrSeq* card_stats(uint worker_id) {
     assert(worker_id < ParallelGCThreads, "Error");
     return _card_stats[worker_id];
