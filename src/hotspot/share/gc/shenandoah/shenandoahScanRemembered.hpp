@@ -26,16 +26,6 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP
 
-#include "runtime/mutexLocker.hpp"
-
-// Uncomment the line below to enable card stats
-#define COLLECT_GS_CARD_STATS 1
-#ifdef COLLECT_GS_CARD_STATS
-#define GS_CARD_STATS(x) x
-#else
-#define GS_CARD_STATS(x) 
-#endif
-
 // Terminology used within this source file:
 //
 // Card Entry:   This is the information that identifies whether a
@@ -688,7 +678,6 @@ public:
 
 };
 
-#ifdef COLLECT_GS_CARD_STATS
 class ShenandoahCardStats: public CHeapObj<mtGC> {
 private:
   size_t _cards_in_cluster;
@@ -737,7 +726,7 @@ private:
   void increment_card_cnt_work(bool dirty) {
     if (dirty) { // dirty card
       if (_last_dirty) {
-        assert(_dirty_run > 0 && _clean_run == 0 && _last_clean == 0, "Error");
+        assert(_dirty_run > 0 && _clean_run == 0 && !_last_clean, "Error");
         _dirty_run++;
       } else {
         if (_last_clean) {
@@ -749,7 +738,7 @@ private:
       }
     } else { // clean card
       if (_last_clean) {
-        assert(_clean_run > 0 && _dirty_run == 0 && _last_dirty == 0, "Error");
+        assert(_clean_run > 0 && _dirty_run == 0 && !_last_dirty, "Error");
         _clean_run++;
       } else {
 	if (_last_dirty) {
@@ -785,7 +774,7 @@ public:
 
   inline void increment_obj_cnt(bool dirty) {
     if (ShenandoahEnableCardStats) {
-      increment_card_cnt_work(dirty);
+      increment_obj_cnt_work(dirty);
     }
   }
 
@@ -795,11 +784,13 @@ public:
     }
   }
 
-  inline void update_run(bool cluster = true) {
+  inline void update_run(bool record) {
     if (ShenandoahEnableCardStats) {
-      update_run_work(cluster);
+      update_run_work(record);
     }
   }
+
+  bool is_clean();
 
   void log() const;
 };
@@ -834,7 +825,6 @@ typedef  enum CardStatType {
     ALTERNATIONS = 10,
     MAX_CARD_STAT_TYPE = 11
 } CardStatType;
-#endif
 
 template<typename RememberedSet>
 class ShenandoahScanRemembered: public CHeapObj<mtGC> {
@@ -843,9 +833,8 @@ private:
   RememberedSet* _rs;
   ShenandoahCardCluster<RememberedSet>* _scc;
 
-  GS_CARD_STATS(HdrSeq** _card_stats;)
+  HdrSeq** _card_stats;
 
-#ifdef COLLECT_GS_CARD_STATS
   const char* _card_stats_name[MAX_CARD_STAT_TYPE] = {
    "dirty_run", "clean_run",
    "dirty_cards", "clean_cards",
@@ -853,7 +842,6 @@ private:
    "dirty_objs", "clean_objs",
    "dirty_scans", "clean_scans",
    "alternations"};
-#endif
 												 //
 public:
   // How to instantiate this object?
@@ -874,7 +862,7 @@ public:
   ShenandoahScanRemembered(RememberedSet *rs) {
     _rs = rs;
     _scc = new ShenandoahCardCluster<RememberedSet>(rs);
-#ifdef COLLECT_GS_CARD_STATS
+
     // We allocate ParallelGCThreads worth even though we usually only
     // use up to ConcGCThreads, because degenerate collections may employ
     // ParallelGCThreads for remembered set scanning.
@@ -882,26 +870,21 @@ public:
     for (uint i = 0; i < ParallelGCThreads; i++) {
       _card_stats[i] = new HdrSeq[MAX_CARD_STAT_TYPE];
     }
-#endif
   }
 
   ~ShenandoahScanRemembered() {
     delete _scc;
-#ifdef COLLECT_GS_CARD_STATS
     for (uint i = 0; i < ParallelGCThreads; i++) {
       delete _card_stats[i];
     }
     FREE_C_HEAP_ARRAY(HdrSeq*, _card_stats);
     _card_stats = nullptr;
-#endif
   }
 
-#ifdef COLLECT_GS_CARD_STATS
   HdrSeq* card_stats(uint worker_id) {
     assert(worker_id < ParallelGCThreads, "Error");
     return _card_stats[worker_id];
   }
-#endif
 
   // TODO:  We really don't want to share all of these APIs with arbitrary consumers of the ShenandoahScanRemembered abstraction.
   // But in the spirit of quick and dirty for the time being, I'm going to go ahead and publish everything for right now.  Some
@@ -1041,8 +1024,8 @@ public:
   //  cross one of these boundaries.
   void roots_do(OopIterateClosure* cl);
 
-  GS_CARD_STATS(void log_card_stats();)
-  GS_CARD_STATS(void log_card_stats(uint worker_id);)
+  void log_card_stats();
+  void log_card_stats(uint worker_id);
 };
 
 struct ShenandoahRegionChunk {

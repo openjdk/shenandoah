@@ -509,9 +509,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
   assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
 
-#ifdef COLLECT_GS_CARD_STATS
   ShenandoahCardStats stats(ShenandoahCardCluster<RememberedSet>::CardsPerCluster, card_stats(worker_id));
-#endif
 
   while (cur_count-- > 0) {
     // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
@@ -521,6 +519,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     cur_cluster++;
     size_t next_card_index = 0;
 
+    assert(stats.is_clean(), "Error");
     while (card_index < end_card_index) {    // TODO: understand why end_of_range is needed.
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
         cur_count = 0;
@@ -529,7 +528,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       }
       bool is_dirty = (write_table)? is_write_card_dirty(card_index): is_card_dirty(card_index);
       bool has_object = _scc->has_object(card_index);
-      GS_CARD_STATS(stats.increment_card_cnt(is_dirty);)
+      stats.increment_card_cnt(is_dirty);
       if (is_dirty) {
         size_t prev_card_index = card_index;
         if (has_object) {
@@ -555,7 +554,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           p += start_offset;
           while (p < endp) {
             oop obj = cast_to_oop(p);
-	    GS_CARD_STATS(stats.increment_obj_cnt(is_dirty);)
+	    stats.increment_obj_cnt(is_dirty);
 
             // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
             if (!ctx || ctx->is_marked(obj)) {
@@ -567,10 +566,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
-	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
+	        stats.increment_scan_cnt(is_dirty);
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
-	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
+	        stats.increment_scan_cnt(is_dirty);
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -611,7 +610,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           size_t last_card;
           if (!ctx || ctx->is_marked(obj)) {
             HeapWord *nextp = p + obj->size();
-	    GS_CARD_STATS(stats.increment_obj_cnt(is_dirty);)
+	    stats.increment_obj_cnt(is_dirty);
 
             // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
             // failure if nextp points to end of heap. Must also not attempt to read past last
@@ -641,10 +640,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
-	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
+	        stats.increment_scan_cnt(is_dirty);
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
-	        GS_CARD_STATS(stats.increment_scan_cnt(is_dirty);)
+	        stats.increment_scan_cnt(is_dirty);
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -673,7 +672,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 	}
       }
     } // end of a range of cards in current cluster
-    GS_CARD_STATS(stats.update_run();)
+    stats.update_run(true /* record */);
   } // end of all clusters
 }
 
@@ -798,7 +797,6 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   }
 }
 
-#ifdef COLLECT_GS_CARD_STATS
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
   for (uint i = 0; i < ParallelGCThreads; i++) {
@@ -818,7 +816,6 @@ void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
       worker_card_stats[i].maximum());
   }
 }
-#endif
 
 inline bool ShenandoahRegionChunkIterator::has_next() const {
   return _index < _total_chunks;

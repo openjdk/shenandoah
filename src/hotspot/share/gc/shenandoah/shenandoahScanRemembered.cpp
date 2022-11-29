@@ -48,8 +48,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
   assert(total_card_count > 0, "Card count cannot be zero.");
 }
 
-#ifdef COLLECT_GS_CARD_STATS
-void ShenandoahCardStats::update_run_work(bool cluster) {
+void ShenandoahCardStats::update_run_work(bool record) {
   assert(!(_last_dirty || _last_clean) || (_last_dirty && _dirty_run > 0) || (_last_clean && _clean_run > 0),
          "dirty/clean run stats inconsistent");
   assert(_dirty_run == 0 || _clean_run == 0, "Both shouldn't be non-zero");
@@ -71,12 +70,8 @@ void ShenandoahCardStats::update_run_work(bool cluster) {
     _local_card_stats[DIRTY_RUN].add((double)_dirty_run*100/(double)_cards_in_cluster);
     _local_card_stats[CLEAN_RUN].add((double)_clean_run*100/(double)_cards_in_cluster);
 
-    if (cluster) {
-      assert(_dirty_card_cnt <= _cards_in_cluster, "Error");
-      assert(_clean_card_cnt <= _cards_in_cluster, "Error");
-
+    if (record) {
       // Update global stats for distribution of dirty/clean card %ge
-      assert(_cards_in_cluster == 64, "Error");
       _local_card_stats[DIRTY_CARDS].add((double)_dirty_card_cnt*100/(double)_cards_in_cluster);
       _local_card_stats[CLEAN_CARDS].add((double)_clean_card_cnt*100/(double)_cards_in_cluster);
 
@@ -94,7 +89,7 @@ void ShenandoahCardStats::update_run_work(bool cluster) {
     }
   }
 
-  if (cluster) {
+  if (record) {
     // reset the stats for the next cluster
     _dirty_card_cnt = 0;
     _clean_card_cnt = 0;
@@ -112,8 +107,26 @@ void ShenandoahCardStats::update_run_work(bool cluster) {
   }
   _dirty_run = 0;
   _clean_run = 0;
-  _last_dirty = 0;
-  _last_clean = 0;
+  _last_dirty = false;
+  _last_clean = false;
+  assert(!record || is_clean(), "Error");
+}
+
+bool ShenandoahCardStats::is_clean() {
+  return
+    _dirty_card_cnt == 0 &&
+    _clean_card_cnt == 0 &&
+    _max_dirty_run == 0 &&
+    _max_clean_run == 0 &&
+    _dirty_obj_cnt == 0 &&
+    _clean_obj_cnt == 0 &&
+    _dirty_scan_cnt == 0 &&
+    _clean_scan_cnt == 0 &&
+    _alternation_cnt == 0 &&
+    _dirty_run == 0 &&
+    _clean_run == 0 &&
+    _last_dirty == false &&
+    _last_clean == false;
 }
 
 void ShenandoahCardStats::log() const {
@@ -127,7 +140,6 @@ void ShenandoahCardStats::log() const {
       _dirty_scan_cnt, _clean_scan_cnt);
   }
 }
-#endif
 
 ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
                                                            ShenandoahObjToScanQueueSet* old_queue_set,
