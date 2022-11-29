@@ -49,7 +49,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
 }
 
 #ifdef COLLECT_GS_CARD_STATS
-void ShenandoahCardStats::update_run(bool cluster) {
+void ShenandoahCardStats::update_run_work(bool cluster) {
   assert(!(_last_dirty || _last_clean) || (_last_dirty && _dirty_run > 0) || (_last_clean && _clean_run > 0),
          "dirty/clean run stats inconsistent");
   assert(_dirty_run == 0 || _clean_run == 0, "Both shouldn't be non-zero");
@@ -117,13 +117,15 @@ void ShenandoahCardStats::update_run(bool cluster) {
 }
 
 void ShenandoahCardStats::log() const {
-  log_info(gc,remset)("Card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
-    " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
-    " dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT ","
-    " dirty scans " SIZE_FORMAT ", clean scans " SIZE_FORMAT,
-    _dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
-    _dirty_obj_cnt, _clean_obj_cnt,
-    _dirty_scan_cnt, _clean_scan_cnt);
+  if (ShenandoahEnableCardStats) {
+    log_info(gc,remset)("Card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+      " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
+      " dirty objs " SIZE_FORMAT ", clean objs " SIZE_FORMAT ","
+      " dirty scans " SIZE_FORMAT ", clean scans " SIZE_FORMAT,
+      _dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
+      _dirty_obj_cnt, _clean_obj_cnt,
+      _dirty_scan_cnt, _clean_scan_cnt);
+  }
 }
 #endif
 

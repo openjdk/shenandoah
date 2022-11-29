@@ -733,7 +733,8 @@ public:
     _alternation_cnt(0)
   { }
 
-  inline void increment_card_cnt(bool dirty) {
+private:
+  void increment_card_cnt_work(bool dirty) {
     if (dirty) { // dirty card
       if (_last_dirty) {
         assert(_dirty_run > 0 && _clean_run == 0 && _last_clean == 0, "Error");
@@ -761,19 +762,44 @@ public:
     }
   }
 
-  inline void increment_obj_cnt(bool dirty)  {
+  inline void increment_obj_cnt_work(bool dirty)  {
     assert(!dirty || (_last_dirty && _dirty_run > 0), "Error");
     assert(dirty  || (_last_clean && _clean_run > 0), "Error");
     dirty ? _dirty_obj_cnt++ : _clean_obj_cnt++;
   }
 
-  inline void increment_scan_cnt(bool dirty) {
+  inline void increment_scan_cnt_work(bool dirty) {
     assert(!dirty || (_last_dirty && _dirty_run > 0), "Error");
     assert(dirty  || (_last_clean && _clean_run > 0), "Error");
     dirty ? _dirty_scan_cnt++ : _clean_scan_cnt++;
   }
 
-  void update_run(bool cluster = true);
+  void update_run_work(bool cluster);
+
+public:
+  inline void increment_card_cnt(bool dirty) {
+    if (ShenandoahEnableCardStats) {
+      increment_card_cnt_work(dirty);
+    }
+  }
+
+  inline void increment_obj_cnt(bool dirty) {
+    if (ShenandoahEnableCardStats) {
+      increment_card_cnt_work(dirty);
+    }
+  }
+
+  inline void increment_scan_cnt(bool dirty) {
+    if (ShenandoahEnableCardStats) {
+      increment_scan_cnt_work(dirty);
+    }
+  }
+
+  inline void update_run(bool cluster = true) {
+    if (ShenandoahEnableCardStats) {
+      update_run_work(cluster);
+    }
+  }
 
   void log() const;
 };
