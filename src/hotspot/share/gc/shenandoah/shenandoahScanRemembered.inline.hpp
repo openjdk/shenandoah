@@ -799,6 +799,7 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
 
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
+  assert(ShenandoahEnableCardStats, "Do not call");
   for (uint i = 0; i < ParallelGCThreads; i++) {
     log_card_stats(i);
   }
@@ -806,6 +807,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
 
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
+  assert(ShenandoahEnableCardStats, "Do not call");
   HdrSeq* worker_card_stats = card_stats(worker_id);
   log_info(gc, remset)("Worker %u Card Stats Histo: ", worker_id);
   for (int i = 0; i < MAX_CARD_STAT_TYPE; i++) {
