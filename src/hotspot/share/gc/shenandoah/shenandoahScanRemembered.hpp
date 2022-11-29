@@ -989,10 +989,8 @@ public:
   // At the start of a concurrent evacuation phase, we invoke process_clusters with
   // ClosureType ShenandoahEvacuateUpdateRootsClosure.
 
-  // This is big enough it probably shouldn't be in-lined.  On the other hand, there are only a few places this
-  // code is called from, so it might well be in-lined.  The "real" reason I'm inlining at the moment is because
-  // the template expansions were making it difficult for the link/loader to resolve references to the template-
-  // parameterized implementations of this service.
+  // All template expansions require methods to be defined in the inline.hpp file, but larger
+  // such methods need not be declared as inline.
   template <typename ClosureType>
   void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, uint worker_id);
 
