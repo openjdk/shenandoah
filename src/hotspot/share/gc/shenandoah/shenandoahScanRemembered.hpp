@@ -866,19 +866,26 @@ public:
     // We allocate ParallelGCThreads worth even though we usually only
     // use up to ConcGCThreads, because degenerate collections may employ
     // ParallelGCThreads for remembered set scanning.
-    _card_stats = NEW_C_HEAP_ARRAY(HdrSeq*, ParallelGCThreads, mtGC);
-    for (uint i = 0; i < ParallelGCThreads; i++) {
-      _card_stats[i] = new HdrSeq[MAX_CARD_STAT_TYPE];
+    if (ShenandoahEnableCardStats) {
+      _card_stats = NEW_C_HEAP_ARRAY(HdrSeq*, ParallelGCThreads, mtGC);
+      for (uint i = 0; i < ParallelGCThreads; i++) {
+        _card_stats[i] = new HdrSeq[MAX_CARD_STAT_TYPE];
+      }
+    } else {
+      _card_stats = nullptr;
     }
   }
 
   ~ShenandoahScanRemembered() {
     delete _scc;
-    for (uint i = 0; i < ParallelGCThreads; i++) {
-      delete _card_stats[i];
+    if (ShenandoahEnableCardStats) {
+      for (uint i = 0; i < ParallelGCThreads; i++) {
+        delete _card_stats[i];
+      }
+      FREE_C_HEAP_ARRAY(HdrSeq*, _card_stats);
+      _card_stats = nullptr;
     }
-    FREE_C_HEAP_ARRAY(HdrSeq*, _card_stats);
-    _card_stats = nullptr;
+    assert(_card_stats == nullptr, "Error");
   }
 
   HdrSeq* card_stats(uint worker_id) {
