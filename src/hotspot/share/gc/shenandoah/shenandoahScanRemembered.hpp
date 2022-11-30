@@ -890,7 +890,8 @@ public:
 
   HdrSeq* card_stats(uint worker_id) {
     assert(worker_id < ParallelGCThreads, "Error");
-    return _card_stats[worker_id];
+    assert(ShenandoahEnableCardStats == (_card_stats != nullptr), "Error");
+    return ShenandoahEnableCardStats ? _card_stats[worker_id] : nullptr;
   }
 
   // TODO:  We really don't want to share all of these APIs with arbitrary consumers of the ShenandoahScanRemembered abstraction.
