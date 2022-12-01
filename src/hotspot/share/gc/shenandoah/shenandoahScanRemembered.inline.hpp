@@ -554,7 +554,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           p += start_offset;
           while (p < endp) {
             oop obj = cast_to_oop(p);
-	    stats.increment_obj_cnt(is_dirty);
+            stats.increment_obj_cnt(is_dirty);
 
             // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
             if (!ctx || ctx->is_marked(obj)) {
@@ -566,10 +566,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
-	        stats.increment_scan_cnt(is_dirty);
+                stats.increment_scan_cnt(is_dirty);
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
-	        stats.increment_scan_cnt(is_dirty);
+                stats.increment_scan_cnt(is_dirty);
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -598,7 +598,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           card_index++;
         }
       } else {
-	if (has_object) {
+        if (has_object) {
           // Card is clean but has object.
           // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
           // or if it reaches into the next cluster.
@@ -610,13 +610,13 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           size_t last_card;
           if (!ctx || ctx->is_marked(obj)) {
             HeapWord *nextp = p + obj->size();
-	    stats.increment_obj_cnt(is_dirty);
+            stats.increment_obj_cnt(is_dirty);
 
             // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
             // failure if nextp points to end of heap. Must also not attempt to read past last
             // valid index for card table.
             last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
-	    last_card = MIN2(last_card, last_valid_index());
+            last_card = MIN2(last_card, last_valid_index());
 
             bool reaches_next_cluster = (last_card > end_card_index);
             bool spans_dirty_within_this_cluster = false;
@@ -640,10 +640,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                 objArrayOop array = objArrayOop(obj);
                 int len = array->length();
                 array->oop_iterate_range(cl, 0, len);
-	        stats.increment_scan_cnt(is_dirty);
+                stats.increment_scan_cnt(is_dirty);
               } else if (obj->is_instance()) {
                 obj->oop_iterate(cl);
-	        stats.increment_scan_cnt(is_dirty);
+                stats.increment_scan_cnt(is_dirty);
               } else {
                 // Case 3: Primitive array. Do nothing, no oops there. We use the same
                 // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
@@ -669,7 +669,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         } else {
           // Card is clean and has no object.  No need to clean this card.
           card_index++;
-	}
+        }
       }
     } // end of a range of cards in current cluster
     stats.update_run(true /* record */);

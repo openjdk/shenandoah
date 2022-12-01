@@ -730,20 +730,20 @@ private:
         _dirty_run++;
       } else {
         if (_last_clean) {
-	  _alternation_cnt++;
-	}
+          _alternation_cnt++;
+        }
         update_run(false);
         _last_dirty = true;
-	_dirty_run = 1;
+        _dirty_run = 1;
       }
     } else { // clean card
       if (_last_clean) {
         assert(_clean_run > 0 && _dirty_run == 0 && !_last_dirty, "Error");
         _clean_run++;
       } else {
-	if (_last_dirty) {
+        if (_last_dirty) {
           _alternation_cnt++;
-	}
+        }
         update_run(false);
         _last_clean = true;
         _clean_run = 1;
@@ -842,7 +842,7 @@ private:
    "dirty_objs", "clean_objs",
    "dirty_scans", "clean_scans",
    "alternations"};
-												 //
+
 public:
   // How to instantiate this object?
   //   ShenandoahDirectCardMarkRememberedSet *rs =

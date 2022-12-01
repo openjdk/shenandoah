@@ -2571,7 +2571,7 @@ private:
       }
       r = _regions->next();
     }
-    
+
     if (_heap->mode()->is_generational() && (_heap->active_generation()->generation_mode() != GLOBAL)) {
       // Since this is generational and not GLOBAL, we have to process the remembered set.  There's no remembered
       // set processing if not in generational mode or if GLOBAL mode.
@@ -2583,7 +2583,7 @@ private:
       RememberedScanner* scanner = _heap->card_scan();
 
       while (!_heap->check_cancelled_gc_and_yield(CONCURRENT) && _work_chunks->next(&assignment)) {
-	// Keep grabging next workchunk to process until finished or asked to yield
+        // Keep grabbing next work chunk to process until finished, or asked to yield
         ShenandoahHeapRegion* r = assignment._r;
         if (r->is_active() && !r->is_cset() && (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION)) {
           HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
