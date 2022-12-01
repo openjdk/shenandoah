@@ -77,37 +77,38 @@ void ShenandoahMmuTracker::report() {
   double process_time_s = process_time_seconds();
   double elapsed_process_time_s = process_time_s - _initial_process_time_s;
   _initial_process_time_s = process_time_s;
-
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahOldGeneration* old = heap->old_generation();
-  double old_time_s = old->reset_collection_time();
-  double old_mtb = old->heuristics()->average_idle_time();
-  ShenandoahYoungGeneration* young = heap->young_generation();
-  double young_time_s = young->reset_collection_time();
-  double young_mtb = young->heuristics()->average_idle_time();
-  ShenandoahGeneration* global = heap->global_generation();
-  double global_time_s = global->reset_collection_time();
-  double global_mtb = global->heuristics()->average_idle_time();
-
-  double thread_time_s = old_time_s + young_time_s + global_time_s;
   double verify_time_s = gc_thread_time_seconds();
   double verify_elapsed = verify_time_s - _initial_verify_collector_time_s;
   _initial_verify_collector_time_s = verify_time_s;
-
-  double mmu = ((elapsed_process_time_s - thread_time_s) / elapsed_process_time_s) * 100;
   double verify_mmu = ((elapsed_process_time_s - verify_elapsed) / elapsed_process_time_s) * 100;
   _mmu_average.add(verify_mmu);
+  log_info(gc)("Average MMU = %.3f", _mmu_average.davg());
 
-  if (_mmu_average.davg() < double(GCTimeRatio)) {
-    log_info(gc)("Average MMU = %.3f", _mmu_average.davg());
-    log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%, VERIFY = %.3f, mmu = %.2f%%",
-                 elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu, verify_elapsed, verify_mmu);
-    log_info(gc)("Mean time between collections: YOUNG = %.3fs, OLD = %.3fs, GLOBAL = %.3fs",
-                 young_mtb, old_mtb, global_mtb);
-    if (old_time_s > young_time_s) {
-      transfer_capacity(young, old);
-    } else {
-      transfer_capacity(old, young);
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if (heap->mode()->is_generational()) {
+    ShenandoahOldGeneration *old = heap->old_generation();
+    double old_time_s = old->reset_collection_time();
+    double old_mtb = old->heuristics()->average_idle_time();
+    ShenandoahYoungGeneration *young = heap->young_generation();
+    double young_time_s = young->reset_collection_time();
+    double young_mtb = young->heuristics()->average_idle_time();
+    ShenandoahGeneration *global = heap->global_generation();
+    double global_time_s = global->reset_collection_time();
+    double global_mtb = global->heuristics()->average_idle_time();
+
+    double thread_time_s = old_time_s + young_time_s + global_time_s;
+    double mmu = ((elapsed_process_time_s - thread_time_s) / elapsed_process_time_s) * 100;
+
+    if (_mmu_average.davg() < double(GCTimeRatio)) {
+      log_info(gc)("Usr+Sys process: %.3f, YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f, mmu = %.2f%%, VERIFY = %.3f, mmu = %.2f%%",
+          elapsed_process_time_s, young_time_s, old_time_s, global_time_s, mmu, verify_elapsed, verify_mmu);
+      log_info(gc)("Mean time between collections: YOUNG = %.3fs, OLD = %.3fs, GLOBAL = %.3fs",
+                   young_mtb, old_mtb, global_mtb);
+      if (old_time_s > young_time_s) {
+        transfer_capacity(young, old);
+      } else {
+        transfer_capacity(old, young);
+      }
     }
   }
 }
