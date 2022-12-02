@@ -810,6 +810,7 @@ public:
   void cancel_old_gc();
   bool is_old_gc_active();
   void coalesce_and_fill_old_regions();
+  bool adjust_generation_sizes();
 
 // ---------- Helper functions
 //

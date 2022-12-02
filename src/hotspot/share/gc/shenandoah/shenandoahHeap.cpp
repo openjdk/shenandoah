@@ -1115,6 +1115,13 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
   parallel_heap_region_iterate(&coalesce);
 }
 
+bool ShenandoahHeap::adjust_generation_sizes() {
+  if (mode()->is_generational()) {
+    return _mmu_tracker.adjust_generation_sizes();
+  }
+  return false;
+}
+
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
                                             size_t* actual_size) {

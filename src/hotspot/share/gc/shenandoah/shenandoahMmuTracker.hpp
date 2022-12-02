@@ -42,6 +42,8 @@ class ShenandoahMmuTracker {
   Monitor _mmu_lock;
   TruncatedSeq _mmu_average;
 
+  bool transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);
+
  public:
   static double gc_thread_time_seconds();
   static double process_time_seconds();
@@ -50,8 +52,7 @@ class ShenandoahMmuTracker {
   void record(ShenandoahGeneration* generation);
   void report();
   void initialize();
-
-  bool transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);
+  bool adjust_generation_sizes();
 };
 
 
