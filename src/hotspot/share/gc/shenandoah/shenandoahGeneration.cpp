@@ -977,6 +977,10 @@ size_t ShenandoahGeneration::adjusted_available() const {
   return in_use > capacity ? 0 : capacity - in_use;
 }
 
+size_t ShenandoahGeneration::adjusted_capacity() const {
+  return _adjusted_capacity;
+}
+
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
   heuristics()->record_success_concurrent(abbreviated);
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();

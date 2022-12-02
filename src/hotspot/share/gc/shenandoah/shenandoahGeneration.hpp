@@ -95,6 +95,7 @@ private:
   // set aside within each generation to hold the results of evacuation, but not promotion, into that region.  Promotions
   // into old-gen are bounded by adjusted_available() whereas evacuations into old-gen are pre-committed.
   virtual size_t adjusted_available() const;
+  virtual size_t adjusted_capacity() const;
 
   // Both of following return new value of available
   virtual size_t adjust_available(intptr_t adjustment);
