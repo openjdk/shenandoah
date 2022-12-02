@@ -58,6 +58,7 @@ double ShenandoahMmuTracker::process_time_seconds() {
 ShenandoahMmuTracker::ShenandoahMmuTracker() :
   _initial_collector_time_s(0.0),
   _initial_process_time_s(0.0),
+  _resize_increment(YoungGenerationSizeIncrement / 100.0),
   _mmu_lock(Mutex::nosafepoint - 2, "ShenandoahMMU_lock", true),
   _mmu_average(10, ShenandoahAdaptiveDecayFactor) {
 }
@@ -125,27 +126,40 @@ bool ShenandoahMmuTracker::transfer_capacity(ShenandoahGeneration* from, Shenand
     return false;
   }
 
-  size_t regions_to_transfer = MAX2(1UL, size_t(double(available_regions) * RESIZE_FACTOR));
+  size_t regions_to_transfer = MAX2(1UL, size_t(double(available_regions) * _resize_increment));
   size_t bytes_to_transfer = regions_to_transfer * ShenandoahHeapRegion::region_size_bytes();
   if (from->generation_mode() == YOUNG) {
     size_t new_young_size = from->max_capacity() - bytes_to_transfer;
-    if (percentage_of_heap(new_young_size) < ShenandoahMinYoungSize) {
-      log_info(gc)("Cannot transfer " SIZE_FORMAT "%s from young with capacity: " SIZE_FORMAT "%s",
-                   byte_size_in_proper_unit(bytes_to_transfer), proper_unit_for_byte_size(bytes_to_transfer),
-                   byte_size_in_proper_unit(from->max_capacity()), proper_unit_for_byte_size(from->max_capacity()));
-      return false;
+    if (percentage_of_heap(new_young_size) < ShenandoahMinYoungPercentage) {
+      ShenandoahHeap* heap = ShenandoahHeap::heap();
+      size_t minimum_size = size_t(ShenandoahMinYoungPercentage / 100.0 * heap->max_capacity());
+      if (from->max_capacity() > minimum_size) {
+        bytes_to_transfer = from->max_capacity() - minimum_size;
+      } else {
+        log_info(gc)("Cannot transfer from young: " SIZE_FORMAT "%s, at minimum capacity: " SIZE_FORMAT "%s",
+            byte_size_in_proper_unit(from->max_capacity()), proper_unit_for_byte_size(from->max_capacity()),
+            byte_size_in_proper_unit(minimum_size), proper_unit_for_byte_size(minimum_size));
+        return false;
+      }
     }
   } else {
     assert(to->generation_mode() == YOUNG, "Can only transfer between young and old.");
     size_t new_young_size = to->max_capacity() + bytes_to_transfer;
-    if (percentage_of_heap(new_young_size) > ShenandoahMaxYoungSize) {
-      log_info(gc)("Cannot transfer " SIZE_FORMAT "%s to young with capacity: " SIZE_FORMAT "%s",
-                   byte_size_in_proper_unit(bytes_to_transfer), proper_unit_for_byte_size(bytes_to_transfer),
-                   byte_size_in_proper_unit(to->max_capacity()), proper_unit_for_byte_size(to->max_capacity()));
-      return false;
+    if (percentage_of_heap(new_young_size) > ShenandoahMaxYoungPercentage) {
+      ShenandoahHeap* heap = ShenandoahHeap::heap();
+      size_t maximum_size = size_t(ShenandoahMaxYoungPercentage / 100.0 * heap->max_capacity());
+      if (maximum_size > to->max_capacity()) {
+        bytes_to_transfer = maximum_size - to->max_capacity();
+      } else {
+        log_info(gc)("Cannot transfer to young: " SIZE_FORMAT "%s, at maximum capacity: " SIZE_FORMAT "%s",
+            byte_size_in_proper_unit(to->max_capacity()), proper_unit_for_byte_size(to->max_capacity()),
+            byte_size_in_proper_unit(maximum_size), proper_unit_for_byte_size(maximum_size));
+        return false;
+      }
     }
   }
 
+  assert(bytes_to_transfer <= regions_to_transfer * ShenandoahHeapRegion::region_size_bytes(), "Cannot transfer more than available in free regions.");
   log_info(gc)("Transfer " SIZE_FORMAT "%s from %s to %s", byte_size_in_proper_unit(bytes_to_transfer),
                proper_unit_for_byte_size(bytes_to_transfer), from->name(), to->name());
   from->decrease_capacity(bytes_to_transfer);

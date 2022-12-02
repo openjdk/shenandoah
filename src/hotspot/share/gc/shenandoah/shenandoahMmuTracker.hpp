@@ -29,8 +29,6 @@
 #include "runtime/mutex.hpp"
 #include "utilities/numberSeq.hpp"
 
-static const double RESIZE_FACTOR = .1;
-
 class ShenandoahGeneration;
 
 class ShenandoahMmuTracker {
@@ -38,6 +36,8 @@ class ShenandoahMmuTracker {
   double _initial_collector_time_s;
   double _initial_process_time_s;
   double _initial_verify_collector_time_s;
+
+  double _resize_increment;
 
   Monitor _mmu_lock;
   TruncatedSeq _mmu_average;
