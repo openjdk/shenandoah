@@ -69,7 +69,6 @@ ShenandoahControlThread::ShenandoahControlThread() :
   reset_gc_id();
   create_and_start();
   _periodic_task.enroll();
-  _periodic_mmu_task.enroll();
   if (ShenandoahPacing) {
     _periodic_pacer_notify_task.enroll();
   }

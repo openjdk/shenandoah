@@ -27,7 +27,20 @@
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "runtime/os.hpp"
+#include "runtime/task.hpp"
 #include "logging/log.hpp"
+
+
+class ShenandoahMmuTask : public PeriodicTask {
+  ShenandoahMmuTracker* _mmu_tracker;
+public:
+  ShenandoahMmuTask(ShenandoahMmuTracker* mmu_tracker) :
+    PeriodicTask(GCPauseIntervalMillis), _mmu_tracker(mmu_tracker) {}
+
+  virtual void task() override {
+    _mmu_tracker->report();
+  }
+};
 
 class ThreadTimeAccumulator : public ThreadClosure {
  public:
@@ -59,8 +72,14 @@ ShenandoahMmuTracker::ShenandoahMmuTracker() :
   _initial_collector_time_s(0.0),
   _initial_process_time_s(0.0),
   _resize_increment(YoungGenerationSizeIncrement / 100.0),
+  _mmu_periodic_task(new ShenandoahMmuTask(this)),
   _mmu_lock(Mutex::nosafepoint - 2, "ShenandoahMMU_lock", true),
   _mmu_average(10, ShenandoahAdaptiveDecayFactor) {
+}
+
+ShenandoahMmuTracker::~ShenandoahMmuTracker() {
+  _mmu_periodic_task->disenroll();
+  delete _mmu_periodic_task;
 }
 
 void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
@@ -171,4 +190,5 @@ void ShenandoahMmuTracker::initialize() {
   _initial_process_time_s = process_time_seconds();
   _initial_collector_time_s = gc_thread_time_seconds();
   _initial_verify_collector_time_s = _initial_collector_time_s;
+  _mmu_periodic_task->enroll();
 }

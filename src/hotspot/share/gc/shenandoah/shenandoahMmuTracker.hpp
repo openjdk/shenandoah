@@ -30,6 +30,7 @@
 #include "utilities/numberSeq.hpp"
 
 class ShenandoahGeneration;
+class ShenandoahMmuTask;
 
 class ShenandoahMmuTracker {
 
@@ -39,6 +40,7 @@ class ShenandoahMmuTracker {
 
   double _resize_increment;
 
+  ShenandoahMmuTask* _mmu_periodic_task;
   Monitor _mmu_lock;
   TruncatedSeq _mmu_average;
 
@@ -49,6 +51,8 @@ class ShenandoahMmuTracker {
   static double process_time_seconds();
 
   explicit ShenandoahMmuTracker();
+  ~ShenandoahMmuTracker();
+
   void record(ShenandoahGeneration* generation);
   void report();
   void initialize();
