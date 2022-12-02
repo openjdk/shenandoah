@@ -1342,7 +1342,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   } // This closes the block that holds the heap lock.  This releases the lock.
 
   // We arrive here if the tlab allocation request can be resized to fit within young_available
-  assert((req.affilitaion() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
+  assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
          (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations");
 
   // We've relinquished the HeapLock and some other thread may perform additional allocation before our recursive call
