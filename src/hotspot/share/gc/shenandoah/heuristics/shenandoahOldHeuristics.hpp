@@ -161,8 +161,6 @@ public:
 
   virtual bool is_experimental() override;
 
-  virtual double average_idle_time() const override;
-
  private:
   void slide_pinned_regions_to_front();
 };

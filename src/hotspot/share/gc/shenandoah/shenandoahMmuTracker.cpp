@@ -112,16 +112,12 @@ bool ShenandoahMmuTracker::adjust_generation_sizes() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahOldGeneration *old = heap->old_generation();
   double old_time_s = old->reset_collection_time();
-  double old_mtb = old->heuristics()->average_idle_time();
   ShenandoahYoungGeneration *young = heap->young_generation();
   double young_time_s = young->reset_collection_time();
-  double young_mtb = young->heuristics()->average_idle_time();
   ShenandoahGeneration *global = heap->global_generation();
   double global_time_s = global->reset_collection_time();
-  double global_mtb = global->heuristics()->average_idle_time();
 
   log_info(gc)("Thread Usr+Sys YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f", young_time_s, old_time_s, global_time_s);
-  log_info(gc)("Mean time between collections: YOUNG = %.3fs, OLD = %.3fs, GLOBAL = %.3fs", young_mtb, old_mtb, global_mtb);
 
   if (old_time_s > young_time_s) {
     return transfer_capacity(young, old);
