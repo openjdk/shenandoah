@@ -657,9 +657,7 @@ void ShenandoahControlThread::service_concurrent_cycle(const ShenandoahHeap* hea
   ShenandoahConcurrentGC gc(generation, do_old_gc_bootstrap);
   if (gc.collect(cause)) {
     // Cycle is complete
-    if (!do_old_gc_bootstrap) {
-      generation->record_success_concurrent(gc.abbreviated());
-    }
+    generation->record_success_concurrent(gc.abbreviated());
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
