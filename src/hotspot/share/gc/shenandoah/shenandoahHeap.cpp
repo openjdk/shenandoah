@@ -624,6 +624,8 @@ public:
 
 void ShenandoahHeap::post_initialize() {
   CollectedHeap::post_initialize();
+  _mmu_tracker.initialize();
+
   MutexLocker ml(Threads_lock);
 
   ShenandoahInitWorkerGCLABClosure init_gclabs;
@@ -637,7 +639,6 @@ void ShenandoahHeap::post_initialize() {
     _safepoint_workers->set_initialize_gclab();
   }
 
-  _mmu_tracker.initialize();
   JFR_ONLY(ShenandoahJFRSupport::register_jfr_type_serializers());
 }
 

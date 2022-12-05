@@ -56,7 +56,6 @@ class ShenandoahMmuTracker {
   double _resize_increment;
 
   ShenandoahMmuTask* _mmu_periodic_task;
-  Monitor _mmu_lock;
   TruncatedSeq _mmu_average;
 
   bool transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);

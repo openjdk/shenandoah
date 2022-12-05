@@ -74,7 +74,6 @@ ShenandoahMmuTracker::ShenandoahMmuTracker() :
   _initial_process_time_s(0.0),
   _resize_increment(YoungGenerationSizeIncrement / 100.0),
   _mmu_periodic_task(new ShenandoahMmuTask(this)),
-  _mmu_lock(Mutex::nosafepoint - 2, "ShenandoahMMU_lock", true),
   _mmu_average(10, ShenandoahAdaptiveDecayFactor) {
 }
 
@@ -84,7 +83,7 @@ ShenandoahMmuTracker::~ShenandoahMmuTracker() {
 }
 
 void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
-  MonitorLocker lock(&_mmu_lock, Mutex::_no_safepoint_check_flag);
+  // This is only called by the control thread.
   double collector_time_s = gc_thread_time_seconds();
   double elapsed_gc_time_s = collector_time_s - _initial_collector_time_s;
   generation->add_collection_time(elapsed_gc_time_s);
@@ -92,7 +91,7 @@ void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
 }
 
 void ShenandoahMmuTracker::report() {
-  MonitorLocker lock(&_mmu_lock, Mutex::_no_safepoint_check_flag);
+  // This is only called by the periodic thread.
   double process_time_s = process_time_seconds();
   double elapsed_process_time_s = process_time_s - _initial_process_time_s;
   _initial_process_time_s = process_time_s;
@@ -129,7 +128,7 @@ bool ShenandoahMmuTracker::adjust_generation_sizes() {
 
 size_t percentage_of_heap(size_t bytes) {
   size_t heap_capacity = ShenandoahHeap::heap()->max_capacity();
-  assert(bytes > heap_capacity, "Must be less than total capacity");
+  assert(bytes < heap_capacity, "Must be less than total capacity");
   return size_t(100.0 * double(bytes) / double(heap_capacity));
 }
 
