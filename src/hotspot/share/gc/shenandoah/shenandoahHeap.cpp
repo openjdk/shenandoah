@@ -353,10 +353,12 @@ jint ShenandoahHeap::initialize() {
   }
 
   _regions = NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, _num_regions, mtGC);
+  _affiliations = NEW_C_HEAP_ARRAY(uint8_t, _num_regions, mtGC);
   _free_set = new ShenandoahFreeSet(this, _num_regions);
 
   {
     ShenandoahHeapLocker locker(lock());
+
 
     for (size_t i = 0; i < _num_regions; i++) {
       HeapWord* start = (HeapWord*)sh_rs.base() + ShenandoahHeapRegion::region_size_words() * i;
@@ -369,6 +371,8 @@ jint ShenandoahHeap::initialize() {
       _marking_context->initialize_top_at_mark_start(r);
       _regions[i] = r;
       assert(!collection_set()->is_in(i), "New region should not be in collection set");
+
+      _affiliations[i] = ShenandoahRegionAffiliation::FREE;
     }
 
     // Initialize to complete
@@ -509,6 +513,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _heap_region_special(false),
   _num_regions(0),
   _regions(NULL),
+  _affiliations(NULL),
   _update_refs_iterator(this),
   _alloc_supplement_reserve(0),
   _promoted_reserve(0),
@@ -535,7 +540,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _old_gen_memory_pool(NULL),
   _stw_memory_manager("Shenandoah Pauses", "end of GC pause"),
   _cycle_memory_manager("Shenandoah Cycles", "end of GC cycle"),
-  _gc_timer(new (ResourceObj::C_HEAP, mtGC) ConcurrentGCTimer()),
+  _gc_timer(new ConcurrentGCTimer()),
   _soft_ref_policy(),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
   _marking_context(NULL),
@@ -767,35 +772,6 @@ size_t ShenandoahHeap::initial_capacity() const {
   return _initial_size;
 }
 
-bool ShenandoahHeap::is_in(const void* p) const {
-  HeapWord* heap_base = (HeapWord*) base();
-  HeapWord* last_region_end = heap_base + ShenandoahHeapRegion::region_size_words() * num_regions();
-  return p >= heap_base && p < last_region_end;
-}
-
-bool ShenandoahHeap::is_in_young(const void* p) const {
-  return is_in(p) && heap_region_containing(p)->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION;
-}
-
-bool ShenandoahHeap::is_in_old(const void* p) const {
-  return is_in(p) && heap_region_containing(p)->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION;
-}
-
-bool ShenandoahHeap::is_in_active_generation(oop obj) const {
-  if (!mode()->is_generational()) {
-    // everything is the same single generation
-    return true;
-  }
-
-  if (active_generation() == NULL) {
-    // no collection is happening, only expect this to be called
-    // when concurrent processing is active, but that could change
-    return false;
-  }
-
-  return active_generation()->contains(obj);
-}
-
 void ShenandoahHeap::op_uncommit(double shrink_before, size_t shrink_until) {
   assert (ShenandoahUncommit, "should be enabled");
 
@@ -857,9 +833,9 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
   // We squelch excessive reports to reduce noise in logs.  Squelch enforcement is not "perfect" because
   // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static
   // last_report_epoch and this_epoch_report_count variables.
-  const uint MaxReportsPerEpoch = 4;
-  static uint last_report_epoch = 0;
-  static uint epoch_report_count = 0;
+  const size_t MaxReportsPerEpoch = 4;
+  static size_t last_report_epoch = 0;
+  static size_t epoch_report_count = 0;
 
   size_t promotion_reserve;
   size_t promotion_expended;
@@ -882,7 +858,7 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
                        size, plab == nullptr? "no": "yes",
                        words_remaining, promote_enabled, promotion_reserve, promotion_expended);
     if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
-      log_info(gc, ergo)("Squelching additional promotion failure reports for epoch %d", last_report_epoch);
+      log_info(gc, ergo)("Squelching additional promotion failure reports for epoch " SIZE_FORMAT, last_report_epoch);
     } else if (gc_id != last_report_epoch) {
       last_report_epoch = gc_id;;
       epoch_report_count = 1;
@@ -1164,7 +1140,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
 }
 
 // is_promotion is true iff this allocation is known for sure to hold the result of young-gen evacuation
-// to old-gen.  plab allocates arre not known as such, since they may hold old-gen evacuations.
+// to old-gen.  plab allocates are not known as such, since they may hold old-gen evacuations.
 HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_promotion) {
   intptr_t pacer_epoch = 0;
   bool in_new_region = false;

@@ -72,6 +72,7 @@ public:
   static void assert_heaplocked(const char* file, int line);
   static void assert_not_heaplocked(const char* file, int line);
   static void assert_heaplocked_or_safepoint(const char* file, int line);
+  static void assert_heaplocked_or_fullgc_safepoint(const char* file, int line);
 
 #ifdef ASSERT
 #define shenandoah_assert_in_heap(interior_loc, obj) \
@@ -164,6 +165,9 @@ public:
 #define shenandoah_assert_heaplocked_or_safepoint() \
                     ShenandoahAsserts::assert_heaplocked_or_safepoint(__FILE__, __LINE__)
 
+#define shenandoah_assert_heaplocked_or_fullgc_safepoint() \
+                    ShenandoahAsserts::assert_heaplocked_or_fullgc_safepoint(__FILE__, __LINE__)
+
 #define shenandoah_assert_generational() \
                     assert(ShenandoahHeap::heap()->mode()->is_generational(), "Must be in generational mode here.")
 #else
@@ -216,6 +220,7 @@ public:
 #define shenandoah_assert_heaplocked()
 #define shenandoah_assert_not_heaplocked()
 #define shenandoah_assert_heaplocked_or_safepoint()
+#define shenandoah_assert_heaplocked_or_fullgc_safepoint()
 #define shenandoah_assert_generational()
 
 #endif

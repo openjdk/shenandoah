@@ -730,6 +730,11 @@ public:
   void andptr(Register dst, int32_t src);
   void andptr(Register src1, Register src2) { LP64_ONLY(andq(src1, src2)) NOT_LP64(andl(src1, src2)) ; }
 
+#ifdef _LP64
+  using Assembler::andq;
+  void andq(Register dst, AddressLiteral src, Register rscratch = noreg);
+#endif
+
   void cmp8(AddressLiteral src1, int imm, Register rscratch = noreg);
 
   // renamed to drag out the casting of address to int32_t/intptr_t
@@ -1754,6 +1759,15 @@ public:
   void evrord(BasicType type, XMMRegister dst, KRegister mask, XMMRegister src, int shift, bool merge, int vlen_enc);
   void evrord(BasicType type, XMMRegister dst, KRegister mask, XMMRegister src1, XMMRegister src2, bool merge, int vlen_enc);
 
+  using Assembler::evpandq;
+  void evpandq(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = noreg);
+
+  using Assembler::evporq;
+  void evporq(XMMRegister dst, XMMRegister nds, AddressLiteral src, int vector_len, Register rscratch = noreg);
+
+  using Assembler::vpternlogq;
+  void vpternlogq(XMMRegister dst, int imm8, XMMRegister src2, AddressLiteral src3, int vector_len, Register rscratch = noreg);
+
   void alltrue(Register dst, uint masklen, KRegister src1, KRegister src2, KRegister kscratch);
   void anytrue(Register dst, uint masklen, KRegister src, KRegister kscratch);
 
@@ -1976,10 +1990,6 @@ public:
   void generate_fill_avx3(BasicType type, Register to, Register value,
                           Register count, Register rtmp, XMMRegister xtmp);
 #endif // COMPILER2_OR_JVMCI
-
-  OopMap* continuation_enter_setup(int& stack_slots);
-  void fill_continuation_entry(Register reg_cont_obj, Register reg_flags);
-  void continuation_enter_cleanup();
 #endif // _LP64
 
   void vallones(XMMRegister dst, int vector_len);
