@@ -25,7 +25,6 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHMMUTRACKER_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHMMUTRACKER_HPP
 
-#include "memory/iterator.hpp"
 #include "runtime/mutex.hpp"
 #include "utilities/numberSeq.hpp"
 
