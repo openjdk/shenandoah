@@ -1230,7 +1230,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
           size_t young_available = young_generation()->adjusted_available();
-          if (requested_bytes >= young_available) {
+          if (requested_bytes > young_available) {
             // We know this is not a GCLAB.  This must be a TLAB or a shared allocation.
             if (req.is_lab_alloc() && (young_available >= req.min_size())) {
               try_smaller_lab_size = true;
@@ -1338,8 +1338,18 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         }
       }
       return result;
-    } // This closes the (!try_smaller_lab_size) block.
+    }
+    // else, try_smaller_lab_size is true so we fall through and recurse with a smaller lab size
   } // This closes the block that holds the heap lock.  This releases the lock.
+
+  if (!((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
+        (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations")) {
+    log_info(gc, ergo)("Assertion about to fail in allocate_memory_under_lock, try_smaller_lab_size is %d", try_smaller_lab_size);
+    log_info(gc, ergo)("req.affiliation: %s", affiliation_name(req.affiliation()));
+    log_info(gc, ergo)("req.is_lab_alloc: %d", req.is_lab_alloc());
+    log_info(gc, ergo)("req.is_mutator_alloc: %d", req.is_mutator_alloc());
+    log_info(gc, ergo)("smaller_lab_size: " SIZE_FORMAT ", req.size: " SIZE_FORMAT, smaller_lab_size, req.size());
+  }
 
   // We arrive here if the tlab allocation request can be resized to fit within young_available
   assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
