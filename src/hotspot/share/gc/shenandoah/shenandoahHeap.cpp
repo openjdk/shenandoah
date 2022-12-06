@@ -684,6 +684,8 @@ size_t ShenandoahHeap::young_generation_capacity(size_t capacity) {
         capacity = MIN2(MaxNewSize, capacity);
       }
     }
+    // capacity must be a multiple of ShenandoahHeapRegion::region_size_bytes()
+    capacity &= ~ShenandoahHeapRegion::region_size_bytes_mask();
   }
   // else, make no adjustment to global capacity
   return capacity;

@@ -348,7 +348,7 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion* r) {
     _used += r->used();
-    log_debug(gc)("ShenandoahCalculatRegionStatsClosure added " SIZE_FORMAT " for %s Region " SIZE_FORMAT ", yielding: " SIZE_FORMAT,
+    log_debug(gc)("ShenandoahCalculateRegionStatsClosure added " SIZE_FORMAT " for %s Region " SIZE_FORMAT ", yielding: " SIZE_FORMAT,
                   r->used(), r->is_humongous()? "humongous": "regular", r->index(), _used);
     _garbage += r->garbage();
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
@@ -377,9 +377,18 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
         return;
       case FREE: return;
       case YOUNG_GENERATION:
+#undef KELVIN_VISIBLE
+#ifdef KELVIN_VISIBLE
+        log_info(gc, ergo)("SGSC YOUNG REGION used " SIZE_FORMAT " in %s Region " SIZE_FORMAT,
+                           r->used(), r->is_humongous()? "humongous": "regular", r->index());
+#endif
         young.heap_region_do(r);
         break;
       case OLD_GENERATION:
+#ifdef KELVIN_VISIBLE
+        log_info(gc, ergo)("SGSC   OLD REGION used " SIZE_FORMAT " in %s Region " SIZE_FORMAT,
+                           r->used(), r->is_humongous()? "humongous": "regular", r->index());
+#endif
         old.heap_region_do(r);
         break;
     }

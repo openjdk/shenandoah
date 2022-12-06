@@ -161,9 +161,9 @@ private:
 
   // Scan remembered set at start of concurrent young-gen marking. */
   void scan_remembered_set(bool is_concurrent);
-
-  void increment_affiliated_region_count();
-  void decrement_affiliated_region_count();
+  
+  size_t increment_affiliated_region_count();
+  size_t decrement_affiliated_region_count();
 
   void clear_used();
   void increase_used(size_t bytes);

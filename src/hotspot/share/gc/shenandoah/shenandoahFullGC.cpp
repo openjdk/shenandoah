@@ -191,9 +191,9 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_gc_generation(heap->global_generation());
 
   if (heap->mode()->is_generational()) {
-    // There will be no concurrent allocations during full GC so reset these coordination variables.
-    heap->young_generation()->unadjust_available();
-    heap->old_generation()->unadjust_available();
+    // Since we probably have not yet reclaimed the most recently selected collection set, we have to defer
+    // unadjust_available() invocations until after Full GC finishes its efforts.
+
     // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
 
     heap->set_alloc_supplement_reserve(0);
@@ -348,6 +348,10 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
       heap->verifier()->verify_after_fullgc();
     }
   }
+
+  // Having reclaimed all dead memory, it is now safe to restore capacities to original values.
+  heap->young_generation()->unadjust_available();
+  heap->old_generation()->unadjust_available();
 
   if (VerifyAfterGC) {
     Universe::verify();

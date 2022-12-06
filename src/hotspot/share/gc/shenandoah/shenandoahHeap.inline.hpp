@@ -632,6 +632,12 @@ inline void ShenandoahHeap::set_affiliation(ShenandoahHeapRegion* r, ShenandoahR
 #ifdef ASSERT
   assert_lock_for_affiliation(region_affiliation(r), new_affiliation);
 #endif
+#undef KELVIN_VISIBLE
+#ifdef KELVIN_VISIBLE
+  log_info(gc, ergo)("Changing affiliation of Region " SIZE_FORMAT " from %s to %s",
+                     r->index(), affiliation_name((ShenandoahRegionAffiliation) _affiliations[r->index()]),
+                     affiliation_name(new_affiliation));
+#endif
   _affiliations[r->index()] = (uint8_t) new_affiliation;
 }
 
@@ -642,6 +648,11 @@ inline ShenandoahRegionAffiliation ShenandoahHeap::region_affiliation(size_t ind
 inline void ShenandoahHeap::set_affiliation(size_t index, ShenandoahRegionAffiliation new_affiliation) {
 #ifdef ASSERT
   assert_lock_for_affiliation(region_affiliation(index), new_affiliation);
+#endif
+#ifdef KELVIN_VISIBLE
+  log_info(gc, ergo)("Setting affiliation of Region " SIZE_FORMAT " from %s to %s",
+                     index, affiliation_name((ShenandoahRegionAffiliation) _affiliations[index]),
+                     affiliation_name(new_affiliation));
 #endif
   _affiliations[index] = (uint8_t) new_affiliation;
 }

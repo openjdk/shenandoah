@@ -974,16 +974,21 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
     heap->old_generation()->decrement_affiliated_region_count();
   }
 
+  size_t regions;
   switch (new_affiliation) {
     case FREE:
       assert(!has_live(), "Free region should not have live data");
       break;
     case YOUNG_GENERATION:
       reset_age();
-      heap->young_generation()->increment_affiliated_region_count();
+      regions = heap->young_generation()->increment_affiliated_region_count();
+      assert(regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->adjusted_capacity(),
+             "Number of young regions cannot exceed adjusted capacity");
       break;
     case OLD_GENERATION:
-      heap->old_generation()->increment_affiliated_region_count();
+      regions = heap->old_generation()->increment_affiliated_region_count();
+      assert(regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->adjusted_capacity(),
+             "Number of old regions cannot exceed adjusted capacity");
       break;
     default:
       ShouldNotReachHere();
