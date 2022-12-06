@@ -974,16 +974,21 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
     heap->old_generation()->decrement_affiliated_region_count();
   }
 
+  size_t regions;
   switch (new_affiliation) {
     case FREE:
       assert(!has_live(), "Free region should not have live data");
       break;
     case YOUNG_GENERATION:
       reset_age();
-      heap->young_generation()->increment_affiliated_region_count();
+      regions = heap->young_generation()->increment_affiliated_region_count();
+      assert(regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->adjusted_capacity(),
+             "Number of young regions cannot exceed adjusted capacity");
       break;
     case OLD_GENERATION:
-      heap->old_generation()->increment_affiliated_region_count();
+      regions = heap->old_generation()->increment_affiliated_region_count();
+      assert(regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->adjusted_capacity(),
+             "Number of old regions cannot exceed adjusted capacity");
       break;
     default:
       ShouldNotReachHere();
@@ -992,6 +997,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   heap->set_affiliation(this, new_affiliation);
 }
 
+// Returns number of regions promoted, or zero if we choose not to promote.
 size_t ShenandoahHeapRegion::promote_humongous() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
@@ -1008,36 +1014,42 @@ size_t ShenandoahHeapRegion::promote_humongous() {
 
   size_t spanned_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
   size_t index_limit = index() + spanned_regions;
+  size_t available_old_regions = ((old_generation->adjusted_capacity() - old_generation->used_regions_size()) /
+                                  ShenandoahHeapRegion::region_size_bytes());
 
-  log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
+  if (spanned_regions <= available_old_regions) {
+    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
 
-  // Since this region may have served previously as OLD, it may hold obsolete object range info.
-  heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
-  // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
-  heap->card_scan()->register_object_wo_lock(bottom());
+    // Since this region may have served previously as OLD, it may hold obsolete object range info.
+    heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
+    // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
+    heap->card_scan()->register_object_wo_lock(bottom());
 
-  // For this region and each humongous continuation region spanned by this humongous object, change
-  // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
-  // in the last humongous region that is not spanned by obj is currently not used.
-  for (size_t i = index(); i < index_limit; i++) {
-    ShenandoahHeapRegion* r = heap->get_region(i);
-    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
-                  r->index(), p2i(r->bottom()), p2i(r->top()));
-    // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
-    r->set_affiliation(OLD_GENERATION);
-    old_generation->increase_used(r->used());
-    young_generation->decrease_used(r->used());
-  }
-  if (obj->is_typeArray()) {
-    // Primitive arrays don't need to be scanned.  See above TODO question about requiring
-    // region promotion at safepoint.
-    log_debug(gc)("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
-                  index(), p2i(bottom()), p2i(bottom() + obj->size()));
-    heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
+    // For this region and each humongous continuation region spanned by this humongous object, change
+    // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
+    // in the last humongous region that is not spanned by obj is currently not used.
+    for (size_t i = index(); i < index_limit; i++) {
+      ShenandoahHeapRegion* r = heap->get_region(i);
+      log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
+                    r->index(), p2i(r->bottom()), p2i(r->top()));
+      // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
+      r->set_affiliation(OLD_GENERATION);
+      old_generation->increase_used(r->used());
+      young_generation->decrease_used(r->used());
+    }
+    if (obj->is_typeArray()) {
+      // Primitive arrays don't need to be scanned.  See above TODO question about requiring
+      // region promotion at safepoint.
+      log_debug(gc)("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
+                    index(), p2i(bottom()), p2i(bottom() + obj->size()));
+      heap->card_scan()->mark_range_as_clean(bottom(), obj->size());
+    } else {
+      log_debug(gc)("Dirty cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
+                    index(), p2i(bottom()), p2i(bottom() + obj->size()));
+      heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
+    }
+    return index_limit - index();
   } else {
-    log_debug(gc)("Dirty cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
-                  index(), p2i(bottom()), p2i(bottom() + obj->size()));
-    heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
+    return 0;
   }
-  return index_limit - index();
 }
