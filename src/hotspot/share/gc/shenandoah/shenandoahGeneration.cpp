@@ -965,18 +965,11 @@ size_t ShenandoahGeneration::available() const {
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
   _adjusted_capacity = soft_max_capacity() + adjustment;
-#undef KELVIN_SEE
-#ifdef KELVIN_SEE
-  log_info(gc, ergo)("adjust_available(%ld) to capacity: " SIZE_FORMAT, adjustment, _adjusted_capacity);
-#endif
   return _adjusted_capacity;
 }
 
 size_t ShenandoahGeneration::unadjust_available() {
   _adjusted_capacity = soft_max_capacity();
-#ifdef KELVIN_SEE
-  log_info(gc, ergo)("unadjust_available() to capacity: " SIZE_FORMAT, _adjusted_capacity);
-#endif
   return _adjusted_capacity;
 }
 

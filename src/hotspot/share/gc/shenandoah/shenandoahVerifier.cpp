@@ -377,18 +377,9 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
         return;
       case FREE: return;
       case YOUNG_GENERATION:
-#undef KELVIN_VISIBLE
-#ifdef KELVIN_VISIBLE
-        log_info(gc, ergo)("SGSC YOUNG REGION used " SIZE_FORMAT " in %s Region " SIZE_FORMAT,
-                           r->used(), r->is_humongous()? "humongous": "regular", r->index());
-#endif
         young.heap_region_do(r);
         break;
       case OLD_GENERATION:
-#ifdef KELVIN_VISIBLE
-        log_info(gc, ergo)("SGSC   OLD REGION used " SIZE_FORMAT " in %s Region " SIZE_FORMAT,
-                           r->used(), r->is_humongous()? "humongous": "regular", r->index());
-#endif
         old.heap_region_do(r);
         break;
     }
