@@ -1090,6 +1090,7 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
   parallel_heap_region_iterate(&coalesce);
 }
 
+// Called from stubs in JIT code or interpreter
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
                                             size_t* actual_size) {
@@ -1237,8 +1238,10 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
               smaller_lab_size = young_available / HeapWordSize;
             } else {
               // Can't allocate because even min_size() is larger than remaining young_available
-              log_info(gc, ergo)("Rejecting TLAB size " SIZE_FORMAT ", min_size: " SIZE_FORMAT ", available: " SIZE_FORMAT,
-                                 requested_bytes, req.min_size() * HeapWordSize, young_available);
+              log_info(gc, ergo)("Unable to shrink %s alloc request of minimum size: " SIZE_FORMAT
+                                 ", young available: " SIZE_FORMAT,
+                                 req.is_lab_alloc()? "TLAB": "shared",
+                                 HeapWordSize * req.is_lab_alloc()? req.min_size(): req.size(), young_available);
               return nullptr;
             }
           }
@@ -1724,9 +1727,13 @@ void ShenandoahHeap::set_young_lab_region_flags() {
 // Returns size in bytes
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
   if (ShenandoahElasticTLAB) {
-    // With Elastic TLABs, return the max allowed size, and let the allocation path
-    // figure out the safe size for current allocation.
-    return ShenandoahHeapRegion::max_tlab_size_bytes();
+    if (mode()->is_generational()) {
+      return MIN2(ShenandoahHeapRegion::max_tlab_size_bytes(), young_generation()->adjusted_available());
+    } else {
+      // With Elastic TLABs, return the max allowed size, and let the allocation path
+      // figure out the safe size for current allocation.
+      return ShenandoahHeapRegion::max_tlab_size_bytes();
+    }
   } else {
     return MIN2(_free_set->unsafe_peek_free(), ShenandoahHeapRegion::max_tlab_size_bytes());
   }
