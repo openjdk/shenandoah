@@ -1045,7 +1045,7 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
   heap->card_scan()->register_object_wo_lock(bottom());
-      
+
   if (obj->is_typeArray()) {
     // Primitive arrays don't need to be scanned.
     log_debug(gc)("Clean cards for promoted humongous object (Region " SIZE_FORMAT ") from " PTR_FORMAT " to " PTR_FORMAT,
