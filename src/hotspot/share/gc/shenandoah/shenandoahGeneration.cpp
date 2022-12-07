@@ -983,6 +983,10 @@ size_t ShenandoahGeneration::adjusted_capacity() const {
   return _adjusted_capacity;
 }
 
+size_t ShenandoahGeneration::adjusted_unaffiliated_regions() {
+  return (adjusted_capacity() - used_regions_size()) / ShenandoahHeapRegion::region_size_bytes();
+}
+
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
   heuristics()->record_success_concurrent(abbreviated);
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();

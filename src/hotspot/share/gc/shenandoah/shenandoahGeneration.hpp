@@ -97,6 +97,10 @@ private:
   virtual size_t adjusted_available() const;
   virtual size_t adjusted_capacity() const;
 
+  // This is the number of FREE regions that are eligible to be affiliated with this generation according to the current
+  // adjusted capacity.
+  virtual size_t adjusted_unaffiliated_regions();
+
   // Both of following return new value of available
   virtual size_t adjust_available(intptr_t adjustment);
   virtual size_t unadjust_available();
