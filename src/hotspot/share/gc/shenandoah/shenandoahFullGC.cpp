@@ -195,8 +195,8 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_gc_generation(heap->global_generation());
 
   if (heap->mode()->is_generational()) {
-    // Since we probably have not yet reclaimed the most recently selected collection set, we have to defer
-    // unadjust_available() invocations until after Full GC finishes its efforts.
+    // Defer unadjust_available() invocations until after Full GC finishes its efforts because Full GC makes use
+    // of young-gen memory that may have been loaned from old-gen.
 
     // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
 

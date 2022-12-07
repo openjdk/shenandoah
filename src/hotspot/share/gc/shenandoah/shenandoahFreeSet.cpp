@@ -100,12 +100,14 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   bool allow_new_region = true;
   switch (req.affiliation()) {
     case ShenandoahRegionAffiliation::OLD_GENERATION:
+      // Note: unsigned result from adjusted_unaffiliated_regions() will never be less than zero, but it may equal zero.
       if (_heap->old_generation()->adjusted_unaffiliated_regions() <= 0) {
         allow_new_region = false;
       }
       break;
 
     case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+      // Note: unsigned result from adjusted_unaffiliated_regions() will never be less than zero, but it may equal zero.
       if (_heap->young_generation()->adjusted_unaffiliated_regions() <= 0) {
         allow_new_region = false;
       }

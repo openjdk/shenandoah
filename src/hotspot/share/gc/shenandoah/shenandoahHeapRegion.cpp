@@ -1012,6 +1012,13 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   oop obj = cast_to_oop(bottom());
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
+  // TODO: Consider not promoting humongous objects that represent primitive arrays.  Leaving a primitive array
+  // (obj->is_typeArray()) in young-gen is harmless because these objects are never relocated and they are not
+  // scanned.  Leaving primitive arrays in young-gen memory allows their memory to be reclaimed more quickly when
+  // it becomes garbage.  Better to not make this change until sizes of young-gen and old-gen are completely
+  // adaptive, as leaving primitive arrays in young-gen might be perceived as an "astonishing result" by someone
+  // has carefully analyzed the required sizes of an application's young-gen and old-gen.
+
   size_t spanned_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
   size_t index_limit = index() + spanned_regions;
 
@@ -1037,6 +1044,16 @@ size_t ShenandoahHeapRegion::promote_humongous() {
       }
       // Then fall through to finish the promotion after releasing the heap lock.
     } else {
+      // There are not enough available old regions to promote this humongous region at this time, so defer promotion.
+      // TODO: Consider allowing the promotion now, with the expectation that we can resize and/or collect OLD
+      // momentarily to address the transient violation of budgets.  Some problems that need to be addressed in order
+      // to allow transient violation of capacity budgets are:
+      //  1. Various size_t subtractions assume usage is less than capacity, and thus assume there will be no
+      //     arithmetic underflow when we subtract usage from capacity.  The results of such size_t subtractions
+      //     would need to be guarded and special handling provided.
+      //  2. ShenandoahVerifier enforces that usage is less than capacity.  If we are going to relax this constraint,
+      //     we need to think about what conditions allow the constraint to be violated and document and implement the
+      //     changes.
       return 0;
     }
   }

@@ -340,6 +340,8 @@ public:
   virtual void do_oop(narrowOop* p) { do_oop_work(p); }
 };
 
+// This closure computes the amounts of used, committed, and garbage memory and the number of regions contained within
+// a subset (e.g. the young generation or old generation) of the total heap.
 class ShenandoahCalculateRegionStatsClosure : public ShenandoahHeapRegionClosure {
 private:
   size_t _used, _committed, _garbage, _regions;
