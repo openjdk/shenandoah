@@ -797,6 +797,7 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   }
 }
 
+#ifndef PRODUCT
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
   assert(ShenandoahEnableCardStats, "Do not call");
@@ -818,6 +819,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
       worker_card_stats[i].maximum());
   }
 }
+#endif
 
 inline bool ShenandoahRegionChunkIterator::has_next() const {
   return _index < _total_chunks;

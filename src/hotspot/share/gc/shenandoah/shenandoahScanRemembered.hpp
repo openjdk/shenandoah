@@ -1030,8 +1030,8 @@ public:
   //  cross one of these boundaries.
   void roots_do(OopIterateClosure* cl);
 
-  void log_card_stats();
-  void log_card_stats(uint worker_id);
+  void log_card_stats() PRODUCT_RETURN;
+  void log_card_stats(uint worker_id) PRODUCT_RETURN;
 };
 
 struct ShenandoahRegionChunk {
