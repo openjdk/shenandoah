@@ -530,7 +530,7 @@
           "With generational mode, increment the age of objects and"        \
           "regions each time this many young-gen GC cycles are completed.") \
                                                                             \
-  product(bool, ShenandoahEnableCardStats, false, DIAGNOSTIC,               \
+  notproduct(bool, ShenandoahEnableCardStats, trueInDebug,                  \
           "Enable statistics collection related to clean & dirty cards")
   // end of GC_SHENANDOAH_FLAGS
 

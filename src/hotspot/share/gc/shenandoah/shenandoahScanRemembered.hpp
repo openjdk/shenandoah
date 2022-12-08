@@ -763,7 +763,7 @@ private:
     dirty ? _dirty_scan_cnt++ : _clean_scan_cnt++;
   }
 
-  void update_run_work(bool cluster);
+  void update_run_work(bool cluster) PRODUCT_RETURN;
 
 public:
   inline void increment_card_cnt(bool dirty) {
@@ -790,9 +790,9 @@ public:
     }
   }
 
-  bool is_clean();
+  bool is_clean() PRODUCT_RETURN0;
 
-  void log() const;
+  void log() const PRODUCT_RETURN;
 };
 
 // ShenandoahScanRemembered is a concrete class representing the

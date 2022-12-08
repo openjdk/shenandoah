@@ -48,6 +48,7 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
   assert(total_card_count > 0, "Card count cannot be zero.");
 }
 
+#ifndef PRODUCT
 void ShenandoahCardStats::update_run_work(bool record) {
   assert(!(_last_dirty || _last_clean) || (_last_dirty && _dirty_run > 0) || (_last_clean && _clean_run > 0),
          "dirty/clean run stats inconsistent");
@@ -140,6 +141,7 @@ void ShenandoahCardStats::log() const {
       _dirty_scan_cnt, _clean_scan_cnt);
   }
 }
+#endif // !PRODUCT
 
 ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
                                                            ShenandoahObjToScanQueueSet* old_queue_set,
