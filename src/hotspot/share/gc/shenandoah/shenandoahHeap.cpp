@@ -860,7 +860,7 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
                        size, plab == nullptr? "no": "yes",
                        words_remaining, promote_enabled, promotion_reserve, promotion_expended);
     if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
-      log_info(gc, ergo)("Squelching additional promotion failure reports for epoch " SIZE_FORMAT, last_report_epoch);
+      log_info(gc, ergo)("Squelching additional promotion failure reports for current epoch");
     } else if (gc_id != last_report_epoch) {
       last_report_epoch = gc_id;;
       epoch_report_count = 1;
@@ -1161,21 +1161,17 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     //
     // Then, we need to make sure the allocation was retried after at least one
     // Full GC, which means we want to try more than ShenandoahFullGCThreshold times.
-
     size_t tries = 0;
-
     while (result == NULL && _progress_last_gc.is_set()) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
-
     while (result == NULL && tries <= ShenandoahFullGCThreshold) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
-
   } else {
     assert(req.is_gc_alloc(), "Can only accept GC allocs here");
     result = allocate_memory_under_lock(req, in_new_region, is_promotion);
@@ -1243,7 +1239,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
               log_info(gc, ergo)("Unable to shrink %s alloc request of minimum size: " SIZE_FORMAT
                                  ", young available: " SIZE_FORMAT,
                                  req.is_lab_alloc()? "TLAB": "shared",
-                                 HeapWordSize * req.is_lab_alloc()? req.min_size(): req.size(), young_available);
+                                 HeapWordSize * (req.is_lab_alloc()? req.min_size(): req.size()), young_available);
               return nullptr;
             }
           }
