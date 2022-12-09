@@ -1279,7 +1279,6 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
           } else {
             promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
           }
-          
           if (promotion_avail == 0) {
             // We need to reserve the remaining memory for evacuation.  Reject this allocation.  The object will be
             // evacuated to young-gen memory and promoted during a future GC pass.
