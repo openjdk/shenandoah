@@ -26,6 +26,7 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
 
+#include <string>
 #include "memory/iterator.hpp"
 #include "oops/oop.hpp"
 #include "oops/objArrayOop.hpp"
@@ -464,7 +465,7 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 
 template<typename RememberedSet>
 template <typename ClosureType>
-void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
+inline void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
                                                           ClosureType *cl, bool is_concurrent, uint worker_id) {
   process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, worker_id);
 }
@@ -800,9 +801,10 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
 
 #ifndef PRODUCT
 template<typename RememberedSet>
-void ShenandoahScanRemembered<RememberedSet>::log_card_stats() {
+void ShenandoahScanRemembered<RememberedSet>::log_card_stats(size_t nworkers, CardStatLogType t) {
   assert(ShenandoahEnableCardStats, "Do not call");
-  for (uint i = 0; i < ParallelGCThreads; i++) {
+  log_info(gc, remset)("%s", _card_stat_log_type[t]);
+  for (uint i = 0; i < nworkers; i++) {
     log_card_stats(i);
   }
 }
@@ -818,6 +820,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint worker_id) {
       worker_card_stats[i].percentile(0), worker_card_stats[i].percentile(25),
       worker_card_stats[i].percentile(50), worker_card_stats[i].percentile(75),
       worker_card_stats[i].maximum());
+    // Merge into the appropriate cumulative stats 
   }
 }
 #endif

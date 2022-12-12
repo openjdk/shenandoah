@@ -683,18 +683,18 @@ public:
 // ShenandoahScanRemembered is a concrete class representing the
 // ability to scan the old-gen remembered set for references to
 // objects residing in young-gen memory.
-//  
+//
 // Scanning normally begins with an invocation of numRegions and ends
 // after all clusters of all regions have been scanned.
 //
 // Throughout the scanning effort, the number of regions does not
 // change.
-//  
+//
 // Even though the regions that comprise old-gen memory are not
 // necessarily contiguous, the abstraction represented by this class
 // identifies each of the old-gen regions with an integer value
 // in the range from 0 to (numRegions() - 1) inclusive.
-//      
+//
 
 template<typename RememberedSet>
 class ShenandoahScanRemembered: public CHeapObj<mtGC> {
@@ -711,7 +711,12 @@ private:
    "max_dirty_run", "max_clean_run",
    "dirty_objs", "clean_objs",
    "dirty_scans", "clean_scans",
-   "alternations"};
+   "alternations"
+  };
+
+  const char* _card_stat_log_type[MAX_CARD_STAT_LOG_TYPE] = {
+   "Scan Remembered Set", "Update Refs"
+  };
 
 public:
   // How to instantiate this object?
@@ -863,14 +868,14 @@ public:
   // All template expansions require methods to be defined in the inline.hpp file, but larger
   // such methods need not be declared as inline.
   template <typename ClosureType>
-  void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, uint worker_id);
+  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, bool is_concurrent, uint worker_id);
 
   template <typename ClosureType>
   void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
                                bool use_write_table, bool is_concurrent, uint worker_id);
 
   template <typename ClosureType>
-  void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
+  inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
                                          HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent);
 
   template <typename ClosureType>
@@ -900,7 +905,8 @@ public:
   //  cross one of these boundaries.
   void roots_do(OopIterateClosure* cl);
 
-  void log_card_stats() PRODUCT_RETURN;
+  void log_card_stats(size_t nworkers, CardStatLogType t) PRODUCT_RETURN;
+private:
   void log_card_stats(uint worker_id) PRODUCT_RETURN;
 };
 

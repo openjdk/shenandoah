@@ -2745,7 +2745,8 @@ private:
 
 void ShenandoahHeap::update_heap_references(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  ShenandoahRegionChunkIterator work_list(workers()->active_workers());
+  size_t nworkers = workers()->active_workers();
+  ShenandoahRegionChunkIterator work_list(nworkers);
 
   if (concurrent) {
     ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, &work_list);
@@ -2753,6 +2754,9 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
   } else {
     ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
+  }
+  if (ShenandoahEnableCardStats) {
+    card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
   }
 }
 

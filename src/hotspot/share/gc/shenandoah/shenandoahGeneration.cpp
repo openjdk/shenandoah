@@ -913,7 +913,7 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   heap->assert_gc_workers(nworkers);
   heap->workers()->run_task(&task);
   if (ShenandoahEnableCardStats) {
-    heap->card_scan()->log_card_stats();
+    heap->card_scan()->log_card_stats(nworkers, CARD_STAT_SCAN_RS);
   }
 }
 
