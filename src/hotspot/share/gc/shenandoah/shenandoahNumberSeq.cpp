@@ -120,6 +120,11 @@ double HdrSeq::percentile(double level) const {
   return maximum();
 }
 
+// Merge this HdrSeq into hdr2: clear optional and off-by-default?
+void HdrSeq::merge(HdrSeq* hdr2) {
+  // guarantee(false, "NYI");
+}
+
 BinaryMagnitudeSeq::BinaryMagnitudeSeq() {
   _mags = NEW_C_HEAP_ARRAY(size_t, BitsPerSize_t, mtInternal);
   clear();

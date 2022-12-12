@@ -83,6 +83,9 @@ public:
   // Debugging/Printing
   virtual void dump();
   virtual void dump_on(outputStream* s);
+
+  // Merge this into seq2
+  virtual void merge(AbsSeq* seq2);
 };
 
 class NumberSeq: public AbsSeq {
@@ -102,6 +105,9 @@ public:
 
   // Debugging/Printing
   virtual void dump_on(outputStream* s);
+
+  // Merge this into seq2
+  virtual void merge(NumberSeq* seq2);
 };
 
 class TruncatedSeq: public AbsSeq {
@@ -129,6 +135,9 @@ public:
 
   // Debugging/Printing
   virtual void dump_on(outputStream* s);
+
+  // Merge this into seq2
+  virtual void merge(TruncatedSeq* seq2);
 };
 
 #endif // SHARE_UTILITIES_NUMBERSEQ_HPP
