@@ -813,7 +813,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_card_stats(size_t nworkers, Ca
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::log_worker_card_stats(uint worker_id, HdrSeq* cum_stats) {
   assert(ShenandoahEnableCardStats, "Do not call");
-  
+
   HdrSeq* worker_card_stats = card_stats(worker_id);
   log_info(gc, remset)("Worker %u Card Stats Histo: ", worker_id);
   for (int i = 0; i < MAX_CARD_STAT_TYPE; i++) {
@@ -822,7 +822,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_worker_card_stats(uint worker_
       worker_card_stats[i].percentile(0), worker_card_stats[i].percentile(25),
       worker_card_stats[i].percentile(50), worker_card_stats[i].percentile(75),
       worker_card_stats[i].maximum());
-    // Merge into the appropriate cumulative stats 
+    // Merge worker stats into the cumulative stats & clear worker stats
     merge_worker_card_stats_cumulative(worker_card_stats, cum_stats);
   }
 }
