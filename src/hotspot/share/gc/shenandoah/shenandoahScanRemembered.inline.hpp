@@ -30,6 +30,7 @@
 #include "oops/oop.hpp"
 #include "oops/objArrayOop.hpp"
 #include "gc/shared/collectorCounters.hpp"
+#include "gc/shenandoah/shenandoahCardStats.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
