@@ -703,6 +703,10 @@ private:
   RememberedSet* _rs;
   ShenandoahCardCluster<RememberedSet>* _scc;
 
+  // Global card stats (cumulative)
+  HdrSeq _card_stats_scan_rs;
+  HdrSeq _card_stats_update_refs;
+  // Per worker card stats (multiplexed by phase)
   HdrSeq** _card_stats;
 
   const char* _card_stats_name[MAX_CARD_STAT_TYPE] = {
@@ -767,6 +771,18 @@ public:
     assert(worker_id < ParallelGCThreads, "Error");
     assert(ShenandoahEnableCardStats == (_card_stats != nullptr), "Error");
     return ShenandoahEnableCardStats ? _card_stats[worker_id] : nullptr;
+  }
+
+  HdrSeq* card_stats_for_phase(CardStatLogType t) {
+    switch (t) {
+      case CARD_STAT_SCAN_RS:
+        return &_card_stats_scan_rs;
+      case CARD_STAT_UPDATE_REFS:
+        return &_card_stats_update_refs;
+      default:
+        guarantee(false, "No such CardStatLogType");
+    }
+    return nullptr; // Quiet compiler
   }
 
   // TODO:  We really don't want to share all of these APIs with arbitrary consumers of the ShenandoahScanRemembered abstraction.
@@ -905,9 +921,13 @@ public:
   //  cross one of these boundaries.
   void roots_do(OopIterateClosure* cl);
 
+  // Log stats related to card/RS stats for given phase t
   void log_card_stats(size_t nworkers, CardStatLogType t) PRODUCT_RETURN;
 private:
-  void log_card_stats(uint worker_id) PRODUCT_RETURN;
+  // Log stats for given worker id related into given cumulative card/RS stats
+  void log_worker_card_stats(uint worker_id, HdrSeq* cum_stats) PRODUCT_RETURN;
+  // Merge the stats from worked_id into the given summary stats, and clear the worker_id's stats.
+  void merge_worker_card_stats_cumulative(HdrSeq* worker_stats, HdrSeq* cum_stats) PRODUCT_RETURN;
 };
 
 struct ShenandoahRegionChunk {
