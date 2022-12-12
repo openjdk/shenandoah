@@ -1355,11 +1355,28 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
          (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations");
 
-  // We've relinquished the HeapLock and some other thread may perform additional allocation before our recursive call
-  // reacquires the lock.  If that happens, we will need another recursive call to further reduce the size of our request
+  // By convention, ShenandoahAllocationRequest is primarily read-only.  The only mutable instance data is represented by
+  // actual_size(), which is overwritten with the size of the allocaion when the allocation request is satisfied.  We use a
+  // recursive call here rather than introducing new methods to mutate the existing ShenandoahAllocationRequest argument.
+  // Mutation of the existing object might result in astonishing results if calling contexts assume the content of immutable
+  // fields remain constant.  The original TLAB allocation request was for memory that exceeded the current capacity.  We'll
+  // attempt to allocate a smaller TLAB.  If this is successful, we'll update actual_size() of our incoming
+  // ShenandoahAllocRequest.  If the recursive request fails, we'll simply return nullptr.
+
+  // Note that we've relinquished the HeapLock and some other thread may perform additional allocation before our recursive
+  // call reacquires the lock.  If that happens, we will need another recursive call to further reduce the size of our request
   // for each time another thread allocates young memory during the brief intervals that the heap lock is available to
   // interfering threads.  We expect this interference to be rare.  The recursion bottoms out when young_available is
-  // smaller than req.min_size().
+  // smaller than req.min_size().  The inner-nested call to allocate_memory_under_lock() uses the same min_size() value
+  // as this call, but it uses a preferred size() that is smaller than our preferred size, and is no larger than what we most
+  // recently saw as the memory currently available within the young generation.
+
+  // TODO: At the expense of code clarity, we could rewrite this recursive solution to use iteration.  We need at most one
+  // extra instance of the ShenandoahAllocRequest, which we can re-initialize multiple times inside a loop, with one iteration
+  // of the loop required for each time the existing solution would recurse.  An iterative solution would be more efficient
+  // in CPU time and stack memory utilization.  The expectation is that it is very rare that we would recurse more than once
+  // so making this change is not currently seen as a high priority.
+
   ShenandoahAllocRequest smaller_req = ShenandoahAllocRequest::for_tlab(req.min_size(), smaller_lab_size);
 
   // Note that shrinking the preferred size gets us past the gatekeeper that checks whether there's available memory to
