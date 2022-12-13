@@ -110,6 +110,11 @@ double AbsSeq::dsd() const {
   return sqrt(var);
 }
 
+void AbsSeq::merge(AbsSeq* abs2, bool clear_this) {
+  guarantee(false, "NYI");
+}
+
+
 NumberSeq::NumberSeq(double alpha) :
   AbsSeq(alpha), _last(0.0), _maximum(0.0) {
 }
@@ -135,6 +140,10 @@ void NumberSeq::add(double val) {
   _sum += val;
   _sum_of_squares += val * val;
   ++_num;
+}
+
+void NumberSeq::merge(NumberSeq* nseq2, bool clear_this) {
+  guarantee(false, "NYI");
 }
 
 
