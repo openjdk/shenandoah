@@ -207,25 +207,29 @@ bool ShenandoahGenerationSizer::adjust_generation_sizes() {
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahOldGeneration *old = heap->old_generation();
-  double old_time_s = old->reset_collection_time();
   ShenandoahYoungGeneration *young = heap->young_generation();
-  double young_time_s = young->reset_collection_time();
   ShenandoahGeneration *global = heap->global_generation();
+  double old_time_s = old->reset_collection_time();
+  double young_time_s = young->reset_collection_time();
   double global_time_s = global->reset_collection_time();
+
+  const double transfer_threshold = 3.0;
+  double delta = young_time_s - old_time_s;
 
   log_info(gc)("Thread Usr+Sys YOUNG = %.3f, OLD = %.3f, GLOBAL = %.3f", young_time_s, old_time_s, global_time_s);
 
-  if (old_time_s > young_time_s) {
-    return transfer_capacity(young, old);
-  } else {
-    return transfer_capacity(old, young);
+  if (abs(delta) <= transfer_threshold) {
+    log_info(gc, ergo)("Difference (%.3f) for thread utilization for each generation is under threshold (%.3f)", abs(delta), transfer_threshold);
+    return false;
   }
-}
 
-size_t percentage_of_heap(size_t bytes) {
-  size_t heap_capacity = ShenandoahHeap::heap()->max_capacity();
-  assert(bytes < heap_capacity, "Must be less than total capacity");
-  return size_t(100.0 * double(bytes) / double(heap_capacity));
+  if (delta > 0) {
+    // young is busier than old, increase size of young to raise MMU
+    return transfer_capacity(old, young);
+  } else {
+    // old is busier than young, increase size of old to raise MMU
+    return transfer_capacity(young, old);
+  }
 }
 
 bool ShenandoahGenerationSizer::transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to) {
@@ -240,32 +244,16 @@ bool ShenandoahGenerationSizer::transfer_capacity(ShenandoahGeneration* from, Sh
   size_t regions_to_transfer = MAX2(1u, uint(double(available_regions) * _resize_increment));
   size_t bytes_to_transfer = regions_to_transfer * ShenandoahHeapRegion::region_size_bytes();
   if (from->generation_mode() == YOUNG) {
-    size_t new_young_size = from->max_capacity() - bytes_to_transfer;
-    size_t minimum_size = min_young_size();
-    if (new_young_size < minimum_size) {
-      if (from->max_capacity() > minimum_size) {
-        bytes_to_transfer = from->max_capacity() - minimum_size;
-      } else {
-        log_info(gc)("Cannot transfer from young: " SIZE_FORMAT "%s, at minimum capacity: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(from->max_capacity()), proper_unit_for_byte_size(from->max_capacity()),
-                     byte_size_in_proper_unit(minimum_size), proper_unit_for_byte_size(minimum_size));
-        return false;
-      }
-    }
+    bytes_to_transfer = adjust_transfer_from_young(from, bytes_to_transfer);
   } else {
-    assert(to->generation_mode() == YOUNG, "Can only transfer between young and old.");
-    size_t new_young_size = to->max_capacity() + bytes_to_transfer;
-    if (percentage_of_heap(new_young_size) > ShenandoahMaxYoungPercentage) {
-      size_t maximum_size = max_young_size();
-      if (maximum_size > to->max_capacity()) {
-        bytes_to_transfer = maximum_size - to->max_capacity();
-      } else {
-        log_info(gc)("Cannot transfer to young: " SIZE_FORMAT "%s, at maximum capacity: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(to->max_capacity()), proper_unit_for_byte_size(to->max_capacity()),
-                     byte_size_in_proper_unit(maximum_size), proper_unit_for_byte_size(maximum_size));
-        return false;
-      }
-    }
+    bytes_to_transfer = adjust_transfer_to_young(to, bytes_to_transfer);
+  }
+
+  if (bytes_to_transfer == 0) {
+    log_debug(gc)("No capacity available to transfer from: %s (" SIZE_FORMAT "%s) to: %s (" SIZE_FORMAT "%s)",
+                  from->name(), byte_size_in_proper_unit(from->max_capacity()), proper_unit_for_byte_size(from->max_capacity()),
+                  to->name(), byte_size_in_proper_unit(to->max_capacity()), proper_unit_for_byte_size(to->max_capacity()));
+    return false;
   }
 
   assert(bytes_to_transfer <= regions_to_transfer * ShenandoahHeapRegion::region_size_bytes(), "Cannot transfer more than available in free regions.");
@@ -274,4 +262,32 @@ bool ShenandoahGenerationSizer::transfer_capacity(ShenandoahGeneration* from, Sh
   from->decrease_capacity(bytes_to_transfer);
   to->increase_capacity(bytes_to_transfer);
   return true;
+}
+
+size_t ShenandoahGenerationSizer::adjust_transfer_from_young(ShenandoahGeneration* from, size_t bytes_to_transfer) const {
+  assert(from->generation_mode() == YOUNG, "Expect to transfer from young");
+  size_t new_young_size = from->max_capacity() - bytes_to_transfer;
+  size_t minimum_size = min_young_size();
+  // Check that we are not going to violate the minimum size constraint.
+  if (new_young_size < minimum_size) {
+    assert(minimum_size <= from->max_capacity(), "Young is under minimum capacity.");
+    // If the transfer violates the minimum size and there is still some capacity to transfer,
+    // adjust the transfer to take the size to the minimum. Note that this may be zero.
+    bytes_to_transfer = from->max_capacity() - minimum_size;
+  }
+  return bytes_to_transfer;
+}
+
+size_t ShenandoahGenerationSizer::adjust_transfer_to_young(ShenandoahGeneration* to, size_t bytes_to_transfer) const {
+  assert(to->generation_mode() == YOUNG, "Can only transfer between young and old.");
+  size_t new_young_size = to->max_capacity() + bytes_to_transfer;
+  size_t maximum_size = max_young_size();
+  // Check that we are not going to violate the maximum size constraint.
+  if (new_young_size > maximum_size) {
+    assert(maximum_size >= to->max_capacity(), "Young is over maximum capacity");
+    // If the transfer violates the maximum size and there is still some capacity to transfer,
+    // adjust the transfer to take the size to the maximum. Note that this may be zero.
+    bytes_to_transfer = maximum_size - to->max_capacity();
+  }
+  return bytes_to_transfer;
 }

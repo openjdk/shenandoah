@@ -114,7 +114,15 @@ private:
   // given the number of heap regions depending on the kind of sizing algorithm.
   void recalculate_min_max_young_length(size_t heap_size);
 
+  // This will attempt to transfer capacity from one generation to the other. It
+  // returns true if a transfer is made, false otherwise.
   bool transfer_capacity(ShenandoahGeneration* from, ShenandoahGeneration* to);
+
+  // These two methods are responsible for enforcing the minimum and maximum
+  // constraints for the size of the generations.
+  size_t adjust_transfer_from_young(ShenandoahGeneration* from, size_t bytes_to_transfer) const;
+  size_t adjust_transfer_to_young(ShenandoahGeneration* to, size_t bytes_to_transfer) const;
+
 public:
   ShenandoahGenerationSizer(ShenandoahMmuTracker* mmu_tracker);
 
