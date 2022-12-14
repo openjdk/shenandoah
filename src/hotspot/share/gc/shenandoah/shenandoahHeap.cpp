@@ -448,15 +448,14 @@ jint ShenandoahHeap::initialize() {
 }
 
 void ShenandoahHeap::initialize_generations() {
-  size_t max_capacity_new      = young_generation_capacity(max_capacity());
-  size_t soft_max_capacity_new = young_generation_capacity(soft_max_capacity());
-  size_t max_capacity_old      = max_capacity() - max_capacity_new;
-  size_t soft_max_capacity_old = soft_max_capacity() - soft_max_capacity_new;
+  _generation_sizer.heap_size_changed(soft_max_capacity());
+  size_t max_capacity_young = _generation_sizer.max_young_size();
+  size_t max_capacity_old = max_capacity() - max_capacity_young;
+  size_t max_capacity_global = max_capacity_young + max_capacity_old;
 
-  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_new, soft_max_capacity_new);
-  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, soft_max_capacity_old);
-  _global_generation = new ShenandoahGlobalGeneration(_max_workers, max_capacity_new + max_capacity_old,
-                                                      soft_max_capacity_new + soft_max_capacity_old);
+  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, max_capacity_young);
+  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, max_capacity_old);
+  _global_generation = new ShenandoahGlobalGeneration(_max_workers, max_capacity_global, max_capacity_global);
 }
 
 void ShenandoahHeap::initialize_heuristics() {
@@ -535,6 +534,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _verifier(NULL),
   _phase_timings(NULL),
   _evac_tracker(new ShenandoahEvacuationTracker()),
+  _mmu_tracker(),
+  _generation_sizer(&_mmu_tracker),
   _monitoring_support(NULL),
   _memory_pool(NULL),
   _young_gen_memory_pool(NULL),
@@ -662,37 +663,6 @@ bool ShenandoahHeap::is_gc_generation_young() const {
   return _gc_generation != NULL && _gc_generation->generation_mode() == YOUNG;
 }
 
-// There are three JVM parameters for setting young gen capacity:
-//    NewSize, MaxNewSize, NewRatio.
-//
-// If only NewSize is set, it assigns a fixed size and the other two parameters are ignored.
-// Otherwise NewRatio applies.
-//
-// If NewSize is set in any combination, it provides a lower bound.
-//
-// If MaxNewSize is set it provides an upper bound.
-// If this bound is smaller than NewSize, it supersedes,
-// resulting in a fixed size given by MaxNewSize.
-size_t ShenandoahHeap::young_generation_capacity(size_t capacity) {
-  if (strcmp(ShenandoahGCMode, "generational") == 0) {
-    if (FLAG_IS_CMDLINE(NewSize) && !FLAG_IS_CMDLINE(MaxNewSize) && !FLAG_IS_CMDLINE(NewRatio)) {
-      capacity = MIN2(NewSize, capacity);
-    } else {
-      capacity /= NewRatio + 1;
-      if (FLAG_IS_CMDLINE(NewSize)) {
-        capacity = MAX2(NewSize, capacity);
-      }
-      if (FLAG_IS_CMDLINE(MaxNewSize)) {
-        capacity = MIN2(MaxNewSize, capacity);
-      }
-    }
-    // capacity must be a multiple of ShenandoahHeapRegion::region_size_bytes()
-    capacity &= ~ShenandoahHeapRegion::region_size_bytes_mask();
-  }
-  // else, make no adjustment to global capacity
-  return capacity;
-}
-
 size_t ShenandoahHeap::used() const {
   return Atomic::load(&_used);
 }
@@ -761,7 +731,8 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
   Atomic::store(&_soft_max_size, v);
 
   if (mode()->is_generational()) {
-    size_t soft_max_capacity_young = young_generation_capacity(_soft_max_size);
+    _generation_sizer.heap_size_changed(_soft_max_size);
+    size_t soft_max_capacity_young = _generation_sizer.max_young_size();
     size_t soft_max_capacity_old = _soft_max_size - soft_max_capacity_young;
     _young_generation->set_soft_max_capacity(soft_max_capacity_young);
     _old_generation->set_soft_max_capacity(soft_max_capacity_old);
@@ -1097,7 +1068,7 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
 
 bool ShenandoahHeap::adjust_generation_sizes() {
   if (mode()->is_generational()) {
-    return _mmu_tracker.adjust_generation_sizes();
+    return _generation_sizer.adjust_generation_sizes();
   }
   return false;
 }

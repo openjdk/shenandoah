@@ -223,7 +223,6 @@ private:
   volatile size_t _committed;
   shenandoah_padding(1);
 
-  static size_t young_generation_capacity(size_t total_capacity);
   void help_verify_region_rem_set(ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx,
                                   HeapWord* from, HeapWord* top, HeapWord* update_watermark, const char* message);
 
@@ -537,6 +536,7 @@ private:
   ShenandoahPhaseTimings*       _phase_timings;
   ShenandoahEvacuationTracker*  _evac_tracker;
   ShenandoahMmuTracker          _mmu_tracker;
+  ShenandoahGenerationSizer     _generation_sizer;
 
   ShenandoahControlThread*   control_thread()          { return _control_thread;    }
   ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
@@ -546,6 +546,7 @@ public:
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
   ShenandoahOldGeneration*   old_generation()    const { return _old_generation;    }
   ShenandoahGeneration*      generation_for(ShenandoahRegionAffiliation affiliation) const;
+  const ShenandoahGenerationSizer* generation_sizer()  const { return &_generation_sizer;  }
 
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
   ShenandoahMode*            mode()              const { return _gc_mode;           }
