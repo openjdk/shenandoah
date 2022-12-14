@@ -120,7 +120,7 @@ void AbsSeq::merge(AbsSeq* abs2, bool clear_this) {
 
   // Decaying stats need a bit more thought
   assert(abs2->_alpha == _alpha, "Caution: merge incompatible?");
-  guarantee(false, "NYI");
+  // guarantee(false, "NYI");
 
   if (clear_this) {
     _num = 0;

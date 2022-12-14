@@ -830,7 +830,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_worker_card_stats(uint worker_
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::merge_worker_card_stats_cumulative(
   HdrSeq* worker_stats, HdrSeq* cum_stats) {
-  guarantee(false, "NYI");
+  worker_stats->merge(cum_stats);
 }
 #endif
 
