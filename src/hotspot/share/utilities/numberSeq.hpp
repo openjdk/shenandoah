@@ -85,7 +85,7 @@ public:
   virtual void dump_on(outputStream* s);
 
   // Merge this AbsSeq into seq2, optionally clearing this AbsSeq
-  void merge(AbsSeq* seq2, bool clear_this = true);
+  void merge(AbsSeq& seq2, bool clear_this = true);
 };
 
 class NumberSeq: public AbsSeq {
@@ -107,7 +107,7 @@ public:
   virtual void dump_on(outputStream* s);
 
   // Merge this NumberSeq into seq2, optionally clearing this NumberSeq
-  void merge(NumberSeq* seq2, bool clear_this = true);
+  void merge(NumberSeq& seq2, bool clear_this = true);
 };
 
 class TruncatedSeq: public AbsSeq {
@@ -135,6 +135,9 @@ public:
 
   // Debugging/Printing
   virtual void dump_on(outputStream* s);
+
+  // Merge this AbsSeq into seq2, optionally clearing this AbsSeq
+  void merge(AbsSeq& seq2, bool clear_this = true);
 };
 
 #endif // SHARE_UTILITIES_NUMBERSEQ_HPP

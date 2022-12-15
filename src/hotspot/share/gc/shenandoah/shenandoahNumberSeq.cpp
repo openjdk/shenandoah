@@ -56,7 +56,7 @@ void HdrSeq::add(double val) {
   int mag;
   if (v > 0) {
     mag = 0;
-    while (v > 1) {
+    while (v >= 1) {
       mag++;
       v /= 10;
     }
@@ -71,7 +71,7 @@ void HdrSeq::add(double val) {
   int bucket = -MagMinimum + mag;
   int sub_bucket = (int) (v * ValBuckets);
 
-  // Defensively saturate for product bits:
+  // Defensively saturate for product bits
   if (bucket < 0) {
     assert (false, "bucket index (%d) underflow for value (%8.2f)", bucket, val);
     bucket = 0;
@@ -123,15 +123,15 @@ double HdrSeq::percentile(double level) const {
 // Merge this HdrSeq into hdr2: clear optional and on-by-default
 // Note: this method isn't intrinsically MT-safe; callers must take care
 // of any mutual exclusion as necessary.
-void HdrSeq::merge(HdrSeq* hdr2, bool clear_this) {
+void HdrSeq::merge(HdrSeq& hdr2, bool clear_this) {
   for (int mag = 0; mag < MagBuckets; mag++) {
     if (_hdr[mag] != NULL) {
-      int* that_bucket = hdr2->_hdr[mag];
+      int* that_bucket = hdr2._hdr[mag];
       if (that_bucket == NULL) {
         if (clear_this) {
           // the target doesn't have any values, swap in ours.
           // Could this cause native memory fragmentation?
-          hdr2->_hdr[mag] = _hdr[mag];
+          hdr2._hdr[mag] = _hdr[mag];
           _hdr[mag] = NULL;
         } else {
           // We can't clear this, so we create the entries & add in below
@@ -139,7 +139,7 @@ void HdrSeq::merge(HdrSeq* hdr2, bool clear_this) {
           for (int val = 0; val < ValBuckets; val++) {
             that_bucket[val] = _hdr[mag][val];
           }
-          hdr2->_hdr[mag] = that_bucket;
+          hdr2._hdr[mag] = that_bucket;
         }
       } else {
         // Add in our values into target
