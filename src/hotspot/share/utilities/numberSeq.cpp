@@ -121,7 +121,12 @@ void AbsSeq::merge(AbsSeq& abs2, bool clear_this) {
 
   // Decaying stats need a bit more thought
   assert(abs2._alpha == _alpha, "Caution: merge incompatible?");
-  // guarantee(false, "NYI");
+
+  // Until JDK-... is fixed, we taint the decaying statistics
+  if (abs2._davg != NAN) {
+    abs2._davg = NAN;
+    abs2._dvariance = NAN;
+  }
 
   if (clear_this) {
     _num = 0;
