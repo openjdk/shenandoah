@@ -543,7 +543,10 @@
           "regions each time this many young-gen GC cycles are completed.") \
                                                                             \
   notproduct(bool, ShenandoahEnableCardStats, trueInDebug,                  \
-          "Enable statistics collection related to clean & dirty cards")
+          "Enable statistics collection related to clean & dirty cards")    \
+                                                                            \
+  notproduct(int, ShenandoahCardStatsLogInterval, 50,                       \
+          "Log cumulative card stats every so many cycles")                 \
   // end of GC_SHENANDOAH_FLAGS
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP

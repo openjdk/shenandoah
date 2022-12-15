@@ -110,16 +110,16 @@ double AbsSeq::dsd() const {
   return sqrt(var);
 }
 
-void AbsSeq::merge(AbsSeq* abs2, bool clear_this) {
+void AbsSeq::merge(AbsSeq& abs2, bool clear_this) {
 
   if (num() == 0) return;  // nothing to do
 
-  abs2->_num += _num;
-  abs2->_sum += _sum;
-  abs2->_sum_of_squares += _sum_of_squares;
+  abs2._num += _num;
+  abs2._sum += _sum;
+  abs2._sum_of_squares += _sum_of_squares;
 
   // Decaying stats need a bit more thought
-  assert(abs2->_alpha == _alpha, "Caution: merge incompatible?");
+  assert(abs2._alpha == _alpha, "Caution: merge incompatible?");
   // guarantee(false, "NYI");
 
   if (clear_this) {
@@ -159,18 +159,18 @@ void NumberSeq::add(double val) {
   ++_num;
 }
 
-void NumberSeq::merge(NumberSeq* nseq2, bool clear_this) {
+void NumberSeq::merge(NumberSeq& nseq2, bool clear_this) {
 
   if (num() == 0) return;  // nothing to do
 
-  nseq2->_last = _last;   // this is newer than that
-  nseq2->_maximum = MAX2(_maximum, nseq2->_maximum);
+  nseq2._last = _last;   // this is newer than that
+  nseq2._maximum = MAX2(_maximum, nseq2._maximum);
 
   AbsSeq::merge(nseq2, clear_this);
 
   if (clear_this) {
-    nseq2->_last = 0;
-    nseq2->_maximum = 0;
+    _last = 0;
+    _maximum = 0;
     assert(num() == 0, "Not cleared");
   }
 }

@@ -704,8 +704,8 @@ private:
   ShenandoahCardCluster<RememberedSet>* _scc;
 
   // Global card stats (cumulative)
-  HdrSeq _card_stats_scan_rs;
-  HdrSeq _card_stats_update_refs;
+  HdrSeq _card_stats_scan_rs[MAX_CARD_STAT_TYPE];
+  HdrSeq _card_stats_update_refs[MAX_CARD_STAT_TYPE];
   // Per worker card stats (multiplexed by phase)
   HdrSeq** _card_stats;
 
@@ -721,6 +721,8 @@ private:
   const char* _card_stat_log_type[MAX_CARD_STAT_LOG_TYPE] = {
    "Scan Remembered Set", "Update Refs"
   };
+
+  int _card_stats_log_counter[2] = {0, 0};
 
 public:
   // How to instantiate this object?
@@ -776,9 +778,9 @@ public:
   HdrSeq* card_stats_for_phase(CardStatLogType t) {
     switch (t) {
       case CARD_STAT_SCAN_RS:
-        return &_card_stats_scan_rs;
+        return _card_stats_scan_rs;
       case CARD_STAT_UPDATE_REFS:
-        return &_card_stats_update_refs;
+        return _card_stats_update_refs;
       default:
         guarantee(false, "No such CardStatLogType");
     }
@@ -926,6 +928,10 @@ public:
 private:
   // Log stats for given worker id related into given cumulative card/RS stats
   void log_worker_card_stats(uint worker_id, HdrSeq* cum_stats) PRODUCT_RETURN;
+
+  // Log given stats
+  inline void log_card_stats(HdrSeq* stats) PRODUCT_RETURN;
+
   // Merge the stats from worked_id into the given summary stats, and clear the worker_id's stats.
   void merge_worker_card_stats_cumulative(HdrSeq* worker_stats, HdrSeq* cum_stats) PRODUCT_RETURN;
 };
