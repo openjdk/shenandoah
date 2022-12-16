@@ -264,6 +264,10 @@ bool ShenandoahGenerationSizer::transfer_capacity(ShenandoahGeneration* from, Sh
   return true;
 }
 
+size_t round_down_to_multiple_of_region_size(size_t bytes) {
+  return (bytes / ShenandoahHeapRegion::region_size_bytes()) * ShenandoahHeapRegion::region_size_bytes();
+}
+
 size_t ShenandoahGenerationSizer::adjust_transfer_from_young(ShenandoahGeneration* from, size_t bytes_to_transfer) const {
   assert(from->generation_mode() == YOUNG, "Expect to transfer from young");
   size_t new_young_size = from->max_capacity() - bytes_to_transfer;
@@ -273,7 +277,7 @@ size_t ShenandoahGenerationSizer::adjust_transfer_from_young(ShenandoahGeneratio
     assert(minimum_size <= from->max_capacity(), "Young is under minimum capacity.");
     // If the transfer violates the minimum size and there is still some capacity to transfer,
     // adjust the transfer to take the size to the minimum. Note that this may be zero.
-    bytes_to_transfer = from->max_capacity() - minimum_size;
+    bytes_to_transfer = round_down_to_multiple_of_region_size(from->max_capacity() - minimum_size);
   }
   return bytes_to_transfer;
 }
@@ -287,7 +291,7 @@ size_t ShenandoahGenerationSizer::adjust_transfer_to_young(ShenandoahGeneration*
     assert(maximum_size >= to->max_capacity(), "Young is over maximum capacity");
     // If the transfer violates the maximum size and there is still some capacity to transfer,
     // adjust the transfer to take the size to the maximum. Note that this may be zero.
-    bytes_to_transfer = maximum_size - to->max_capacity();
+    bytes_to_transfer = round_down_to_multiple_of_region_size(maximum_size - to->max_capacity());
   }
   return bytes_to_transfer;
 }
