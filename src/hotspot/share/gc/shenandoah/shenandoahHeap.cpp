@@ -2745,7 +2745,7 @@ private:
 
 void ShenandoahHeap::update_heap_references(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  size_t nworkers = workers()->active_workers();
+  uint nworkers = workers()->active_workers();
   ShenandoahRegionChunkIterator work_list(nworkers);
 
   if (concurrent) {
