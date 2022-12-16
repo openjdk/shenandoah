@@ -1,6 +1,5 @@
 /*
- * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
- * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,14 +24,13 @@
 #include "precompiled.hpp"
 #include "gc/shenandoah/shenandoahNumberSeq.hpp"
 #include <iostream>
-#include <string>
 #include "unittest.hpp"
 #include "utilities/ostream.hpp"
 
 class ShenandoahNumberSeqTest: public ::testing::Test {
+ protected:
   const double err = 0.5;
 
- protected:
   HdrSeq seq1;
   HdrSeq seq2;
   HdrSeq seq3;
@@ -50,19 +48,16 @@ class ShenandoahNumberSeqTest: public ::testing::Test {
   }
 
   void print(HdrSeq& seq, const char* msg) {
-    std::cout << msg;
-    std::cout << " p0 = " << seq.percentile(0);
-    std::cout << " p10 = " << seq.percentile(10);
-    std::cout << " p20 = " << seq.percentile(20);
-    std::cout << " p30 = " << seq.percentile(30);
-    std::cout << " p50 = " << seq.percentile(50);
-    std::cout << " p80 = " << seq.percentile(80);
-    std::cout << " p90 = " << seq.percentile(90);
-    std::cout << " p100 = " << seq.percentile(100);
+    std::cout << "[";
+    for (int i = 0; i <= 100; i += 10) {
+      std::cout << "\t" << seq.percentile(i);
+    }
+    std::cout << " ] : " << msg << "\n";
   }
 };
 
 class BasicShenandoahNumberSeqTest: public ShenandoahNumberSeqTest {
+ public:
   BasicShenandoahNumberSeqTest() {
     seq1.add(0);
     seq1.add(1);
@@ -70,7 +65,23 @@ class BasicShenandoahNumberSeqTest: public ShenandoahNumberSeqTest {
     for (int i = 0; i < 7; i++) {
       seq1.add(100);
     }
-    print();
+    ShenandoahNumberSeqTest::print();
+  }
+};
+
+class ShenandoahNumberSeqMergeTest: public ShenandoahNumberSeqTest {
+ public:
+  ShenandoahNumberSeqMergeTest() {
+    for (int i = 0; i < 80; i++) {
+      seq1.add(1);
+      seq3.add(1);
+    }
+
+    for (int i = 0; i < 20; i++) {
+      seq2.add(100);
+      seq3.add(100);
+    }
+    ShenandoahNumberSeqTest::print();
   }
 };
 
@@ -93,27 +104,25 @@ TEST_VM_F(BasicShenandoahNumberSeqTest, percentile_test) {
   EXPECT_NEAR(100, seq1.percentile(100), err);
 }
 
+TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
+  EXPECT_EQ(seq1.num(), 80);
+  EXPECT_EQ(seq2.num(), 20);
 
-class ShenandoahNumberSeqMergeTest: public ShenandoahNumberSeqTest {
-  ShenandoahNumberSeqMergeTest() {
-    for (int i = 0; i < 80; i++) {
-      seq1.add(1);
-      seq3.add(1);
-    }
-
-    for (int i = 0; i < 20; i++) {
-      seq2.add(100);
-      seq3.add(100);
-    }
-    print();
-  }
-};
-
-TEST_VM_F(ShenandoahNumberSeqMergeTest, maximum_test) {
+  std::cout << "Pre-merge: \n";
+  print();
   seq1.merge(seq2);    // clears seq1, after merging into seq2
+  std::cout << "Post-merge: \n";
+  print();
+
+  EXPECT_EQ(seq1.num(), 0);
+  EXPECT_EQ(seq2.num(), 100);
+  EXPECT_EQ(seq2.num(), seq3.num());
+
   EXPECT_EQ(seq2.maximum(), seq3.maximum());
-  EXPECT_EQ(seq2.percentile(), seq3.percentile());
-  for (i = 0, i <= 100; i++) {
+  EXPECT_EQ(seq2.percentile(0), seq3.percentile(0));
+  for (int i = 0; i <= 100; i += 10) {
     EXPECT_NEAR(seq2.percentile(i), seq3.percentile(i), err);
   }
+  EXPECT_NEAR(seq2.avg(), seq3.avg(), err);
+  EXPECT_NEAR(seq2.sd(),  seq3.sd(),  err);
 }
