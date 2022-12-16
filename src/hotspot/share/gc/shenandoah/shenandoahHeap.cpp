@@ -2755,7 +2755,7 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
     ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
   }
-  if (ShenandoahEnableCardStats) {
+  if (ShenandoahEnableCardStats && card_scan()!=NULL) { // generational check proxy
     card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
   }
 }
