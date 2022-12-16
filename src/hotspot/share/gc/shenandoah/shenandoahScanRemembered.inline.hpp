@@ -799,7 +799,7 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
 }
 
 #ifndef PRODUCT
-// Log given card stats 
+// Log given card stats
 template<typename RememberedSet>
 inline void ShenandoahScanRemembered<RememberedSet>::log_card_stats(HdrSeq* stats) {
   for (int i = 0; i < MAX_CARD_STAT_TYPE; i++) {
