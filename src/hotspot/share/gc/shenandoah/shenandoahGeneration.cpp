@@ -904,7 +904,7 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  uint nworkers = heap->workers()->active_workers();
+  size_t nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 
   ShenandoahReferenceProcessor* rp = ref_processor();
@@ -912,6 +912,9 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   ShenandoahScanRememberedTask task(task_queues(), old_gen_task_queues(), rp, &work_list, is_concurrent);
   heap->assert_gc_workers(nworkers);
   heap->workers()->run_task(&task);
+  if (ShenandoahEnableCardStats) {
+    heap->card_scan()->log_card_stats(nworkers, CARD_STAT_SCAN_RS);
+  }
 }
 
 size_t ShenandoahGeneration::increment_affiliated_region_count() {
