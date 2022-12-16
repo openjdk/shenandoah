@@ -904,7 +904,7 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  size_t nworkers = heap->workers()->active_workers();
+  uint nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 
   ShenandoahReferenceProcessor* rp = ref_processor();

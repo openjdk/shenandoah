@@ -26,7 +26,6 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP
 
-#include <string>
 #include "memory/iterator.hpp"
 #include "oops/oop.hpp"
 #include "oops/objArrayOop.hpp"
@@ -814,7 +813,7 @@ inline void ShenandoahScanRemembered<RememberedSet>::log_card_stats(HdrSeq* stat
 
 // Log card stats for all nworkers for a specific phase t
 template<typename RememberedSet>
-void ShenandoahScanRemembered<RememberedSet>::log_card_stats(size_t nworkers, CardStatLogType t) {
+void ShenandoahScanRemembered<RememberedSet>::log_card_stats(uint nworkers, CardStatLogType t) {
   assert(ShenandoahEnableCardStats, "Do not call");
   HdrSeq* cum_stats = card_stats_for_phase(t);
   log_info(gc, remset)("%s", _card_stat_log_type[t]);

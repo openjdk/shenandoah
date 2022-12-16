@@ -924,7 +924,7 @@ public:
   void roots_do(OopIterateClosure* cl);
 
   // Log stats related to card/RS stats for given phase t
-  void log_card_stats(size_t nworkers, CardStatLogType t) PRODUCT_RETURN;
+  void log_card_stats(uint nworkers, CardStatLogType t) PRODUCT_RETURN;
 private:
   // Log stats for given worker id related into given cumulative card/RS stats
   void log_worker_card_stats(uint worker_id, HdrSeq* cum_stats) PRODUCT_RETURN;
