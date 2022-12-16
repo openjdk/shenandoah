@@ -249,8 +249,11 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
     _total_chunks(calc_total_chunks()),
     _index(0)
 {
-  assert(_smallest_chunk_size_words == _clusters_in_smallest_chunk * CardTable::card_size_in_words()
-         * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster, "_smallest_chunk_size is not valid");
+#ifdef ASSERT
+  size_t expected_chunk_size_words = _clusters_in_smallest_chunk * CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+  assert(_smallest_chunk_size_words == expected_chunk_size_words, "_smallest_chunk_size (" SIZE_FORMAT") is not valid because it does not equal (" SIZE_FORMAT ")",
+      _smallest_chunk_size_words, expected_chunk_size_words);
+#endif
   assert(_num_groups <= _maximum_groups,
          "The number of remembered set scanning groups must be less than or equal to maximum groups");
   assert(_smallest_chunk_size_words << (_maximum_groups - 1) == _maximum_chunk_size_words,
