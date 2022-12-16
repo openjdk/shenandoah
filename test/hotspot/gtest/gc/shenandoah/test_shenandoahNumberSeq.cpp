@@ -107,6 +107,9 @@ TEST_VM_F(BasicShenandoahNumberSeqTest, percentile_test) {
 TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
   EXPECT_EQ(seq1.num(), 80);
   EXPECT_EQ(seq2.num(), 20);
+  EXPECT_FALSE(isnan(seq2.davg()));  // Exercise the path; not a nan
+  EXPECT_FALSE(isnan(seq2.dsd()));
+  EXPECT_FALSE(isnan(seq2.dvariance()));
 
   std::cout << "Pre-merge: \n";
   print();
@@ -117,6 +120,8 @@ TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
   EXPECT_EQ(seq1.num(), 0);
   EXPECT_EQ(seq2.num(), 100);
   EXPECT_EQ(seq2.num(), seq3.num());
+  EXPECT_TRUE(isnan(seq2.davg()));  // until we fix decayed stats
+  EXPECT_TRUE(isnan(seq2.dvariance()));
 
   EXPECT_EQ(seq2.maximum(), seq3.maximum());
   EXPECT_EQ(seq2.percentile(0), seq3.percentile(0));
