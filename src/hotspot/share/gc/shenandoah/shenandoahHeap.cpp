@@ -449,14 +449,14 @@ jint ShenandoahHeap::initialize() {
 
 void ShenandoahHeap::initialize_generations() {
   _generation_sizer.heap_size_changed(soft_max_capacity());
-  size_t initial_capacity_young = _generation_sizer.min_young_size();
+  size_t initial_capacity_young = _generation_sizer.max_young_size();
   size_t max_capacity_young = _generation_sizer.max_young_size();
   size_t initial_capacity_old = max_capacity() - max_capacity_young;
   size_t max_capacity_old = max_capacity() - initial_capacity_young;
 
   _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
   _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-  _global_generation = new ShenandoahGlobalGeneration(_max_workers, max_capacity(), max_capacity());
+  _global_generation = new ShenandoahGlobalGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
 }
 
 void ShenandoahHeap::initialize_heuristics() {
