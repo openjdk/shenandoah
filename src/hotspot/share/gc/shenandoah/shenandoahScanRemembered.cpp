@@ -139,7 +139,7 @@ size_t ShenandoahRegionChunkIterator::calc_num_groups() {
   size_t num_groups = 0;
   size_t cumulative_group_span = 0;
   size_t current_group_span = _first_group_chunk_size_b4_rebalance * _regular_group_size;
-  size_t smallest_group_span = _smallest_chunk_size_words * _regular_group_size;
+  size_t smallest_group_span = smallest_chunk_size_words() * _regular_group_size;
   while ((num_groups < _maximum_groups) && (cumulative_group_span + current_group_span <= total_heap_size)) {
     num_groups++;
     cumulative_group_span += current_group_span;
@@ -179,7 +179,7 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
   size_t num_chunks = 0;
   size_t cumulative_group_span = 0;
   size_t current_group_span = _first_group_chunk_size_b4_rebalance * _regular_group_size;
-  size_t smallest_group_span = _smallest_chunk_size_words * _regular_group_size;
+  size_t smallest_group_span = smallest_chunk_size_words() * _regular_group_size;
 
   // The first group gets special handling because the first chunk size can be no larger than _largest_chunk_size_words
   if (region_size_words > _maximum_chunk_size_words) {
@@ -216,7 +216,7 @@ size_t ShenandoahRegionChunkIterator::calc_total_chunks() {
       } else if (current_group_span <= smallest_group_span) {
         // We cannot introduce new groups because we've reached the lower bound on group size.  So this last
         // group may hold extra chunks.
-        size_t chunk_span = _smallest_chunk_size_words;
+        size_t chunk_span = smallest_chunk_size_words();
         size_t extra_chunks = unspanned_heap_size / chunk_span;
         assert (extra_chunks * chunk_span == unspanned_heap_size, "Chunks must precisely span regions");
         num_chunks += extra_chunks;
@@ -251,12 +251,12 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
 {
 #ifdef ASSERT
   size_t expected_chunk_size_words = _clusters_in_smallest_chunk * CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
-  assert(_smallest_chunk_size_words == expected_chunk_size_words, "_smallest_chunk_size (" SIZE_FORMAT") is not valid because it does not equal (" SIZE_FORMAT ")",
-      _smallest_chunk_size_words, expected_chunk_size_words);
+  assert(smallest_chunk_size_words() == expected_chunk_size_words, "_smallest_chunk_size (" SIZE_FORMAT") is not valid because it does not equal (" SIZE_FORMAT ")",
+         smallest_chunk_size_words(), expected_chunk_size_words);
 #endif
   assert(_num_groups <= _maximum_groups,
          "The number of remembered set scanning groups must be less than or equal to maximum groups");
-  assert(_smallest_chunk_size_words << (_maximum_groups - 1) == _maximum_chunk_size_words,
+  assert(smallest_chunk_size_words() << (_maximum_groups - 1) == _maximum_chunk_size_words,
          "Maximum number of groups needs to span maximum chunk size to smallest chunk size");
 
   size_t words_in_region = ShenandoahHeapRegion::region_size_words();
