@@ -538,15 +538,18 @@ private:
   ShenandoahMmuTracker          _mmu_tracker;
   ShenandoahGenerationSizer     _generation_sizer;
 
-  ShenandoahControlThread*   control_thread()          { return _control_thread;    }
   ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
 
 public:
+  ShenandoahControlThread*   control_thread()          { return _control_thread;    }
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
   ShenandoahOldGeneration*   old_generation()    const { return _old_generation;    }
   ShenandoahGeneration*      generation_for(ShenandoahRegionAffiliation affiliation) const;
   const ShenandoahGenerationSizer* generation_sizer()  const { return &_generation_sizer;  }
+
+  size_t max_size_for(ShenandoahGeneration* generation) const;
+  size_t min_size_for(ShenandoahGeneration* generation) const;
 
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
   ShenandoahMode*            mode()              const { return _gc_mode;           }

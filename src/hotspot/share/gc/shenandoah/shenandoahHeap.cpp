@@ -447,7 +447,33 @@ jint ShenandoahHeap::initialize() {
   return JNI_OK;
 }
 
+size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
+  switch (generation->generation_mode()) {
+    case YOUNG:  return _generation_sizer.max_young_size();
+    case OLD:    return max_capacity() - _generation_sizer.min_young_size();
+    case GLOBAL: return max_capacity();
+    default:
+      ShouldNotReachHere();
+      return 0;
+  }
+}
+
+size_t ShenandoahHeap::min_size_for(ShenandoahGeneration* generation) const {
+  switch (generation->generation_mode()) {
+    case YOUNG:  return _generation_sizer.min_young_size();
+    case OLD:    return max_capacity() - _generation_sizer.max_young_size();
+    case GLOBAL: return min_capacity();
+    default:
+      ShouldNotReachHere();
+      return 0;
+  }
+}
+
 void ShenandoahHeap::initialize_generations() {
+  // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
+  // for old would be total heap - minimum capacity of young. This means the sum of the maximum
+  // allowed for old and young could exceed the total heap size. It remains the case that the
+  // _actual_ capacity of young + old = total.
   _generation_sizer.heap_size_changed(soft_max_capacity());
   size_t initial_capacity_young = _generation_sizer.max_young_size();
   size_t max_capacity_young = _generation_sizer.max_young_size();

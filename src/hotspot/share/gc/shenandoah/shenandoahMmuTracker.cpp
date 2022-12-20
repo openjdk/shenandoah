@@ -23,6 +23,7 @@
  */
 #include "precompiled.hpp"
 
+#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -82,7 +83,7 @@ ShenandoahMmuTracker::~ShenandoahMmuTracker() {
 }
 
 void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
-  // This is only called by the control thread or the VM thread.
+  shenandoah_assert_control_or_vm_thread();
   double collector_time_s = gc_thread_time_seconds();
   double elapsed_gc_time_s = collector_time_s - _generational_reference_time_s;
   generation->add_collection_time(elapsed_gc_time_s);
