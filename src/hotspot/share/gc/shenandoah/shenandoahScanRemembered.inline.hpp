@@ -521,7 +521,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     size_t next_card_index = 0;
 
     assert(stats.is_clean(), "Error");
-    while (card_index < end_card_index) {    // TODO: understand why end_of_range is needed.
+    while (card_index < end_card_index) {
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
         cur_count = 0;
         card_index = end_card_index;

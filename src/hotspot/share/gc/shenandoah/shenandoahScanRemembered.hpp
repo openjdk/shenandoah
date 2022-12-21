@@ -853,9 +853,8 @@ public:
   void mark_range_as_empty(HeapWord *addr, size_t length_in_words);
 
   // process_clusters() scans a portion of the remembered set
-  // to scan roots from old gen into young to identify live objects
-  // in the young generation. Several worker threads scan different
-  // portions of the remembered set by making parallel invocations
+  // for references from old gen into young. Several worker threads
+  // scan different portions of the remembered set by making parallel invocations
   // of process_clusters() with each invocation scanning different
   // "clusters" of the remembered set.
   //
@@ -891,6 +890,7 @@ public:
   template <typename ClosureType>
   void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
                                bool use_write_table, bool is_concurrent, uint worker_id);
+
 
   template <typename ClosureType>
   inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
