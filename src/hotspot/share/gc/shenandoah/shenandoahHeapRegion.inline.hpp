@@ -47,9 +47,16 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
   assert(unalignment_bytes % HeapWordSize == 0, "top should be multiple of HeapWordSize");
 
   size_t pad_words = (alignment_in_bytes - unalignment_bytes) / HeapWordSize;
-  if (pad_words < ShenandoahHeap::min_fill_size()) {
+  if ((pad_words > 0) && (pad_words < ShenandoahHeap::min_fill_size())) {
     pad_words += alignment_in_bytes / HeapWordSize;
   }
+#undef KELVIN_CODE_COVERAGE
+#ifdef KELVIN_CODE_COVERAGE
+  if (pad_words > 0) {
+    log_info(gc, ergo)("allocate_aligned with pad: " SIZE_FORMAT ", size: " SIZE_FORMAT ", available: " SIZE_FORMAT,
+                       pad_words, size, pointer_delta(end(), obj + pad_words));
+  }
+#endif
   if (pointer_delta(end(), obj + pad_words) >= size) {
     if (pad_words > 0) {
       ShenandoahHeap::fill_with_object(obj, pad_words);

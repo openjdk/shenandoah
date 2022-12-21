@@ -237,12 +237,25 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // Need to assure that plabs are aligned on multiple of card region.
       size_t free = r->free();
       size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
+#undef KELVIN_CODE_COVERAGE
+#ifdef KELVIN_CODE_COVERAGE
+      if (usable_free != free) {
+        log_info(gc, ergo)("PLAB of size: " SIZE_FORMAT ", min: " SIZE_FORMAT ", free: " SIZE_FORMAT ", usable: " SIZE_FORMAT,
+                           size, req.min_size(), free, usable_free);
+      }
+#endif
       if ((free != usable_free) && (free - usable_free < ShenandoahHeap::min_fill_size() * HeapWordSize)) {
         // We'll have to add another card's memory to the padding
         if (usable_free > CardTable::card_size()) {
           usable_free -= CardTable::card_size();
+#ifdef KELVIN_CODE_COVERAGE
+          log_info(gc, ergo)(" shrinking usable_free to " SIZE_FORMAT, usable_free);
+#endif
         } else {
-          assert(usable_Free == 0, "usable_free is a multiple of card_size and card_size > min_fill_size");
+#ifdef KELVIN_CODE_COVERAGE
+          log_info(gc, ergo)(" asserting that usable_free " SIZE_FORMAT " equals zero", usable_free);
+#endif
+          assert(usable_free == 0, "usable_free is a multiple of card_size and card_size > min_fill_size");
         }
       }
       free /= HeapWordSize;
@@ -253,6 +266,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size_t adjusted_min_size = req.min_size();
       size_t remnant = adjusted_min_size % CardTable::card_size_in_words();
       if (remnant > 0) {
+        // Round up adjusted_min_size to a multiple of alignment size
         adjusted_min_size = adjusted_min_size - remnant + CardTable::card_size_in_words();
       }
       if (size >= adjusted_min_size) {
@@ -299,7 +313,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       if (usable_free > CardTable::card_size()) {
         usable_free -= CardTable::card_size();
       } else {
-        assert(usable_Free == 0, "usable_free is a multiple of card_size and card_size > min_fill_size");
+        assert(usable_free == 0, "usable_free is a multiple of card_size and card_size > min_fill_size");
       }
     }
     assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of remembered set card size");
