@@ -465,26 +465,27 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, bool is_concurrent, uint worker_id) {
-  process_clusters(first_cluster, count, end_of_range, cl, false, is_concurrent, worker_id);
+                                                          ClosureType *cl, uint worker_id) {
+  process_clusters(first_cluster, count, end_of_range, cl, false, worker_id);
 }
 
 // Process all objects starting within count clusters beginning with first_cluster for which the start address is
 // less than end_of_range.  For any non-array object whose header lies on a dirty card, scan the entire object,
-// even if its end reaches beyond end_of_range. Object arrays, on the other hand,s are precisely dirtied and only
-// the portions of the array on dirty cards need to be scanned.
+// even if its end reaches beyond end_of_range -- TODO ysr When would that happen?
+// Object arrays, on the other hand, are precisely dirtied and only the portions of the array on dirty cards need
+// to be scanned.
 //
 // Do not CANCEL within process_clusters.  It is assumed that if a worker thread accepts responsbility for processing
 // a chunk of work, it will finish the work it starts.  Otherwise, the chunk of work will be lost in the transition to
-// degenerated execution.
+// degenerated execution, leading to dangling references.
 template<typename RememberedSet>
 template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                               ClosureType *cl, bool write_table, bool is_concurrent, uint worker_id) {
+                                                               ClosureType *cl, bool write_table, uint worker_id) {
 
-  // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
-  // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
-  // set will be marked and then subsequently scanned.
+  // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set
+  // are not always themselves marked.  Each such object will be scanned exactly once. Any young-gen objects referenced from
+  // the remembered set will be marked and then subsequently scanned.
 
   // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
   // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
@@ -492,7 +493,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // may contain zombie objects.  Zombie objects are known to be dead, but have not yet been "collected".  Scanning
   // zombie objects is unsafe because the Klass pointer is not reliable, objects referenced from a zombie may have been
   // collected (if dead), or relocated (if live), or if dead but not yet collected, we don't want to "revive" them
-  // by marking them (when marking) or evacuating them (when updating refereces).
+  // by marking them (when marking) or evacuating them (when updating references).
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* ctx;
@@ -520,8 +521,12 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     cur_cluster++;
     size_t next_card_index = 0;
 
-    assert(stats.is_clean(), "Error");
+    assert(stats.is_clean(), "Should be reset for each cluster");
+    // TODO: ysr : check if card indices can be replaced with ranges? No, because we need to check if card is dirty,
+    // but if we have accumulated a range of dirty of clean cards, we can work with address ranges.
     while (card_index < end_card_index) {
+      // get_dirty_cards_in_range_as_memregion_updating_card_index_to_next_dirty_card(&card_index, end_card_index);
+      // for each card in the custer
       if (_rs->addr_for_card_index(card_index) > end_of_range) {
         cur_count = 0;
         card_index = end_card_index;
@@ -698,6 +703,8 @@ ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHe
   start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, write_table, is_concurrent);
 }
 
+
+// This method takes a region & determines the end of the region that the worker can scan.
 template<typename RememberedSet>
 template <typename ClosureType>
 inline void
@@ -705,9 +712,6 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
                                                               bool is_concurrent, uint worker_id) {
   HeapWord *start_of_range = region->bottom() + start_offset;
-  size_t cluster_size =
-    CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
-  size_t words = clusters * cluster_size;
   size_t start_cluster_no = cluster_for_addr(start_of_range);
   assert(addr_for_cluster(start_cluster_no) == start_of_range, "process_region_slice range must align on cluster boundary");
 
@@ -736,23 +740,29 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
                 region->index(), p2i(start_of_range), p2i(end_of_range),
                 use_write_table? "read/write (updating)": "read (marking)");
 
-  // Note that end_of_range may point to the middle of a cluster because region->top() or region->get_update_watermark() may
-  // be less than start_of_range + words.
-
-  // We want to assure that our process_clusters() request spans all relevant clusters.  Note that each cluster
-  // processed will avoid processing beyond end_of_range.
-
-  // Note that any object that starts between start_of_range and end_of_range, including humongous objects, will
-  // be fully processed by process_clusters, even though the object may reach beyond end_of_range.
-
-  // If I am assigned to process a range that starts beyond end_of_range (top or update-watermark), we have no work to do.
-
+  // Note that end_of_range may point to the middle of a cluster because we limit scanning to
+  // region->top() or region->get_update_watermark(). We avoid processing past end_of_range.
+  // Objects that start between start_of_range and end_of_range, including humongous objects, will
+  // be fully processed by process_clusters. In no case should we need to scan past end_of_range.
+  // TODO: ysr I don't think we should ever need to look beyond end_of_range -- when would an
+  // object go past end of range?)
   if (start_of_range < end_of_range) {
     if (region->is_humongous()) {
       ShenandoahHeapRegion* start_region = region->humongous_start_region();
+      // TODO: ysr : This will be called multiple times with same start_region, but different start_cluster_no.
+      // Check that it does the right thing here, and doesn't do redundant work. Also see if thee call API/interface
+      // can be cleaned up from current clutter.
       process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
     } else {
-      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent, worker_id);
+      // TODO: ysr The start_of_range calculated above is discarded and may be calculated again in process_clusters().
+      // See if the redundant and wasted calculations can be avoided, and if the call parameters can be cleaned up.
+      // It almost sounds like this set of methods needs a working class to stash away some useful info that can be
+      // efficiently passed around amongst these methods, as well as related state. Note that we can't use
+      // ShenandoahScanRemembered as there seems to be only one instance of that object for the heap which is shared
+      // by all workers. Note that there are also task methods which call these which may have per worker storage.
+      // We need to be careful however that if the number of workers changes dynamically that state isn't sequestered
+      // and become obsolete.
+      process_clusters(start_cluster_no, clusters, end_of_range, cl, use_write_table, worker_id);
     }
   }
 }
