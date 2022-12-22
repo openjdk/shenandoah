@@ -96,7 +96,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
       if (end_of_range > region->top()) {
         end_of_range = region->top();
       }
-      scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, _is_concurrent, worker_id);
+      scanner->process_region_slice(region, assignment._chunk_offset, clusters, end_of_range, &cl, false, worker_id);
     }
 #ifdef ENABLE_REMEMBERED_SET_CANCELLATION
     // This check is currently disabled to avoid crashes that occur

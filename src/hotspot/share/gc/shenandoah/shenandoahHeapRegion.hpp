@@ -406,8 +406,7 @@ public:
   // Invoke closure on every reference contained within the humongous object that spans this humongous
   // region if the reference is contained within a DIRTY card and the reference is no more than words following
   // start within the humongous object.
-  void oop_iterate_humongous_slice(OopIterateClosure* cl, bool dirty_only, HeapWord* start, size_t words,
-                                   bool write_table, bool is_concurrent);
+  void oop_iterate_humongous_slice(OopIterateClosure* cl, bool dirty_only, HeapWord* start, size_t words, bool write_table);
 
   HeapWord* block_start(const void* p) const;
   size_t block_size(const HeapWord* p) const;

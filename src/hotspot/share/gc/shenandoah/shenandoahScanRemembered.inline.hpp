@@ -688,8 +688,7 @@ template<typename RememberedSet>
 template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
-                                                                    HeapWord *end_of_range, ClosureType *cl, bool write_table,
-                                                                    bool is_concurrent) {
+                                                                    HeapWord *end_of_range, ClosureType *cl, bool write_table) {
   ShenandoahHeapRegion* start_region = r->humongous_start_region();
   HeapWord* p = start_region->bottom();
   oop obj = cast_to_oop(p);
@@ -700,7 +699,7 @@ ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHe
   size_t first_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
   HeapWord* first_cluster_addr = _rs->addr_for_card_index(first_card_index);
   size_t spanned_words = count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster * CardTable::card_size_in_words();
-  start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, write_table, is_concurrent);
+  start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, write_table);
 }
 
 
@@ -710,7 +709,7 @@ template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegion *region, size_t start_offset, size_t clusters,
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
-                                                              bool is_concurrent, uint worker_id) {
+                                                              uint worker_id) {
   HeapWord *start_of_range = region->bottom() + start_offset;
   size_t start_cluster_no = cluster_for_addr(start_of_range);
   assert(addr_for_cluster(start_cluster_no) == start_of_range, "process_region_slice range must align on cluster boundary");
@@ -752,7 +751,7 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
       // TODO: ysr : This will be called multiple times with same start_region, but different start_cluster_no.
       // Check that it does the right thing here, and doesn't do redundant work. Also see if thee call API/interface
       // can be cleaned up from current clutter.
-      process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table, is_concurrent);
+      process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table);
     } else {
       // TODO: ysr The start_of_range calculated above is discarded and may be calculated again in process_clusters().
       // See if the redundant and wasted calculations can be avoided, and if the call parameters can be cleaned up.
@@ -800,7 +799,7 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
       // Remembered set scanner
       if (region->is_humongous()) {
         process_humongous_clusters(region->humongous_start_region(), start_cluster_no, num_clusters, end_of_range, cl,
-                                   false /* is_write_table */, false /* is_concurrent */);
+                                   false /* is_write_table */);
       } else {
         process_clusters(start_cluster_no, num_clusters, end_of_range, cl, false /* is_concurrent */, 0);
       }

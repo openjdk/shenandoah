@@ -894,11 +894,11 @@ public:
 
   template <typename ClosureType>
   inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
-                                         HeapWord *end_of_range, ClosureType *oops, bool use_write_table, bool is_concurrent);
+                                         HeapWord *end_of_range, ClosureType *oops, bool use_write_table);
 
   template <typename ClosureType>
   inline void process_region_slice(ShenandoahHeapRegion* region, size_t offset, size_t clusters, HeapWord* end_of_range,
-                                   ClosureType *cl, bool use_write_table, bool is_concurrent, uint worker_id);
+                                   ClosureType *cl, bool use_write_table, uint worker_id);
 
   // To Do:
   //  Create subclasses of ShenandoahInitMarkRootsClosure and
