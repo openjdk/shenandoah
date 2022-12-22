@@ -835,7 +835,7 @@ void ShenandoahScanRemembered<RememberedSet>::log_worker_card_stats(uint worker_
   assert(ShenandoahEnableCardStats, "Do not call");
 
   HdrSeq* worker_card_stats = card_stats(worker_id);
-  log_info(gc, remset)("Worker %u Card Stats Histo: ", worker_id);
+  log_info(gc, remset)("Worker %u Card Stats: ", worker_id);
   log_card_stats(worker_card_stats);
   // Merge worker stats into the cumulative stats & clear worker stats
   merge_worker_card_stats_cumulative(worker_card_stats, cum_stats);
