@@ -73,6 +73,10 @@ private:
   ShenandoahGeneration(GenerationMode generation_mode, uint max_workers, size_t max_capacity, size_t soft_max_capacity);
   ~ShenandoahGeneration();
 
+  bool is_young() const  { return _generation_mode == YOUNG; }
+  bool is_old() const    { return _generation_mode == OLD; }
+  bool is_global() const { return _generation_mode == GLOBAL; }
+
   inline GenerationMode generation_mode() const { return _generation_mode; }
 
   inline ShenandoahHeuristics* heuristics() const { return _heuristics; }
