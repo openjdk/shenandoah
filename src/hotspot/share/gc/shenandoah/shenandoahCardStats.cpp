@@ -53,15 +53,15 @@ void ShenandoahCardStats::update_run_work(bool record) {
     _local_card_stats[CLEAN_RUN].add((double)_clean_run*100/(double)_cards_in_cluster);
 
     if (record) {
-      // Update global stats for distribution of dirty/clean card %ge
+      // Update global stats for distribution of dirty/clean cards as a percentage of chunk
       _local_card_stats[DIRTY_CARDS].add((double)_dirty_card_cnt*100/(double)_cards_in_cluster);
       _local_card_stats[CLEAN_CARDS].add((double)_clean_card_cnt*100/(double)_cards_in_cluster);
 
-      // Update global stats for max run distribution as dirty/clean card %ge
+      // Update global stats for max dirty/clean run distribution as a percentage of chunk
       _local_card_stats[MAX_DIRTY_RUN].add((double)_max_dirty_run*100/(double)_cards_in_cluster);
       _local_card_stats[MAX_CLEAN_RUN].add((double)_max_clean_run*100/(double)_cards_in_cluster);
 
-      // Update global stats for dirty & clean objects
+      // Update global stats for dirty & clean object counts
       _local_card_stats[DIRTY_OBJS].add(_dirty_obj_cnt);
       _local_card_stats[CLEAN_OBJS].add(_clean_obj_cnt);
       _local_card_stats[DIRTY_SCANS].add(_dirty_scan_cnt);
