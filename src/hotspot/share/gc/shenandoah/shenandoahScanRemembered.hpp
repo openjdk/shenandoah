@@ -936,22 +936,26 @@ private:
   void merge_worker_card_stats_cumulative(HdrSeq* worker_stats, HdrSeq* cum_stats) PRODUCT_RETURN;
 };
 
+
+// A ShenandoahRegionChunk represents a contiguous interval of a ShenandoahHeapRegion, typically representing
+// work to be done by a worker thread.
 struct ShenandoahRegionChunk {
-  ShenandoahHeapRegion *_r;
+  ShenandoahHeapRegion *_r;      // The region of which this represents a chunk
   size_t _chunk_offset;          // HeapWordSize offset
   size_t _chunk_size;            // HeapWordSize qty
 };
 
-// ShenandoahRegionChunkIterator divides the total remembered set scanning effort into assignments (ShenandoahRegionChunks)
-// that are assigned one at a time to worker threads.  Note that the effort required to scan a range of memory is not
-// necessarily a linear function of the size of the range.  Some memory ranges hold only a small number of live objects.
-// Some ranges hold primarily primitive (non-pointer data).  We start with larger assignment sizes because larger assignments
-// can be processed with less coordination effort.  We expect that the GC worker threads that receive more difficult assignments
-// will work longer on those assignments.  Meanwhile, other worker will threads repeatedly accept and complete multiple
-// easier assignments.  As the total amount of work remaining to be completed decreases, we decrease the size of assignments
-// given to individual threads.  This reduces the likelihood that significant imbalance between worker thread assignments
-// will be introduced when there is less meaningful work to be performed by the remaining worker threads while they wait for
-// worker threads with difficult assignments to finish.
+// ShenandoahRegionChunkIterator divides the total remembered set scanning effort into ShenandoahRegionChunks
+// that are assigned one at a time to worker threads. (Here, we use the terms`assignments` and `chunks`
+// interchangeably.) Note that the effort required to scan a range of memory is not necessarily a linear
+// function of the size of the range.  Some memory ranges hold only a small number of live objects.
+// Some ranges hold primarily primitive (non-pointer) data.  We start with larger chunk sizes because larger chunks
+// reduce coordination overhead.  We expect that the GC worker threads that receive more difficult assignments
+// will work longer on those chunks.  Meanwhile, other worker will threads repeatedly accept and complete multiple
+// easier chunks.  As the total amount of work remaining to be completed decreases, we decrease the size of chunks
+// given to individual threads.  This reduces the likelihood of significant imbalance between worker thread assignments
+// when there is less meaningful work to be performed by the remaining worker threads while they wait for
+// worker threads with difficult assignments to finish, reducing the overall duration of the phase.
 
 class ShenandoahRegionChunkIterator : public StackObj {
 private:
@@ -964,7 +968,7 @@ private:
   // smallest_chunk_size is 4 clusters.  Each cluster spans 128 KiB.
   // This is computed from CardTable::card_size_in_words() *
   //      ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
-  static size_t smallest_chunk_size_words() {
+  static const size_t smallest_chunk_size_words() {
       return _clusters_in_smallest_chunk * CardTable::card_size_in_words() *
              ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
   }

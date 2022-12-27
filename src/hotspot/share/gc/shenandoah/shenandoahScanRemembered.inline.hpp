@@ -495,6 +495,30 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // collected (if dead), or relocated (if live), or if dead but not yet collected, we don't want to "revive" them
   // by marking them (when marking) or evacuating them (when updating references).
 
+  //    For each cluster (range of cards), starting at end of card range
+  //       1. Find (next) contiguous range of dirty cards (no further than right end of cluster),
+  //          skipping all clean cards
+  //       2. For the memory range corresponding to the cards scan objects, clearing cards that don't have
+  //          intergenerational pointers
+  //       3. Remember the first object in the current range (which will limit the right end of the next dirty range)
+  //
+  //    find end of cluster range, clipped by end_of_range, and calculate new count?
+  //    or traffic in start address and end address? The current API is pretty awkward.
+  //
+  //    what is the value of count, typically?
+  //    # of cards per cluster = 64 (=512KB)
+  //    # of clusters per 2M region = 2MB/512KB = 4096
+  //    count of clusters per worker at 10 workers = 4096/10 ~ 400 clusters
+  //    
+  //    Several clusters may run afoul of the end of range; it makes sense to use
+  //    start of range and end of range, and a cluster size, rather than using count
+  //
+  //    Look at where this method is called from and if we can change the callers to do this better.
+  //
+  //    I presume "count" is being used to do a finer or coarser subdivision of clusters for the dynamic
+  //    sizing that Kelvin mentioned. I need to see where that is being done (and secondarily whether it
+  //    makes a difference in performance or just makes the interface more complex).
+
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* ctx;
 
@@ -514,8 +538,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   NOT_PRODUCT(ShenandoahCardStats stats(ShenandoahCardCluster<RememberedSet>::CardsPerCluster, card_stats(worker_id));)
 
   while (cur_count-- > 0) {
-    // TODO: do we want to check cancellation in inner loop, on every card processed?  That would be more responsive,
-    // but require more overhead for checking.
     card_index = cur_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
     cur_cluster++;
@@ -864,25 +886,28 @@ inline bool ShenandoahRegionChunkIterator::has_next() const {
 }
 
 inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *assignment) {
-  if (_index > _total_chunks) {
+  if (_index >= _total_chunks) {
     return false;
   }
   size_t new_index = Atomic::add(&_index, (size_t) 1, memory_order_relaxed);
   if (new_index > _total_chunks) {
+    // First worker that hits new_index == _total_chunks continues, other
+    // contending workers return false.
     return false;
   }
   // convert to zero-based indexing
   new_index--;
+  assert(new_index < _total_chunks, "Error");
 
+  // Find the group number for the assigned chunk index
   size_t group_no;
   for (group_no = 0; new_index >= _group_entries[group_no]; group_no++)
     ;
-
   assert(group_no < _num_groups, "Cannot have group no greater or equal to _num_groups");
 
   // All size computations measured in HeapWord
   size_t region_size_words = ShenandoahHeapRegion::region_size_words();
-  size_t group_region_index = _region_index[group_no];
+  size_t group_region_index = _region_index[group_no];     // fetch the 
   size_t group_region_offset = _group_offset[group_no];
 
   size_t index_within_group = (group_no == 0)? new_index: new_index - _group_entries[group_no - 1];
