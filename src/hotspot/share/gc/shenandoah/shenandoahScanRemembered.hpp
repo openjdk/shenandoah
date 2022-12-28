@@ -49,11 +49,9 @@
 //               its entirety, when the object is imprecisely dirtied. Imprecise
 //               dirtying is when the card corresponding to the object header
 //               is dirtied, rather than the card on which the updated field lives).
-//               TODO CHECK AND CORRECT THIS, IT SEEMS WISHY-WASHY: ysr
-//               To allow better balancing of work among parallel workers, especially
-//               in the absence of cluster claiming, it is advisable for the multiple
-//               worker threads to be flexible in the number of clusters to be
-//               processed by each thread.
+//               To better balance work amongst them, parallel worker threads dynamically
+//               claim clusters and are flexible in the number of clusters they
+//               process.
 //
 // A cluster represents a "natural" quantum of work to be performed by
 // a parallel GC thread's background remembered set scanning efforts.
@@ -317,15 +315,12 @@ public:
 //     for scanning the portion of the obj-array overlapping the dirty cards in
 //     its cluster.
 //  3. Non-array objects are precisely dirtied by the interpreter and the compilers
-//     (why? Are offsets of a field in an object that expensive to determine?).
 //     For such objects that extend over multiple cards, or even multiple clusters,
 //     the entire object is scanned by the worker that processes the (dirty) card on
-//     which the object's header lies. However, GC workers then precisley dirty the
-//     cards in the body of this object, thus making the subsequent scans potentially
-//     less expensive. This is achieved by means of marking the card "younger-gen-val",
-//     indicating the presence of an intergenerational pointer on the card on which the
-//     intergenerational pointer is found. GC threads always maintain this value
-//     in preference to "dirty-card-val" for cards with intergenerational pointers.
+//     which the object's header lies. (However, GC workers should precisely dirty the
+//     cards with inter-regional/inter-generational pointers in the body of this object,
+//     thus making subsequent scans potentially less expensive.) Such larger non-array
+//     objects are relatively rare.
 //
 //  A possible criticism:
 //  C. The representation of pointer location descriptive information
