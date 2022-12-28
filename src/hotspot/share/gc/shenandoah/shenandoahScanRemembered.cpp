@@ -100,7 +100,10 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
     }
 #ifdef ENABLE_REMEMBERED_SET_CANCELLATION
     // This check is currently disabled to avoid crashes that occur
-    // when we try to cancel remembered set scanning
+    // when we try to cancel remembered set scanning; it should be re-enabled
+    // after the issues are fixed, as it would allow more prompt cancellation and
+    // transition to degenerated / full GCs. Note that work that has been assigned/
+    // claimed above must be completed before we return here upon cancellation.
     if (heap->check_cancelled_gc_and_yield(_is_concurrent)) {
       return;
     }

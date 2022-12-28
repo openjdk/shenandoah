@@ -483,9 +483,9 @@ template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
                                                                ClosureType *cl, bool write_table, uint worker_id) {
 
-  // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set
-  // are not always themselves marked.  Each such object will be scanned exactly once. Any young-gen objects referenced from
-  // the remembered set will be marked and then subsequently scanned.
+  // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
+  // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
+  // set will be marked and then subsequently scanned.
 
   // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
   // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
