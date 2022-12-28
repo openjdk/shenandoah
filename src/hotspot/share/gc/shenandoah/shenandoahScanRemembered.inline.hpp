@@ -483,10 +483,6 @@ template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
                                                                ClosureType *cl, bool write_table, uint worker_id) {
 
-  // Unlike traditional Shenandoah marking, the old-gen resident objects that are examined as part of the remembered set are not
-  // always themselves marked.  Each such object will be scanned exactly once.  Any young-gen objects referenced from the remembered
-  // set will be marked and then subsequently scanned.
-
   // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
   // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
   // regions that are in the candidate collection set have not been coalesced and filled.  Thus, these heap regions
@@ -495,29 +491,18 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // collected (if dead), or relocated (if live), or if dead but not yet collected, we don't want to "revive" them
   // by marking them (when marking) or evacuating them (when updating references).
 
-  //    For each cluster (range of cards), starting at end of card range
+  //    Convert first_cluster, count and end_of_range, into a start_addr & end_addr (at caller). This method just gets
+  //    a mem region that it works off of.
+  //
+  //    Starting at end of card range:
   //       1. Find (next) contiguous range of dirty cards (no further than right end of cluster),
   //          skipping all clean cards
   //       2. For the memory range corresponding to the cards scan objects, clearing cards that don't have
   //          intergenerational pointers
   //       3. Remember the first object in the current range (which will limit the right end of the next dirty range)
-  //
-  //    find end of cluster range, clipped by end_of_range, and calculate new count?
-  //    or traffic in start address and end address? The current API is pretty awkward.
-  //
-  //    what is the value of count, typically?
-  //    # of cards per cluster = 64 (=512KB)
-  //    # of clusters per 2M region = 2MB/512KB = 4096
-  //    count of clusters per worker at 10 workers = 4096/10 ~ 400 clusters
-  //    
-  //    Several clusters may run afoul of the end of range; it makes sense to use
-  //    start of range and end of range, and a cluster size, rather than using count
-  //
-  //    Look at where this method is called from and if we can change the callers to do this better.
-  //
-  //    I presume "count" is being used to do a finer or coarser subdivision of clusters for the dynamic
-  //    sizing that Kelvin mentioned. I need to see where that is being done (and secondarily whether it
-  //    makes a difference in performance or just makes the interface more complex).
+
+  log_info(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " end = " INTPTR_FORMAT,
+                       worker_id, first_cluster, count, p2i(end_of_range));
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* ctx;
