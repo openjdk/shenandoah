@@ -335,7 +335,7 @@ void ShenandoahBarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_O
   assert(addr->is_register(), "must be a register at this point");
 
   LIR_Opr tmp = gen->new_pointer_register();
-  if (TwoOperandLIRForm) {
+  if (two_operand_lir_form) {
     __ move(addr, tmp);
     __ unsigned_shift_right(tmp, CardTable::card_shift(), tmp);
   } else {
