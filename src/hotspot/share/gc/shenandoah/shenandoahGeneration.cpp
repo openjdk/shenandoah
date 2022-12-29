@@ -998,6 +998,7 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   _max_capacity += increment;
   _soft_max_capacity += increment;
   _adjusted_capacity += increment;
+  heuristics()->reset_gc_learning();
 }
 
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
@@ -1006,6 +1007,7 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;
   _adjusted_capacity -= decrement;
+  heuristics()->reset_gc_learning();
 }
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {

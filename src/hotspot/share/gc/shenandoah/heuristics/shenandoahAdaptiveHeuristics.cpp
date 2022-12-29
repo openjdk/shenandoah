@@ -495,11 +495,6 @@ bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
     return true;
   }
 
-  // We successfully enlarged our generation. Reset times learned because the size
-  // of the generation has changed. The heuristic should relearn collection
-  // statistics. This also has the effect of not resizing the generations for at
-  // least ShenandoahLearningSteps.
-  _gc_times_learned = 0;
   return should_start_gc();
 }
 
