@@ -51,9 +51,16 @@ ShenandoahDirectCardMarkRememberedSet::card_index_for_addr(HeapWord *p) {
   return _card_table->index_for(p);
 }
 
-inline HeapWord *
+inline HeapWord*
 ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) {
   return _whole_heap_base + CardTable::card_size_in_words() * card_index;
+}
+
+inline uint8_t*
+ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool write_table) {
+  return write_table ?
+           _card_table->write_byte_map()
+           : _card_table->read_byte_map();
 }
 
 inline bool
@@ -480,8 +487,8 @@ inline void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t fir
 // degenerated execution, leading to dangling references.
 template<typename RememberedSet>
 template <typename ClosureType>
-void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                               ClosureType *cl, bool write_table, uint worker_id) {
+void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord* end_of_range,
+                                                               ClosureType* cl, bool write_table, uint worker_id) {
 
   // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
   // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
@@ -491,202 +498,100 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // collected (if dead), or relocated (if live), or if dead but not yet collected, we don't want to "revive" them
   // by marking them (when marking) or evacuating them (when updating references).
 
-  //    Convert first_cluster, count and end_of_range, into a start_addr & end_addr (at caller). This method just gets
+  //    [Done] Convert first_cluster, count and end_of_range, into a start_addr & end_addr (at caller). This method just gets
   //    a mem region that it works off of.
   //
   //    Starting at end of card range:
-  //       1. Find (next) contiguous range of dirty cards (no further than right end of cluster),
+  //       1. [Done] Find (next) contiguous range of dirty cards (no further than right end of cluster),
   //          skipping all clean cards
   //       2. For the memory range corresponding to the cards scan objects, clearing cards that don't have
   //          intergenerational pointers
   //       3. Remember the first object in the current range (which will limit the right end of the next dirty range)
 
-  log_info(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " end = " INTPTR_FORMAT,
-                       worker_id, first_cluster, count, p2i(end_of_range));
-
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahMarkingContext* ctx;
-
-  if (heap->is_old_bitmap_stable()) {
-    ctx = heap->marking_context();
-  } else {
-    ctx = nullptr;
+  // start and end addresses of range of objects to be scanned, clipped to end_of_range
+  size_t start_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
+  HeapWord* start_addr = _rs->addr_for_card_index(start_card_index);
+  HeapWord* end_addr = start_addr + (count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster
+                                           * CardTable::card_size_in_words());
+  // clip at end_of_range
+  if (end_addr > end_of_range) {
+    end_addr = end_of_range;
   }
+  assert(start_addr <= end_addr, "Empty region?");
+  size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words() ;
+  size_t end_card_index = start_card_index + whole_cards;
+  log_info(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " eor = " INTPTR_FORMAT
+                       " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
+                       worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
 
-  size_t cur_cluster = first_cluster;
-  size_t cur_count = count;
-  size_t card_index = cur_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
-  HeapWord* start_of_range = _rs->addr_for_card_index(card_index);
-  ShenandoahHeapRegion* r = heap->heap_region_containing(start_of_range);
-  assert(end_of_range <= r->top(), "process_clusters() examines one region at a time");
+  // TODO: Should use CardVal* instead of uint8_t* below
+  uint8_t* ctbm = _rs->get_card_table_byte_map(write_table);
 
-  NOT_PRODUCT(ShenandoahCardStats stats(ShenandoahCardCluster<RememberedSet>::CardsPerCluster, card_stats(worker_id));)
+  // TODO: (ysr) It makes sense to
+  // place this on the closure so as to not penalize all closures where liveness isn't
+  // important. The assumption is that the stability of bit map tested here is a stable
+  // condition from the standpoint of the scanner at the point that the scanning closure
+  // is instantiated.
+  const ShenandoahHeap* heap = ShenandoahHeap::heap();
+  const ShenandoahMarkingContext* ctx = heap->is_old_bitmap_stable() ?
+                                        heap->marking_context() : nullptr;
+  // assert(ctx == nullptr ||
+  //       end_addr <= ctx->top_at_mark_start(heap->heap_region_containing(start_addr)),
+  //       "Range extends past TAMS");
 
-  while (cur_count-- > 0) {
-    card_index = cur_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
-    size_t end_card_index = card_index + ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
-    cur_cluster++;
-    size_t next_card_index = 0;
-
-    assert(stats.is_clean(), "Should be reset for each cluster");
-    // TODO: ysr : check if card indices can be replaced with ranges? No, because we need to check if card is dirty,
-    // but if we have accumulated a range of dirty of clean cards, we can work with address ranges.
-    while (card_index < end_card_index) {
-      // get_dirty_cards_in_range_as_memregion_updating_card_index_to_next_dirty_card(&card_index, end_card_index);
-      // for each card in the custer
-      if (_rs->addr_for_card_index(card_index) > end_of_range) {
-        cur_count = 0;
-        card_index = end_card_index;
-        break;
+  NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
+  // Starting at the right end of the address range, walk backwards accumulating
+  // and clearing a maximal dirty range of cards, then process those cards.
+  size_t cur = end_card_index;
+  while (cur >= start_card_index) {
+    if (ctbm[cur] == CardTable::dirty_card_val()) {
+      const size_t dirty_r = cur;    // record right end of dirty range
+      ctbm[cur] = CardTable::clean_card_val();
+      while (--cur >= start_card_index && ctbm[cur] == CardTable::dirty_card_val()) {
+        // walk back over contiguous dirty cards, clearing them
+        ctbm[cur] = CardTable::clean_card_val();
       }
-      bool is_dirty = (write_table)? is_write_card_dirty(card_index): is_card_dirty(card_index);
-      bool has_object = _scc->has_object(card_index);
-      NOT_PRODUCT(stats.increment_card_cnt(is_dirty);)
-      if (is_dirty) {
-        size_t prev_card_index = card_index;
-        if (has_object) {
-          // Scan all objects that start within this card region.
-          size_t start_offset = _scc->get_first_start(card_index);
-          HeapWord *p = _rs->addr_for_card_index(card_index);
-          HeapWord *card_start = p;
-          HeapWord *endp = p + CardTable::card_size_in_words();
-          assert(!r->is_humongous(), "Process humongous regions elsewhere");
-
-          if (endp > end_of_range) {
-            endp = end_of_range;
-            next_card_index = end_card_index;
-          } else {
-            // endp either points to start of next card region, or to the next object that needs to be scanned, which may
-            // reside in some successor card region.
-
-            // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
-            // failure if endp points to end of heap.
-            next_card_index = card_index + (endp - card_start) / CardTable::card_size_in_words();
-          }
-
-          p += start_offset;
-          while (p < endp) {
-            oop obj = cast_to_oop(p);
-            NOT_PRODUCT(stats.increment_obj_cnt(is_dirty);)
-
-            // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
-            if (!ctx || ctx->is_marked(obj)) {
-              // Future TODO:
-              // For improved efficiency, we might want to give special handling of obj->is_objArray().  In
-              // particular, in that case, we might want to divide the effort for scanning of a very long object array
-              // between multiple threads.  Also, skip parts of the array that are not marked as dirty.
-              if (obj->is_objArray()) {
-                objArrayOop array = objArrayOop(obj);
-                int len = array->length();
-                array->oop_iterate_range(cl, 0, len);
-                NOT_PRODUCT(stats.increment_scan_cnt(is_dirty);)
-              } else if (obj->is_instance()) {
-                obj->oop_iterate(cl);
-                NOT_PRODUCT(stats.increment_scan_cnt(is_dirty);)
-              } else {
-                // Case 3: Primitive array. Do nothing, no oops there. We use the same
-                // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-                // We skip iterating over the klass pointer since we know that
-                // Universe::TypeArrayKlass never moves.
-                assert (obj->is_typeArray(), "should be type array");
-              }
-              p += obj->size();
-            } else {
-              // This object is not marked so we don't scan it.  Containing region r is initialized above.
-              HeapWord* tams = ctx->top_at_mark_start(r);
-              if (p >= tams) {
-                p += obj->size();
-              } else {
-                p = ctx->get_next_marked_addr(p, tams);
-              }
-            }
-          }
-          if (p > endp) {
-            card_index = card_index + (p - card_start) / CardTable::card_size_in_words();
-          } else {                  // p == endp
-            card_index = next_card_index;
-          }
+      const size_t dirty_l = cur + 1;   // record left end of dirty range
+      // Record alternations, dirty run length, and dirty card count
+      NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
+      assert(dirty_r >= dirty_l, "Error");
+      // Find first object that starts this range, consulting previous card's last object
+      const size_t offset = _scc->get_last_start(cur - 1);
+      HeapWord* p = _rs->addr_for_card_index(cur) + offset;
+      HeapWord* left = _rs->addr_for_card_index(dirty_l);
+      HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
+      oop obj = cast_to_oop(p);
+      assert(p < left, "obj should start before dirty_l");
+      if (p + obj->size() == left) {
+        p = left;
+        obj = cast_to_oop(p);
+      }
+      assert(p <= left, "obj should start at or before dirty_l");
+      assert(p + obj->size() > left, "obj shouldn't end at or before dirty_l");
+      size_t i = 0;
+      while (p < right) {
+        // walk right scanning objects
+        if (ctx == nullptr || ctx->is_marked(obj)) {
+          // object is marked, so we scan its oops
+          obj->oop_iterate(cl);
+          p += obj->size();
+          NOT_PRODUCT(i++);
         } else {
-          // Card is dirty but has no object.  Card will have been scanned during scan of a previous cluster.
-          card_index++;
-        }
-      } else {
-        if (has_object) {
-          // Card is clean but has object.
-          // Scan the last object that starts within this card memory if it spans at least one dirty card within this cluster
-          // or if it reaches into the next cluster.
-          size_t start_offset = _scc->get_last_start(card_index);
-          HeapWord *card_start = _rs->addr_for_card_index(card_index);
-          HeapWord *p = card_start + start_offset;
-          oop obj = cast_to_oop(p);
-
-          size_t last_card;
-          if (!ctx || ctx->is_marked(obj)) {
-            HeapWord *nextp = p + obj->size();
-            NOT_PRODUCT(stats.increment_obj_cnt(is_dirty);)
-
-            // Can't use _scc->card_index_for_addr(endp) here because it crashes with assertion
-            // failure if nextp points to end of heap. Must also not attempt to read past last
-            // valid index for card table.
-            last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
-            last_card = MIN2(last_card, last_valid_index());
-
-            bool reaches_next_cluster = (last_card > end_card_index);
-            bool spans_dirty_within_this_cluster = false;
-
-            if (!reaches_next_cluster) {
-              for (size_t span_card = card_index+1; span_card <= last_card; span_card++) {
-                if ((write_table)? _rs->is_write_card_dirty(span_card): _rs->is_card_dirty(span_card)) {
-                  spans_dirty_within_this_cluster = true;
-                  break;
-                }
-              }
-            }
-
-            // TODO: only iterate over this object if it spans dirty within this cluster or within following clusters.
-            // Code as written is known not to examine a zombie object because either the object is marked, or we are
-            // not using the mark-context to differentiate objects, so the object is known to have been coalesced and
-            // filled if it is not "live".
-
-            if (reaches_next_cluster || spans_dirty_within_this_cluster) {
-              if (obj->is_objArray()) {
-                objArrayOop array = objArrayOop(obj);
-                int len = array->length();
-                array->oop_iterate_range(cl, 0, len);
-                NOT_PRODUCT(stats.increment_scan_cnt(is_dirty);)
-              } else if (obj->is_instance()) {
-                obj->oop_iterate(cl);
-                NOT_PRODUCT(stats.increment_scan_cnt(is_dirty);)
-              } else {
-                // Case 3: Primitive array. Do nothing, no oops there. We use the same
-                // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-                // We skip iterating over the klass pointer since we know that
-                // Universe::TypeArrayKlass never moves.
-                assert (obj->is_typeArray(), "should be type array");
-              }
-            }
-          } else {
-            // The object that spans end of this clean card is not marked, so no need to scan it or its
-            // unmarked neighbors.  Containing region r is initialized above.
-            HeapWord* tams = ctx->top_at_mark_start(r);
-            HeapWord* nextp;
-            if (p >= tams) {
-              nextp = p + obj->size();
-            } else {
-              nextp = ctx->get_next_marked_addr(p, tams);
-            }
-            last_card = card_index + (nextp - card_start) / CardTable::card_size_in_words();
-          }
-          // Increment card_index to account for the spanning object, even if we didn't scan it.
-          card_index = (last_card > card_index)? last_card: card_index + 1;
-        } else {
-          // Card is clean and has no object.  No need to clean this card.
-          card_index++;
+          // object isn't marked, skip to next marked
+          p = ctx->get_next_marked_addr(p, right);
         }
       }
-    } // end of a range of cards in current cluster
-    NOT_PRODUCT(stats.update_run(true /* record */);)
-  } // end of all clusters
+      NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
+    } else {
+      assert(ctbm[cur] == CardTable::clean_card_val(), "Error");
+      // walk back over contiguous clean cards
+      size_t i = 0;
+      while (--cur >= start_card_index && ctbm[cur] == CardTable::clean_card_val())
+        NOT_PRODUCT(i++);
+      // Record alternations, clean run length, and clean card count
+      NOT_PRODUCT(stats.record_clean_run(i);)
+    }
+  }
 }
 
 // Given that this range of clusters is known to span a humongous object spanned by region r, scan the

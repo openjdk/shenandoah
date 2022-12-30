@@ -224,19 +224,20 @@ public:
   size_t total_cards();
   size_t card_index_for_addr(HeapWord *p);
   HeapWord *addr_for_card_index(size_t card_index);
-  bool is_card_dirty(size_t card_index);
-  bool is_write_card_dirty(size_t card_index);
-  void mark_card_as_dirty(size_t card_index);
-  void mark_range_as_dirty(size_t card_index, size_t num_cards);
-  void mark_card_as_clean(size_t card_index);
-  void mark_read_card_as_clean(size_t card_index);
-  void mark_range_as_clean(size_t card_index, size_t num_cards);
-  bool is_card_dirty(HeapWord *p);
-  void mark_card_as_dirty(HeapWord *p);
-  void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
-  void mark_card_as_clean(HeapWord *p);
-  void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  size_t cluster_count();
+  inline uint8_t* get_card_table_byte_map(bool write_table);
+  inline bool is_card_dirty(size_t card_index);
+  inline bool is_write_card_dirty(size_t card_index);
+  inline void mark_card_as_dirty(size_t card_index);
+  inline void mark_range_as_dirty(size_t card_index, size_t num_cards);
+  inline void mark_card_as_clean(size_t card_index);
+  inline void mark_read_card_as_clean(size_t card_index);
+  inline void mark_range_as_clean(size_t card_index, size_t num_cards);
+  inline bool is_card_dirty(HeapWord *p);
+  inline void mark_card_as_dirty(HeapWord *p);
+  inline void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
+  inline void mark_card_as_clean(HeapWord *p);
+  inline void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
+  inline size_t cluster_count();
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
@@ -708,8 +709,7 @@ private:
    "dirty_run", "clean_run",
    "dirty_cards", "clean_cards",
    "max_dirty_run", "max_clean_run",
-   "dirty_objs", "clean_objs",
-   "dirty_scans", "clean_scans",
+   "dirty_scan_objs",
    "alternations"
   };
 
@@ -885,7 +885,6 @@ public:
   template <typename ClosureType>
   void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
                                bool use_write_table, uint worker_id);
-
 
   template <typename ClosureType>
   inline void process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
