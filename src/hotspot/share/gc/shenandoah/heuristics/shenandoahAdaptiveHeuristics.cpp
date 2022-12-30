@@ -489,7 +489,7 @@ bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
     // a change, to help prevent thrashing.
     return true;
   }
-  
+
   if (!heap->generation_sizer()->transfer_capacity(_generation)) {
     // We could not enlarge our generation, so we must start a gc cycle.
     return true;
