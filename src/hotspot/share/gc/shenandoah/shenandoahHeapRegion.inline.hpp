@@ -46,7 +46,10 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
   size_t unalignment_bytes = addr_as_int % alignment_in_bytes;
   assert(unalignment_bytes % HeapWordSize == 0, "top should be multiple of HeapWordSize");
 
-  size_t pad_words = (alignment_in_bytes - unalignment_bytes) / HeapWordSize;
+  size_t pad_words = 0;
+  if (unalignment_bytes > 0) {
+    pad_words = (alignment_in_bytes - unalignment_bytes) / HeapWordSize;
+  }
   if ((pad_words > 0) && (pad_words < ShenandoahHeap::min_fill_size())) {
     pad_words += alignment_in_bytes / HeapWordSize;
   }

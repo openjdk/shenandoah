@@ -795,6 +795,28 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     size_t heap_used = _heap->used();
 
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    if (cl.used() != heap_used) {
+      log_info(gc, ergo)("About to issue assert failure, heap_used: " SIZE_FORMAT " does not equal regions used: " SIZE_FORMAT,
+                         heap_used, cl.used());
+      size_t total_old_used = 0;
+      size_t total_young_used = 0;
+      for (size_t i = 0; i < _heap->num_regions(); i++) {
+        stringStream ss;
+        ShenandoahHeapRegion* r = _heap->get_region(i);
+        r->print_on(&ss);
+        log_info(gc, ergo)("%s", ss.freeze());
+        if (r->is_old()) {
+          total_old_used += r->used();
+        } else if (r->is_young()) {
+          total_young_used += r->used();
+        }
+      }
+      log_info(gc, ergo)("Total old used: " SIZE_FORMAT ", total young used: " SIZE_FORMAT, total_old_used, total_young_used);
+    }
+#endif
+
     guarantee(cl.used() == heap_used,
               "%s: heap used size must be consistent: heap-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
               label,
