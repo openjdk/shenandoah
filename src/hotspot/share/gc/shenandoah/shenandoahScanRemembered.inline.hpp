@@ -193,8 +193,8 @@ ShenandoahCardCluster<RememberedSet>::register_object_wo_lock(HeapWord* address)
   HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
   uint8_t offset_in_card = address - card_start_address;
 
-  if (!has_object(card_at_start)) {
-    set_has_object_bit(card_at_start);
+  if (!starts_object(card_at_start)) {
+    set_starts_object_bit(card_at_start);
     set_first_start(card_at_start, offset_in_card);
     set_last_start(card_at_start, offset_in_card);
   } else {
@@ -236,18 +236,18 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
 
     // All the cards between first and last get cleared.
     for (size_t i = card_at_start + 1; i < card_at_end; i++) {
-      clear_has_object_bit(i);
+      clear_starts_object_bit(i);
     }
 
     uint8_t follow_offset = static_cast<uint8_t>((address + length_in_words) - _rs->addr_for_card_index(card_at_end));
-    if (has_object(card_at_end) && (get_first_start(card_at_end) < follow_offset)) {
+    if (starts_object(card_at_end) && (get_first_start(card_at_end) < follow_offset)) {
       // It may be that after coalescing within this last card's memory range, the last card
       // no longer holds an object.
       if (get_last_start(card_at_end) >= follow_offset) {
         set_first_start(card_at_end, follow_offset);
       } else {
         // last_start is being coalesced so this card no longer has any objects.
-        clear_has_object_bit(card_at_end);
+        clear_starts_object_bit(card_at_end);
       }
     }
     // else
@@ -261,14 +261,14 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
 template<typename RememberedSet>
 inline size_t
 ShenandoahCardCluster<RememberedSet>::get_first_start(size_t card_index) {
-  assert(has_object(card_index), "Can't get first start because no object starts here");
+  assert(starts_object(card_index), "Can't get first start because no object starts here");
   return object_starts[card_index].offsets.first & FirstStartBits;
 }
 
 template<typename RememberedSet>
 inline size_t
 ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
-  assert(has_object(card_index), "Can't get last start because no object starts here");
+  assert(starts_object(card_index), "Can't get last start because no object starts here");
   return object_starts[card_index].offsets.last;
 }
 
@@ -355,7 +355,7 @@ inline bool
 ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, ShenandoahMarkingContext* ctx) {
 
   size_t index = card_index_for_addr(address);
-  if (!_scc->has_object(index)) {
+  if (!_scc->starts_object(index)) {
     return false;
   }
   HeapWord* base_addr = addr_for_card_index(index);
@@ -410,7 +410,7 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
 
     if (end_card_index > index && end_card_index <= _rs->last_valid_index()) {
       // If there is a following object registered on the next card, it should begin where this object ends.
-      if (_scc->has_object(end_card_index) &&
+      if (_scc->starts_object(end_card_index) &&
           ((addr_for_card_index(end_card_index) + _scc->get_first_start(end_card_index)) != (base_addr + offset))) {
         return false;
       }
@@ -418,7 +418,7 @@ ShenandoahScanRemembered<RememberedSet>::verify_registration(HeapWord* address, 
 
     // Assure that no other objects are registered "inside" of this one.
     for (index++; index < end_card_index; index++) {
-      if (_scc->has_object(index)) {
+      if (_scc->starts_object(index)) {
         return false;
       }
     }
@@ -545,13 +545,13 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   size_t cur = end_card_index;
   while (cur >= start_card_index) {
     if (ctbm[cur] == CardTable::dirty_card_val()) {
-      const size_t dirty_r = cur;    // record right end of dirty range
+      const size_t dirty_r = cur;    // record right end of dirty range (inclusive)
       ctbm[cur] = CardTable::clean_card_val();
       while (--cur >= start_card_index && ctbm[cur] == CardTable::dirty_card_val()) {
-        // TODO: walk back over contiguous dirty cards, clearing them
+        // walk back over contiguous dirty cards, TODO: (ysr) clearing them
         // ctbm[cur] = CardTable::clean_card_val();
       }
-      const size_t dirty_l = cur + 1;   // record left end of dirty range
+      const size_t dirty_l = cur + 1;   // record left end of dirty range (inclusive)
       assert(dirty_r >= dirty_l, "Error");
       // Record alternations, dirty run length, and dirty card count
       NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
@@ -561,9 +561,13 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       size_t offset;
       HeapWord* p;
       oop obj;
-      HeapWord* left = _rs->addr_for_card_index(dirty_l);
+      // [left, right) is a right-open interval of dirty cards
+      HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      if (_scc->has_object(dirty_l - 1)) {
+      // TODO: (ysr) this doesn't consider the case of a card being
+      // the first in a region
+      if (_scc->starts_object(dirty_l - 1)) {
+        // left neighbor has an object
         offset = _scc->get_last_start(dirty_l - 1);
         p = _rs->addr_for_card_index(dirty_l - 1) + offset;
         assert(p < left, "obj should start before dirty_l");
@@ -573,7 +577,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           obj = cast_to_oop(p);
         }
       } else {
-        assert(_scc->has_object(dirty_l), "Error");
+        // if the left neighbor doesn't have an object, the
+        // leftmost card in the range must begin with one.
+        assert(_scc->starts_object(dirty_l), "Error");
         assert(_scc->get_first_start(dirty_l) == 0, "Error");
         p = left;
         obj = cast_to_oop(p);

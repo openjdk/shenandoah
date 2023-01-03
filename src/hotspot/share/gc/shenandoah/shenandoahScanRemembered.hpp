@@ -389,7 +389,7 @@ private:
 
   // ObjectStartsInCardRegion bit is set within a crossing_info.offsets.start iff at least one object starts within
   // a particular card region.  We pack this bit into start byte under assumption that start byte is accessed less
-  // frequently that last byte.  This is true when number of clean cards is greater than number of dirty cards.
+  // frequently than last byte.  This is true when number of clean cards is greater than number of dirty cards.
   static const uint16_t ObjectStartsInCardRegion = 0x80;
   static const uint16_t FirstStartBits           = 0x3f;
 
@@ -405,16 +405,16 @@ public:
     object_starts[card_index].offsets.last = value;
   }
 
-  inline void set_has_object_bit(size_t card_index) {
+  inline void set_starts_object_bit(size_t card_index) {
     object_starts[card_index].offsets.first |= ObjectStartsInCardRegion;
   }
 
-  inline void clear_has_object_bit(size_t card_index) {
+  inline void clear_starts_object_bit(size_t card_index) {
     object_starts[card_index].offsets.first &= ~ObjectStartsInCardRegion;
   }
 
   // Returns true iff an object is known to start within the card memory associated with card card_index.
-  inline bool has_object(size_t card_index) {
+  inline bool starts_object(size_t card_index) {
     return (object_starts[card_index].offsets.first & ObjectStartsInCardRegion) != 0;
   }
 
@@ -587,7 +587,7 @@ public:
   //
   //  1. For efficiency, there is no locking in the implementation of register_object()
   //  2. Thus, it is required that users of this service assure that concurrent/parallel invocations of
-  //     register_object() do pertain to the same card's memory range.  See discussion below to undestand
+  //     register_object() do pertain to the same card's memory range.  See discussion below to understand
   //     the risks.
   //  3. When allocating from a TLAB or GCLAB, the mutual exclusion can be guaranteed by assuring that each
   //     LAB's start and end are aligned on card memory boundaries.
@@ -612,7 +612,7 @@ public:
   // invocations associated with objects that are allocated from "free lists" to provide their own mutual exclusion locking
   // mechanism.
 
-  // Reset the has_object() information to false for all cards in the range between from and to.
+  // Reset the starts_object() information to false for all cards in the range between from and to.
   void reset_object_range(HeapWord *from, HeapWord *to);
 
   // register_object() requires that the caller hold the heap lock
@@ -642,7 +642,7 @@ public:
   //     start entry either remains the same or it is changed to the start of the coalesced region.
   //  2. For the card that holds the start of the coalesced object, it will not impact the first start
   //     but it may impact the last start.
-  //  3. For following cards spanned entirely by the newly coalesced object, it will change has_object
+  //  3. For following cards spanned entirely by the newly coalesced object, it will change starts_object
   //     to false (and make first-start and last-start "undefined").
   //  4. For a following card that is spanned patially by the newly coalesced object, it may change
   //     first-start value, but it will not change the last-start value.
@@ -662,15 +662,15 @@ public:
   //       scan the objects contained therein if the card is dirty
   // To avoid excessive lookups in a sparse array, the API queries
   // the card number pertaining to a particular address and then uses the
-  // card noumber for subsequent information lookups and stores.
+  // card number for subsequent information lookups and stores.
 
-  // If has_object(card_index), this returns the word offset within this card
-  // memory at which the first object begins.  If !has_object(card_index), the
-  // result is a don't care value.
+  // If starts_object(card_index), this returns the word offset within this card
+  // memory at which the first object begins.  If !starts_object(card_index), the
+  // result is a don't care value -- asserts in a debug build.
   size_t get_first_start(size_t card_index);
 
-  // If has_object(card_index), this returns the word offset within this card
-  // memory at which the last object begins.  If !has_object(card_index), the
+  // If starts_object(card_index), this returns the word offset within this card
+  // memory at which the last object begins.  If !starts_object(card_index), the
   // result is a don't care value.
   size_t get_last_start(size_t card_index);
 
@@ -705,6 +705,7 @@ private:
   // Per worker card stats (multiplexed by phase)
   HdrSeq** _card_stats;
 
+  // The types of card metrics that we gather
   const char* _card_stats_name[MAX_CARD_STAT_TYPE] = {
    "dirty_run", "clean_run",
    "dirty_cards", "clean_cards",
@@ -713,6 +714,8 @@ private:
    "alternations"
   };
 
+  // The statistics are collected and logged separately for
+  // card-scans for initial marking, and for updating refs.
   const char* _card_stat_log_type[MAX_CARD_STAT_LOG_TYPE] = {
    "Scan Remembered Set", "Update Refs"
   };
@@ -834,7 +837,7 @@ public:
   void coalesce_objects(HeapWord *addr, size_t length_in_words);
 
   HeapWord* first_object_in_card(size_t card_index) {
-    if (_scc->has_object(card_index)) {
+    if (_scc->starts_object(card_index)) {
       return addr_for_card_index(card_index) + _scc->get_first_start(card_index);
     } else {
       return nullptr;
