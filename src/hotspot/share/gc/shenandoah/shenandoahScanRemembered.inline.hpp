@@ -504,7 +504,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   //    Starting at end of card range:
   //       1. [Done] Find (next) contiguous range of dirty cards (no further than right end of cluster),
   //          skipping all clean cards
-  //       2. For the memory range corresponding to the cards scan objects, clearing cards that don't have
+  //       2. [Done] For the memory range corresponding to the cards scan objects, clearing cards that don't have
   //          intergenerational pointers
   //       3. Remember the first object in the current range (which will limit the right end of the next dirty range)
 
@@ -519,7 +519,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   }
   assert(start_addr <= end_addr, "Empty region?");
   size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words() ;
-  size_t end_card_index = start_card_index + whole_cards;
+  size_t end_card_index = start_card_index + whole_cards - 1;
   log_info(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " eor = " INTPTR_FORMAT
                        " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
                        worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
@@ -548,21 +548,33 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       const size_t dirty_r = cur;    // record right end of dirty range
       ctbm[cur] = CardTable::clean_card_val();
       while (--cur >= start_card_index && ctbm[cur] == CardTable::dirty_card_val()) {
-        // walk back over contiguous dirty cards, clearing them
-        ctbm[cur] = CardTable::clean_card_val();
+        // TODO: walk back over contiguous dirty cards, clearing them
+        // ctbm[cur] = CardTable::clean_card_val();
       }
       const size_t dirty_l = cur + 1;   // record left end of dirty range
+      assert(dirty_r >= dirty_l, "Error");
       // Record alternations, dirty run length, and dirty card count
       NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
-      assert(dirty_r >= dirty_l, "Error");
       // Find first object that starts this range, consulting previous card's last object
-      const size_t offset = _scc->get_last_start(cur - 1);
-      HeapWord* p = _rs->addr_for_card_index(cur) + offset;
+      // TODO: remember the first object of the last dirty range, so as not to
+      // scan it again.
+      size_t offset;
+      HeapWord* p;
+      oop obj;
       HeapWord* left = _rs->addr_for_card_index(dirty_l);
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      oop obj = cast_to_oop(p);
-      assert(p < left, "obj should start before dirty_l");
-      if (p + obj->size() == left) {
+      if (_scc->has_object(dirty_l - 1)) {
+        offset = _scc->get_last_start(dirty_l - 1);
+        p = _rs->addr_for_card_index(dirty_l - 1) + offset;
+        assert(p < left, "obj should start before dirty_l");
+        obj = cast_to_oop(p);
+        if (p + obj->size() == left) {
+          p = left;
+          obj = cast_to_oop(p);
+        }
+      } else {
+        assert(_scc->has_object(dirty_l), "Error");
+        assert(_scc->get_first_start(dirty_l) == 0, "Error");
         p = left;
         obj = cast_to_oop(p);
       }
@@ -586,8 +598,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       assert(ctbm[cur] == CardTable::clean_card_val(), "Error");
       // walk back over contiguous clean cards
       size_t i = 0;
-      while (--cur >= start_card_index && ctbm[cur] == CardTable::clean_card_val())
+      while (--cur >= start_card_index && ctbm[cur] == CardTable::clean_card_val()) {
         NOT_PRODUCT(i++);
+      }
       // Record alternations, clean run length, and clean card count
       NOT_PRODUCT(stats.record_clean_run(i);)
     }
