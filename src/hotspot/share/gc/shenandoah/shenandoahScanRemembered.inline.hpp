@@ -275,30 +275,39 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
 // Given a card_index, return the starting address of the first block in the heap
 // that straddles into this card. If this card is co-initial with an object, then
 // this would return the starting address of the heap that this card covers.
+// TODO: collect some stats for the size of walks backward over cards and then
+// forward to appropriate card.
 template<typename RememberedSet>
 HeapWord*
 ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
-  // TODO: (ysr) this doesn't consider the case of a card being
-  // the first in a region
-  HeapWord* p = nullptr;
+
   HeapWord* left = _rs->addr_for_card_index(card_index);
-  if (starts_object(card_index - 1)) {
-    // left neighbor has an object
-    size_t offset = get_last_start(card_index - 1);
-    // can avoid call via card size arithmetic below instead
-    p = _rs->addr_for_card_index(card_index - 1) + offset;
-    assert(p < left, "obj should start before left");
-    oop obj = cast_to_oop(p);
-    // TODO: This might need to be a walk up to this card, so a loop.
-    if (p + obj->size() == left) {
-      p = left;
-    }
-  } else if (starts_object(card_index) && get_first_start(card_index) == 0) {
-    // this card contains a co-initial object
+  if (starts_object(card_index) && get_first_start(card_index) == 0) {
+    // This card contains a co-initial object. Covers the case
+    // of a card being the first in a region.
+    return left;
+  }
+
+  HeapWord* p = nullptr;
+  oop obj = cast_to_oop(p);
+  // Walk backwards over the cards.
+  size_t cur_index = card_index;
+  while (--cur_index > 0 && !starts_object(cur_index));
+  // cur_index should have an object:
+  // we should not have walked past the left end of this region;
+  // (TODO) perhaps we can assert that.
+  assert(starts_object(cur_index), "Walking off the left end of the cliff");
+  size_t offset = get_last_start(cur_index);
+  // can avoid call via card size arithmetic below instead
+  p = _rs->addr_for_card_index(cur_index) + offset;
+  assert(p < left, "obj should start before left");
+  obj = cast_to_oop(p);
+  while (p + obj->size() < left) {
+    p += obj->size();
+  }
+  assert(p < left && (p + obj->size() >= left), "Error");
+  if (p + obj->size() == left) {
     p = left;
-  } else {
-    // walk backwards to find start of object into this card
-    guarantee(false, "NYI");
   }
   return p;
 }
