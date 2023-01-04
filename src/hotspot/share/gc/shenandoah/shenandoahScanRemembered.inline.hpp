@@ -272,6 +272,37 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
   return object_starts[card_index].offsets.last;
 }
 
+// Given a card_index, return the starting address of the first block in the heap
+// that straddles into this card. If this card is co-initial with an object, then
+// this would return the starting address of the heap that this card covers.
+template<typename RememberedSet>
+HeapWord*
+ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
+  // TODO: (ysr) this doesn't consider the case of a card being
+  // the first in a region
+  HeapWord* p = nullptr;
+  HeapWord* left = _rs->addr_for_card_index(card_index);
+  if (starts_object(card_index - 1)) {
+    // left neighbor has an object
+    size_t offset = get_last_start(card_index - 1);
+    // can avoid call via card size arithmetic below instead
+    p = _rs->addr_for_card_index(card_index - 1) + offset;
+    assert(p < left, "obj should start before left");
+    oop obj = cast_to_oop(p);
+    // TODO: This might need to be a walk up to this card, so a loop.
+    if (p + obj->size() == left) {
+      p = left;
+    }
+  } else if (starts_object(card_index) && get_first_start(card_index) == 0) {
+    // this card contains a co-initial object
+    p = left;
+  } else {
+    // walk backwards to find start of object into this card
+    guarantee(false, "NYI");
+  }
+  return p;
+}
+
 template<typename RememberedSet>
 inline size_t
 ShenandoahScanRemembered<RememberedSet>::last_valid_index() { return _rs->last_valid_index(); }
@@ -498,16 +529,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // collected (if dead), or relocated (if live), or if dead but not yet collected, we don't want to "revive" them
   // by marking them (when marking) or evacuating them (when updating references).
 
-  //    [Done] Convert first_cluster, count and end_of_range, into a start_addr & end_addr (at caller). This method just gets
-  //    a mem region that it works off of.
-  //
-  //    Starting at end of card range:
-  //       1. [Done] Find (next) contiguous range of dirty cards (no further than right end of cluster),
-  //          skipping all clean cards
-  //       2. [Done] For the memory range corresponding to the cards scan objects, clearing cards that don't have
-  //          intergenerational pointers
-  //       3. Remember the first object in the current range (which will limit the right end of the next dirty range)
-
   // start and end addresses of range of objects to be scanned, clipped to end_of_range
   size_t start_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
   HeapWord* start_addr = _rs->addr_for_card_index(start_card_index);
@@ -542,13 +563,24 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
   // Starting at the right end of the address range, walk backwards accumulating
   // and clearing a maximal dirty range of cards, then process those cards.
+  // TODO: (ysr) Remember the first object in the current range (which will limit
+  // the right end of the next dirty range)
+
   size_t cur = end_card_index;
   while (cur >= start_card_index) {
     if (ctbm[cur] == CardTable::dirty_card_val()) {
       const size_t dirty_r = cur;    // record right end of dirty range (inclusive)
       ctbm[cur] = CardTable::clean_card_val();
       while (--cur >= start_card_index && ctbm[cur] == CardTable::dirty_card_val()) {
-        // walk back over contiguous dirty cards, TODO: (ysr) clearing them
+        // walk back over contiguous dirty cards; there's currently no reason to
+        // clear them as:
+        // 1. for card-scanning to kick off marking, we clear the cards when making
+        //    the read-only copy that we use here. TODO: (ysr) check whether inline
+        //    cleaning here might potentially be better than taking a
+        //    single-threaded (?) snapshot as we do currently.
+        // 2. for updating refs, we don't clear them at all. TODO: (ysr) clearing
+        //    them and redirtying may be better, but need to think about implications
+        //    for mutator-initiated ref updates and if/how they might interact.
         // ctbm[cur] = CardTable::clean_card_val();
       }
       const size_t dirty_l = cur + 1;   // record left end of dirty range (inclusive)
@@ -558,32 +590,18 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       // Find first object that starts this range, consulting previous card's last object
       // TODO: remember the first object of the last dirty range, so as not to
       // scan it again.
-      size_t offset;
-      HeapWord* p;
-      oop obj;
+      // TODO: need a block_start() method on _scc
       // [left, right) is a right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      // TODO: (ysr) this doesn't consider the case of a card being
-      // the first in a region
-      if (_scc->starts_object(dirty_l - 1)) {
-        // left neighbor has an object
-        offset = _scc->get_last_start(dirty_l - 1);
-        p = _rs->addr_for_card_index(dirty_l - 1) + offset;
-        assert(p < left, "obj should start before dirty_l");
-        obj = cast_to_oop(p);
-        if (p + obj->size() == left) {
-          p = left;
-          obj = cast_to_oop(p);
-        }
-      } else {
-        // if the left neighbor doesn't have an object, the
-        // leftmost card in the range must begin with one.
-        assert(_scc->starts_object(dirty_l), "Error");
-        assert(_scc->get_first_start(dirty_l) == 0, "Error");
-        p = left;
-        obj = cast_to_oop(p);
-      }
+      // TODO: (ysr) Clip right to the first object scanned in last range.
+      HeapWord* p = _scc->block_start(dirty_l);
+      oop obj = cast_to_oop(p);
+      // TODO: (ysr) what if block isn't an object? Perhaps semantics of
+      // block_start() should be to return an object, which may be the
+      // first address on dirty_l (the argument to the method)?
+      // Ideally, the following post-conditions should get checked in the
+      // method, rather than by its clients.
       assert(p <= left, "obj should start at or before dirty_l");
       assert(p + obj->size() > left, "obj shouldn't end at or before dirty_l");
       size_t i = 0;

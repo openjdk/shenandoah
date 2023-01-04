@@ -674,6 +674,11 @@ public:
   // result is a don't care value.
   size_t get_last_start(size_t card_index);
 
+
+  // Given a card_index, return the starting address of the first block in the heap
+  // that straddles into the card. If the card is co-initial with an object, then
+  // this would return the starting address of the heap that this card covers.
+  HeapWord* block_start(size_t card_index);
 };
 
 // ShenandoahScanRemembered is a concrete class representing the
