@@ -98,20 +98,9 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   // Overwrite with non-zero (non-NULL) values only if necessary for allocation bookkeeping.
 
   bool allow_new_region = true;
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  size_t unaffiliated_old_regions = 999999999L;
-  size_t total_old_regions = 0;
-  size_t old_used = 0;
-#endif
   switch (req.affiliation()) {
     case ShenandoahRegionAffiliation::OLD_GENERATION:
       // Note: unsigned result from adjusted_unaffiliated_regions() will never be less than zero, but it may equal zero.
-#ifdef KELVIN_DEBUG
-      unaffiliated_old_regions = _heap->old_generation()->adjusted_unaffiliated_regions();
-      total_old_regions = _heap->old_generation()->adjusted_capacity() / ShenandoahHeapRegion::region_size_bytes();
-      old_used = _heap->old_generation()->used_regions();
-#endif
       if (_heap->old_generation()->adjusted_unaffiliated_regions() <= 0) {
         allow_new_region = false;
       }
@@ -181,39 +170,10 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
             ShenandoahHeapRegion* r = _heap->get_region(idx);
             if (can_allocate_from(r)) {
               flip_to_gc(r);
-#ifdef KELVIN_DEBUG
-              if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-                log_info(gc, ergo)("Trying to flip mutator region " SIZE_FORMAT ", adjusted_unaffiliated: " SIZE_FORMAT
-                                   ", previously adjusted unaffiliated: " SIZE_FORMAT " out of " SIZE_FORMAT ", used: " SIZE_FORMAT
-                                   ", old_regions: " SIZE_FORMAT ", old_regions + 1 span: " SIZE_FORMAT
-                                   ", old adjusted capacity: " SIZE_FORMAT,
-                                   r->index(), _heap->old_generation()->adjusted_unaffiliated_regions(),
-                                   unaffiliated_old_regions, total_old_regions, old_used, 
-                                   _heap->old_generation()->used_regions(),
-                                   (_heap->old_generation()->used_regions() + 1) * ShenandoahHeapRegion::region_size_bytes(),
-                                   _heap->old_generation()->adjusted_capacity());
-              }
-#endif
               HeapWord *result = try_allocate_in(r, req, in_new_region);
               if (result != NULL) {
-#ifdef KELVIN_DEBUG
-                if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-                  log_info(gc, ergo)("After successful flip, used_regions: " SIZE_FORMAT ", unaffiliated regions: " SIZE_FORMAT,
-                                     _heap->old_generation()->used_regions(),
-                                     _heap->old_generation()->adjusted_unaffiliated_regions());
-                }
-#endif
                 return result;
               }
-#ifdef KELVIN_DEBUG
-              else {
-                if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-                  log_info(gc, ergo)("After failed try_allocate_in, used_regions: " SIZE_FORMAT ", unaffiliated regions: " SIZE_FORMAT,
-                                     _heap->old_generation()->used_regions(),
-                                     _heap->old_generation()->adjusted_unaffiliated_regions());
-                }
-              }
-#endif
             }
           }
         }
@@ -237,18 +197,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       r->is_trash()) {
     return NULL;
   }
-
-#undef KELVIN_CODE_COVERAGE
-#ifdef KELVIN_CODE_COVERAGE
-  log_info(gc, ergo)("tai(size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ", affiliation: %s, region: " SIZE_FORMAT
-                     ", free: " SIZE_FORMAT ", affiliation: %s)",
-                     req.size(), req.is_lab_alloc()? req.min_size(): 0L,
-                     affiliation_name(req.affiliation()), r->index(), r->free() / HeapWordSize,
-                     affiliation_name(r->affiliation()));
-#endif
-
   try_recycle_trashed(r);
-
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
     r->set_affiliation(req.affiliation());
@@ -276,15 +225,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   }
 
   in_new_region = r->is_empty();
-
-#ifdef KELVIN_CODE_COVERAGE
-  if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-    log_info(gc, ergo)("tai changed region affiliation, req.type() is %s, %s",
-                       ShenandoahAllocRequest::alloc_type_to_string(req.type()),
-                       ShenandoahElasticTLAB? "TLABs are elastic": "TLABs are not elastic");
-  }
-#endif
-
   HeapWord* result = NULL;
   size_t size = req.size();
 
@@ -294,34 +234,16 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // Need to assure that plabs are aligned on multiple of card region.
       size_t free = r->free();
       size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
-#ifdef KELVIN_CODE_COVERAGE
-      // No message if free is aligned on card boundary
-      if (usable_free != free) {
-        log_info(gc, ergo)("PLAB of size: " SIZE_FORMAT ", min: " SIZE_FORMAT ", free: " SIZE_FORMAT ", usable: " SIZE_FORMAT,
-                           size, req.min_size(), free, usable_free);
-      }
-#endif
       if ((free != usable_free) && (free - usable_free < ShenandoahHeap::min_fill_size() * HeapWordSize)) {
         // We'll have to add another card's memory to the padding
         if (usable_free > CardTable::card_size()) {
           usable_free -= CardTable::card_size();
-#ifdef KELVIN_CODE_COVERAGE
-          log_info(gc, ergo)(" shrinking usable_free to " SIZE_FORMAT, usable_free);
-#endif
         } else {
-#ifdef KELVIN_CODE_COVERAGE
-          log_info(gc, ergo)(" asserting that usable_free " SIZE_FORMAT " equals zero", usable_free);
-#endif
           assert(usable_free == 0, "usable_free is a multiple of card_size and card_size > min_fill_size");
         }
       }
       free /= HeapWordSize;
       usable_free /= HeapWordSize;
-
-#ifdef KELVIN_CODE_COVERAGE
-      log_info(gc, ergo)(" tai, free words: " SIZE_FORMAT ", usable_free words: " SIZE_FORMAT ", size: " SIZE_FORMAT,
-                         free, usable_free, size);
-#endif
       size_t remnant = size % CardTable::card_size_in_words();
       if (remnant > 0) {
         // Since we have Elastic TLABs, align size up.  This is consistent with aligning min_size up.
@@ -338,21 +260,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         // Round up adjusted_min_size to a multiple of alignment size
         adjusted_min_size = adjusted_min_size - remnant + CardTable::card_size_in_words();
       }
-#ifdef KELVIN_CODE_COVERAGE
-      log_info(gc, ergo)(" tai, adjusted_min_size: " SIZE_FORMAT ", remnant: " SIZE_FORMAT, adjusted_min_size, remnant);
-#endif
-
       if (size >= adjusted_min_size) {
         result = r->allocate_aligned(size, req, CardTable::card_size());
         // TODO: Fix allocate_aligned() to provide min_size() allocation if insufficient memory for desired size.
         //       Then add: assert(result != nullptr, "Allocation cannot fail");
-
-#ifdef KELVIN_CODE_COVERAGE
-        log_info(gc, ergo)(" PLAB allocate_aligned original_size: " SIZE_FORMAT ", adjusted size: " SIZE_FORMAT
-                           ", adjusted_min_size: " SIZE_FORMAT " returns " PTR_FORMAT,
-                           req.size(), size, adjusted_min_size, p2i(result));
-#endif
-
         assert(r->top() <= r->end(), "Allocation cannot span end of region");
         // actual_size() will be set to size below.
         assert((result == nullptr) || (size % CardTable::card_size_in_words() == 0),
@@ -368,11 +279,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
           _heap->old_generation()->increase_used(padding);
           // For verification consistency, we need to report this padding to _heap
           _heap->increase_used(padding);
-#undef KELVIN_USAGE_ACCOUNTING
-#ifdef KELVIN_USAGE_ACCOUNTING
-          log_info(gc, ergo)("try_allocate_in() region " SIZE_FORMAT ", increasing used by " SIZE_FORMAT " for padding",
-                             r->index(), padding);
-#endif
         }
       }
       // Otherwise, leave result == NULL because the adjusted size is smaller than min size.
@@ -391,11 +297,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
     }
   } else if (req.is_lab_alloc() && req.type() == ShenandoahAllocRequest::_alloc_plab) {
-
-#ifdef KELVIN_CODE_COVERAGE
-    log_info(gc, ergo)("PLAB allocate is not Elastic");
-#endif
-
     size_t free = r->free();
     size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
     free /= HeapWordSize;
@@ -426,9 +327,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
     }
   } else {
-#ifdef KELVIN_CODE_COVERAGE
-    log_info(gc, ergo)("tai is not PLAB");
-#endif
     result = r->allocate(size, req);
   }
 
@@ -455,29 +353,15 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
       if (r->affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
         _heap->young_generation()->increase_used(size * HeapWordSize);
-#ifdef KELVIN_USAGE_ACCOUNTING
-        log_info(gc, ergo)("try_allocate_in() region " SIZE_FORMAT ", increasing young used by " SIZE_FORMAT " for allocation",
-                           r->index(), size * HeapWordSize);
-#endif
       } else {
         assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "GC Alloc was not YOUNG so must be OLD");
         assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
         _heap->old_generation()->increase_used(size * HeapWordSize);
         // for plabs, we'll sort the difference between evac and promotion usage when we retire the plab
-#ifdef KELVIN_USAGE_ACCOUNTING
-        log_info(gc, ergo)("try_allocate_in() region " SIZE_FORMAT ", increasing old-gen only used by " SIZE_FORMAT
-                           ", total used in region: " SIZE_FORMAT,
-                           r->index(), size * HeapWordSize, (r->top() - r->bottom()) * HeapWordSize);
-#endif
       }
     }
   }
   if (result == NULL || has_no_alloc_capacity(r)) {
-
-#ifdef KELVIN_CODE_COVERAGE
-    log_info(gc, ergo)("tai is retiring region " SIZE_FORMAT, r->index());
-#endif
-
     // Region cannot afford this or future allocations. Retire it.
     //
     // While this seems a bit harsh, especially in the case when this large allocation does not
