@@ -305,10 +305,13 @@ ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
   while (p + obj->size() < left) {
     p += obj->size();
   }
-  assert(p < left && (p + obj->size() >= left), "Error");
+  assert(p < left, "obj should start before left");
+  assert(p + obj->size() >= left, "obj shouldn't end before left");
   if (p + obj->size() == left) {
     p = left;
   }
+  assert(p <= left, "obj should start at or before left");
+  assert(p + obj->size() > left, "obj shouldn't end at or before left");
   return p;
 }
 
@@ -571,7 +574,8 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
   // Starting at the right end of the address range, walk backwards accumulating
-  // and clearing a maximal dirty range of cards, then process those cards.
+  // (see note below re clearing) a maximal dirty range of cards, then process
+  // those cards.
   // TODO: (ysr) Remember the first object in the current range (which will limit
   // the right end of the next dirty range)
 
@@ -599,20 +603,13 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       // Find first object that starts this range, consulting previous card's last object
       // TODO: remember the first object of the last dirty range, so as not to
       // scan it again.
-      // TODO: need a block_start() method on _scc
       // [left, right) is a right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
       // TODO: (ysr) Clip right to the first object scanned in last range.
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);
-      // TODO: (ysr) what if block isn't an object? Perhaps semantics of
-      // block_start() should be to return an object, which may be the
-      // first address on dirty_l (the argument to the method)?
-      // Ideally, the following post-conditions should get checked in the
-      // method, rather than by its clients.
-      assert(p <= left, "obj should start at or before dirty_l");
-      assert(p + obj->size() > left, "obj shouldn't end at or before dirty_l");
+      // TODO: (ysr) what if block isn't an object?
       size_t i = 0;
       while (p < right) {
         // walk right scanning objects
