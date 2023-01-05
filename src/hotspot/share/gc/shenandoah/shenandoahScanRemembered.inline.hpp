@@ -840,7 +840,7 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
 
   // All size computations measured in HeapWord
   size_t region_size_words = ShenandoahHeapRegion::region_size_words();
-  size_t group_region_index = _region_index[group_no];     // fetch the 
+  size_t group_region_index = _region_index[group_no];
   size_t group_region_offset = _group_offset[group_no];
 
   size_t index_within_group = (group_no == 0)? new_index: new_index - _group_entries[group_no - 1];
