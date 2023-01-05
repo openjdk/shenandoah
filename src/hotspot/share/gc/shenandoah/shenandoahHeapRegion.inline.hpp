@@ -43,30 +43,48 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
   HeapWord* obj = top();
   uintptr_t addr_as_int = (uintptr_t) obj;
 
-  size_t unalignment_bytes = addr_as_int % alignment_in_bytes;
-  assert(unalignment_bytes % HeapWordSize == 0, "top should be multiple of HeapWordSize");
+  // unalignment_bytes is the amount by which current top() exceeds the desired alignment point.  We subtract this amount
+  // from alignment_in_bytes to determine padding required to next alignment point.
 
+  size_t unalignment_bytes = addr_as_int % alignment_in_bytes;
+  size_t unalignment_words = unalignment_bytes / HeapWordSize;
+
+  HeapWord* aligned_obj = obj + unalignment_words;
   size_t pad_words = 0;
-  if (unalignment_bytes > 0) {
-    pad_words = (alignment_in_bytes - unalignment_bytes) / HeapWordSize;
+  if (pointer_delta(end(), aligned_obj) < size) {
+    size = pointer_delta(end(), aligned_obj);
+    // Force size to align on multiple of alignment_in_bytes
+    size_t byte_size = size * HeapWordSize;
+    size_t excess_bytes = byte_size % alignment_in_bytes;
+    if (excess_bytes > 0) {
+      size -= excess_bytes / HeapWordSize;
+    }
   }
-  if ((pad_words > 0) && (pad_words < ShenandoahHeap::min_fill_size())) {
-    pad_words += alignment_in_bytes / HeapWordSize;
+
+  assert(req.is_lab_alloc(), "allocate_aligned() only applies to LAB allocations");
+  size_t adjusted_min_size = req.min_size();
+  size_t remnant = adjusted_min_size % CardTable::card_size_in_words();
+  if (remnant > 0) {
+    // Round min-size up to nearest multiple of card size
+    adjusted_min_size = adjusted_min_size - remnant + CardTable::card_size_in_words();
   }
-  if (pointer_delta(end(), obj + pad_words) >= size) {
-    if (pad_words > 0) {
+
+  if (size >= adjusted_min_size) {
+    if (unalignment_words > 0) {
+      pad_words = (alignment_in_bytes / HeapWordSize) - unalignment_words;
+      if (pad_words < ShenandoahHeap::min_fill_size()) {
+        pad_words += (alignment_in_bytes / HeapWordSize);
+      }
       ShenandoahHeap::fill_with_object(obj, pad_words);
-      // register the filled pad object
       ShenandoahHeap::heap()->card_scan()->register_object(obj);
       obj += pad_words;
     }
 
-    // We don't need to register the PLAB.  Its content will be registered as objects are allocated within it and/or
-    // when the PLAB is retired.
     make_regular_allocation(req.affiliation());
     adjust_alloc_metadata(req.type(), size);
 
     HeapWord* new_top = obj + size;
+    assert(new_top <= end(), "PLAB cannot span end of heap region");
     set_top(new_top);
     assert(is_object_aligned(new_top), "new top breaks alignment: " PTR_FORMAT, p2i(new_top));
     assert(is_aligned(obj, alignment_in_bytes), "obj is not aligned: " PTR_FORMAT, p2i(obj));

@@ -262,16 +262,14 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
       if (size >= adjusted_min_size) {
         result = r->allocate_aligned(size, req, CardTable::card_size());
-        // TODO: Fix allocate_aligned() to provide min_size() allocation if insufficient memory for desired size.
-        //       Then add: assert(result != nullptr, "Allocation cannot fail");
+        assert(result != nullptr, "Allocation cannot fail");
         assert(r->top() <= r->end(), "Allocation cannot span end of region");
         // actual_size() will be set to size below.
         assert((result == nullptr) || (size % CardTable::card_size_in_words() == 0),
                "PLAB size must be multiple of card size");
         assert((result == nullptr) || (((uintptr_t) result) % CardTable::card_size_in_words() == 0),
                "PLAB start must align with card boundary");
-
-        if (result != nullptr && free > usable_free) {
+        if (free > usable_free) {
           // Account for the alignment padding
           size_t padding = (free - usable_free) * HeapWordSize;
           increase_used(padding);
