@@ -267,7 +267,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         assert(r->top() <= r->end(), "Allocation cannot span end of region");
         // actual_size() will be set to size below.
         assert((result == nullptr) || (size % CardTable::card_size_in_words() == 0),
-               "PLAB size must multiple of card size");
+               "PLAB size must be multiple of card size");
         assert((result == nullptr) || (((uintptr_t) result) % CardTable::card_size_in_words() == 0),
                "PLAB start must align with card boundary");
 

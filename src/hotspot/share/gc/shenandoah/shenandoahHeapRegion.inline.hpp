@@ -63,7 +63,6 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
 
     // We don't need to register the PLAB.  Its content will be registered as objects are allocated within it and/or
     // when the PLAB is retired.
-    ShenandoahHeap::heap()->card_scan()->register_object(obj);
     make_regular_allocation(req.affiliation());
     adjust_alloc_metadata(req.type(), size);
 
