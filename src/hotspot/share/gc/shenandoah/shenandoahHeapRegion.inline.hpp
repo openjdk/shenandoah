@@ -35,10 +35,16 @@
 // so that returned object is aligned on an address that is a multiple of alignment_in_words.  Requested
 // size is in words.  It is assumed that this->is_old().  A pad object is allocated, filled, and registered
 // if necessary to assure the new allocation is properly aligned.
-HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest req, size_t alignment_in_bytes) {
+HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest &req, size_t alignment_in_bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
+  assert(req.is_lab_alloc(), "allocate_aligned() only applies to LAB allocations");
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
   assert(is_old(), "aligned allocations are only taken from OLD regions to support PLABs");
+
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc, ergo)("aa(size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ")", size, req.min_size());
+#endif
 
   HeapWord* obj = top();
   uintptr_t addr_as_int = (uintptr_t) obj;
@@ -58,18 +64,16 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
     size_t excess_bytes = byte_size % alignment_in_bytes;
     if (excess_bytes > 0) {
       size -= excess_bytes / HeapWordSize;
+#ifdef KELVIN_DEBUG
+      log_info(gc, ergo)("aa() reduce size to: " SIZE_FORMAT, size);
+#endif
     }
   }
 
-  assert(req.is_lab_alloc(), "allocate_aligned() only applies to LAB allocations");
-  size_t adjusted_min_size = req.min_size();
-  size_t remnant = adjusted_min_size % CardTable::card_size_in_words();
-  if (remnant > 0) {
-    // Round min-size up to nearest multiple of card size
-    adjusted_min_size = adjusted_min_size - remnant + CardTable::card_size_in_words();
-  }
-
-  if (size >= adjusted_min_size) {
+  // Both originally requested size and adjusted size must be properly aligned
+  assert ((size * HeapWordSize) % alignment_in_bytes == 0, "Size must be multiple of alignment constraint");
+  if (size >= req.min_size()) {
+    // Even if req.min_size() is not a multiple of card size, we know that size is.
     if (unalignment_words > 0) {
       pad_words = (alignment_in_bytes / HeapWordSize) - unalignment_words;
       if (pad_words < ShenandoahHeap::min_fill_size()) {
@@ -86,11 +90,18 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
     HeapWord* new_top = obj + size;
     assert(new_top <= end(), "PLAB cannot span end of heap region");
     set_top(new_top);
+    req.set_actual_size(size);
+#ifdef KELVIN_DEBUG
+    log_info(gc, ergo)("aa() setting actual size: " SIZE_FORMAT, size);
+#endif
     assert(is_object_aligned(new_top), "new top breaks alignment: " PTR_FORMAT, p2i(new_top));
     assert(is_aligned(obj, alignment_in_bytes), "obj is not aligned: " PTR_FORMAT, p2i(obj));
 
     return obj;
   } else {
+#ifdef KELVIN_DEBUG
+    log_info(gc, ergo)("aa() not setting actual size, returning NULL");
+#endif
     return NULL;
   }
 }
