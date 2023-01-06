@@ -261,16 +261,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         adjusted_min_size = adjusted_min_size - remnant + CardTable::card_size_in_words();
       }
       if (size >= adjusted_min_size) {
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-        log_info(gc, ergo)("tai() size (" SIZE_FORMAT ") > adjusted_min_size (" SIZE_FORMAT ")",
-                           size, adjusted_min_size);
-#endif
         result = r->allocate_aligned(size, req, CardTable::card_size());
         assert(result != nullptr, "Allocation cannot fail");
-#ifdef KELVIN_DEBUG
-        log_info(gc, ergo)("aa() returned " PTR_FORMAT, p2i(result));
-#endif
         size = req.actual_size();
         assert(r->top() <= r->end(), "Allocation cannot span end of region");
         // actual_size() will be set to size below.

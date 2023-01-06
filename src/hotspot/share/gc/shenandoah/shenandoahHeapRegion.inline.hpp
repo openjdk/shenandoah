@@ -41,32 +41,38 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
   assert(is_old(), "aligned allocations are only taken from OLD regions to support PLABs");
 
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  log_info(gc, ergo)("aa(size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ")", size, req.min_size());
-#endif
-
-  HeapWord* obj = top();
-  uintptr_t addr_as_int = (uintptr_t) obj;
+  HeapWord* orig_top = top();
+  size_t addr_as_int = (uintptr_t) orig_top;
 
   // unalignment_bytes is the amount by which current top() exceeds the desired alignment point.  We subtract this amount
   // from alignment_in_bytes to determine padding required to next alignment point.
 
+  // top is HeapWord-aligned so unalignment_bytes is a multiple of HeapWordSize
   size_t unalignment_bytes = addr_as_int % alignment_in_bytes;
   size_t unalignment_words = unalignment_bytes / HeapWordSize;
 
-  HeapWord* aligned_obj = obj + unalignment_words;
-  size_t pad_words = 0;
+  size_t pad_words;
+  HeapWord* aligned_obj;
+  if (unalignment_words > 0) {
+    pad_words = (alignment_in_bytes / HeapWordSize) - unalignment_words;
+    if (pad_words < ShenandoahHeap::min_fill_size()) {
+      pad_words += (alignment_in_bytes / HeapWordSize);
+    }
+    aligned_obj = orig_top + pad_words;
+  } else {
+    pad_words = 0;
+    aligned_obj = orig_top;
+  }
+
   if (pointer_delta(end(), aligned_obj) < size) {
     size = pointer_delta(end(), aligned_obj);
     // Force size to align on multiple of alignment_in_bytes
     size_t byte_size = size * HeapWordSize;
     size_t excess_bytes = byte_size % alignment_in_bytes;
+    // Note: excess_bytes is a multiple of HeapWordSize because it is the difference of HeapWord-aligned end
+    //       and proposed HeapWord-aligned object address.
     if (excess_bytes > 0) {
       size -= excess_bytes / HeapWordSize;
-#ifdef KELVIN_DEBUG
-      log_info(gc, ergo)("aa() reduce size to: " SIZE_FORMAT, size);
-#endif
     }
   }
 
@@ -74,34 +80,22 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
   assert ((size * HeapWordSize) % alignment_in_bytes == 0, "Size must be multiple of alignment constraint");
   if (size >= req.min_size()) {
     // Even if req.min_size() is not a multiple of card size, we know that size is.
-    if (unalignment_words > 0) {
-      pad_words = (alignment_in_bytes / HeapWordSize) - unalignment_words;
-      if (pad_words < ShenandoahHeap::min_fill_size()) {
-        pad_words += (alignment_in_bytes / HeapWordSize);
-      }
-      ShenandoahHeap::fill_with_object(obj, pad_words);
-      ShenandoahHeap::heap()->card_scan()->register_object(obj);
-      obj += pad_words;
+    if (pad_words > 0) {
+      ShenandoahHeap::fill_with_object(orig_top, pad_words);
+      ShenandoahHeap::heap()->card_scan()->register_object(orig_top);
     }
 
     make_regular_allocation(req.affiliation());
     adjust_alloc_metadata(req.type(), size);
 
-    HeapWord* new_top = obj + size;
+    HeapWord* new_top = aligned_obj + size;
     assert(new_top <= end(), "PLAB cannot span end of heap region");
     set_top(new_top);
     req.set_actual_size(size);
-#ifdef KELVIN_DEBUG
-    log_info(gc, ergo)("aa() setting actual size: " SIZE_FORMAT, size);
-#endif
     assert(is_object_aligned(new_top), "new top breaks alignment: " PTR_FORMAT, p2i(new_top));
-    assert(is_aligned(obj, alignment_in_bytes), "obj is not aligned: " PTR_FORMAT, p2i(obj));
-
-    return obj;
+    assert(is_aligned(aligned_obj, alignment_in_bytes), "obj is not aligned: " PTR_FORMAT, p2i(aligned_obj));
+    return aligned_obj;
   } else {
-#ifdef KELVIN_DEBUG
-    log_info(gc, ergo)("aa() not setting actual size, returning NULL");
-#endif
     return NULL;
   }
 }
