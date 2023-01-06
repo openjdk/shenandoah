@@ -56,7 +56,7 @@ ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) {
   return _whole_heap_base + CardTable::card_size_in_words() * card_index;
 }
 
-inline uint8_t*
+inline CardValue*
 ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool write_table) {
   return write_table ?
            _card_table->write_byte_map()
@@ -65,25 +65,25 @@ ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool write_table)
 
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_write_card_dirty(size_t card_index) {
-  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+  CardValue* bp = &(_card_table->write_byte_map())[card_index];
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(size_t card_index) {
-  uint8_t *bp = &(_card_table->read_byte_map())[card_index];
+  CardValue* bp = &(_card_table->read_byte_map())[card_index];
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_dirty(size_t card_index) {
-  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+  CardValue* bp = &(_card_table->write_byte_map())[card_index];
   bp[0] = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(size_t card_index, size_t num_cards) {
-  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+  CardValue* bp = &(_card_table->write_byte_map())[card_index];
   while (num_cards-- > 0) {
     *bp++ = CardTable::dirty_card_val();
   }
@@ -91,13 +91,13 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(size_t card_index, si
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_clean(size_t card_index) {
-  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+  CardValue* bp = &(_card_table->write_byte_map())[card_index];
   bp[0] = CardTable::clean_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(size_t card_index, size_t num_cards) {
-  uint8_t *bp = &(_card_table->write_byte_map())[card_index];
+  CardValue* bp = &(_card_table->write_byte_map())[card_index];
   while (num_cards-- > 0) {
     *bp++ = CardTable::clean_card_val();
   }
@@ -106,21 +106,21 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(size_t card_index, si
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) {
   size_t index = card_index_for_addr(p);
-  uint8_t *bp = &(_card_table->read_byte_map())[index];
+  CardValue* bp = &(_card_table->read_byte_map())[index];
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_dirty(HeapWord *p) {
   size_t index = card_index_for_addr(p);
-  uint8_t *bp = &(_card_table->write_byte_map())[index];
+  CardValue* bp = &(_card_table->write_byte_map())[index];
   bp[0] = CardTable::dirty_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(HeapWord *p, size_t num_heap_words) {
-  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
-  uint8_t *end_bp = &(_card_table->write_byte_map_base())[uintptr_t(p + num_heap_words) >> _card_shift];
+  CardValue* bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
+  CardValue* end_bp = &(_card_table->write_byte_map_base())[uintptr_t(p + num_heap_words) >> _card_shift];
   // If (p + num_heap_words) is not aligned on card boundary, we also need to dirty last card.
   if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size() - 1)) {
     end_bp++;
@@ -133,20 +133,20 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_dirty(HeapWord *p, size_t n
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_card_as_clean(HeapWord *p) {
   size_t index = card_index_for_addr(p);
-  uint8_t *bp = &(_card_table->write_byte_map())[index];
+  CardValue* bp = &(_card_table->write_byte_map())[index];
   bp[0] = CardTable::clean_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_read_card_as_clean(size_t index) {
-  uint8_t *bp = &(_card_table->read_byte_map())[index];
+  CardValue* bp = &(_card_table->read_byte_map())[index];
   bp[0] = CardTable::clean_card_val();
 }
 
 inline void
 ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, size_t num_heap_words) {
-  uint8_t *bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
-  uint8_t *end_bp = &(_card_table->write_byte_map_base())[uintptr_t(p + num_heap_words) >> _card_shift];
+  CardValue* bp = &(_card_table->write_byte_map_base())[uintptr_t(p) >> _card_shift];
+  CardValue* end_bp = &(_card_table->write_byte_map_base())[uintptr_t(p + num_heap_words) >> _card_shift];
   // If (p + num_heap_words) is not aligned on card boundary, we also need to clean last card.
   if (((unsigned long long) (p + num_heap_words)) & (CardTable::card_size() - 1)) {
     end_bp++;
@@ -557,8 +557,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                        " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
                        worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
 
-  // TODO: Should use CardVal* instead of uint8_t* below
-  uint8_t* ctbm = _rs->get_card_table_byte_map(write_table);
+  CardValue* ctbm = _rs->get_card_table_byte_map(write_table);
 
   // TODO: (ysr) It makes sense to
   // place this on the closure so as to not penalize all closures where liveness isn't
@@ -568,9 +567,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   const ShenandoahHeap* heap = ShenandoahHeap::heap();
   const ShenandoahMarkingContext* ctx = heap->is_old_bitmap_stable() ?
                                         heap->marking_context() : nullptr;
-  // assert(ctx == nullptr ||
-  //       end_addr <= ctx->top_at_mark_start(heap->heap_region_containing(start_addr)),
-  //       "Range extends past TAMS");
+  assert(ctx == nullptr ||
+         end_addr <= ctx->top_at_mark_start(ShenandoahHeap::heap()->heap_region_containing(start_addr)),
+         "Range extends past TAMS");
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
   // Starting at the right end of the address range, walk backwards accumulating

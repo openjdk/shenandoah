@@ -192,6 +192,7 @@ class ShenandoahRegionIterator;
 class ShenandoahMarkingContext;
 
 class CardTable;
+typedef CardTable::CardValue CardValue;
 
 class ShenandoahDirectCardMarkRememberedSet: public CHeapObj<mtGC> {
 
@@ -201,7 +202,6 @@ private:
   //  CardTable::card_shift = 9;
   //  CardTable::card_size = 512;
   //  CardTable::card_size_in_words = 64;
-
   //  CardTable::clean_card_val()
   //  CardTable::dirty_card_val()
 
@@ -211,10 +211,11 @@ private:
   size_t _total_card_count;
   size_t _cluster_count;
   HeapWord *_whole_heap_base;   // Points to first HeapWord of data contained within heap memory
-  uint8_t *_byte_map;           // Points to first entry within the card table
-  uint8_t *_byte_map_base;      // Points to byte_map minus the bias computed from address of heap memory
+  CardValue* _byte_map;         // Points to first entry within the card table
+  CardValue* _byte_map_base;    // Points to byte_map minus the bias computed from address of heap memory
 
 public:
+
   // count is the number of cards represented by the card table.
   ShenandoahDirectCardMarkRememberedSet(ShenandoahCardTable *card_table, size_t total_card_count);
   ~ShenandoahDirectCardMarkRememberedSet();
@@ -224,7 +225,7 @@ public:
   size_t total_cards();
   size_t card_index_for_addr(HeapWord *p);
   HeapWord *addr_for_card_index(size_t card_index);
-  inline uint8_t* get_card_table_byte_map(bool write_table);
+  inline CardValue* get_card_table_byte_map(bool write_table);
   inline bool is_card_dirty(size_t card_index);
   inline bool is_write_card_dirty(size_t card_index);
   inline void mark_card_as_dirty(size_t card_index);
@@ -246,7 +247,7 @@ public:
   void merge_write_table(HeapWord* start, size_t word_count) {
     size_t card_index = card_index_for_addr(start);
     size_t num_cards = word_count / CardTable::card_size_in_words();
-    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardTable::CardValue));
+    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardValue));
     intptr_t* read_table_ptr = (intptr_t*) &(_card_table->read_byte_map())[card_index];
     intptr_t* write_table_ptr = (intptr_t*) &(_card_table->write_byte_map())[card_index];
     for (size_t i = 0; i < iterations; i++) {
@@ -262,7 +263,7 @@ public:
   void reset_remset(HeapWord* start, size_t word_count) {
     size_t card_index = card_index_for_addr(start);
     size_t num_cards = word_count / CardTable::card_size_in_words();
-    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardTable::CardValue));
+    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardValue));
     intptr_t* read_table_ptr = (intptr_t*) &(_card_table->read_byte_map())[card_index];
     intptr_t* write_table_ptr = (intptr_t*) &(_card_table->write_byte_map())[card_index];
     for (size_t i = 0; i < iterations; i++) {
