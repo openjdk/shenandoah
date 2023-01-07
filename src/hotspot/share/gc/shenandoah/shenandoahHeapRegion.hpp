@@ -428,6 +428,11 @@ public:
   size_t used() const           { return byte_size(bottom(), top()); }
   size_t free() const           { return byte_size(top(),    end()); }
 
+  // Does this region contain this address?
+  bool contains(HeapWord* p) const {
+    return (bottom() <= p) && (p < top());
+  }
+
   inline void adjust_alloc_metadata(ShenandoahAllocRequest::Type type, size_t);
   void reset_alloc_metadata();
   size_t get_shared_allocs() const;

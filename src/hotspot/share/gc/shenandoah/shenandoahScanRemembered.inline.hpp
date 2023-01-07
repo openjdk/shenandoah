@@ -290,9 +290,11 @@ ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
 
   HeapWord* p = nullptr;
   oop obj = cast_to_oop(p);
-  // Walk backwards over the cards.
   size_t cur_index = card_index;
-  while (--cur_index > 0 && !starts_object(cur_index));
+  // Walk backwards over the cards...
+  while (--cur_index > 0 && !starts_object(cur_index)) {
+   // ... to the one that starts the object
+  }
   // cur_index should have an object:
   // we should not have walked past the left end of this region;
   // (TODO) perhaps we can assert that.
@@ -301,6 +303,7 @@ ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
   // can avoid call via card size arithmetic below instead
   p = _rs->addr_for_card_index(cur_index) + offset;
   assert(p < left, "obj should start before left");
+  // TODO (ysr): is obj->size() always safe?
   obj = cast_to_oop(p);
   while (p + obj->size() < left) {
     p += obj->size();
@@ -567,9 +570,11 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   const ShenandoahHeap* heap = ShenandoahHeap::heap();
   const ShenandoahMarkingContext* ctx = heap->is_old_bitmap_stable() ?
                                         heap->marking_context() : nullptr;
-  assert(ctx == nullptr ||
-         end_addr <= ctx->top_at_mark_start(ShenandoahHeap::heap()->heap_region_containing(start_addr)),
-         "Range extends past TAMS");
+
+  // The region we will scan is the half-open interval [start_addr, end_addr).
+  const ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(start_addr);
+  assert(region->contains(end_addr - 1), "Slice shouldn't cross regions");
+  const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region));
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
   // Starting at the right end of the address range, walk backwards accumulating
@@ -585,7 +590,11 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       ctbm[cur] = CardTable::clean_card_val();
       while (--cur >= start_card_index && ctbm[cur] == CardTable::dirty_card_val()) {
         // walk back over contiguous dirty cards; there's currently no reason to
-        // clear them as:
+        // clean them:
+        //
+        // ctbm[cur] = CardTable::clean_card_val();
+        //
+        // because:
         // 1. for card-scanning to kick off marking, we clear the cards when making
         //    the read-only copy that we use here. TODO: (ysr) check whether inline
         //    cleaning here might potentially be better than taking a
@@ -593,7 +602,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         // 2. for updating refs, we don't clear them at all. TODO: (ysr) clearing
         //    them and redirtying may be better, but need to think about implications
         //    for mutator-initiated ref updates and if/how they might interact.
-        // ctbm[cur] = CardTable::clean_card_val();
       }
       const size_t dirty_l = cur + 1;   // record left end of dirty range (inclusive)
       assert(dirty_r >= dirty_l, "Error");
@@ -617,8 +625,13 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           obj->oop_iterate(cl);
           p += obj->size();
           NOT_PRODUCT(i++);
+        } else if (p > tams) {
+          // objects above tams aren't explicitly marked
+          assert(p < region->top(), "Shouldn't be walking above top");
+          obj->oop_iterate(cl);
+          p += obj->size();
         } else {
-          // object isn't marked, skip to next marked
+          // object isn't marked, we aren't over tams: skip to next marked
           p = ctx->get_next_marked_addr(p, right);
         }
       }

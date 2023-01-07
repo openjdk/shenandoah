@@ -112,7 +112,7 @@ inline void ShenandoahMarkingContext::reset_top_at_mark_start(ShenandoahHeapRegi
   _top_at_mark_starts_base[r->index()] = r->bottom();
 }
 
-inline HeapWord* ShenandoahMarkingContext::top_at_mark_start(ShenandoahHeapRegion* r) const {
+inline HeapWord* ShenandoahMarkingContext::top_at_mark_start(const ShenandoahHeapRegion* r) const {
   return _top_at_mark_starts_base[r->index()];
 }
 

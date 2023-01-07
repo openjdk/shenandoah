@@ -70,7 +70,7 @@ public:
   inline bool allocated_after_mark_start(oop obj) const;
   inline bool allocated_after_mark_start(HeapWord* addr) const;
 
-  inline HeapWord* top_at_mark_start(ShenandoahHeapRegion* r) const;
+  inline HeapWord* top_at_mark_start(const ShenandoahHeapRegion* r) const;
   inline void capture_top_at_mark_start(ShenandoahHeapRegion* r);
   inline void reset_top_at_mark_start(ShenandoahHeapRegion* r);
   void initialize_top_at_mark_start(ShenandoahHeapRegion* r);
