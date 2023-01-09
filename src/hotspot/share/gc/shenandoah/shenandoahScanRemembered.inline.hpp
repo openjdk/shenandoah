@@ -274,36 +274,47 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
 
 // Given a card_index, return the starting address of the first block in the heap
 // that straddles into this card. If this card is co-initial with an object, then
-// this would return the starting address of the heap that this card covers.
+// this would return the first address of the range that this card covers.
 // TODO: collect some stats for the size of walks backward over cards and then
-// forward to appropriate card.
+// forward to appropriate card. For larger objects, a logarithmic BOT might hasten
+// the backwards walk.
 template<typename RememberedSet>
 HeapWord*
 ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
 
   HeapWord* left = _rs->addr_for_card_index(card_index);
+
+#ifdef ASSERT
+  // For HumongousRegion:s it's more efficient to jump directly to the
+  // start region.
+  ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(left);
+  assert(!region->is_humongous(), "Use region->humongous_start_region() instead");
+#endif
   if (starts_object(card_index) && get_first_start(card_index) == 0) {
-    // This card contains a co-initial object. Covers the case
-    // of a card being the first in a region.
+    // This card contains a co-initial object; a fortiori, it covers
+    // also the case of a card being the first in a region.
     return left;
   }
 
   HeapWord* p = nullptr;
   oop obj = cast_to_oop(p);
   size_t cur_index = card_index;
+  assert(cur_index > 0, "Should have returned above");
   // Walk backwards over the cards...
   while (--cur_index > 0 && !starts_object(cur_index)) {
    // ... to the one that starts the object
   }
-  // cur_index should have an object:
-  // we should not have walked past the left end of this region;
-  // (TODO) perhaps we can assert that.
-  assert(starts_object(cur_index), "Walking off the left end of the cliff");
+  // cur_index should start an object: we should not have walked
+  // past the left end of the region.
+  assert((0 <= cur_index) && (cur_index <= card_index), "Error");
+  assert(region->bottom() <= _rs->addr_for_card_index(cur_index),
+         "Fell off the bottom of containing region");
+  assert(starts_object(cur_index), "Error");
   size_t offset = get_last_start(cur_index);
   // can avoid call via card size arithmetic below instead
   p = _rs->addr_for_card_index(cur_index) + offset;
   assert(p < left, "obj should start before left");
-  // TODO (ysr): is obj->size() always safe?
+  // TODO (ysr): Explain why obj->size() is always safe.
   obj = cast_to_oop(p);
   while (p + obj->size() < left) {
     p += obj->size();
@@ -613,25 +624,21 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       // [left, right) is a right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
+      assert(right < region->top(), "Error: examine code above");
+      const MemRegion mr(left, right);
       // TODO: (ysr) Clip right to the first object scanned in last range.
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);
-      // TODO: (ysr) what if block isn't an object?
       size_t i = 0;
       while (p < right) {
         // walk right scanning objects
-        if (ctx == nullptr || ctx->is_marked(obj)) {
-          // object is marked, so we scan its oops
-          obj->oop_iterate(cl);
-          p += obj->size();
+        if (ctx == nullptr || ctx->is_marked(obj) || p > tams) {
+          // We lack marking context, or object is marked, or we are
+          // above tams -- scan the object for inter-gen oops.
+          p += obj->oop_iterate_size(cl,mr);
           NOT_PRODUCT(i++);
-        } else if (p > tams) {
-          // objects above tams aren't explicitly marked
-          assert(p < region->top(), "Shouldn't be walking above top");
-          obj->oop_iterate(cl);
-          p += obj->size();
         } else {
-          // object isn't marked, we aren't over tams: skip to next marked
+          // object under tams isn't marked: skip to next marked
           p = ctx->get_next_marked_addr(p, right);
         }
       }
