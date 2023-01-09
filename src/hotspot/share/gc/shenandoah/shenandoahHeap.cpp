@@ -3172,27 +3172,49 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
                                           "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
         }
       } else if (!r->is_humongous()) {
+        if (ctx) {
+          // Require appropriate dirty card marks on marked objects between bottom and TAMS
+          HeapWord* tams = ctx->top_at_mark_start(r);
+          while (obj_addr < tams) {
+            oop obj = cast_to_oop(obj_addr);
+            if (ctx->is_marked(obj)) {
+              // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+              // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+              if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+                obj->oop_iterate(&check_interesting_pointers);
+              }
+              // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
+              if (!scanner->verify_registration(obj_addr, ctx)) {
+                ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+                                                 "Verify init-mark remembered set violation",
+                                                 "object not properly registered", __FILE__, __LINE__);
+              }
+              obj_addr += obj->size();
+            } else {
+              // This object is not live so we don't verify dirty cards contained therein.  If no more marked objects
+              // below TAMS, get_next_marked_addr() returns TAMS.
+              obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
+            }
+          }
+        }
+        // Require appropriate dirty card marks on all objects throughout the remainder of this heap region.
+        // At this point obj_addr either equals bottom() with ctx == nullptr, or obj_addr == TAMS
+        // Between obj_addr and top, every object is considered live.
         HeapWord* top = r->top();
         while (obj_addr < top) {
           oop obj = cast_to_oop(obj_addr);
-          // ctx->is_marked() returns true if mark bit set (TAMS not relevant during init mark)
-          if (!ctx || ctx->is_marked(obj)) {
-            // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-            // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-            if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
-              obj->oop_iterate(&check_interesting_pointers);
-            }
-            // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-            if (!scanner->verify_registration(obj_addr, ctx)) {
-              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
-                                            "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
-            }
-            obj_addr += obj->size();
-          } else {
-            // This object is not live so we don't verify dirty cards contained therein
-            assert(ctx->top_at_mark_start(r) == top, "Expect tams == top at start of mark.");
-            obj_addr = ctx->get_next_marked_addr(obj_addr, top);
+          // For regular objects (not object arrays), if the card holding the start of the object is dirty,
+          // we do not need to verify that cards spanning interesting pointers within this object are dirty.
+          if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+            obj->oop_iterate(&check_interesting_pointers);
           }
+          // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
+          if (!scanner->verify_registration(obj_addr, ctx)) {
+            ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+                                             "Verify init-mark remembered set violation",
+                                             "object not properly registered", __FILE__, __LINE__);
+          }
+          obj_addr += obj->size();
         }
       } // else, we ignore humongous continuation region
     } // else, this is not an OLD region so we ignore it
