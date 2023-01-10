@@ -539,7 +539,7 @@ inline void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t fir
 // Object arrays, on the other hand, are precisely dirtied and only the portions of the array on dirty cards need
 // to be scanned.
 //
-// Do not CANCEL within process_clusters.  It is assumed that if a worker thread accepts responsbility for processing
+// Do not CANCEL within process_clusters.  It is assumed that if a worker thread accepts responsibility for processing
 // a chunk of work, it will finish the work it starts.  Otherwise, the chunk of work will be lost in the transition to
 // degenerated execution, leading to dangling references.
 template<typename RememberedSet>
@@ -591,8 +591,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // Starting at the right end of the address range, walk backwards accumulating
   // (see note below re clearing) a maximal dirty range of cards, then process
   // those cards.
-  // TODO: (ysr) Remember the first object in the current range (which will limit
-  // the right end of the next dirty range)
 
   size_t cur = end_card_index;
   while (cur >= start_card_index) {
@@ -618,29 +616,55 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       assert(dirty_r >= dirty_l, "Error");
       // Record alternations, dirty run length, and dirty card count
       NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
-      // Find first object that starts this range, consulting previous card's last object
-      // TODO: remember the first object of the last dirty range, so as not to
-      // scan it again.
+      // Find first object that starts this range:
       // [left, right) is a right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      assert(right < region->top(), "Error: examine code above");
+      assert(right <= region->top(), "Error: examine code above");
+      // Clip right by end_addr
+      right = MIN2(right, end_addr);
       const MemRegion mr(left, right);
-      // TODO: (ysr) Clip right to the first object scanned in last range.
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);
+      // If this is a regular object that starts before left, skip and start with the
+      // next object. A non-array object straddling into this card range from the left
+      // will be scanned if/when we process the card in which it starts, provided that
+      // card is dirty.
+      if (p < left && !obj->is_objArray()) {
+        p += obj->size();
+      }
       size_t i = 0;
+      // TODO (ysr): The treatment of the last object below seems too complex.
+      // See how other generational GCs deal with this case in card scanning.
+      HeapWord* last_p = nullptr;
       while (p < right) {
         // walk right scanning objects
         if (ctx == nullptr || ctx->is_marked(obj) || p > tams) {
+          // remember the last object ptr we scanned, in case
+          // we need to complete a partial scan at the right end of mr.
+          last_p = p;
+          obj = cast_to_oop(p);
           // We lack marking context, or object is marked, or we are
           // above tams -- scan the object for inter-gen oops.
           p += obj->oop_iterate_size(cl,mr);
           NOT_PRODUCT(i++);
         } else {
+          // forget the last object we remembered
+          last_p = nullptr;
           // object under tams isn't marked: skip to next marked
           p = ctx->get_next_marked_addr(p, right);
         }
+      }
+      // Fix up a possible incomplete scan at right end of window
+      if (p > right && last_p != nullptr) {
+        // check if last_p suffix needs scanning
+        const oop last_obj = cast_to_oop(last_p);
+        if (!last_obj->is_objArray()) {
+          // fix up the suffix scan
+          const MemRegion last_mr(right, p);
+          last_obj->oop_iterate(cl, last_mr);
+        }
+        // the object was already counted above, so no need for i++
       }
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
     } else {
