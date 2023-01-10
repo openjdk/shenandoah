@@ -495,6 +495,7 @@ bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
     return true;
   }
 
+  log_info(gc)("Increased size of %s generation, re-evaluate trigger criteria", _generation->name());
   return should_start_gc();
 }
 
