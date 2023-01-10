@@ -620,9 +620,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       // [left, right) is a right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      assert(right <= region->top(), "Error: examine code above");
       // Clip right by end_addr
       right = MIN2(right, end_addr);
+      assert(right <= region->top(), "Error: examine code above");
       const MemRegion mr(left, right);
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);
