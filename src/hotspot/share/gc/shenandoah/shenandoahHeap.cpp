@@ -1,4 +1,4 @@
-/*
+*
  * Copyright (c) 2013, 2022, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -3190,7 +3190,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
             obj_addr += obj->size();
           } else {
             // This object is not live so we don't verify dirty cards contained therein
-            obj_addr = ctx->get_next_marked_addr(obj_addr, top);
+            obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
           }
         }
       } // else, we ignore humongous continuation region
