@@ -76,53 +76,20 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
   size_t rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
   size_t leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
   
-#undef KELVIN_PLAB
-#ifdef KELVIN_PLAB
-  size_t affiliates = 0;
-  size_t uncollecteds = 0;
-  size_t available = 0;
-  size_t largest_free = 0;
-#endif
-
   for (size_t c = rightmost + 1; c > leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
     if (r->affiliation() == affiliation && !r->is_humongous()) {
-#ifdef KELVIN_PLAB
-      affiliates++;
-#endif
       if (!r->is_cset() && !has_no_alloc_capacity(r)) {
-#ifdef KELVIN_PLAB
-        uncollecteds++;
-        available += r->free();
-        if (r->free() > largest_free) {
-          largest_free = r->free();
-        }
-#endif
         HeapWord* result = try_allocate_in(r, req, in_new_region);
         if (result != NULL) {
-#ifdef KELVIN_PLAB
-          stringStream ss;
-          ss.print("awoa allocated " SIZE_FORMAT " (target: " SIZE_FORMAT ", min: " SIZE_FORMAT ") in region: ",
-                   req.actual_size(), req.size(), req.min_size());
-          r->print_on(&ss);
-          log_info(gc, ergo)("%s", ss.freeze());
-#endif
           return result;
         }
       }
     }
   }
-
-#ifdef KELVIN_PLAB
-  log_info(gc, ergo)("awoa failed to allocate size: " SIZE_FORMAT ", min: " SIZE_FORMAT ", affiliates: " SIZE_FORMAT
-                     ", uncollecteds: " SIZE_FORMAT ", largest free: " SIZE_FORMAT ", available: " SIZE_FORMAT
-                     " in range " SIZE_FORMAT " to " SIZE_FORMAT,
-                     req.size(), req.min_size(), affiliates, uncollecteds, largest_free / HeapWordSize,
-                     available / HeapWordSize, leftmost, rightmost);
-#endif
-  return NULL;
+  return nullptr;
 }
 
 HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region) {
