@@ -75,7 +75,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
 
   size_t rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
   size_t leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
-  
+
   for (size_t c = rightmost + 1; c > leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
