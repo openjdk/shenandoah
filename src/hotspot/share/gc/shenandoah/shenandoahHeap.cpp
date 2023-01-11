@@ -3151,6 +3151,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
 
   while (iterator.has_next()) {
     ShenandoahHeapRegion* r = iterator.next();
+    HeapWord* tams = ctx? ctx->top_at_mark_start(r): nullptr;
     if (r == nullptr)
       break;
     if (r->is_old() && r->is_active()) {
@@ -3190,7 +3191,8 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
             obj_addr += obj->size();
           } else {
             // This object is not live so we don't verify dirty cards contained therein
-            obj_addr = ctx->get_next_marked_addr(obj_addr, top);
+            assert(tams != nullptr, "If object is not live, ctx and tams should be non-null");
+            obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
           }
         }
       } // else, we ignore humongous continuation region
