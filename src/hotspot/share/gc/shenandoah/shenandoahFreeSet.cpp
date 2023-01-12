@@ -65,6 +65,33 @@ bool ShenandoahFreeSet::is_collector_free(size_t idx) const {
   return _collector_free_bitmap.at(idx);
 }
 
+// This is a temporary solution to work around a shortcoming with the existing free set implementation.
+// TODO:
+//   Remove this function after restructing FreeSet representation.  A problem in the existing implementation is that old-gen
+//   regions are not considered to reside within the is_collector_free range.
+//
+HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region) {
+  ShenandoahRegionAffiliation affiliation = ShenandoahRegionAffiliation::OLD_GENERATION;
+
+  size_t rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
+  size_t leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
+
+  for (size_t c = rightmost + 1; c > leftmost; c--) {
+    // size_t is unsigned, need to dodge underflow when _leftmost = 0
+    size_t idx = c - 1;
+    ShenandoahHeapRegion* r = _heap->get_region(idx);
+    if (r->affiliation() == affiliation && !r->is_humongous()) {
+      if (!r->is_cset() && !has_no_alloc_capacity(r)) {
+        HeapWord* result = try_allocate_in(r, req, in_new_region);
+        if (result != NULL) {
+          return result;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
 HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region) {
   for (size_t c = _collector_rightmost + 1; c > _collector_leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
@@ -145,7 +172,14 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
     case ShenandoahAllocRequest::_alloc_shared_gc: {
       // First try to fit into a region that is already in use in the same generation.
-      HeapWord* result = allocate_with_affiliation(req.affiliation(), req, in_new_region);
+      HeapWord* result;
+      if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+        // TODO: this is a work around to address a deficiency in FreeSet representation.  A better solution fixes
+        // the FreeSet implementation to deal more efficiently with old-gen regions as being in the "collector free set"
+        result = allocate_with_old_affiliation(req, in_new_region);
+      } else {
+        result = allocate_with_affiliation(req.affiliation(), req, in_new_region);
+      }
       if (result != NULL) {
         return result;
       }
@@ -262,16 +296,15 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
       if (size >= adjusted_min_size) {
         result = r->allocate_aligned(size, req, CardTable::card_size());
-        // TODO: Fix allocate_aligned() to provide min_size() allocation if insufficient memory for desired size.
-        //       Then add: assert(result != nullptr, "Allocation cannot fail");
+        assert(result != nullptr, "Allocation cannot fail");
+        size = req.actual_size();
         assert(r->top() <= r->end(), "Allocation cannot span end of region");
         // actual_size() will be set to size below.
         assert((result == nullptr) || (size % CardTable::card_size_in_words() == 0),
                "PLAB size must be multiple of card size");
         assert((result == nullptr) || (((uintptr_t) result) % CardTable::card_size_in_words() == 0),
                "PLAB start must align with card boundary");
-
-        if (result != nullptr && free > usable_free) {
+        if (free > usable_free) {
           // Account for the alignment padding
           size_t padding = (free - usable_free) * HeapWordSize;
           increase_used(padding);
@@ -290,6 +323,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
       if (size >= req.min_size()) {
         result = r->allocate(size, req);
+        if (result != nullptr) {
+          // Record actual allocation size
+          req.set_actual_size(size);
+        }
         assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
       } else {
         log_info(gc, ergo)("Failed to shrink TLAB or GCLAB request (" SIZE_FORMAT ") in region " SIZE_FORMAT " to " SIZE_FORMAT
@@ -297,6 +334,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
     }
   } else if (req.is_lab_alloc() && req.type() == ShenandoahAllocRequest::_alloc_plab) {
+    // inelastic PLAB
     size_t free = r->free();
     size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
     free /= HeapWordSize;
@@ -312,6 +350,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of remembered set card size");
     if (size <= usable_free) {
       result = r->allocate_aligned(size, req, CardTable::card_size());
+      size = req.actual_size();
       assert(result != nullptr, "Allocation cannot fail");
       assert(r->top() <= r->end(), "Allocation cannot span end of region");
       assert(req.actual_size() % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
@@ -328,12 +367,13 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
   } else {
     result = r->allocate(size, req);
+    if (result != nullptr) {
+      // Record actual allocation size
+      req.set_actual_size(size);
+    }
   }
 
   if (result != NULL) {
-    // Record actual allocation size
-    req.set_actual_size(size);
-
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       // Mutator allocations always pull from young gen.
