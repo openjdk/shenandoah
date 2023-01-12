@@ -526,18 +526,10 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
   _scc->clear_objects_in_range(addr, length_in_words);
 }
 
-template<typename RememberedSet>
-template <typename ClosureType>
-inline void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range,
-                                                          ClosureType *cl, uint worker_id) {
-  process_clusters(first_cluster, count, end_of_range, cl, false, worker_id);
-}
-
 // Process all objects starting within count clusters beginning with first_cluster for which the start address is
 // less than end_of_range.  For any non-array object whose header lies on a dirty card, scan the entire object,
-// even if its end reaches beyond end_of_range -- TODO ysr When would that happen?
-// Object arrays, on the other hand, are precisely dirtied and only the portions of the array on dirty cards need
-// to be scanned.
+// even if its end reaches beyond end_of_range. Object arrays, on the other hand, are precisely dirtied and
+// only the portions of the array on dirty cards need to be scanned.
 //
 // Do not CANCEL within process_clusters.  It is assumed that if a worker thread accepts responsibility for processing
 // a chunk of work, it will finish the work it starts.  Otherwise, the chunk of work will be lost in the transition to
@@ -556,22 +548,19 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // by marking them (when marking) or evacuating them (when updating references).
 
   // start and end addresses of range of objects to be scanned, clipped to end_of_range
-  size_t start_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
+  const size_t start_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
   HeapWord* start_addr = _rs->addr_for_card_index(start_card_index);
-  HeapWord* end_addr = start_addr + (count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster
-                                           * CardTable::card_size_in_words());
-  // clip at end_of_range
-  if (end_addr > end_of_range) {
-    end_addr = end_of_range;
-  }
-  assert(start_addr <= end_addr, "Empty region?");
-  size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words() ;
-  size_t end_card_index = start_card_index + whole_cards - 1;
+  // clip at end_of_range (exclusive)
+  HeapWord* end_addr = MIN2(end_of_range, start_addr + (count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster
+                                                              * CardTable::card_size_in_words()));
+  assert(start_addr < end_addr, "Empty region?");
+  const size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words() ;
+  const size_t end_card_index = start_card_index + whole_cards - 1;
   log_info(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " eor = " INTPTR_FORMAT
                        " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
                        worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
 
-  CardValue* ctbm = _rs->get_card_table_byte_map(write_table);
+  const CardValue* const ctbm = _rs->get_card_table_byte_map(write_table);
 
   // TODO: (ysr) It makes sense to
   // place this on the closure so as to not penalize all closures where liveness isn't
@@ -585,51 +574,54 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // The region we will scan is the half-open interval [start_addr, end_addr).
   const ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(start_addr);
   assert(region->contains(end_addr - 1), "Slice shouldn't cross regions");
+
+  // This code may have implicit assumptions of examining only old gen regions.
+  assert(region->is_old(), "We only expect to be processing old regions");
   const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region));
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
   // Starting at the right end of the address range, walk backwards accumulating
-  // (see note below re clearing) a maximal dirty range of cards, then process
-  // those cards.
+  // a maximal dirty range of cards, then process those cards.
 
-  size_t cur = end_card_index;
-  while (cur >= start_card_index) {
-    if (ctbm[cur] == CardTable::dirty_card_val()) {
-      const size_t dirty_r = cur;    // record right end of dirty range (inclusive)
-      ctbm[cur] = CardTable::clean_card_val();
-      while (--cur >= start_card_index && ctbm[cur] == CardTable::dirty_card_val()) {
-        // walk back over contiguous dirty cards; there's currently no reason to
-        // clean them:
-        //
-        // ctbm[cur] = CardTable::clean_card_val();
-        //
-        // because:
-        // 1. for card-scanning to kick off marking, we clear the cards when making
-        //    the read-only copy that we use here. TODO: (ysr) check whether inline
-        //    cleaning here might potentially be better than taking a
-        //    single-threaded (?) snapshot as we do currently.
-        // 2. for updating refs, we don't clear them at all. TODO: (ysr) clearing
-        //    them and redirtying may be better, but need to think about implications
-        //    for mutator-initiated ref updates and if/how they might interact.
+  size_t cur_index = end_card_index;
+  while (cur_index >= start_card_index) {
+    if (ctbm[cur_index] == CardTable::dirty_card_val()) {
+      const size_t dirty_r = cur_index;    // record right end of dirty range (inclusive)
+      while (--cur_index >= start_card_index && ctbm[cur_index] == CardTable::dirty_card_val()) {
+        // walk back over contiguous dirty cards
       }
-      const size_t dirty_l = cur + 1;   // record left end of dirty range (inclusive)
+      // [dirty_l, dirty_r] is a "maximal" closed interval range of dirty card indices:
+      // it may not be maximal if we are using the write_table, because of concurrent
+      // mutations dirtying the card-table.
+      const size_t dirty_l = cur_index + 1;   // record left end of dirty range (inclusive)
+      // Check that we found a boundary
+      assert(ctbm[dirty_l] == CardTable::dirty_card_val(), "First card in range should be dirty");
+      assert(dirty_l == start_card_index || write_table
+             || ctbm[dirty_l - 1] == CardTable::clean_card_val(),
+             "Interval isn't maximal on the left");
       assert(dirty_r >= dirty_l, "Error");
+      assert(ctbm[dirty_r] == CardTable::dirty_card_val(), "Last card in range should be dirty");
+      assert(dirty_r == end_card_index || write_table
+             || ctbm[dirty_r + 1] == CardTable::clean_card_val(),
+             "Interval isn't maximal on the right");
       // Record alternations, dirty run length, and dirty card count
       NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
       // Find first object that starts this range:
-      // [left, right) is a right-open interval of dirty cards
+      // [left, right) is a maximal right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      // Clip right by end_addr
+      // Clip right to end_addr (still exclusive)
       right = MIN2(right, end_addr);
       assert(right <= region->top(), "Error: examine code above");
       const MemRegion mr(left, right);
       HeapWord* p = _scc->block_start(dirty_l);
+
+      // We now scan the objects in this range from left to right.
       oop obj = cast_to_oop(p);
       // If this is a regular object that starts before left, skip and start with the
       // next object. A non-array object straddling into this card range from the left
       // will be scanned if/when we process the card in which it starts, provided that
-      // card is dirty.
+      // card (dubbed `header card`) is dirty.
       if (p < left && !obj->is_objArray()) {
         p += obj->size();
       }
@@ -639,39 +631,41 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       HeapWord* last_p = nullptr;
       while (p < right) {
         // walk right scanning objects
-        if (ctx == nullptr || ctx->is_marked(obj) || p > tams) {
-          // remember the last object ptr we scanned, in case
-          // we need to complete a partial scan at the right end of mr.
+        if (ctx == nullptr || ctx->is_marked(obj)) {
+          // remember the last object ptr we scanned, in case we need to
+          // complete a partial scan at the right end of mr, see below
           last_p = p;
           obj = cast_to_oop(p);
-          // We lack marking context, or object is marked, or we are
-          // above tams -- scan the object for inter-gen oops.
+          // scan the object for inter-gen oops.
           p += obj->oop_iterate_size(cl,mr);
           NOT_PRODUCT(i++);
         } else {
           // forget the last object we remembered
           last_p = nullptr;
+          assert(p <= tams, "Everything above tams is implicitly marked in ctx");
           // object under tams isn't marked: skip to next marked
           p = ctx->get_next_marked_addr(p, right);
         }
       }
       // Fix up a possible incomplete scan at right end of window
       if (p > right && last_p != nullptr) {
+        assert(last_p < right, "Error");
         // check if last_p suffix needs scanning
         const oop last_obj = cast_to_oop(last_p);
         if (!last_obj->is_objArray()) {
           // fix up the suffix scan
           const MemRegion last_mr(right, p);
-          last_obj->oop_iterate(cl, last_mr);
+          last_obj->oop_iterate(cl);
+          assert(p == last_p + obj->size(), "Just being paranoid");
         }
         // the object was already counted above, so no need for i++
       }
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
     } else {
-      assert(ctbm[cur] == CardTable::clean_card_val(), "Error");
+      assert(ctbm[cur_index] == CardTable::clean_card_val(), "Error");
       // walk back over contiguous clean cards
       size_t i = 0;
-      while (--cur >= start_card_index && ctbm[cur] == CardTable::clean_card_val()) {
+      while (--cur_index >= start_card_index && ctbm[cur_index] == CardTable::clean_card_val()) {
         NOT_PRODUCT(i++);
       }
       // Record alternations, clean run length, and clean card count
@@ -741,14 +735,12 @@ ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegi
   // region->top() or region->get_update_watermark(). We avoid processing past end_of_range.
   // Objects that start between start_of_range and end_of_range, including humongous objects, will
   // be fully processed by process_clusters. In no case should we need to scan past end_of_range.
-  // TODO: ysr I don't think we should ever need to look beyond end_of_range -- when would an
-  // object go past end of range?)
   if (start_of_range < end_of_range) {
     if (region->is_humongous()) {
       ShenandoahHeapRegion* start_region = region->humongous_start_region();
       // TODO: ysr : This will be called multiple times with same start_region, but different start_cluster_no.
-      // Check that it does the right thing here, and doesn't do redundant work. Also see if thee call API/interface
-      // can be cleaned up from current clutter.
+      // Check that it does the right thing here, and doesn't do redundant work. Also see if the call API/interface
+      // can be simplified.
       process_humongous_clusters(start_region, start_cluster_no, clusters, end_of_range, cl, use_write_table);
     } else {
       // TODO: ysr The start_of_range calculated above is discarded and may be calculated again in process_clusters().
@@ -799,7 +791,8 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
         process_humongous_clusters(region->humongous_start_region(), start_cluster_no, num_clusters, end_of_range, cl,
                                    false /* is_write_table */);
       } else {
-        process_clusters(start_cluster_no, num_clusters, end_of_range, cl, false /* is_concurrent */, 0);
+        process_clusters(start_cluster_no, num_clusters, end_of_range, cl,
+                         false /* is_write_table */, 0 /* fake worker id */);
       }
     }
   }

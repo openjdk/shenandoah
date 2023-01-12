@@ -889,9 +889,6 @@ public:
   // All template expansions require methods to be defined in the inline.hpp file, but larger
   // such methods need not be declared as inline.
   template <typename ClosureType>
-  inline void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops, uint worker_id);
-
-  template <typename ClosureType>
   void process_clusters(size_t first_cluster, size_t count, HeapWord *end_of_range, ClosureType *oops,
                                bool use_write_table, uint worker_id);
 
