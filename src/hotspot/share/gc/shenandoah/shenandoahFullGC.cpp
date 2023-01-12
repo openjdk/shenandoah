@@ -179,6 +179,14 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
     log_info(gc, ergo)("At end of Full GC, old_available: " SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
                        byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
                        byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+
+    // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
+    // made valid by the time Full GC completes.
+    assert(heap->old_generation()->used_regions_size() <= heap->old_generation()->adjusted_capacity(),
+           "Old generation affiliated regions must be less than capacity");
+    assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->adjusted_capacity(),
+           "Young generation affiliated regions must be less than capacity");
+
   }
   if (metrics.is_good_progress()) {
     ShenandoahHeap::heap()->notify_gc_progress();
