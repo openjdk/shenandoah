@@ -57,8 +57,8 @@ ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) {
 }
 
 inline CardValue*
-ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool write_table) {
-  return write_table ?
+ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool use_write_table) {
+  return use_write_table ?
            _card_table->write_byte_map()
            : _card_table->read_byte_map();
 }
@@ -537,7 +537,7 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
 template<typename RememberedSet>
 template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord* end_of_range,
-                                                               ClosureType* cl, bool write_table, uint worker_id) {
+                                                               ClosureType* cl, bool use_write_table, uint worker_id) {
 
   // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
   // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
@@ -554,13 +554,14 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   HeapWord* end_addr = MIN2(end_of_range, start_addr + (count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster
                                                               * CardTable::card_size_in_words()));
   assert(start_addr < end_addr, "Empty region?");
+
   const size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words() ;
   const size_t end_card_index = start_card_index + whole_cards - 1;
-  log_info(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " eor = " INTPTR_FORMAT
-                       " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
-                       worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
+  log_debug(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " eor = " INTPTR_FORMAT
+                        " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
+                        worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
 
-  const CardValue* const ctbm = _rs->get_card_table_byte_map(write_table);
+  const CardValue* const ctbm = _rs->get_card_table_byte_map(use_write_table);
 
   // TODO: (ysr) It makes sense to
   // place this on the closure so as to not penalize all closures where liveness isn't
@@ -596,12 +597,12 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       const size_t dirty_l = cur_index + 1;   // record left end of dirty range (inclusive)
       // Check that we found a boundary
       assert(ctbm[dirty_l] == CardTable::dirty_card_val(), "First card in range should be dirty");
-      assert(dirty_l == start_card_index || write_table
+      assert(dirty_l == start_card_index || use_write_table
              || ctbm[dirty_l - 1] == CardTable::clean_card_val(),
              "Interval isn't maximal on the left");
       assert(dirty_r >= dirty_l, "Error");
       assert(ctbm[dirty_r] == CardTable::dirty_card_val(), "Last card in range should be dirty");
-      assert(dirty_r == end_card_index || write_table
+      assert(dirty_r == end_card_index || use_write_table
              || ctbm[dirty_r + 1] == CardTable::clean_card_val(),
              "Interval isn't maximal on the right");
       // Record alternations, dirty run length, and dirty card count
@@ -618,13 +619,11 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 
       // We now scan the objects in this range from left to right.
       oop obj = cast_to_oop(p);
-      // If this is a regular object that starts before left, skip and start with the
-      // next object. A non-array object straddling into this card range from the left
-      // will be scanned if/when we process the card in which it starts, provided that
-      // card (dubbed `header card`) is dirty.
-      if (p < left && !obj->is_objArray()) {
-        p += obj->size();
-      }
+      // The interpreter dirties non-array objects imprecisely (i.e. always the head),
+      // but the compiler precisely dirties them. Thus, we should always do the body of
+      // any object that straddles into this dirty card range from the left.
+      // TODO (ysr): remember the dirty_l here so as to right-clip an
+      // imprecise scan for the next dirty card range to our left.
       size_t i = 0;
       // TODO (ysr): The treatment of the last object below seems too complex.
       // See how other generational GCs deal with this case in card scanning.
@@ -637,7 +636,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           last_p = p;
           obj = cast_to_oop(p);
           // scan the object for inter-gen oops.
-          p += obj->oop_iterate_size(cl,mr);
+          p += obj->oop_iterate_size(cl, mr);
           NOT_PRODUCT(i++);
         } else {
           // forget the last object we remembered
@@ -648,15 +647,23 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         }
       }
       // Fix up a possible incomplete scan at right end of window
+      // by scanning the non-objArray suffix that wasn't done.
       if (p > right && last_p != nullptr) {
         assert(last_p < right, "Error");
         // check if last_p suffix needs scanning
         const oop last_obj = cast_to_oop(last_p);
         if (!last_obj->is_objArray()) {
-          // fix up the suffix scan
+          // fix up the suffix scan, for an imprecise mark by the interpreter,
+          // (TODO) clipping it by what we may already have done, or by the end
+          // of our range.
           const MemRegion last_mr(right, p);
           last_obj->oop_iterate(cl);
           assert(p == last_p + obj->size(), "Just being paranoid");
+          log_debug(gc, remset)("Fixed up suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+                                p2i(last_mr.start()), p2i(last_mr.end()));
+        } else {
+          log_debug(gc, remset)("Skipped array suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+                                p2i(right), p2i(p));
         }
         // the object was already counted above, so no need for i++
       }
@@ -680,7 +687,7 @@ template<typename RememberedSet>
 template <typename ClosureType>
 inline void
 ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHeapRegion* r, size_t first_cluster, size_t count,
-                                                                    HeapWord *end_of_range, ClosureType *cl, bool write_table) {
+                                                                    HeapWord *end_of_range, ClosureType *cl, bool use_write_table) {
   ShenandoahHeapRegion* start_region = r->humongous_start_region();
   HeapWord* p = start_region->bottom();
   oop obj = cast_to_oop(p);
@@ -691,7 +698,7 @@ ShenandoahScanRemembered<RememberedSet>::process_humongous_clusters(ShenandoahHe
   size_t first_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
   HeapWord* first_cluster_addr = _rs->addr_for_card_index(first_card_index);
   size_t spanned_words = count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster * CardTable::card_size_in_words();
-  start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, write_table);
+  start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, use_write_table);
 }
 
 
@@ -702,6 +709,9 @@ inline void
 ShenandoahScanRemembered<RememberedSet>::process_region_slice(ShenandoahHeapRegion *region, size_t start_offset, size_t clusters,
                                                               HeapWord *end_of_range, ClosureType *cl, bool use_write_table,
                                                               uint worker_id) {
+
+  // This is called only for young gen collection, when we scan old gen regions
+  assert(region->is_old(), "Expecting an old region");
   HeapWord *start_of_range = region->bottom() + start_offset;
   size_t start_cluster_no = cluster_for_addr(start_of_range);
   assert(addr_for_cluster(start_cluster_no) == start_of_range, "process_region_slice range must align on cluster boundary");
@@ -789,10 +799,10 @@ void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
       // Remembered set scanner
       if (region->is_humongous()) {
         process_humongous_clusters(region->humongous_start_region(), start_cluster_no, num_clusters, end_of_range, cl,
-                                   false /* is_write_table */);
+                                   false /* use_write_table */);
       } else {
         process_clusters(start_cluster_no, num_clusters, end_of_range, cl,
-                         false /* is_write_table */, 0 /* fake worker id */);
+                         false /* use_write_table */, 0 /* fake worker id */);
       }
     }
   }
