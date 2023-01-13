@@ -618,7 +618,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       HeapWord* p = _scc->block_start(dirty_l);
 
       // We now scan the objects in this range from left to right.
-      oop obj = cast_to_oop(p);
       // The interpreter dirties non-array objects imprecisely (i.e. always the head),
       // but the compiler precisely dirties them. Thus, we should always do the body of
       // any object that straddles into this dirty card range from the left.
@@ -627,14 +626,15 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       size_t i = 0;
       // TODO (ysr): The treatment of the last object below seems too complex.
       // See how other generational GCs deal with this case in card scanning.
+      oop obj;
       HeapWord* last_p = nullptr;
       while (p < right) {
+        obj = cast_to_oop(p);
         // walk right scanning objects
         if (ctx == nullptr || ctx->is_marked(obj)) {
           // remember the last object ptr we scanned, in case we need to
           // complete a partial scan at the right end of mr, see below
           last_p = p;
-          obj = cast_to_oop(p);
           // scan the object for inter-gen oops.
           p += obj->oop_iterate_size(cl, mr);
           NOT_PRODUCT(i++);
