@@ -582,17 +582,23 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
 
-  // In the case of imprecise marking, these help to reduce the
-  // cost of duplicate scans of large non-objArrays.
-  bool skip_last_object_next = false;
-  bool skip_last_object = false;
+  // In the case of imprecise marking, we remember the lest address
+  // scanned as we work backwards.
+  HeapWord* next_right = nullptr;
 
   // Starting at the right end of the address range, walk backwards accumulating
   // a maximal dirty range of cards, then process those cards.
   size_t cur_index = end_card_index;
   while (cur_index >= start_card_index) {
+    // Clip our right end by the earliest address we may already have scanned
+    if (next_right != nullptr) {
+      size_t right_index = _rs->card_index_for_addr(next_right);
+      cur_index = MIN2(cur_index, right_index);
+      end_addr  = MIN2(end_addr, next_right);
+      next_right = nullptr;
+    }
+    const size_t dirty_r = cur_index;  // record right end of range (inclusive)
     if (ctbm[cur_index] == CardTable::dirty_card_val()) {
-      const size_t dirty_r = cur_index;    // record right end of dirty range (inclusive)
       while (--cur_index >= start_card_index && ctbm[cur_index] == CardTable::dirty_card_val()) {
         // walk back over contiguous dirty cards
       }
@@ -607,9 +613,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
              "Interval isn't maximal on the left");
       assert(dirty_r >= dirty_l, "Error");
       assert(ctbm[dirty_r] == CardTable::dirty_card_val(), "Last card in range should be dirty");
-      assert(dirty_r == end_card_index || use_write_table
-             || ctbm[dirty_r + 1] == CardTable::clean_card_val(),
-             "Interval isn't maximal on the right");
       // Record alternations, dirty run length, and dirty card count
       NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
       // Find first object that starts this range:
@@ -636,14 +639,19 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // then it contains no cross-generational pointers
 #ifdef ASSERT
           const size_t h_index = _rs->card_index_for_addr(p);
-          if (ShenandoahVerify && ctbm[h_index] == CardTable::clean_card_val()) {
+          if (ShenandoahVerify && ctbm[h_index] == CardTable::clean_card_val()
+              && (ctx == nullptr || ctx->is_marked(obj))) {
             ShenandoahVerifyNoYoungRefsClosure no_young_refs_cl;
             obj->oop_iterate(&no_young_refs_cl);
           }
 #endif
           // We can skip scanning this object; it'll be scanned when we
           // examine the card in which it starts.
-          p += obj->size();
+          if (ctx == nullptr) {
+            p += obj->size();
+          } else {
+            ctx->get_next_marked_addr(p, right);
+          }
         } else {
           // The compiler and interpreter typically dirty the head of an object,
           // but GC may dirty the object precisely. In this case, we check the
@@ -652,15 +660,14 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // isn't dirty, we'll scan the dirty cards on which this object lies below.
           const size_t h_index = _rs->card_index_for_addr(p);
           if (ctbm[h_index] == CardTable::dirty_card_val()) {
-            // Scan the object in its entirety
-            p += obj->oop_iterate_size(cl);
-            // Remember h_index for the next trip around the outer loop, and
-            // remember to skip the last object of that dirty range.
-            assert(h_index <= cur_index, "Error");
-            cur_index = h_index;
-            skip_last_object_next = true;
-          } else {
-            skip_last_object_next = false;
+            next_right = p;   // remember the earliest address we scanned
+            if (ctx == nullptr || ctx->is_marked(obj)) {
+              // Scan the object in its entirety
+              p += obj->oop_iterate_size(cl);
+            } else {
+              // Skip over a dead object
+              p = ctx->get_next_marked_addr(p, right);
+            }
           }
         }
       }
@@ -694,7 +701,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         assert(last_p < right, "Error");
         // check if last_p suffix needs scanning
         const oop last_obj = cast_to_oop(last_p);
-        if (!last_obj->is_objArray() && !skip_last_object) {
+        if (!last_obj->is_objArray()) {
           // fix up the suffix scan, for an imprecise mark by the interpreter,
           // unless it was already taken care of.
           const MemRegion last_mr(right, p);
@@ -706,9 +713,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           log_debug(gc, remset)("Skipped suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(right), p2i(p));
         }
-        // the object was already counted above, so no need for i++
-        skip_last_object = skip_last_object_next;
-        skip_last_object_next = false;
       }
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
     } else {
