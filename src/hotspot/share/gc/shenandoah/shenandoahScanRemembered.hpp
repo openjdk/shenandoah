@@ -1060,4 +1060,17 @@ class ShenandoahScanRememberedTask : public WorkerTask {
   void work(uint worker_id);
   void do_work(uint worker_id);
 };
+
+// Verify that the oop doesn't point into the young generation
+class ShenandoahVerifyNoYoungRefsClosure: public BasicOopIterateClosure {
+  ShenandoahHeap* _heap;
+  template<class T> void work(T* p);
+
+ public:
+  ShenandoahVerifyNoYoungRefsClosure();
+
+  virtual void do_oop(narrowOop* p) { work(p); }
+  virtual void do_oop(oop* p)       { work(p); }
+};
+
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBERED_HPP

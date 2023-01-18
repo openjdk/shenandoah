@@ -581,9 +581,14 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region));
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
+
+  // In the case of imprecise marking, these help to reduce the
+  // cost of duplicate scans of large non-objArrays.
+  bool skip_last_object_next = false;
+  bool skip_last_object = false;
+
   // Starting at the right end of the address range, walk backwards accumulating
   // a maximal dirty range of cards, then process those cards.
-
   size_t cur_index = end_card_index;
   while (cur_index >= start_card_index) {
     if (ctbm[cur_index] == CardTable::dirty_card_val()) {
@@ -615,19 +620,56 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       right = MIN2(right, end_addr);
       assert(right <= region->top(), "Error: examine code above");
       const MemRegion mr(left, right);
-      HeapWord* p = _scc->block_start(dirty_l);
 
-      // We now scan the objects in this range from left to right.
-      // The interpreter dirties non-array objects imprecisely (i.e. always the head),
-      // but the compiler precisely dirties them. Thus, we should always do the body of
-      // any object that straddles into this dirty card range from the left.
-      // TODO (ysr): remember the dirty_l here so as to right-clip an
-      // imprecise scan for the next dirty card range to our left.
+      HeapWord* p = _scc->block_start(dirty_l);
+      oop obj = cast_to_oop(p);;
+
+#define ObjMarkImprecise false
+      if (p < left && !obj->is_objArray()) {
+        if (ObjMarkImprecise) {
+          // If we always dirty non-array objects imprecisely (i.e. only the head),
+          // then we'll scan the body of a non-array object when we process the
+          // (dirty) card that has its head, so we can skip over it.
+          log_debug(gc, remset)("Skipping non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+                                p2i(left), p2i(p + obj->size()));
+          // Check that if the card on which it starts is clean,
+          // then it contains no cross-generational pointers
+#ifdef ASSERT
+          const size_t h_index = _rs->card_index_for_addr(p);
+          if (ShenandoahVerify && ctbm[h_index] == CardTable::clean_card_val()) {
+            ShenandoahVerifyNoYoungRefsClosure no_young_refs_cl;
+            obj->oop_iterate(&no_young_refs_cl);
+          }
+#endif
+          // We can skip scanning this object; it'll be scanned when we
+          // examine the card in which it starts.
+          p += obj->size();
+        } else {
+          // The compiler and interpreter typically dirty the head of an object,
+          // but GC may dirty the object precisely. In this case, we check the
+          // head card of the object and either scan it in its entirety, assuming
+          // imprecise marking by the compiler/interpreter, or if the head card
+          // isn't dirty, we'll scan the dirty cards on which this object lies below.
+          const size_t h_index = _rs->card_index_for_addr(p);
+          if (ctbm[h_index] == CardTable::dirty_card_val()) {
+            // Scan the object in its entirety
+            p += obj->oop_iterate_size(cl);
+            // Remember h_index for the next trip around the outer loop, and
+            // remember to skip the last object of that dirty range.
+            assert(h_index <= cur_index, "Error");
+            cur_index = h_index;
+            skip_last_object_next = true;
+          } else {
+            skip_last_object_next = false;
+          }
+        }
+      }
+
       size_t i = 0;
       // TODO (ysr): The treatment of the last object below seems too complex.
       // See how other generational GCs deal with this case in card scanning.
-      oop obj;
       HeapWord* last_p = nullptr;
+
       while (p < right) {
         obj = cast_to_oop(p);
         // walk right scanning objects
@@ -652,20 +694,21 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         assert(last_p < right, "Error");
         // check if last_p suffix needs scanning
         const oop last_obj = cast_to_oop(last_p);
-        if (!last_obj->is_objArray()) {
+        if (!last_obj->is_objArray() && !skip_last_object) {
           // fix up the suffix scan, for an imprecise mark by the interpreter,
-          // (TODO) clipping it by what we may already have done, or by the end
-          // of our range.
+          // unless it was already taken care of.
           const MemRegion last_mr(right, p);
-          last_obj->oop_iterate(cl);
+          last_obj->oop_iterate(cl, last_mr);
           assert(p == last_p + obj->size(), "Just being paranoid");
-          log_debug(gc, remset)("Fixed up suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+          log_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(last_mr.start()), p2i(last_mr.end()));
         } else {
-          log_debug(gc, remset)("Skipped array suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+          log_debug(gc, remset)("Skipped suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(right), p2i(p));
         }
         // the object was already counted above, so no need for i++
+        skip_last_object = skip_last_object_next;
+        skip_last_object_next = false;
       }
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
     } else {
@@ -902,4 +945,14 @@ inline bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *as
   assignment->_chunk_size = group_chunk_size;
   return true;
 }
+
+template<class T>
+inline void ShenandoahVerifyNoYoungRefsClosure::work(T* p) {
+  T o = RawAccess<>::oop_load(p);
+  if (!CompressedOops::is_null(o)) {
+    oop obj = CompressedOops::decode_not_null(o);
+    assert(!_heap->is_in_young(obj), "Found a young ref");
+  }
+}
+
 #endif   // SHARE_GC_SHENANDOAH_SHENANDOAHSCANREMEMBEREDINLINE_HPP

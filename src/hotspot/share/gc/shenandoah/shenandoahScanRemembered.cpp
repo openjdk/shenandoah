@@ -316,3 +316,8 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
 void ShenandoahRegionChunkIterator::reset() {
   _index = 0;
 }
+
+ShenandoahVerifyNoYoungRefsClosure::ShenandoahVerifyNoYoungRefsClosure():
+  _heap(ShenandoahHeap::heap()) {
+  assert(_heap->mode()->is_generational(), "Don't use when non-generational");
+}
