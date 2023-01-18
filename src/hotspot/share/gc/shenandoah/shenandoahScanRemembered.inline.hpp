@@ -260,14 +260,14 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
 
 template<typename RememberedSet>
 inline size_t
-ShenandoahCardCluster<RememberedSet>::get_first_start(size_t card_index) {
+ShenandoahCardCluster<RememberedSet>::get_first_start(size_t card_index) const {
   assert(starts_object(card_index), "Can't get first start because no object starts here");
   return object_starts[card_index].offsets.first & FirstStartBits;
 }
 
 template<typename RememberedSet>
 inline size_t
-ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
+ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) const {
   assert(starts_object(card_index), "Can't get last start because no object starts here");
   return object_starts[card_index].offsets.last;
 }
@@ -280,7 +280,7 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) {
 // the backwards walk.
 template<typename RememberedSet>
 HeapWord*
-ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
+ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const {
 
   HeapWord* left = _rs->addr_for_card_index(card_index);
 
@@ -306,7 +306,7 @@ ShenandoahCardCluster<RememberedSet>::block_start(size_t card_index) {
   }
   // cur_index should start an object: we should not have walked
   // past the left end of the region.
-  assert((0 <= cur_index) && (cur_index <= card_index), "Error");
+  assert((0 < cur_index + 1) && (cur_index <= card_index), "Error");
   assert(region->bottom() <= _rs->addr_for_card_index(cur_index),
          "Fell off the bottom of containing region");
   assert(starts_object(cur_index), "Error");

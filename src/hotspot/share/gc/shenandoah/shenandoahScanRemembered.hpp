@@ -415,7 +415,7 @@ public:
   }
 
   // Returns true iff an object is known to start within the card memory associated with card card_index.
-  inline bool starts_object(size_t card_index) {
+  inline bool starts_object(size_t card_index) const {
     return (object_starts[card_index].offsets.first & ObjectStartsInCardRegion) != 0;
   }
 
@@ -668,18 +668,18 @@ public:
   // If starts_object(card_index), this returns the word offset within this card
   // memory at which the first object begins.  If !starts_object(card_index), the
   // result is a don't care value -- asserts in a debug build.
-  size_t get_first_start(size_t card_index);
+  size_t get_first_start(size_t card_index) const;
 
   // If starts_object(card_index), this returns the word offset within this card
   // memory at which the last object begins.  If !starts_object(card_index), the
   // result is a don't care value.
-  size_t get_last_start(size_t card_index);
+  size_t get_last_start(size_t card_index) const;
 
 
   // Given a card_index, return the starting address of the first block in the heap
   // that straddles into the card. If the card is co-initial with an object, then
   // this would return the starting address of the heap that this card covers.
-  HeapWord* block_start(size_t card_index);
+  HeapWord* block_start(size_t card_index) const;
 };
 
 // ShenandoahScanRemembered is a concrete class representing the
