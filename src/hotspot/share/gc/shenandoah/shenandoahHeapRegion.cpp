@@ -726,7 +726,9 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
   }
 
   // Generational Shenandoah needs this alignment for card tables.
-  max_heap_size = align_up(max_heap_size , CardTableRS::ct_max_alignment_constraint());
+  if (strcmp(ShenandoahGCMode, "generational") == 0) {
+    max_heap_size = align_up(max_heap_size , CardTableRS::ct_max_alignment_constraint());
+  }
 
   size_t region_size;
   if (FLAG_IS_DEFAULT(ShenandoahRegionSize)) {
