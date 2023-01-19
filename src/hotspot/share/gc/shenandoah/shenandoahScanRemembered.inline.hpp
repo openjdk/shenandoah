@@ -526,7 +526,7 @@ ShenandoahScanRemembered<RememberedSet>::mark_range_as_empty(HeapWord *addr, siz
   _scc->clear_objects_in_range(addr, length_in_words);
 }
 
-// Process all objects starting within count clusters beginning with first_cluster for which the start address is
+// Process all objects starting within count clusters beginning with first_cluster and for which the start address is
 // less than end_of_range.  For any non-array object whose header lies on a dirty card, scan the entire object,
 // even if its end reaches beyond end_of_range. Object arrays, on the other hand, are precisely dirtied and
 // only the portions of the array on dirty cards need to be scanned.
@@ -561,52 +561,71 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                         " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
                         worker_id, first_cluster, count, p2i(end_of_range), p2i(start_addr), p2i(end_addr), whole_cards);
 
+  // use_write_table states whether we are using the card table that is being
+  // marked by the mutators. If false, we are using a snapshot of the card table
+  // that is not subject to modifications. Even when this arg is true, and
+  // the card table is being actively marked, SATB marking ensures that we need not
+  // worry about cards marked after the processing here has passed them.
   const CardValue* const ctbm = _rs->get_card_table_byte_map(use_write_table);
 
-  // TODO: (ysr) It makes sense to
-  // place this on the closure so as to not penalize all closures where liveness isn't
-  // important. The assumption is that the stability of bit map tested here is a stable
-  // condition from the standpoint of the scanner at the point that the scanning closure
-  // is instantiated.
+  // If old gen evacuation is active, ctx will hold the completed marking of
+  // old generation objects. We'll only scan objects that are marked live by
+  // the old generation marking. These include objects allocated since the
+  // start of old generation marking (being those above TAMS).
   const ShenandoahHeap* heap = ShenandoahHeap::heap();
   const ShenandoahMarkingContext* ctx = heap->is_old_bitmap_stable() ?
                                         heap->marking_context() : nullptr;
 
-  // The region we will scan is the half-open interval [start_addr, end_addr).
+  // The region we will scan is the half-open interval [start_addr, end_addr),
+  // and lies entirely within a single region.
   const ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(start_addr);
   assert(region->contains(end_addr - 1), "Slice shouldn't cross regions");
 
   // This code may have implicit assumptions of examining only old gen regions.
   assert(region->is_old(), "We only expect to be processing old regions");
+  assert(!region->is_humongous(), "Humongous regions can be processed more efficiently;"
+                                  "see process_humongous_clusters()");
   const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region));
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
 
-  // In the case of imprecise marking, we remember the lest address
-  // scanned as we work backwards.
-  HeapWord* next_right = nullptr;
+  // In the case of imprecise marking, we remember the lowest address
+  // scanned in a range of dirty cards, as we work our way left from the
+  // highest end_addr. This serves as another upper bound on the address we will
+  // scan as we move left over each contiguous range of dirty cards.
+  HeapWord* upper_bound = nullptr;
 
   // Starting at the right end of the address range, walk backwards accumulating
   // a maximal dirty range of cards, then process those cards.
   size_t cur_index = end_card_index;
   while (cur_index >= start_card_index) {
-    // Clip our right end by the earliest address we may already have scanned
-    if (next_right != nullptr) {
-      size_t right_index = _rs->card_index_for_addr(next_right);
+
+    // We'll continue the search at the upper bound address identified by
+    // the last dirty range, if any
+    if (upper_bound != nullptr) {
+      size_t right_index = _rs->card_index_for_addr(upper_bound);
       cur_index = MIN2(cur_index, right_index);
-      end_addr  = MIN2(end_addr, next_right);
-      next_right = nullptr;
+      end_addr  = MIN2(end_addr, upper_bound);
+      upper_bound = nullptr;
+      if (end_addr >= start_addr) {
+        // We are done with our cluster
+        return;
+      }
     }
-    const size_t dirty_r = cur_index;  // record right end of range (inclusive)
+
     if (ctbm[cur_index] == CardTable::dirty_card_val()) {
+      // ==== BEGIN DIRTY card range processing ====
+
+      const size_t dirty_r = cur_index;  // record right end of dirty range (inclusive)
       while (--cur_index >= start_card_index && ctbm[cur_index] == CardTable::dirty_card_val()) {
-        // walk back over contiguous dirty cards
+        // walk back over contiguous dirty cards to find left end of dirty range (inclusive)
       }
       // [dirty_l, dirty_r] is a "maximal" closed interval range of dirty card indices:
       // it may not be maximal if we are using the write_table, because of concurrent
-      // mutations dirtying the card-table.
+      // mutations dirtying the card-table. It may also not be maximal if an upper bound
+      // was established by the scan of the previous chunk.
       const size_t dirty_l = cur_index + 1;   // record left end of dirty range (inclusive)
-      // Check that we found a boundary
+      // Check that we identified a boundary on our left
       assert(ctbm[dirty_l] == CardTable::dirty_card_val(), "First card in range should be dirty");
       assert(dirty_l == start_card_index || use_write_table
              || ctbm[dirty_l - 1] == CardTable::clean_card_val(),
@@ -615,52 +634,53 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       assert(ctbm[dirty_r] == CardTable::dirty_card_val(), "Last card in range should be dirty");
       // Record alternations, dirty run length, and dirty card count
       NOT_PRODUCT(stats.record_dirty_run(dirty_r - dirty_l + 1);)
+
       // Find first object that starts this range:
       // [left, right) is a maximal right-open interval of dirty cards
       HeapWord* left = _rs->addr_for_card_index(dirty_l);        // inclusive
       HeapWord* right = _rs->addr_for_card_index(dirty_r + 1);   // exclusive
-      // Clip right to end_addr (still exclusive)
+      // Clip right to end_addr established above (still exclusive)
       right = MIN2(right, end_addr);
-      assert(right <= region->top(), "Error: examine code above");
+      assert(right <= region->top() && end_addr <= region->top(), "Busted bounds");
       const MemRegion mr(left, right);
 
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);;
 
-#define ObjMarkImprecise false
+      // PREFIX: The object that straddles into this range of dirty cards
+      // from the left may be subject to special treatment unless
+      // it is an object array.
+#define ObjMarkImprecise false     // indicates that objects are _always_ imprecisely marked:
+                                   // this is not true today, as GC closures are precise, but
+                                   // compiler & interpreter are imprecise.
       if (p < left && !obj->is_objArray()) {
         if (ObjMarkImprecise) {
           // If we always dirty non-array objects imprecisely (i.e. only the head),
-          // then we'll scan the body of a non-array object when we process the
-          // (dirty) card that has its head, so we can skip over it.
-          log_debug(gc, remset)("Skipping non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+          // then we'll scan this object when we process the (potentially dirty)
+          // card in which it starts, so we can skip over it now.
+          log_debug(gc, remset)("Skipping non-objArray suffix in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(left), p2i(p + obj->size()));
-          // Check that if the card on which it starts is clean,
-          // then it contains no cross-generational pointers
-#ifdef ASSERT
-          const size_t h_index = _rs->card_index_for_addr(p);
-          if (ShenandoahVerify && ctbm[h_index] == CardTable::clean_card_val()
-              && (ctx == nullptr || ctx->is_marked(obj))) {
-            ShenandoahVerifyNoYoungRefsClosure no_young_refs_cl;
-            obj->oop_iterate(&no_young_refs_cl);
-          }
-#endif
-          // We can skip scanning this object; it'll be scanned when we
-          // examine the card in which it starts.
+          // It's tempting to assert that if the card on which it starts is clean,
+          // then it must contain no cross-generational pointers. However, that check
+          // would be too strong, because such mutations will be found by
+          // our SATB barrier processing, and need not be found here.
           if (ctx == nullptr) {
             p += obj->size();
           } else {
-            ctx->get_next_marked_addr(p, right);
+            p = ctx->get_next_marked_addr(p, right);
           }
+          assert(p > left, "Should have processed into the range");
         } else {
           // The compiler and interpreter typically dirty the head of an object,
-          // but GC may dirty the object precisely. In this case, we check the
-          // head card of the object and either scan it in its entirety, assuming
-          // imprecise marking by the compiler/interpreter, or if the head card
-          // isn't dirty, we'll scan the dirty cards on which this object lies below.
+          // but GC may dirty the object precisely. To handle this, we check the
+          // head card of the object here and, if dirty, scan the object in its
+          // entirety. If we find the head card clean, we'll scan only the
+          // portion of the object lying in the dirty card range below,
+          // assuming precise marking by GC closures.
           const size_t h_index = _rs->card_index_for_addr(p);
           if (ctbm[h_index] == CardTable::dirty_card_val()) {
-            next_right = p;   // remember the earliest address we scanned
+            // Scan or skip, and remember for next chunk
+            upper_bound = p;   // remember upper bound for next chunk
             if (ctx == nullptr || ctx->is_marked(obj)) {
               // Scan the object in its entirety
               p += obj->oop_iterate_size(cl);
@@ -668,45 +688,46 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
               // Skip over a dead object
               p = ctx->get_next_marked_addr(p, right);
             }
+            assert(p > left, "Should have processed into the range");
           }
         }
       }
 
       size_t i = 0;
-      // TODO (ysr): The treatment of the last object below seems too complex.
-      // See how other generational GCs deal with this case in card scanning.
       HeapWord* last_p = nullptr;
 
+      // BODY: Deal with (other) objects in this dirty card range
       while (p < right) {
         obj = cast_to_oop(p);
-        // walk right scanning objects
+        // walk right scanning eligible objects
         if (ctx == nullptr || ctx->is_marked(obj)) {
-          // remember the last object ptr we scanned, in case we need to
-          // complete a partial scan at the right end of mr, see below
+          // we need to remember the last object ptr we scanned, in case we need to
+          // complete a partial suffix scan after mr, see below
           last_p = p;
-          // scan the object for inter-gen oops.
+          // apply the closure to the oops in the portion of
+          // the object within mr.
           p += obj->oop_iterate_size(cl, mr);
           NOT_PRODUCT(i++);
         } else {
-          // forget the last object we remembered
+          // forget the last object pointer we remembered
           last_p = nullptr;
           assert(p <= tams, "Everything above tams is implicitly marked in ctx");
           // object under tams isn't marked: skip to next marked
           p = ctx->get_next_marked_addr(p, right);
         }
       }
-      // Fix up a possible incomplete scan at right end of window
-      // by scanning the non-objArray suffix that wasn't done.
+
+      // SUFFIX: Fix up a possible incomplete scan at right end of window
+      // by scanning the portion of a non-objArray that wasn't done.
       if (p > right && last_p != nullptr) {
         assert(last_p < right, "Error");
         // check if last_p suffix needs scanning
         const oop last_obj = cast_to_oop(last_p);
         if (!last_obj->is_objArray()) {
-          // fix up the suffix scan, for an imprecise mark by the interpreter,
-          // unless it was already taken care of.
+          // scan the remaining suffix of the object
           const MemRegion last_mr(right, p);
-          last_obj->oop_iterate(cl, last_mr);
           assert(p == last_p + obj->size(), "Just being paranoid");
+          last_obj->oop_iterate(cl, last_mr);
           log_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(last_mr.start()), p2i(last_mr.end()));
         } else {
@@ -715,7 +736,11 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         }
       }
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
+
+      // ==== END   DIRTY card range processing ====
     } else {
+      // ==== BEGIN CLEAN card range processing ====
+
       assert(ctbm[cur_index] == CardTable::clean_card_val(), "Error");
       // walk back over contiguous clean cards
       size_t i = 0;
@@ -724,6 +749,8 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       }
       // Record alternations, clean run length, and clean card count
       NOT_PRODUCT(stats.record_clean_run(i);)
+
+      // ==== END CLEAN card range processing ====
     }
   }
 }
