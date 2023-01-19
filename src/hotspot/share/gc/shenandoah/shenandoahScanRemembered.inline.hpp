@@ -555,7 +555,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                                                               * CardTable::card_size_in_words()));
   assert(start_addr < end_addr, "Empty region?");
 
-  const size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words() ;
+  const size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words();
   const size_t end_card_index = start_card_index + whole_cards - 1;
   log_debug(gc, remset)("Worker %u: cluster = " SIZE_FORMAT " count = " SIZE_FORMAT " eor = " INTPTR_FORMAT
                         " start_addr = " INTPTR_FORMAT " end_addr = " INTPTR_FORMAT " cards = " SIZE_FORMAT,
@@ -585,7 +585,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   assert(region->is_old(), "We only expect to be processing old regions");
   assert(!region->is_humongous(), "Humongous regions can be processed more efficiently;"
                                   "see process_humongous_clusters()");
-  const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region));
+  const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region)); // TODO: fix!
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
 
@@ -644,6 +644,8 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       assert(right <= region->top() && end_addr <= region->top(), "Busted bounds");
       const MemRegion mr(left, right);
 
+      // TODO: cache so as to not call block_start() repeatedly
+      // on a very large object.
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);;
 
@@ -685,7 +687,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
               // Scan the object in its entirety
               p += obj->oop_iterate_size(cl);
             } else {
-              // Skip over a dead object
+              // Skip over a dead object TODO: p should be above TAMS: fix!
               p = ctx->get_next_marked_addr(p, right);
             }
             assert(p > left, "Should have processed into the range");
@@ -712,10 +714,12 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // forget the last object pointer we remembered
           last_p = nullptr;
           assert(p <= tams, "Everything above tams is implicitly marked in ctx");
-          // object under tams isn't marked: skip to next marked
+          // object under tams isn't marked: skip to next marked : TODO: fix!! (TAMS)
           p = ctx->get_next_marked_addr(p, right);
         }
       }
+
+      // TODO: if an objArray then ony use mr, else just iterate over entire object.
 
       // SUFFIX: Fix up a possible incomplete scan at right end of window
       // by scanning the portion of a non-objArray that wasn't done.
