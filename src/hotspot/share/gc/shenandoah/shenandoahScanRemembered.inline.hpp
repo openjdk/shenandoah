@@ -314,18 +314,29 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   // can avoid call via card size arithmetic below instead
   p = _rs->addr_for_card_index(cur_index) + offset;
   assert(p < left, "obj should start before left");
-  // TODO (ysr): Explain why obj->size() is always safe.
+  // While it is safe to ask an object its size in the loop that
+  // follows, the loop should not be needed because:
+  // 1. we ask this question only for regions in the old generation
+  // 2. there is no direct allocation ever by mutators in old generation
+  //    regions. Only GC will ever allocate in old regions, and then
+  //    too only during promotion/evacuation phases.
+  // 3. only GC asks this question during phases when it is not concurrently
+  //    evacuating/promoting, viz. during concurrent root scanning (before
+  //    the evacuation phase) and during concurrent update refs (after the
+  //    evacuation phase) of young collections. This is never called
+  //    during old or global collections.
+  // 4. Every allocation under TAMS updates the object start array.
+  //    [TODO: Compare with the performance of a logarithmic BOT alternative,
+  //    e.g. as used by G1.]
   obj = cast_to_oop(p);
-  while (p + obj->size() < left) {
+#define WALK_FORWARD_IN_BLOCK_START false
+  while (WALK_FORWARD_IN_BLOCK_START && p + obj->size() < left) {
     p += obj->size();
   }
+#undef WALK_FORWARD_IN_BLOCK_START // false
+  // Recall that we already dealt with the co-initial object case above
   assert(p < left, "obj should start before left");
-  assert(p + obj->size() >= left, "obj shouldn't end before left");
-  if (p + obj->size() == left) {
-    p = left;
-  }
-  assert(p <= left, "obj should start at or before left");
-  assert(p + obj->size() > left, "obj shouldn't end at or before left");
+  assert(p + obj->size() > left, "obj should end after left");
   return p;
 }
 
@@ -585,7 +596,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   assert(region->is_old(), "We only expect to be processing old regions");
   assert(!region->is_humongous(), "Humongous regions can be processed more efficiently;"
                                   "see process_humongous_clusters()");
-  const HeapWord* tams = (ctx == nullptr ? region->end() : ctx->top_at_mark_start(region)); // TODO: fix!
+  // tams and ctx below are for old generation marking. As such, young gen roots must
+  // consider everything above tams, since it doesn't represent a TAMS for young gen's
+  // SATB marking.
+  const HeapWord* tams = (ctx == nullptr ? region->bottom() : ctx->top_at_mark_start(region));
 
   NOT_PRODUCT(ShenandoahCardStats stats(whole_cards, card_stats(worker_id));)
 
@@ -645,18 +659,19 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       const MemRegion mr(left, right);
 
       // TODO: cache so as to not call block_start() repeatedly
-      // on a very large object.
+      // on a very large object. Check: may be upper_bound below
+      // and its use above already takes care of this.
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);;
 
       // PREFIX: The object that straddles into this range of dirty cards
       // from the left may be subject to special treatment unless
       // it is an object array.
-#define ObjMarkImprecise false     // indicates that objects are _always_ imprecisely marked:
+#define OBJ_MARK_IMPRECISE false   // indicates that objects are _always_ imprecisely marked:
                                    // this is not true today, as GC closures are precise, but
                                    // compiler & interpreter are imprecise.
       if (p < left && !obj->is_objArray()) {
-        if (ObjMarkImprecise) {
+        if (OBJ_MARK_IMPRECISE) {
           // If we always dirty non-array objects imprecisely (i.e. only the head),
           // then we'll scan this object when we process the (potentially dirty)
           // card in which it starts, so we can skip over it now.
@@ -666,7 +681,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // then it must contain no cross-generational pointers. However, that check
           // would be too strong, because such mutations will be found by
           // our SATB barrier processing, and need not be found here.
-          if (ctx == nullptr) {
+          if (ctx == nullptr || p >= tams) {
             p += obj->size();
           } else {
             p = ctx->get_next_marked_addr(p, right);
@@ -687,8 +702,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
               // Scan the object in its entirety
               p += obj->oop_iterate_size(cl);
             } else {
-              // Skip over a dead object TODO: p should be above TAMS: fix!
-              p = ctx->get_next_marked_addr(p, right);
+              assert(p < tams, "Error 1 in ctx/marking/tams logic");
+              // Skip over any intermediate dead objects
+              p = ctx->get_next_marked_addr(p, tams);
+              assert(p <= tams, "Error 2 in ctx/marking/tams logic");
             }
             assert(p > left, "Should have processed into the range");
           }
@@ -713,13 +730,15 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         } else {
           // forget the last object pointer we remembered
           last_p = nullptr;
-          assert(p <= tams, "Everything above tams is implicitly marked in ctx");
-          // object under tams isn't marked: skip to next marked : TODO: fix!! (TAMS)
-          p = ctx->get_next_marked_addr(p, right);
+          assert(p < tams, "Tams and above are implicitly marked in ctx");
+          // object under tams isn't marked: skip to next live object
+          p = ctx->get_next_marked_addr(p, tams);
+          assert(p <= tams, "Error 3 in ctx/marking/tams logic");
         }
       }
 
-      // TODO: if an objArray then ony use mr, else just iterate over entire object.
+      // TODO: if an objArray then only use mr, else just iterate over entire object;
+      // that would avoid the special treatment of suffix below.
 
       // SUFFIX: Fix up a possible incomplete scan at right end of window
       // by scanning the portion of a non-objArray that wasn't done.
@@ -739,6 +758,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                                 p2i(right), p2i(p));
         }
       }
+#undef OBJ_MARK_IMPRECISE // false
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
 
       // ==== END   DIRTY card range processing ====
