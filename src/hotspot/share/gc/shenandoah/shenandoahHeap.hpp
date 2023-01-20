@@ -314,7 +314,10 @@ public:
     WEAK_ROOTS_BITPOS  = 4,
 
     // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5
+    OLD_MARKING_BITPOS = 5,
+
+    // The evacuation reserves for old-gen and young-gen are available
+    VALID_EVACUATION_RESERVE_QUANTITIES_BITPOS = 6
   };
 
   enum GCState {
@@ -324,7 +327,8 @@ public:
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
-    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
+    VALID_EVACUATION_RESERVE_QUANTITIES = 1 << VALID_EVACUATION_RESERVE_QUANTITIES_BITPOS
   };
 
 private:
@@ -382,15 +386,19 @@ private:
 
   bool _upgraded_to_full;
 
+  bool _has_evacuation_reserve_quantities;
+
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
 
 
 
 public:
+
   char gc_state() const;
   static address gc_state_addr();
 
+  void set_evacuation_reserve_quantities(bool is_valid);
   void set_concurrent_young_mark_in_progress(bool in_progress);
   void set_concurrent_old_mark_in_progress(bool in_progress);
   void set_evacuation_in_progress(bool in_progress);
@@ -406,6 +414,7 @@ public:
 
   inline bool is_stable() const;
   inline bool is_idle() const;
+  inline bool has_evacuation_reserve_quantities() const;
   inline bool is_concurrent_mark_in_progress() const;
   inline bool is_concurrent_young_mark_in_progress() const;
   inline bool is_concurrent_old_mark_in_progress() const;
