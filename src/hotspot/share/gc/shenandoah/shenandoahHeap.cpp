@@ -2234,6 +2234,10 @@ void ShenandoahHeap::set_gc_state_mask(uint mask, bool value) {
   set_gc_state_all_threads(_gc_state.raw_value());
 }
 
+void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
+  set_gc_state_mask(VALID_EVACUATION_RESERVE_QUANTITIES, is_valid);
+}
+
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   if (has_forwarded_objects()) {
     set_gc_state_mask(YOUNG_MARKING | UPDATEREFS, in_progress);

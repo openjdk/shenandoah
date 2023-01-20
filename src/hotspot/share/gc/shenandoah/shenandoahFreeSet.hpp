@@ -33,24 +33,36 @@ private:
   ShenandoahHeap* const _heap;
   CHeapBitMap _mutator_free_bitmap;
   CHeapBitMap _collector_free_bitmap;
+  // We keep the _old_collector regions separate from the young collector regions.  This allows us to pack the old regions
+  // further to the right than the young collector regions.  This is desirable because the old collector regions are recycled
+  // even less frequently than the young survivor regions.  In generational mode, the young survivor regions are typically
+  // recycled after tenure age GC passes.
+  CHeapBitMap _old_collector_free_bitmap;
   size_t _max;
 
   // Left-most and right-most region indexes. There are no free regions outside
   // of [left-most; right-most] index intervals
   size_t _mutator_leftmost, _mutator_rightmost;
   size_t _collector_leftmost, _collector_rightmost;
+  size_t _old_collector_leftmost, _old_collector_rightmost;
 
   size_t _capacity;
+  size_t _old_capacity;
   size_t _used;
+
+  bool _old_collector_search_left_to_right = true;
+
 
   void assert_bounds() const NOT_DEBUG_RETURN;
 
   bool is_mutator_free(size_t idx) const;
   bool is_collector_free(size_t idx) const;
+  bool is_old_collector_free(size_t idx) const;
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
   HeapWord* allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
-  HeapWord* allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region);
+  HeapWord* allocate_old_with_affiliation(ShenandoahRegionAffiliation affiliation,
+                                          ShenandoahAllocRequest& req, bool& in_new_region);
 
   // While holding the heap lock, allocate memory for a single object which is to be entirely contained
   // within a single HeapRegion as characterized by req.  The req.size() value is known to be less than or
@@ -62,6 +74,7 @@ private:
   HeapWord* allocate_contiguous(ShenandoahAllocRequest& req);
 
   void flip_to_gc(ShenandoahHeapRegion* r);
+  void flip_to_old_gc(ShenandoahHeapRegion* r);
 
   void recompute_bounds();
   void adjust_bounds();
@@ -79,8 +92,11 @@ private:
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
-  // Number of regions dedicated to GC allocations (for evacuation or promotion) that are currently free
+  // Number of regions dedicated to GC allocations (for evacuation) that are currently free
   size_t collector_count() const { return _collector_free_bitmap.count_one_bits(); }
+
+  // Number of regions dedicated to Old GC allocations (for evacuation or promotion) that are currently free
+  size_t old_collector_count() const { return _old_collector_free_bitmap.count_one_bits(); }
 
   // Number of regions dedicated to mutator allocations that are currently free
   size_t mutator_count()   const { return _mutator_free_bitmap.count_one_bits();   }
@@ -107,7 +123,7 @@ public:
 
   void print_on(outputStream* out) const;
 
-  void reserve_regions(size_t to_reserve);
+  void reserve_regions(size_t young_reserve, size_t old_reserve);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
