@@ -968,7 +968,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 #endif
     ShenandoahHeapRegion* region = _heap->get_region(idx);
     if (_mutator_free_bitmap.at(idx) && (alloc_capacity(region) > 0)) {
-      assert(!region_is_old(), "Old regions should not be mutator is free at this point");
+      assert(!region->is_old(), "Old regions should not be mutator is free at this point");
       if (_old_capacity < to_reserve_old) {
         _mutator_free_bitmap.clear_bit(idx);
         _old_collector_free_bitmap.set_bit(idx);
