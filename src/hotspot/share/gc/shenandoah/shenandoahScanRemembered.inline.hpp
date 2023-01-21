@@ -298,7 +298,8 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
 
   HeapWord* p = nullptr;
   oop obj = cast_to_oop(p);
-  size_t cur_index = card_index;
+  ssize_t cur_index = (ssize_t)card_index;
+  assert(cur_index >= 0, "Overflow");
   assert(cur_index > 0, "Should have returned above");
   // Walk backwards over the cards...
   while (--cur_index > 0 && !starts_object(cur_index)) {
@@ -306,7 +307,7 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   }
   // cur_index should start an object: we should not have walked
   // past the left end of the region.
-  assert((0 < cur_index + 1) && (cur_index <= card_index), "Error");
+  assert(cur_index >= 0 && (cur_index <= (ssize_t)card_index), "Error");
   assert(region->bottom() <= _rs->addr_for_card_index(cur_index),
          "Fell off the bottom of containing region");
   assert(starts_object(cur_index), "Error");
@@ -611,20 +612,23 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 
   // Starting at the right end of the address range, walk backwards accumulating
   // a maximal dirty range of cards, then process those cards.
-  size_t cur_index = end_card_index;
-  while (cur_index >= start_card_index) {
+  ssize_t cur_index = (ssize_t) end_card_index;
+  assert(cur_index > 0, "Overflow");
+  assert(((ssize_t)start_card_index) >= 0, "Overflow");
+  while (cur_index >= (ssize_t)start_card_index) {
 
     // We'll continue the search starting with the card for the upper bound
     // address identified by the last dirty range that we processed, if any,
     // skipping any cards at higher addresses.
     if (upper_bound != nullptr) {
-      size_t right_index = _rs->card_index_for_addr(upper_bound);
+      ssize_t right_index = _rs->card_index_for_addr(upper_bound);
+      assert(right_index > 0, "Overflow");
       cur_index = MIN2(cur_index, right_index);
       assert(upper_bound < end_addr, "Program logic");
       end_addr  = upper_bound;   // lower end_addr
       upper_bound = nullptr;     // and clear upper_bound
       if (end_addr <= start_addr) {
-        assert(right_index <= start_card_index, "Program logic");
+        assert(right_index <= (ssize_t)start_card_index, "Program logic");
         // We are done with our cluster
         return;
       }
@@ -634,7 +638,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       // ==== BEGIN DIRTY card range processing ====
 
       const size_t dirty_r = cur_index;  // record right end of dirty range (inclusive)
-      while (--cur_index >= start_card_index && ctbm[cur_index] == CardTable::dirty_card_val()) {
+      while (--cur_index >= (ssize_t)start_card_index && ctbm[cur_index] == CardTable::dirty_card_val()) {
         // walk back over contiguous dirty cards to find left end of dirty range (inclusive)
       }
       // [dirty_l, dirty_r] is a "maximal" closed interval range of dirty card indices:
@@ -771,7 +775,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       assert(ctbm[cur_index] == CardTable::clean_card_val(), "Error");
       // walk back over contiguous clean cards
       size_t i = 0;
-      while (--cur_index >= start_card_index && ctbm[cur_index] == CardTable::clean_card_val()) {
+      while (--cur_index >= (ssize_t)start_card_index && ctbm[cur_index] == CardTable::clean_card_val()) {
         NOT_PRODUCT(i++);
       }
       // Record alternations, clean run length, and clean card count
