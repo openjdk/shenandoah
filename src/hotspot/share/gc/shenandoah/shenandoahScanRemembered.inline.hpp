@@ -614,14 +614,17 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   size_t cur_index = end_card_index;
   while (cur_index >= start_card_index) {
 
-    // We'll continue the search at the upper bound address identified by
-    // the last dirty range, if any
+    // We'll continue the search starting with the card for the upper bound
+    // address identified by the last dirty range that we processed, if any,
+    // skipping any cards at higher addresses.
     if (upper_bound != nullptr) {
       size_t right_index = _rs->card_index_for_addr(upper_bound);
       cur_index = MIN2(cur_index, right_index);
-      end_addr  = MIN2(end_addr, upper_bound);
-      upper_bound = nullptr;
-      if (end_addr >= start_addr) {
+      assert(upper_bound < end_addr, "Program logic");
+      end_addr  = upper_bound;   // lower end_addr
+      upper_bound = nullptr;     // and clear upper_bound
+      if (end_addr <= start_addr) {
+        assert(right_index <= start_card_index, "Program logic");
         // We are done with our cluster
         return;
       }
