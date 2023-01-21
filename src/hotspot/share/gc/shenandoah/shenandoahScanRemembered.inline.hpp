@@ -37,40 +37,40 @@
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 
 inline size_t
-ShenandoahDirectCardMarkRememberedSet::last_valid_index() {
+ShenandoahDirectCardMarkRememberedSet::last_valid_index() const {
   return _card_table->last_valid_index();
 }
 
 inline size_t
-ShenandoahDirectCardMarkRememberedSet::total_cards() {
+ShenandoahDirectCardMarkRememberedSet::total_cards() const {
   return _total_card_count;
 }
 
 inline size_t
-ShenandoahDirectCardMarkRememberedSet::card_index_for_addr(HeapWord *p) {
+ShenandoahDirectCardMarkRememberedSet::card_index_for_addr(HeapWord *p) const {
   return _card_table->index_for(p);
 }
 
 inline HeapWord*
-ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) {
+ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card_index) const {
   return _whole_heap_base + CardTable::card_size_in_words() * card_index;
 }
 
-inline CardValue*
-ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool use_write_table) {
+inline const CardValue*
+ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool use_write_table) const {
   return use_write_table ?
            _card_table->write_byte_map()
            : _card_table->read_byte_map();
 }
 
 inline bool
-ShenandoahDirectCardMarkRememberedSet::is_write_card_dirty(size_t card_index) {
+ShenandoahDirectCardMarkRememberedSet::is_write_card_dirty(size_t card_index) const {
   CardValue* bp = &(_card_table->write_byte_map())[card_index];
   return (bp[0] == CardTable::dirty_card_val());
 }
 
 inline bool
-ShenandoahDirectCardMarkRememberedSet::is_card_dirty(size_t card_index) {
+ShenandoahDirectCardMarkRememberedSet::is_card_dirty(size_t card_index) const {
   CardValue* bp = &(_card_table->read_byte_map())[card_index];
   return (bp[0] == CardTable::dirty_card_val());
 }
@@ -104,7 +104,7 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(size_t card_index, si
 }
 
 inline bool
-ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) {
+ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) const {
   size_t index = card_index_for_addr(p);
   CardValue* bp = &(_card_table->read_byte_map())[index];
   return (bp[0] == CardTable::dirty_card_val());
@@ -157,7 +157,7 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, size_t n
 }
 
 inline size_t
-ShenandoahDirectCardMarkRememberedSet::cluster_count() {
+ShenandoahDirectCardMarkRememberedSet::cluster_count() const {
   return _cluster_count;
 }
 
@@ -275,9 +275,9 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) const {
 // Given a card_index, return the starting address of the first block in the heap
 // that straddles into this card. If this card is co-initial with an object, then
 // this would return the first address of the range that this card covers.
-// TODO: collect some stats for the size of walks backward over cards and then
-// forward to appropriate card. For larger objects, a logarithmic BOT might hasten
-// the backwards walk.
+// TODO: collect some stats for the size of walks backward over cards.
+// For larger objects, a logarithmic BOT such as used by G1 might make the
+// backwards walk potentially faster.
 template<typename RememberedSet>
 HeapWord*
 ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const {
@@ -285,9 +285,11 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   HeapWord* left = _rs->addr_for_card_index(card_index);
 
 #ifdef ASSERT
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Do not use in non-generational mode");
+  ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(left);
+  assert(region->is_old(), "Do not use for young regions");
   // For HumongousRegion:s it's more efficient to jump directly to the
   // start region.
-  ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(left);
   assert(!region->is_humongous(), "Use region->humongous_start_region() instead");
 #endif
   if (starts_object(card_index) && get_first_start(card_index) == 0) {
@@ -316,11 +318,15 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   p = _rs->addr_for_card_index(cur_index) + offset;
   assert(p < left, "obj should start before left");
   // While it is safe to ask an object its size in the loop that
-  // follows, the loop should not be needed because:
+  // follows, the loop should never be needed because:
+  // [TODO: assert as many of these conditions as one may be able to
+  //  efficiently check.]
   // 1. we ask this question only for regions in the old generation
   // 2. there is no direct allocation ever by mutators in old generation
   //    regions. Only GC will ever allocate in old regions, and then
-  //    too only during promotion/evacuation phases.
+  //    too only during promotion/evacuation phases. Thus there is no danger
+  //    of races between reading and writing the object start array, or
+  //    of asking partially initialized objects their size.
   // 3. only GC asks this question during phases when it is not concurrently
   //    evacuating/promoting, viz. during concurrent root scanning (before
   //    the evacuation phase) and during concurrent update refs (after the
@@ -329,7 +335,7 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   // 4. Every allocation under TAMS updates the object start array.
   //    [TODO: Compare with the performance of a logarithmic BOT alternative,
   //    e.g. as used by G1.]
-  obj = cast_to_oop(p);
+  NOT_PRODUCT(obj = cast_to_oop(p);)
 #define WALK_FORWARD_IN_BLOCK_START false
   while (WALK_FORWARD_IN_BLOCK_START && p + obj->size() < left) {
     p += obj->size();

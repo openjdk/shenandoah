@@ -221,24 +221,24 @@ public:
   ~ShenandoahDirectCardMarkRememberedSet();
 
   // Card index is zero-based relative to _byte_map.
-  size_t last_valid_index();
-  size_t total_cards();
-  size_t card_index_for_addr(HeapWord *p);
-  HeapWord *addr_for_card_index(size_t card_index);
-  inline CardValue* get_card_table_byte_map(bool write_table);
-  inline bool is_card_dirty(size_t card_index);
-  inline bool is_write_card_dirty(size_t card_index);
+  size_t last_valid_index() const;
+  size_t total_cards() const;
+  size_t card_index_for_addr(HeapWord *p) const;
+  HeapWord *addr_for_card_index(size_t card_index) const;
+  inline const CardValue* get_card_table_byte_map(bool write_table) const;
+  inline bool is_card_dirty(size_t card_index) const;
+  inline bool is_write_card_dirty(size_t card_index) const;
   inline void mark_card_as_dirty(size_t card_index);
   inline void mark_range_as_dirty(size_t card_index, size_t num_cards);
   inline void mark_card_as_clean(size_t card_index);
   inline void mark_read_card_as_clean(size_t card_index);
   inline void mark_range_as_clean(size_t card_index, size_t num_cards);
-  inline bool is_card_dirty(HeapWord *p);
+  inline bool is_card_dirty(HeapWord *p) const;
   inline void mark_card_as_dirty(HeapWord *p);
   inline void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   inline void mark_card_as_clean(HeapWord *p);
   inline void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  inline size_t cluster_count();
+  inline size_t cluster_count() const;
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
@@ -679,6 +679,8 @@ public:
   // Given a card_index, return the starting address of the first block in the heap
   // that straddles into the card. If the card is co-initial with an object, then
   // this would return the starting address of the heap that this card covers.
+  // Expects to be called for a card affiliated with the old generation in
+  // generational mode.
   HeapWord* block_start(size_t card_index) const;
 };
 
