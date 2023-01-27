@@ -972,6 +972,8 @@ size_t ShenandoahGeneration::available() const {
 }
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
+  // TODO: ysr: revert to an assert
+  guarantee(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0, "Region-sized changes only");
   _adjusted_capacity = soft_max_capacity() + adjustment;
   return _adjusted_capacity;
 }
@@ -1002,6 +1004,8 @@ size_t ShenandoahGeneration::adjusted_unaffiliated_regions() const {
 void ShenandoahGeneration::increase_capacity(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_size_for(this), "Cannot increase generation capacity beyond maximum.");
+  // TODO: ysr: revert to an assert
+  guarantee(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Region-sized changes only");
   _max_capacity += increment;
   _soft_max_capacity += increment;
   _adjusted_capacity += increment;
@@ -1010,6 +1014,8 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_max_capacity - decrement >= ShenandoahHeap::heap()->min_size_for(this), "Cannot decrease generation capacity beyond minimum.");
+  // TODO: ysr: revert to an assert
+  guarantee(decrement % ShenandoahHeapRegion::region_size_bytes() == 0, "Region-sized changes only");
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;
   _adjusted_capacity -= decrement;
