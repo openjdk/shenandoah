@@ -709,7 +709,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // portion of the object lying in the dirty card range below,
           // assuming precise marking by GC closures.
           const size_t h_index = _rs->card_index_for_addr(p);
-	  if (ctbm[h_index] == CardTable::dirty_card_val()) {
+          if (ctbm[h_index] == CardTable::dirty_card_val()) {
             // Scan or skip, and remember for next chunk
             upper_bound = p;   // remember upper bound for next chunk
             if (p < start_addr) {
