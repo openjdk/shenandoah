@@ -567,10 +567,10 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 
   // start and end addresses of range of objects to be scanned, clipped to end_of_range
   const size_t start_card_index = first_cluster * ShenandoahCardCluster<RememberedSet>::CardsPerCluster;
-  HeapWord* start_addr = _rs->addr_for_card_index(start_card_index);
+  const HeapWord* start_addr = _rs->addr_for_card_index(start_card_index);
   // clip at end_of_range (exclusive)
-  HeapWord* end_addr = MIN2(end_of_range, start_addr + (count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster
-                                                              * CardTable::card_size_in_words()));
+  HeapWord* end_addr = MIN2(end_of_range, (HeapWord*)start_addr + (count * ShenandoahCardCluster<RememberedSet>::CardsPerCluster
+                                                                   * CardTable::card_size_in_words()));
   assert(start_addr < end_addr, "Empty region?");
 
   const size_t whole_cards = (end_addr - start_addr + CardTable::card_size_in_words() - 1)/CardTable::card_size_in_words();
@@ -694,6 +694,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // then it must contain no cross-generational pointers. However, that check
           // would be too strong, because such mutations will be found by
           // our SATB barrier processing, and need not be found here.
+          assert(obj == cast_to_oop(p), "Inconsistency detected");
           if (ctx == nullptr || p >= tams) {
             p += obj->size();
           } else {
@@ -708,17 +709,26 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // portion of the object lying in the dirty card range below,
           // assuming precise marking by GC closures.
           const size_t h_index = _rs->card_index_for_addr(p);
-          if (ctbm[h_index] == CardTable::dirty_card_val()) {
+	  if (ctbm[h_index] == CardTable::dirty_card_val()) {
             // Scan or skip, and remember for next chunk
             upper_bound = p;   // remember upper bound for next chunk
-            if (ctx == nullptr || ctx->is_marked(obj)) {
-              // Scan the object in its entirety
-              p += obj->oop_iterate_size(cl);
+            if (p < start_addr) {
+              // if object starts in a previous cluster, it'll be handled
+              // in its entirety by the thread processing that cluster; we can
+              // skip over it.
+              assert(obj == cast_to_oop(p), "Inconsistency detected");
+              p += obj->size();
             } else {
-              assert(p < tams, "Error 1 in ctx/marking/tams logic");
-              // Skip over any intermediate dead objects
-              p = ctx->get_next_marked_addr(p, tams);
-              assert(p <= tams, "Error 2 in ctx/marking/tams logic");
+              assert(obj == cast_to_oop(p), "Inconsistency detected");
+              if (ctx == nullptr || ctx->is_marked(obj)) {
+                // Scan the object in its entirety
+                p += obj->oop_iterate_size(cl);
+              } else {
+                assert(p < tams, "Error 1 in ctx/marking/tams logic");
+                // Skip over any intermediate dead objects
+                p = ctx->get_next_marked_addr(p, tams);
+                assert(p <= tams, "Error 2 in ctx/marking/tams logic");
+              }
             }
             assert(p > left, "Should have processed into the range");
           }
