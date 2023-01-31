@@ -260,8 +260,6 @@ void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
 
   _available.add(double(available));
 
-  
-
   // In the case when a concurrent GC cycle completes successfully but with an
   // unusually small amount of available memory we will adjust our trigger
   // parameters so that they are more likely to initiate a new cycle.
