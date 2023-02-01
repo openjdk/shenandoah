@@ -948,7 +948,7 @@ struct ShenandoahRegionChunk {
 };
 
 // ShenandoahRegionChunkIterator divides the total remembered set scanning effort into ShenandoahRegionChunks
-// that are assigned one at a time to worker threads. (Here, we use the terms`assignments` and `chunks`
+// that are assigned one at a time to worker threads. (Here, we use the terms `assignments` and `chunks`
 // interchangeably.) Note that the effort required to scan a range of memory is not necessarily a linear
 // function of the size of the range.  Some memory ranges hold only a small number of live objects.
 // Some ranges hold primarily primitive (non-pointer) data.  We start with larger chunk sizes because larger chunks
