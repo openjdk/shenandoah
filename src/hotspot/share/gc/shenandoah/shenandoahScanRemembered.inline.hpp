@@ -274,7 +274,8 @@ ShenandoahCardCluster<RememberedSet>::get_last_start(size_t card_index) const {
 
 // Given a card_index, return the starting address of the first block in the heap
 // that straddles into this card. If this card is co-initial with an object, then
-// this would return the first address of the range that this card covers.
+// this would return the first address of the range that this card covers, which is
+// where the card's first object also begins.
 // TODO: collect some stats for the size of walks backward over cards.
 // For larger objects, a logarithmic BOT such as used by G1 might make the
 // backwards walk potentially faster.
@@ -295,6 +296,7 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   if (starts_object(card_index) && get_first_start(card_index) == 0) {
     // This card contains a co-initial object; a fortiori, it covers
     // also the case of a card being the first in a region.
+    assert(oopDesc::is_oop(cast_to_oop(left)), "Should be an object");
     return left;
   }
 
@@ -316,33 +318,29 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   size_t offset = get_last_start(cur_index);
   // can avoid call via card size arithmetic below instead
   p = _rs->addr_for_card_index(cur_index) + offset;
+  // Recall that we already dealt with the co-initial object case above
   assert(p < left, "obj should start before left");
   // While it is safe to ask an object its size in the loop that
-  // follows, the loop should never be needed because:
-  // [TODO: assert as many of these conditions as one may be able to
-  //  efficiently check.]
+  // follows, the (ifdef'd out) loop should never be needed.
   // 1. we ask this question only for regions in the old generation
   // 2. there is no direct allocation ever by mutators in old generation
   //    regions. Only GC will ever allocate in old regions, and then
   //    too only during promotion/evacuation phases. Thus there is no danger
-  //    of races between reading and writing the object start array, or
-  //    of asking partially initialized objects their size.
+  //    of races between reading from and writing to the object start array,
+  //    or of asking partially initialized objects their size (in the loop below).
   // 3. only GC asks this question during phases when it is not concurrently
   //    evacuating/promoting, viz. during concurrent root scanning (before
   //    the evacuation phase) and during concurrent update refs (after the
   //    evacuation phase) of young collections. This is never called
   //    during old or global collections.
   // 4. Every allocation under TAMS updates the object start array.
-  //    [TODO: Compare with the performance of a logarithmic BOT alternative,
-  //    e.g. as used by G1.]
   NOT_PRODUCT(obj = cast_to_oop(p);)
+  assert(oopDesc::is_oop(obj), "Should be an object");
 #define WALK_FORWARD_IN_BLOCK_START false
   while (WALK_FORWARD_IN_BLOCK_START && p + obj->size() < left) {
     p += obj->size();
   }
 #undef WALK_FORWARD_IN_BLOCK_START // false
-  // Recall that we already dealt with the co-initial object case above
-  assert(p < left, "obj should start before left");
   assert(p + obj->size() > left, "obj should end after left");
   return p;
 }
@@ -671,67 +669,60 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       assert(right <= region->top() && end_addr <= region->top(), "Busted bounds");
       const MemRegion mr(left, right);
 
-      // TODO: cache so as to not call block_start() repeatedly
-      // on a very large object. Check: may be upper_bound below
-      // and its use above already takes care of this.
+      // NOTE: We'll not call block_start() repeatedly
+      // on a very large object if its head card is dirty. If not,
+      // (i.e. the head card is clean) we'll call it each time we
+      // process a new dirty range on the object. This is always
+      // the case for large object arrays, which are typically more
+      // common.
+      // TODO: It is worthwhile to memoize this, so as to avoid that
+      // overhead, and it is easy to do, but deferred to a follow-up.
       HeapWord* p = _scc->block_start(dirty_l);
       oop obj = cast_to_oop(p);
 
       // PREFIX: The object that straddles into this range of dirty cards
       // from the left may be subject to special treatment unless
       // it is an object array.
-#define OBJ_MARK_IMPRECISE false   // indicates that objects are _always_ imprecisely marked:
-                                   // this is not true today, as GC closures are precise, but
-                                   // compiler & interpreter are imprecise.
       if (p < left && !obj->is_objArray()) {
-        if (OBJ_MARK_IMPRECISE) {
-          // If we always dirty non-array objects imprecisely (i.e. only the head),
-          // then we'll scan this object when we process the (potentially dirty)
-          // card in which it starts, so we can skip over it now.
-          log_debug(gc, remset)("Skipping non-objArray suffix in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
-                                p2i(left), p2i(p + obj->size()));
-          // It's tempting to assert that if the card on which it starts is clean,
-          // then it must contain no cross-generational pointers. However, that check
-          // would be too strong, because such mutations will be found by
-          // our SATB barrier processing, and need not be found here.
-          assert(obj == cast_to_oop(p), "Inconsistency detected");
-          if (ctx == nullptr || p >= tams) {
+        // The mutator (both compiler and interpreter, but not JNI?)
+        // typically dirty imprecisely (i.e. only the head of an object),
+        // but GC closures typically dirty the object precisely. (It would
+        // be nice to have everything be precise for maximum efficiency.)
+        //
+        // To handle this, we check the head card of the object here and,
+        // if dirty, (arrange to) scan the object in its entirety. If we
+        // find the head card clean, we'll scan only the portion of the
+        // object lying in the dirty card range below, assuming this was
+        // the result of precise marking by GC closures.
+
+        // index of the "head card" for p
+        const size_t hc_index = _rs->card_index_for_addr(p);
+        if (ctbm[hc_index] == CardTable::dirty_card_val()) {
+          // Scan or skip the object, depending on location of its
+          // head card, and remember that we'll have processed all
+          // the objects back up to p, which is thus an upper bound
+          // for the next iteration of a dirty card loop.
+          upper_bound = p;   // remember upper bound for next chunk
+          if (p < start_addr) {
+            // if object starts in a previous slice, it'll be handled
+            // in its entirety by the thread processing that slice; we can
+            // skip over it and avoid an unnecessary extra scan.
+            assert(obj == cast_to_oop(p), "Inconsistency detected");
             p += obj->size();
           } else {
-            p = ctx->get_next_marked_addr(p, right);
-          }
-          assert(p > left, "Should have processed into the range");
-        } else {
-          // The compiler and interpreter typically dirty the head of an object,
-          // but GC may dirty the object precisely. To handle this, we check the
-          // head card of the object here and, if dirty, scan the object in its
-          // entirety. If we find the head card clean, we'll scan only the
-          // portion of the object lying in the dirty card range below,
-          // assuming precise marking by GC closures.
-          const size_t h_index = _rs->card_index_for_addr(p);
-          if (ctbm[h_index] == CardTable::dirty_card_val()) {
-            // Scan or skip, and remember for next chunk
-            upper_bound = p;   // remember upper bound for next chunk
-            if (p < start_addr) {
-              // if object starts in a previous slice, it'll be handled
-              // in its entirety by the thread processing that slice; we can
-              // skip over it.
-              assert(obj == cast_to_oop(p), "Inconsistency detected");
-              p += obj->size();
+            // the object starts in our slice, we scan it in its entirety
+            assert(obj == cast_to_oop(p), "Inconsistency detected");
+            if (ctx == nullptr || ctx->is_marked(obj)) {
+              // Scan the object in its entirety
+              p += obj->oop_iterate_size(cl);
             } else {
-              assert(obj == cast_to_oop(p), "Inconsistency detected");
-              if (ctx == nullptr || ctx->is_marked(obj)) {
-                // Scan the object in its entirety
-                p += obj->oop_iterate_size(cl);
-              } else {
-                assert(p < tams, "Error 1 in ctx/marking/tams logic");
-                // Skip over any intermediate dead objects
-                p = ctx->get_next_marked_addr(p, tams);
-                assert(p <= tams, "Error 2 in ctx/marking/tams logic");
-              }
+              assert(p < tams, "Error 1 in ctx/marking/tams logic");
+              // Skip over any intermediate dead objects
+              p = ctx->get_next_marked_addr(p, tams);
+              assert(p <= tams, "Error 2 in ctx/marking/tams logic");
             }
-            assert(p > left, "Should have processed into the range");
           }
+          assert(p > left, "Should have processed into interior of dirty range");
         }
       }
 
@@ -781,7 +772,6 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
                                 p2i(right), p2i(p));
         }
       }
-#undef OBJ_MARK_IMPRECISE // false
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
 
       // ==== END   DIRTY card range processing ====
