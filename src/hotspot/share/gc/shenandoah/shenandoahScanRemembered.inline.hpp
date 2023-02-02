@@ -617,7 +617,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // Starting at the right end of the address range, walk backwards accumulating
   // a maximal dirty range of cards, then process those cards.
   ssize_t cur_index = (ssize_t) end_card_index;
-  assert(cur_index > 0, "Overflow");
+  assert(cur_index >= 0, "Overflow");
   assert(((ssize_t)start_card_index) >= 0, "Overflow");
   while (cur_index >= (ssize_t)start_card_index) {
 
@@ -626,7 +626,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     // skipping any cards at higher addresses.
     if (upper_bound != nullptr) {
       ssize_t right_index = _rs->card_index_for_addr(upper_bound);
-      assert(right_index > 0, "Overflow");
+      assert(right_index >= 0, "Overflow");
       cur_index = MIN2(cur_index, right_index);
       assert(upper_bound < end_addr, "Program logic");
       end_addr  = upper_bound;   // lower end_addr
