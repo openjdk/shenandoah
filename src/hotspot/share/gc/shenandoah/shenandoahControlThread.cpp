@@ -267,12 +267,18 @@ void ShenandoahControlThread::run_service() {
         ShenandoahHeapLocker locker(heap->lock());
         heap->free_set()->log_status();
       }
-
+      // In case this is a degenerated cycle, remember whether original cycle was aging.
+      bool was_aging_cycle = heap->is_aging_cycle();
       heap->set_aging_cycle(false);
       {
         switch (_mode) {
           case concurrent_normal: {
-            if ((generation == YOUNG) && (age_period-- == 0)) {
+            // At this point:
+            //  if (generation == YOUNG), this is a normal YOUNG cycle
+            //  if (generation == OLD), this is a bootstrap OLD cycle
+            //  if (generation == GLOBAL), this is a GLOBAL cycle triggered by System.gc()
+            // In all three cases, we want to age old objects if this is an aging cycle
+            if (age_period-- == 0) {
               heap->set_aging_cycle(true);
               age_period = ShenandoahAgingCyclePeriod - 1;
             }
@@ -280,6 +286,7 @@ void ShenandoahControlThread::run_service() {
             break;
           }
           case stw_degenerated: {
+            heap->set_aging_cycle(was_aging_cycle);
             if (!service_stw_degenerated_cycle(cause, degen_point)) {
               // The degenerated GC was upgraded to a Full GC
               generation = GLOBAL;
@@ -287,6 +294,10 @@ void ShenandoahControlThread::run_service() {
             break;
           }
           case stw_full: {
+            if (age_period-- == 0) {
+              heap->set_aging_cycle(true);
+              age_period = ShenandoahAgingCyclePeriod - 1;
+            }
             service_stw_full_cycle(cause);
             break;
           }
@@ -475,10 +486,14 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
       ShouldNotReachHere();
   }
   const char* msg;
-  if (heap->cancelled_gc()) {
-    msg = (generation == YOUNG)? "At end of Interrupted Concurrent Young GC": "At end of Interrupted Concurrent Bootstrap GC";
+  if (heap->mode()->is_generational()) {
+    if (heap->cancelled_gc()) {
+      msg = (generation == YOUNG)? "At end of Interrupted Concurrent Young GC": "At end of Interrupted Concurrent Bootstrap GC";
+    } else {
+      msg = (generation == YOUNG)? "At end of Concurrent Young GC": "At end of Concurrent Bootstrap GC";
+    }
   } else {
-    msg = (generation == YOUNG)? "At end of Concurrent Young GC": "At end of Concurrent Bootstrap GC";
+    msg = heap->cancelled_gc() ? "At end of cancelled GC" : "At end of GC";
   }
   heap->log_heap_status(msg);
 }

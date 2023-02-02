@@ -675,7 +675,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       // on a very large object. Check: may be upper_bound below
       // and its use above already takes care of this.
       HeapWord* p = _scc->block_start(dirty_l);
-      oop obj = cast_to_oop(p);;
+      oop obj = cast_to_oop(p);
 
       // PREFIX: The object that straddles into this range of dirty cards
       // from the left may be subject to special treatment unless
@@ -713,8 +713,8 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
             // Scan or skip, and remember for next chunk
             upper_bound = p;   // remember upper bound for next chunk
             if (p < start_addr) {
-              // if object starts in a previous cluster, it'll be handled
-              // in its entirety by the thread processing that cluster; we can
+              // if object starts in a previous slice, it'll be handled
+              // in its entirety by the thread processing that slice; we can
               // skip over it.
               assert(obj == cast_to_oop(p), "Inconsistency detected");
               p += obj->size();
@@ -772,7 +772,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         if (!last_obj->is_objArray()) {
           // scan the remaining suffix of the object
           const MemRegion last_mr(right, p);
-          assert(p == last_p + obj->size(), "Would miss portion of last_obj");
+          assert(p == last_p + last_obj->size(), "Would miss portion of last_obj");
           last_obj->oop_iterate(cl, last_mr);
           log_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(last_mr.start()), p2i(last_mr.end()));

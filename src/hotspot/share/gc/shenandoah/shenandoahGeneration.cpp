@@ -39,12 +39,18 @@
 
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
  private:
+  ShenandoahHeap* _heap;
   ShenandoahMarkingContext* const _ctx;
  public:
   ShenandoahResetUpdateRegionStateClosure() :
-    _ctx(ShenandoahHeap::heap()->marking_context()) {}
+    _heap(ShenandoahHeap::heap()),
+    _ctx(_heap->marking_context()) {}
 
-  void heap_region_do(ShenandoahHeapRegion* r) {
+  void heap_region_do(ShenandoahHeapRegion* r) override {
+    if (_heap->is_bitmap_slice_committed(r)) {
+      _ctx->clear_bitmap(r);
+    }
+
     if (r->is_active()) {
       // Reset live data and set TAMS optimistically. We would recheck these under the pause
       // anyway to capture any updates that happened since now.
@@ -53,7 +59,7 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
     }
   }
 
-  bool is_thread_safe() { return true; }
+  bool is_thread_safe() override { return true; }
 };
 
 class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
@@ -209,9 +215,10 @@ void ShenandoahGeneration::merge_write_table() {
 }
 
 void ShenandoahGeneration::prepare_gc() {
-  // Reset mark bitmap for this generation (typically young)
-  reset_mark_bitmap();
-  // Capture Top At Mark Start for this generation (typically young)
+  // Invalidate the marking context
+  set_mark_incomplete();
+
+  // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_heap_region_iterate(&cl);
 }
@@ -722,12 +729,16 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     old_bytes_reserved_for_alloc_supplement += additional_regions_to_loan * region_size_bytes;
     working_old_available -= additional_regions_to_loan * region_size_bytes;
   }
-  size_t allocation_supplement = old_bytes_reserved_for_alloc_supplement;
+  size_t allocation_supplement = old_bytes_reserved_for_alloc_supplement + old_bytes_loaned_for_young_evac;
+  assert(allocation_supplement % ShenandoahHeapRegion::region_size_bytes() == 0,
+         "allocation_supplement must be multiple of region size");
+
   heap->set_alloc_supplement_reserve(allocation_supplement);
 
   // TODO: young_available, which feeds into alloc_budget_evac_and_update is lacking memory available within
   // existing young-gen regions that were not selected for the collection set.  Add this in and adjust the
   // log message (where it says "empty-region allocation budget").
+
 
   log_debug(gc)("Memory reserved for young evacuation: " SIZE_FORMAT "%s for evacuating " SIZE_FORMAT
                 "%s out of young available: " SIZE_FORMAT "%s",
@@ -972,11 +983,13 @@ size_t ShenandoahGeneration::available() const {
 }
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
-  assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0, "Region-sized changes only");
+  // TODO: ysr: remove this check & warning
   if (adjustment % ShenandoahHeapRegion::region_size_bytes() != 0) {
     log_warning(gc)("Adjustment (" INTPTR_FORMAT ") should be a multiple of region size (" SIZE_FORMAT ")",
                     adjustment, ShenandoahHeapRegion::region_size_bytes());
   }
+  assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0,
+         "Adjustment to generation size must be multiple of region size");
   _adjusted_capacity = soft_max_capacity() + adjustment;
   return _adjusted_capacity;
 }
@@ -1008,6 +1021,7 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_size_for(this), "Cannot increase generation capacity beyond maximum.");
   assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Region-sized changes only");
+  // TODO: ysr: remove this check and warning
   if (increment % ShenandoahHeapRegion::region_size_bytes() != 0) {
     log_warning(gc)("Increment (" INTPTR_FORMAT ") should be a multiple of region size (" SIZE_FORMAT ")",
                     increment, ShenandoahHeapRegion::region_size_bytes());
@@ -1021,6 +1035,7 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_max_capacity - decrement >= ShenandoahHeap::heap()->min_size_for(this), "Cannot decrease generation capacity beyond minimum.");
   assert(decrement % ShenandoahHeapRegion::region_size_bytes() == 0, "Region-sized changes only");
+  // TODO: ysr: remove this check and warning
   if (decrement % ShenandoahHeapRegion::region_size_bytes() != 0) {
     log_warning(gc)("Decrement (" INTPTR_FORMAT ") should be a multiple of region size (" SIZE_FORMAT ")",
                     decrement, ShenandoahHeapRegion::region_size_bytes());
