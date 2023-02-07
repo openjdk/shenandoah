@@ -210,23 +210,30 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     // Traditional Shenandoah (non-generational)
     size_t capacity    = ShenandoahHeap::heap()->soft_max_capacity();
     size_t max_cset    = (size_t)((1.0 * capacity / 100 * ShenandoahEvacReserve) / ShenandoahEvacWaste);
-    size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_cset;
+    size_t free_target = (capacity / 100 * ShenandoahMinFreeThreshold) + max_cset;
     size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
 
-    log_info(gc, ergo)("Adaptive CSet Selection. Max Evacuation: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
-                         byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
-                         byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
+    log_info(gc, ergo)("Adaptive CSet Selection. Target Free: " SIZE_FORMAT "%s, Actual Free: "
+                     SIZE_FORMAT "%s, Max CSet: " SIZE_FORMAT "%s, Min Garbage: " SIZE_FORMAT "%s",
+                     byte_size_in_proper_unit(free_target), proper_unit_for_byte_size(free_target),
+                     byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free),
+                     byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
+                     byte_size_in_proper_unit(min_garbage), proper_unit_for_byte_size(min_garbage));
 
     size_t cur_cset = 0;
     size_t cur_garbage = 0;
 
     for (size_t idx = 0; idx < size; idx++) {
       ShenandoahHeapRegion* r = data[idx]._region;
-      size_t new_cset = cur_cset + r->get_live_data_bytes();
-      size_t region_garbage = r->garbage();
-      size_t new_garbage = cur_garbage + region_garbage;
-      bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
-      if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
+
+      size_t new_cset    = cur_cset + r->get_live_data_bytes();
+      size_t new_garbage = cur_garbage + r->garbage();
+
+      if (new_cset > max_cset) {
+        break;
+      }
+
+      if ((new_garbage < min_garbage) || (r->garbage() > garbage_threshold)) {
         cset->add_region(r);
         cur_cset = new_cset;
         cur_garbage = new_garbage;
@@ -423,23 +430,23 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
 
-  size_t last_live_memory = get_last_live_memory();
-  size_t penultimate_live_memory = get_penultimate_live_memory();
+//  size_t last_live_memory = get_last_live_memory();
+//  size_t penultimate_live_memory = get_penultimate_live_memory();
   double original_cycle_time = avg_cycle_time;
-  if ((penultimate_live_memory < last_live_memory) && (penultimate_live_memory != 0)) {
-    // If the live-memory size is growing, our estimates of cycle time are based on lighter workload, so adjust.
-    // TODO: Be more precise about how to scale when live memory is growing.  Existing code is a very rough approximation
-    // tuned with very limited workload observations.
-    avg_cycle_time = (avg_cycle_time * 2 * last_live_memory) / penultimate_live_memory;
-  } else {
-    int degen_cycles = degenerated_cycles_in_a_row();
-    if (degen_cycles > 0) {
-      // If we've degenerated recently, we might be waiting too long between triggers so adjust trigger forward.
-      // TODO: Be more precise about how to scale when we've experienced recent degenerated GC.  Existing code is a very
-      // rough approximation tuned with very limited workload observations.
-      avg_cycle_time += degen_cycles * avg_cycle_time;
-    }
-  }
+//  if ((penultimate_live_memory < last_live_memory) && (penultimate_live_memory != 0)) {
+//    // If the live-memory size is growing, our estimates of cycle time are based on lighter workload, so adjust.
+//    // TODO: Be more precise about how to scale when live memory is growing.  Existing code is a very rough approximation
+//    // tuned with very limited workload observations.
+//    avg_cycle_time = (avg_cycle_time * 2 * last_live_memory) / penultimate_live_memory;
+//  } else {
+//    int degen_cycles = degenerated_cycles_in_a_row();
+//    if (degen_cycles > 0) {
+//      // If we've degenerated recently, we might be waiting too long between triggers so adjust trigger forward.
+//      // TODO: Be more precise about how to scale when we've experienced recent degenerated GC.  Existing code is a very
+//      // rough approximation tuned with very limited workload observations.
+//      avg_cycle_time += degen_cycles * avg_cycle_time;
+//    }
+//  }
 
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
   log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",

@@ -780,6 +780,8 @@ void ShenandoahFreeSet::log_status() {
         frag_int = 0;
       }
       ls.print(SIZE_FORMAT "%% internal; ", frag_int);
+      ls.print("Used: " SIZE_FORMAT "%s, Mutator Free: " SIZE_FORMAT " ",
+               byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used), mutator_count());
     }
 
     {
