@@ -58,8 +58,6 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
   _gc_times_learned(0),
   _gc_time_penalties(0),
   _gc_cycle_time_history(new TruncatedSeq(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor)),
-  _live_memory_last_cycle(0),
-  _live_memory_penultimate_cycle(0),
   _metaspace_oom()
 {
   // No unloading during concurrent mark? Communicate that to heuristics
@@ -180,8 +178,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       live_memory += region->get_live_data_bytes();
     }
   }
-
-  save_last_live_memory(live_memory);
 
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
   // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
@@ -381,17 +377,4 @@ size_t ShenandoahHeuristics::min_free_threshold() {
           ? ShenandoahOldMinFreeThreshold
           : ShenandoahMinFreeThreshold;
   return _generation->soft_max_capacity() / 100 * min_free_threshold;
-}
-
-void ShenandoahHeuristics::save_last_live_memory(size_t live_memory) {
-  _live_memory_penultimate_cycle = _live_memory_last_cycle;
-  _live_memory_last_cycle = live_memory;
-}
-
-size_t ShenandoahHeuristics::get_last_live_memory() {
-  return _live_memory_last_cycle;
-}
-
-size_t ShenandoahHeuristics::get_penultimate_live_memory() {
-  return _live_memory_penultimate_cycle;
 }

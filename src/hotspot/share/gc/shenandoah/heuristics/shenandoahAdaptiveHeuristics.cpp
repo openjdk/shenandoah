@@ -430,33 +430,11 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
 
-//  size_t last_live_memory = get_last_live_memory();
-//  size_t penultimate_live_memory = get_penultimate_live_memory();
-  double original_cycle_time = avg_cycle_time;
-//  if ((penultimate_live_memory < last_live_memory) && (penultimate_live_memory != 0)) {
-//    // If the live-memory size is growing, our estimates of cycle time are based on lighter workload, so adjust.
-//    // TODO: Be more precise about how to scale when live memory is growing.  Existing code is a very rough approximation
-//    // tuned with very limited workload observations.
-//    avg_cycle_time = (avg_cycle_time * 2 * last_live_memory) / penultimate_live_memory;
-//  } else {
-//    int degen_cycles = degenerated_cycles_in_a_row();
-//    if (degen_cycles > 0) {
-//      // If we've degenerated recently, we might be waiting too long between triggers so adjust trigger forward.
-//      // TODO: Be more precise about how to scale when we've experienced recent degenerated GC.  Existing code is a very
-//      // rough approximation tuned with very limited workload observations.
-//      avg_cycle_time += degen_cycles * avg_cycle_time;
-//    }
-//  }
-
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
   log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
     _generation->name(), avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
 
   if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
-    if (avg_cycle_time > original_cycle_time) {
-      log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention",
-                    _generation->name(), original_cycle_time, avg_cycle_time);
-    }
 
     log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
                  _generation->name(), avg_cycle_time * 1000,
@@ -590,10 +568,6 @@ bool ShenandoahAllocationRate::is_spiking(double rate, double threshold) const {
     }
   }
   return false;
-}
-
-double ShenandoahAllocationRate::instantaneous_rate(size_t allocated) const {
-  return instantaneous_rate(os::elapsedTime(), allocated);
 }
 
 double ShenandoahAllocationRate::instantaneous_rate(double time, size_t allocated) const {
