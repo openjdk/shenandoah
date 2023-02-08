@@ -44,20 +44,21 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _next_old_collection_candidate(0),
   _last_old_region(0),
   _trigger_heuristic(trigger_heuristic),
+  _old_generation(generation),
   _promotion_failed(false),
-  _old_generation(generation)
+  _special_trigger_request(false)
 {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
 }
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
-  if (unprocessed_old_collection_candidates() == 0) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if ((unprocessed_old_collection_candidates() == 0) || !heap->is_old_compaction_enabled()) {
     return false;
   }
 
   _first_pinned_candidate = NOT_FOUND;
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
   uint included_old_regions = 0;
   size_t evacuated_old_bytes = 0;
   size_t collected_old_bytes = 0;
@@ -67,7 +68,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
-  size_t old_evacuation_budget = (size_t) ((double) heap->get_old_evac_reserve() / ShenandoahEvacWaste);
+  size_t old_evacuation_budget = (size_t) ((double) heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
   size_t lost_evacuation_capacity = 0;
   log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
@@ -331,17 +332,20 @@ void ShenandoahOldHeuristics::abandon_collection_candidates() {
 }
 
 void ShenandoahOldHeuristics::handle_promotion_failure() {
+#ifdef KELVIN_DEPRECATE
   if (!_promotion_failed) {
     if (ShenandoahHeap::heap()->generation_sizer()->transfer_capacity(_old_generation)) {
       log_info(gc)("Increased size of old generation due to promotion failure.");
     }
     // TODO: Increase tenuring threshold to push back on promotions.
   }
+#endif
   _promotion_failed = true;
 }
 
 void ShenandoahOldHeuristics::record_cycle_start() {
   _promotion_failed = false;
+  _special_trigger_request = false;
   _trigger_heuristic->record_cycle_start();
 }
 
@@ -358,10 +362,17 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     return false;
   }
 
+#ifdef KELVIN_DEPRECATE
   // If there's been a promotion failure (and we don't have regions already scheduled for evacuation),
   // start a new old generation collection.
   if (_promotion_failed) {
     log_info(gc)("Trigger: Promotion Failure");
+    return true;
+  }
+#endif
+
+  if (_special_trigger_request) {
+    log_info(gc)("Trigger: Old expansion failure");
     return true;
   }
 

@@ -110,7 +110,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     if (is_global) {
       size_t max_young_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
       size_t young_cur_cset = 0;
-      size_t max_old_cset    = (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste);
+      size_t max_old_cset    = (size_t) (heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
       size_t old_cur_cset = 0;
       size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_young_cset;
       size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
@@ -313,6 +313,74 @@ static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }
 
+// Return conservative estimate of how much memory can be allocated before we need to start GC
+size_t ShenandoahAdaptiveHeuristics::evac_slack() {
+  assert(_generation->is_young(), "evac_slack is only meaningful for young-gen heuristic");
+
+  size_t max_capacity = _generation->max_capacity();
+  size_t capacity = _generation->soft_max_capacity();
+  size_t available = _generation->available();
+  size_t allocated = _generation->bytes_allocated_since_gc_start();
+  
+  size_t allocation_headroom = available;
+  size_t spike_headroom = capacity * ShenandoahAllocSpikeFactor / 100;
+  size_t penalties      = capacity * _gc_time_penalties / 100;
+
+  double rate = _allocation_rate.sample(allocated);
+
+  // At what value of available, would avg and spike triggers occur?
+  //  if allocation_headroom < avg_cycle_time * avg_alloc_rate, then we experience avg trigger
+  //  if allocation_headroom < avg_cycle_time * rate, then we experience spike trigger if is_spiking
+  //
+  // allocation_headroom =
+  //     0, if penalties > available or if penalties + spike_headroom > available
+  //     available - penalties - spike_headroom, otherwise
+  //
+  // so we trigger if available - penalties - spike_headroom < avg_cycle_time * avg_alloc_rate, which is to say
+  //                  available < avg_cycle_time * avg_alloc_rate + penalties + spike_headroom
+  //            or if available < penalties + spike_headroom 
+  //
+  // since avg_cycle_time * avg_alloc_rate > 0, the first test is sufficient to test both conditions
+  //
+  // thus, avg_evac_slack is MIN2(0,  available - avg_cycle_time * avg_alloc_rate + penalties + spike_headroom)
+  //
+  // similarly, spike_evac_slack is MIN2(0, available - avg_cycle_time * rate + penalties + spike_headroom)
+  // but spike_evac_slack is only relevant if is_spiking, as defined below.
+
+  double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+  double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
+
+  size_t evac_slack_avg;
+  if (available > avg_cycle_time * avg_alloc_rate + penalties + spike_headroom) {
+    evac_slack_avg = available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
+  } else {
+    // we have no slack because it's already time to trigger
+    evac_slack_avg = 0;
+  }
+
+  bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
+  size_t evac_slack_spiking;
+  if (is_spiking) {
+    if (available > avg_cycle_time * rate + penalties + spike_headroom) {
+      evac_slack_spiking = available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
+    } else {
+      // we have no slack because it's already time to trigger
+      evac_slack_spiking = 0;
+    }
+    if (evac_slack_spiking < evac_slack_avg) {
+#define KELVIN_TRACE
+#ifdef KELVIN_TRACE
+      log_info(gc, ergo)("Evac slack returning spike: " SIZE_FORMAT, evac_slack_spiking);
+#endif
+      return evac_slack_spiking;
+    }
+  }
+#ifdef KELVIN_TRACE
+  log_info(gc, ergo)("Evac slack returning avg: " SIZE_FORMAT, evac_slack_avg);
+#endif
+  return evac_slack_avg;
+}
+
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
@@ -366,12 +434,17 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                  _generation->name(),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                  byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
+#ifdef KELVIN_DEPRECATE
     return resize_and_evaluate();
+#else
+    return true;
+#endif
   }
 
   // Check if we need to learn a bit about the application
   const size_t max_learn = ShenandoahLearningSteps;
-  if (_gc_times_learned < max_learn) {
+  // Only run learning cycles on young generation
+  if (!_generation->is_old() && _gc_times_learned < max_learn) {
     size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
     if (allocation_headroom < init_threshold) {
       log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
@@ -421,62 +494,74 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
   //     the calculation of avg_cycle_time below.
 
-  double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+  // OLD generation is maintained to be as small as possible.  Depletion of free pool triggers do not apply
+  // to old generation.
+  if (!_generation->is_old()) {
 
-  size_t last_live_memory = get_last_live_memory();
-  size_t penultimate_live_memory = get_penultimate_live_memory();
-  double original_cycle_time = avg_cycle_time;
-  if ((penultimate_live_memory < last_live_memory) && (penultimate_live_memory != 0)) {
-    // If the live-memory size is growing, our estimates of cycle time are based on lighter workload, so adjust.
-    // TODO: Be more precise about how to scale when live memory is growing.  Existing code is a very rough approximation
-    // tuned with very limited workload observations.
-    avg_cycle_time = (avg_cycle_time * 2 * last_live_memory) / penultimate_live_memory;
-  } else {
-    int degen_cycles = degenerated_cycles_in_a_row();
-    if (degen_cycles > 0) {
-      // If we've degenerated recently, we might be waiting too long between triggers so adjust trigger forward.
-      // TODO: Be more precise about how to scale when we've experienced recent degenerated GC.  Existing code is a very
-      // rough approximation tuned with very limited workload observations.
-      avg_cycle_time += degen_cycles * avg_cycle_time;
-    }
-  }
+    double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
 
-  double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
-  log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
-    _generation->name(), avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
-
-  if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
-    if (avg_cycle_time > original_cycle_time) {
-      log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention",
-                    _generation->name(), original_cycle_time, avg_cycle_time);
+    size_t last_live_memory = get_last_live_memory();
+    size_t penultimate_live_memory = get_penultimate_live_memory();
+    double original_cycle_time = avg_cycle_time;
+    if ((penultimate_live_memory < last_live_memory) && (penultimate_live_memory != 0)) {
+      // If the live-memory size is growing, our estimates of cycle time are based on lighter workload, so adjust.
+      // TODO: Be more precise about how to scale when live memory is growing.  Existing code is a very rough approximation
+      // tuned with very limited workload observations.
+      avg_cycle_time = (avg_cycle_time * 2 * last_live_memory) / penultimate_live_memory;
+    } else {
+      int degen_cycles = degenerated_cycles_in_a_row();
+      if (degen_cycles > 0) {
+        // If we've degenerated recently, we might be waiting too long between triggers so adjust trigger forward.
+        // TODO: Be more precise about how to scale when we've experienced recent degenerated GC.  Existing code is a very
+        // rough approximation tuned with very limited workload observations.
+        avg_cycle_time += degen_cycles * avg_cycle_time;
+      }
     }
 
-    log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
-                 _generation->name(), avg_cycle_time * 1000,
-                 byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
-                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                 _margin_of_error_sd);
+    double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
+    log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s", _generation->name(),
+                  avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
 
-    log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - " SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
-                       byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
-                       byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
-                       byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
-                       byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
+    if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
+      if (avg_cycle_time > original_cycle_time) {
+        log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention",
+                      _generation->name(), original_cycle_time, avg_cycle_time);
+      }
 
-    _last_trigger = RATE;
-    return resize_and_evaluate();
-  }
+      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
+                   _generation->name(), avg_cycle_time * 1000,
+                   byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   _margin_of_error_sd);
 
-  bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
-  if (is_spiking && avg_cycle_time > allocation_headroom / rate) {
-    log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
-                 _generation->name(), avg_cycle_time * 1000,
-                 byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
-                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+      log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - " SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
+                         byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
+                         byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
+                         byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
+                         byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
 
-                 _spike_threshold_sd);
-    _last_trigger = SPIKE;
-    return resize_and_evaluate();
+      _last_trigger = RATE;
+#ifdef KELVIN_DEPRECATE
+      return resize_and_evaluate();
+#else
+      return true;
+#endif
+    }
+
+    bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
+    if (is_spiking && avg_cycle_time > allocation_headroom / rate) {
+      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
+                   _generation->name(), avg_cycle_time * 1000,
+                   byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   _spike_threshold_sd);
+      _last_trigger = SPIKE;
+#ifdef KELVIN_DEPRECATE
+      return resize_and_evaluate();
+#else
+      return true;
+#endif
+    }
   }
 
   return ShenandoahHeuristics::should_start_gc();
@@ -489,6 +574,7 @@ bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
     return true;
   }
 
+#ifdef KELVIN_DEPRECATE
   if (_cycles_since_last_resize <= MINIMUM_RESIZE_INTERVAL) {
     log_info(gc, ergo)("Not resizing %s for another " UINT32_FORMAT " cycles.",
         _generation->name(),  _cycles_since_last_resize);
@@ -503,6 +589,9 @@ bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
 
   log_info(gc)("Increased size of %s generation, re-evaluate trigger criteria", _generation->name());
   return should_start_gc();
+#else
+  return true;
+#endif
 }
 
 void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount) {

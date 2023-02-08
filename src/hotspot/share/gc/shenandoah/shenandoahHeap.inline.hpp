@@ -68,6 +68,10 @@ inline bool ShenandoahHeap::has_forwarded_objects() const {
   return _gc_state.is_set(HAS_FORWARDED);
 }
 
+inline bool ShenandoahHeap::is_old_compaction_enabled() const {
+  return _gc_state.is_set(MIXED_EVACUATIONS_ENABLED);
+}
+
 inline WorkerThreads* ShenandoahHeap::workers() const {
   return _workers;
 }

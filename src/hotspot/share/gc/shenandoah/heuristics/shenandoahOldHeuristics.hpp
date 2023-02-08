@@ -76,12 +76,17 @@ private:
   // This can be the 'static' or 'adaptive' heuristic.
   ShenandoahHeuristics* _trigger_heuristic;
 
+  // Keep a pointer to our generation that we can use without down casting a protected member from the base class.
+  ShenandoahOldGeneration* _old_generation;
+
   // Flag is set when promotion failure is detected (by gc thread), and cleared when
   // old generation collection begins (by control thread).
   volatile bool _promotion_failed;
 
-  // Keep a pointer to our generation that we can use without down casting a protected member from the base class.
-  ShenandoahOldGeneration* _old_generation;
+
+  // Flag is set when promotion failure is detected (by gc thread), and cleared when
+  // old generation collection begins (by control thread).
+  volatile bool _special_trigger_request;
 
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
@@ -130,6 +135,8 @@ public:
   // be evacuated into the young generation. The collection should complete normally, but we want to schedule
   // an old collection as soon as possible.
   void handle_promotion_failure();
+
+  void trigger_old_gc() { _special_trigger_request = true; };
 
   virtual void record_cycle_start() override;
 

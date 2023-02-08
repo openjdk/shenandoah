@@ -80,20 +80,44 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
 size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   size_t old_consumed = 0;
+  size_t promo_potential = 0;
   if (heap->mode()->is_generational()) {
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* region = heap->get_region(i);
       if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
-        size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahEvacWaste);
-        if (old_consumed + promotion_need < old_available) {
+        size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahPromoEvacWaste);
+        if (old_consumed + promotion_need <= old_available) {
+#undef KELVIN_NOISE
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Preselecting regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
+                             ", garbage: " SIZE_FORMAT,
+                             region->index(), region->age(), region->get_live_data_bytes(), region->garbage());
+#endif
+#undef KELVIN_NOISE
           old_consumed += promotion_need;
           preselected_regions[i] = true;
         }
         // Note that we keep going even if one region is excluded from selection.  Subsequent regions may be selected
         // if they have smaller live data.
+      } else if (in_generation(region) && !region->is_empty() && region->is_regular() &&
+                 (region->age() + 1 == InitialTenuringThreshold)) {
+#ifdef KELVIN_NOISE
+        log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
+                           ", garbage: " SIZE_FORMAT,
+                           region->index(), region->age(), region->get_live_data_bytes(), region->garbage());
+#endif
+        promo_potential += region->get_live_data_bytes();
       }
+#ifdef KELVIN_NOISE
+      else if (in_generation(region) && !region->is_empty() && (region->age() + 1 == InitialTenuringThreshold)) {
+        log_info(gc, ergo)("Not anticipating promotion of humongous region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
+                           ", garbage: " SIZE_FORMAT,
+                           region->index(), region->age(), region->get_live_data_bytes(), region->garbage());
+      }
+#endif
     }
   }
+  heap->set_promotion_potential(promo_potential);
   return old_consumed;
 }
 
@@ -123,6 +147,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t free = 0;
   size_t free_regions = 0;
   size_t live_memory = 0;
+
+  // This counts the number of humongous regions that we intend to promote in this cycle.
+  size_t humongous_regions_promoted = 0;
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
@@ -154,7 +181,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         cand_idx++;
       }
     } else if (region->is_humongous_start()) {
-
       // Reclaim humongous regions here, and count them as the immediate garbage
 #ifdef ASSERT
       bool reg_live = region->has_live();
@@ -171,6 +197,16 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         immediate_garbage += garbage;
       } else {
         live_memory += region->get_live_data_bytes();
+        if (region->age() >= InitialTenuringThreshold) {
+          oop obj = (oop) region->bottom();
+          size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+          humongous_regions_promoted += humongous_regions;
+#undef KELVIN_NOISE
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " humongous regions starting with index " SIZE_FORMAT,
+                             humongous_regions, humongous_regions_promoted);
+#endif
+        }
       }
     } else if (region->is_trash()) {
       // Count in just trashed collection set, during coalesced CM-with-UR
@@ -180,7 +216,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       live_memory += region->get_live_data_bytes();
     }
   }
-
+  reserve_promotable_humongous_regions(humongous_regions_promoted);
   save_last_live_memory(live_memory);
 
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
@@ -364,6 +400,12 @@ bool ShenandoahHeuristics::should_unload_classes() {
 void ShenandoahHeuristics::initialize() {
   // Nothing to do by default.
 }
+
+size_t ShenandoahHeuristics::evac_slack() {
+  assert(false, "evac_slack() only implemented for young Adaptive Heuristics");
+  return 0;
+}
+
 
 double ShenandoahHeuristics::elapsed_cycle_time() const {
   return os::elapsedTime() - _cycle_start;

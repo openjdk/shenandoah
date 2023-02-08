@@ -87,6 +87,10 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!is_in(r), "Already in collection set");
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
+#define KELVIN_CSET
+#ifdef KELVIN_CSET
+  log_info(gc, ergo)("add_region " SIZE_FORMAT ": affiliation: %s", r->index(), affiliation_name(r->affiliation()));
+#endif
   _cset_map[r->index()] = 1;
 
   if (r->affiliation() == YOUNG_GENERATION) {
@@ -111,6 +115,11 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
 
 void ShenandoahCollectionSet::clear() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
+
+#ifdef KELVIN_CSET
+  log_info(gc, ergo)("clearing cset");
+#endif
+
   Copy::zero_to_bytes(_cset_map, _map_size);
 
 #ifdef ASSERT

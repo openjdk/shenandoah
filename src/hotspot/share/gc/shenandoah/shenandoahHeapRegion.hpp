@@ -442,7 +442,7 @@ public:
 
   inline ShenandoahRegionAffiliation affiliation() const;
 
-  void set_affiliation(ShenandoahRegionAffiliation new_affiliation);
+  void set_affiliation(ShenandoahRegionAffiliation new_affiliation, bool defer_affiliated_region_count_updates);
 
   uint age()           { return _age; }
   void increment_age() { _age++; }

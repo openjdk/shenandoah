@@ -174,6 +174,7 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
   metrics.snap_after();
   if (heap->mode()->is_generational()) {
+    heap->mmu_tracker()->record_full(heap->global_generation(), GCId::current());
     heap->log_heap_status("At end of Full GC");
 
     // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
@@ -339,8 +340,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   // Resize metaspace
   MetaspaceGC::compute_new_size();
 
-  heap->adjust_generation_sizes();
-
   // Free worker slices
   for (uint i = 0; i < heap->max_workers(); i++) {
     delete worker_slices[i];
@@ -358,9 +357,13 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     }
   }
 
+#ifdef KELVIN_DEPRECATE
   // Having reclaimed all dead memory, it is now safe to restore capacities to original values.
   heap->young_generation()->unadjust_available();
   heap->old_generation()->unadjust_available();
+#else
+  // Humongous regions are promoted on demand and are accounted for by normal Full GC mechanisms.
+#endif
 
   if (VerifyAfterGC) {
     Universe::verify();
@@ -544,7 +547,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           ShenandoahHeapRegion* new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(OLD_GENERATION);
+          new_to_region->set_affiliation(OLD_GENERATION, false);
           _old_to_region = new_to_region;
           _old_compact_point = _old_to_region->bottom();
           promote_object = true;
@@ -570,7 +573,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(OLD_GENERATION);
+          new_to_region->set_affiliation(OLD_GENERATION, false);
         } else {
           // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
@@ -615,7 +618,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(YOUNG_GENERATION);
+          new_to_region->set_affiliation(YOUNG_GENERATION, false);
         } else {
           // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
@@ -1468,12 +1471,26 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     heap->heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
     if (heap->mode()->is_generational()) {
+      size_t old_usage = heap->old_generation()->used_regions_size();
+      size_t old_capacity = heap->old_generation()->max_capacity();
+
+      assert(old_usage % ShenandoahHeapRegion::region_size_bytes() == 0, "Old usage must aligh with region size");
+      assert(old_capacity % ShenandoahHeapRegion::region_size_bytes() == 0, "Old capacity must aligh with region size");
+
+      if (old_capacity > old_usage) {
+        size_t excess_old_regions = (old_capacity - old_usage) / ShenandoahHeapRegion::region_size_bytes();
+        heap->generation_sizer()->transfer_to_young(excess_old_regions);
+      } else if (old_capacity < old_usage) {
+        size_t old_regions_deficit = (old_usage - old_capacity) / ShenandoahHeapRegion::region_size_bytes();
+        heap->generation_sizer()->transfer_to_old(old_regions_deficit);
+      }
+      
       log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
                     post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
     }
 
     heap->collection_set()->clear();
-    heap->free_set()->rebuild();
+    heap->rebuild_free_set(false);
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);

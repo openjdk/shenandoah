@@ -79,6 +79,10 @@ void VM_ShenandoahFinalUpdateRefs::doit() {
 
 void VM_ShenandoahFinalRoots::doit() {
   ShenandoahGCPauseMark mark(_gc_id, SvcGCMarker::CONCURRENT);
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+  log_info(gc, ergo)("VM_ShenandoahFinalRoots::doit() will increment region ages if %d is non-zero\n", _incr_region_ages);
+#endif
   if (_incr_region_ages) {
     // TODO: Do we even care about this?  Do we want to parallelize it?
     ShenandoahHeap* heap = ShenandoahHeap::heap();

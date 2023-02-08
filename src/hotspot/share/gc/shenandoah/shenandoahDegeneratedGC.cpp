@@ -56,7 +56,11 @@ bool ShenandoahDegenGC::collect(GCCause::Cause cause) {
   vmop_degenerated();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational()) {
-    heap->log_heap_status("At end of Degenerated GC");
+    bool is_bootstrap_gc = heap->is_concurrent_old_mark_in_progress() && _generation->is_young();
+    heap->mmu_tracker()->record_degenerated(_generation, GCId::current(), is_bootstrap_gc,
+                                            !heap->collection_set()->has_old_regions());
+    const char* msg = is_bootstrap_gc? "At end of Degenerated Boostrap Old GC": "At end of Degenerated GC";
+    heap->log_heap_status(msg);
   }
   return true;
 }
@@ -277,18 +281,22 @@ void ShenandoahDegenGC::op_degenerated() {
   if (heap->mode()->is_generational()) {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
-
+#ifdef KELVIN_DEPRECATE
     heap->young_generation()->unadjust_available();
     heap->old_generation()->unadjust_available();
     // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
+#else
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+    log_info(gc,ergo)("KELVIN: end of DegenGC: need to age survivor regions, look for log evidence, if none, do it here");
+#endif 
+#endif
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
     heap->reset_old_evac_expended();
     heap->set_promoted_reserve(0);
-
-    heap->adjust_generation_sizes();
   }
 
   if (ShenandoahVerify) {

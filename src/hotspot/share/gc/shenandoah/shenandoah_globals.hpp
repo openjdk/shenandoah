@@ -127,8 +127,9 @@
           "size.")                                                          \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahOldMinFreeThreshold, 5, EXPERIMENTAL,            \
+  product(uintx, ShenandoahOldMinFreeThreshold, 0, EXPERIMENTAL,            \
           "Percentage of free old generation heap memory below which most " \
+          "  KELVIN TO DEPRECATE THIS PARAMETER "         \
           "heuristics trigger collection independent of other triggers. "   \
           "Provides a safety margin for many heuristics. In percents of "   \
           "(soft) max heap size.")                                          \
@@ -304,7 +305,23 @@
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
                                                                             \
-  product(double, ShenandoahGenerationalEvacWaste, 2.0, EXPERIMENTAL,       \
+  product(double, ShenandoahOldEvacWaste, 1.6, EXPERIMENTAL,                \
+          "How much waste evacuations produce within the reserved space. "  \
+          "Larger values make evacuations more resilient against "          \
+          "evacuation conflicts, at expense of evacuating less on each "    \
+          "GC cycle.  Smaller values increase the risk of evacuation "      \
+          "failures, which will trigger stop-the-world Full GC passes.")    \
+          range(1.0,100.0)                                                  \
+                                                                            \
+  product(double, ShenandoahPromoEvacWaste, 1.2, EXPERIMENTAL,              \
+          "How much waste evacuations produce within the reserved space. "  \
+          "Larger values make evacuations more resilient against "          \
+          "evacuation conflicts, at expense of evacuating less on each "    \
+          "GC cycle.  Smaller values increase the risk of evacuation "      \
+          "failures, which will trigger stop-the-world Full GC passes.")    \
+          range(1.0,100.0)                                                  \
+                                                                            \
+  product(double, ShenandoahGenerationalEvacWaste, 1.2, EXPERIMENTAL,       \
           "For generational mode, how much waste evacuations produce "      \
           "within the reserved space.  Larger values make evacuations "     \
           "more resilient against evacuation conflicts, at expense of "     \
@@ -312,6 +329,7 @@
           "the risk of evacuation failures, which will trigger "            \
           "stop-the-world Full GC passes.  The default value for "          \
           "generational mode is 2.0.  The reason for the higher default "   \
+          "  KELVIN WANTS TO DEPRECATE THIS "                               \
           "value in generational mode is because generational mode "        \
           "enforces the evacuation budget, triggering degenerated GC "      \
           "which upgrades to full GC whenever the budget is exceeded.")     \
@@ -347,6 +365,7 @@
           "How much of old-generation heap to reserve for old-generation "  \
           "evacuations.  Larger values allow GC to evacuate more live "     \
           "old-generation objects on every cycle, while potentially "       \
+          " KELVIN TO DEPRECATE" \
           "creating greater impact on the cadence at which the young- "     \
           "generation allocation pool is replenished.  During mixed "       \
           "evacuations, the bound on amount of old-generation heap "        \
@@ -357,12 +376,16 @@
           "old-generation heap size.")                                      \
           range(1,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahOldEvacRatioPercent, 12, EXPERIMENTAL,           \
+  product(uintx, ShenandoahOldEvacRatioPercent, 50, EXPERIMENTAL,           \
           "The maximum proportion of evacuation from old-gen memory, as "   \
-          "a percent ratio.  The default value 12 denotes that no more "    \
-          "than one eighth (12%) of the collection set evacuation "         \
-          "workload may be comprised of old-gen heap regions.  A larger "   \
-          "value allows a smaller number of mixed evacuations to process "  \
+          "a percent ratio.  The default value 50 denotes that no more "    \
+          "than one half (50%) of the collection set evacuation "           \
+          "workload may be evacuate to old-gen heap regions.  This "        \
+          "both the promotion of aged regions and the compaction of "       \
+          "existing old regions.  A value of 50 denotes than the normal "   \
+          "young-gen evacuation is increased by up to two fold. "           \
+          "A larger value allows quicker promotion and allows"              \
+          "a smaller number of mixed evacuations to process "               \
           "the entire list of old-gen collection candidates at the cost "   \
           "of an increased disruption of the normal cadence of young-gen "  \
           "collections.  A value of 100 allows a mixed evacuation to "      \
@@ -376,13 +399,13 @@
           "events.")                                                        \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahMinYoungPercentage, 20,                                \
+  product(uintx, ShenandoahMinYoungPercentage, 20,                          \
           "The minimum percentage of the heap to use for the young "        \
           "generation. Heuristics will not adjust the young generation "    \
           "to be less than this.")                                          \
           range(0, 100)                                                     \
                                                                             \
-  product(uintx, ShenandoahMaxYoungPercentage, 80,                                \
+  product(uintx, ShenandoahMaxYoungPercentage, 95,                          \
           "The maximum percentage of the heap to use for the young "        \
           "generation. Heuristics will not adjust the young generation "    \
           "to be more than this.")                                          \
@@ -521,6 +544,7 @@
           "Any memory borrowed from old-gen during evacuation and "         \
           "update-references phases of GC will be repaid from the "         \
           "abundance of young-gen memory produced when the collection "     \
+          " KELVIN TO DEPRECATE" \
           "set is recycled at the end of updating references.  The "        \
           "default value of 30 reserves 70% of the to-be-reclaimed "        \
           "young collection set memory to be allocated during the "         \

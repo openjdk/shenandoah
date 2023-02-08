@@ -72,6 +72,8 @@ public:
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
 
+  virtual size_t evac_slack();
+
  private:
   // These are used to adjust the margin of error and the spike threshold
   // in response to GC cycle outcomes. These values are shared, but the

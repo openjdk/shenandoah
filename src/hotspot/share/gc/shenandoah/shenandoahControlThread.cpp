@@ -459,8 +459,9 @@ void ShenandoahControlThread::process_phase_timings(const ShenandoahHeap* heap) 
 //      +--->  Global Degen +--------------------> Full <----+
 //
 void ShenandoahControlThread::service_concurrent_normal_cycle(
-  const ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
+  ShenandoahHeap* heap, const GenerationMode generation, GCCause::Cause cause) {
   GCIdMark gc_id_mark;
+  ShenandoahGeneration* the_generation = nullptr;
   switch (generation) {
     case YOUNG: {
       // Run a young cycle. This might or might not, have interrupted an ongoing
@@ -469,16 +470,19 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
       // they end up in, but we have to be sure we don't promote into any regions
       // that are in the cset.
       log_info(gc, ergo)("Start GC cycle (YOUNG)");
-      service_concurrent_cycle(heap->young_generation(), cause, false);
+      the_generation = heap->young_generation();
+      service_concurrent_cycle(the_generation, cause, false);
       break;
     }
     case GLOBAL: {
       log_info(gc, ergo)("Start GC cycle (GLOBAL)");
-      service_concurrent_cycle(heap->global_generation(), cause, false);
+      the_generation = heap->global_generation();
+      service_concurrent_cycle(the_generation, cause, false);
       break;
     }
     case OLD: {
       log_info(gc, ergo)("Start GC cycle (OLD)");
+      the_generation = heap->old_generation();
       service_concurrent_old_cycle(heap, cause);
       break;
     }
@@ -488,9 +492,17 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
   const char* msg;
   if (heap->mode()->is_generational()) {
     if (heap->cancelled_gc()) {
-      msg = (generation == YOUNG)? "At end of Interrupted Concurrent Young GC": "At end of Interrupted Concurrent Bootstrap GC";
+      msg = (generation == YOUNG)?
+        "At end of Interrupted Concurrent Young GC": "At end of Interrupted Concurrent Bootstrap Old GC";
     } else {
-      msg = (generation == YOUNG)? "At end of Concurrent Young GC": "At end of Concurrent Bootstrap GC";
+      msg = (generation == YOUNG)? "At end of Concurrent Young GC": "At end of Concurrent Bootstrap Old GC";
+      // We only record GC results if GC was successful
+      ShenandoahMmuTracker* mmu_tracker = heap->mmu_tracker();
+      if (generation == YOUNG) {
+        mmu_tracker->record_young(the_generation, GCId::current());
+      } else {
+        mmu_tracker->record_bootstrap(the_generation, GCId::current(), heap->collection_set()->has_old_regions());
+      }
     }
   } else {
     msg = heap->cancelled_gc() ? "At end of cancelled GC" : "At end of GC";
@@ -498,7 +510,7 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
   heap->log_heap_status(msg);
 }
 
-void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap* heap, GCCause::Cause &cause) {
+void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap, GCCause::Cause &cause) {
 
   ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
@@ -560,9 +572,13 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
       if (marking_complete) {
         assert(old_generation->state() != ShenandoahOldGeneration::MARKING, "Should not still be marking.");
         if (original_state == ShenandoahOldGeneration::MARKING) {
+          heap->mmu_tracker()->record_old_marking_increment(old_generation, GCId::current(), true,
+                                                            heap->collection_set()->has_old_regions());
           heap->log_heap_status("At end of Concurrent Old Marking finishing increment");
         }
       } else if (original_state == ShenandoahOldGeneration::MARKING) {
+        heap->mmu_tracker()->record_old_marking_increment(old_generation, GCId::current(), false,
+                                                          heap->collection_set()->has_old_regions());
         heap->log_heap_status("At end of Concurrent Old Marking increment");
       }
       break;

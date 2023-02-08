@@ -218,6 +218,7 @@ public:
 private:
            size_t _initial_size;
            size_t _minimum_size;
+           size_t _promotion_potential;
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
   volatile size_t _used;
@@ -262,6 +263,7 @@ public:
   WorkerThreads* safepoint_workers() override;
 
   void gc_threads_do(ThreadClosure* tcl) const override;
+  void mutator_threads_do(ThreadClosure* tcl) const;
 
 // ---------- Heap regions handling machinery
 //
@@ -287,6 +289,8 @@ public:
 
   void heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
+
+  inline ShenandoahMmuTracker* mmu_tracker() { return &_mmu_tracker; };
 
 // ---------- GC state machinery
 //
@@ -315,7 +319,10 @@ public:
     WEAK_ROOTS_BITPOS  = 4,
 
     // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5
+    OLD_MARKING_BITPOS = 5,
+
+    // Old (mixed) evacations are enabled.
+    MIXED_EVACUATIONS_ENABLED_BITPOS = 6
   };
 
   enum GCState {
@@ -325,7 +332,8 @@ public:
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
-    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
+    MIXED_EVACUATIONS_ENABLED = 1 << MIXED_EVACUATIONS_ENABLED_BITPOS
   };
 
 private:
@@ -386,8 +394,6 @@ private:
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
 
-
-
 public:
   char gc_state() const;
   static address gc_state_addr();
@@ -402,14 +408,17 @@ public:
   void set_has_forwarded_objects(bool cond);
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
+  void set_old_compaction_enabled(bool cond);
   void set_prepare_for_old_mark_in_progress(bool cond);
   void set_aging_cycle(bool cond);
+
 
   inline bool is_stable() const;
   inline bool is_idle() const;
   inline bool is_concurrent_mark_in_progress() const;
   inline bool is_concurrent_young_mark_in_progress() const;
   inline bool is_concurrent_old_mark_in_progress() const;
+  inline bool is_old_compaction_enabled() const;
   inline bool is_update_refs_in_progress() const;
   inline bool is_evacuation_in_progress() const;
   inline bool is_degenerated_gc_in_progress() const;
@@ -429,6 +438,10 @@ public:
   inline size_t capture_old_usage(size_t usage);
   inline void set_previous_promotion(size_t promoted_bytes);
   inline size_t get_previous_promotion() const;
+
+  inline void clear_promotion_potential() { _promotion_potential = 0; };
+  inline void set_promotion_potential(size_t val) { _promotion_potential = val; };
+  inline size_t get_promotion_potential() { return _promotion_potential; };
 
   // Returns previous value
   inline size_t set_promoted_reserve(size_t new_val);
@@ -511,11 +524,11 @@ private:
   void update_heap_references(bool concurrent);
   // Final update region states
   void update_heap_region_states(bool concurrent);
-  void rebuild_free_set(bool concurrent);
 
   void rendezvous_threads();
   void recycle_trash();
 public:
+  void rebuild_free_set(bool concurrent);
   void notify_gc_progress()    { _progress_last_gc.set();   }
   void notify_gc_no_progress() { _progress_last_gc.unset(); }
 
@@ -824,7 +837,7 @@ public:
   void cancel_old_gc();
   bool is_old_gc_active();
   void coalesce_and_fill_old_regions();
-  bool adjust_generation_sizes();
+  bool adjust_generation_sizes_for_next_cycle(size_t old_xfer_limit);
 
 // ---------- Helper functions
 //

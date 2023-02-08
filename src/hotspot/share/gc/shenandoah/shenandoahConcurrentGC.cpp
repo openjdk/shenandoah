@@ -218,31 +218,20 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   }
 
   if (heap->mode()->is_generational()) {
-    size_t old_available, young_available;
-    {
-      ShenandoahYoungGeneration* young_gen = heap->young_generation();
-      ShenandoahGeneration* old_gen = heap->old_generation();
-      ShenandoahHeapLocker locker(heap->lock());
+    ShenandoahYoungGeneration* young_gen = heap->young_generation();
+    ShenandoahGeneration* old_gen = heap->old_generation();
+    ShenandoahHeapLocker locker(heap->lock());
 
-      size_t old_usage_before_evac = heap->capture_old_usage(0);
-      size_t old_usage_now = old_gen->used();
-      size_t promoted_bytes = old_usage_now - old_usage_before_evac;
-      heap->set_previous_promotion(promoted_bytes);
+    size_t old_usage_before_evac = heap->capture_old_usage(0);
+    size_t old_usage_now = old_gen->used();
+    size_t promoted_bytes = old_usage_now - old_usage_before_evac;
+    heap->set_previous_promotion(promoted_bytes);
 
-      young_gen->unadjust_available();
-      old_gen->unadjust_available();
-      // No need to old_gen->increase_used().
-      // That was done when plabs were allocated, accounting for both old evacs and promotions.
-
-      young_available = young_gen->adjusted_available();
-      old_available = old_gen->adjusted_available();
-
-      heap->set_alloc_supplement_reserve(0);
-      heap->set_young_evac_reserve(0);
-      heap->set_old_evac_reserve(0);
-      heap->reset_old_evac_expended();
-      heap->set_promoted_reserve(0);
-    }
+    heap->set_alloc_supplement_reserve(0);
+    heap->set_young_evac_reserve(0);
+    heap->set_old_evac_reserve(0);
+    heap->reset_old_evac_expended();
+    heap->set_promoted_reserve(0);
   }
   return true;
 }
@@ -765,6 +754,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
       ShenandoahCodeRoots::arm_nmethods();
       ShenandoahStackWatermark::change_epoch_id();
 
+#ifdef KELVIN_DEPRECATE
       if (heap->mode()->is_generational()) {
         // Calculate the temporary evacuation allowance supplement to young-gen memory capacity (for allocations
         // and young-gen evacuations).
@@ -778,7 +768,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
                            byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
                            byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
       }
-
+#endif
       if (ShenandoahPacing) {
         heap->pacer()->setup_for_evac();
       }
@@ -1198,7 +1188,6 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
   }
 
   heap->rebuild_free_set(true /*concurrent*/);
-  heap->adjust_generation_sizes();
 }
 
 void ShenandoahConcurrentGC::op_final_roots() {

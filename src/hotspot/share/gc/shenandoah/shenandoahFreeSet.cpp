@@ -73,9 +73,15 @@ bool ShenandoahFreeSet::is_collector_free(size_t idx) const {
 HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region) {
   ShenandoahRegionAffiliation affiliation = ShenandoahRegionAffiliation::OLD_GENERATION;
 
+#ifdef KELVIN_DEPRECATE
   size_t rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
   size_t leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
-
+#else
+  size_t o_rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
+  size_t o_leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
+  size_t rightmost = _heap->num_regions() - 1;
+  size_t leftmost = 0;
+#endif
   for (size_t c = rightmost + 1; c > leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
@@ -84,11 +90,26 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
       if (!r->is_cset() && !has_no_alloc_capacity(r)) {
         HeapWord* result = try_allocate_in(r, req, in_new_region);
         if (result != NULL) {
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+          log_info(gc, ergo)("awoa(size: " SIZE_FORMAT ", plab: %s, min_size: " SIZE_FORMAT ") succeeds @" PTR_FORMAT
+                             ", region " SIZE_FORMAT ", actual_size: " SIZE_FORMAT,
+                             req.size(), req.is_lab_alloc()? "yes": "no", req.is_lab_alloc()? req.min_size(): 0L, p2i(result),
+                             r->index(), req.actual_size());
+          if ((idx < o_leftmost) || (idx > o_rightmost)) {
+            log_info(gc, ergo)(" Surprise! Surprise! Surprise!  o_leftmost: " SIZE_FORMAT ", o_rightmost: " SIZE_FORMAT,
+                               o_leftmost, o_rightmost);
+          }
+#endif
           return result;
         }
       }
     }
   }
+#ifdef KELVIN_TRACE
+  log_info(gc, ergo)("awoa(size: " SIZE_FORMAT ", plab: %s, min_size: " SIZE_FORMAT ") fails",
+                     req.size(), req.is_lab_alloc()? "yes": "no", req.is_lab_alloc()? req.min_size(): 0L);
+#endif
   return nullptr;
 }
 
@@ -183,6 +204,17 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       if (result != NULL) {
         return result;
       }
+#ifdef KELVIN_TRACE
+      if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+        ShenandoahGeneration* old_gen = _heap->old_generation();
+        log_info(gc, ergo)("Since awoa failed, will try new region maybe: %s", allow_new_region? "yes": "not even");
+        log_info(gc, ergo)(" old_used: " SIZE_FORMAT ", old_regions_used: " SIZE_FORMAT ", old_unaffiliated_regions: " SIZE_FORMAT
+                           ", adjusted_unaffiliated_regions: " SIZE_FORMAT ", old available: " SIZE_FORMAT,
+                           old_gen->used(), old_gen->used_regions_size(), old_gen->free_unaffiliated_regions(),
+                           old_gen->adjusted_unaffiliated_regions(), old_gen->available());
+                           
+      }
+#endif
       if (allow_new_region) {
         // Then try a free region that is dedicated to GC allocations.
         result = allocate_with_affiliation(FREE, req, in_new_region);
@@ -190,7 +222,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           return result;
         }
       }
-
+#ifdef KELVIN_TRACE
+      if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+        log_info(gc, ergo)("%sGoing to try the mutator view", allow_new_region? "": "NOT ");
+      }
+#endif
       // No dice. Can we borrow space from mutator view?
       if (!ShenandoahEvacReserveOverflow) {
         return NULL;
@@ -234,7 +270,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   try_recycle_trashed(r);
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
-    r->set_affiliation(req.affiliation());
+    r->set_affiliation(req.affiliation(), false);
     if (r->is_old()) {
       // Any OLD region allocated during concurrent coalesce-and-fill does not need to be coalesced and filled because
       // all objects allocated within this region are above TAMS (and thus are implicitly marked).  In case this is an
@@ -531,7 +567,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
       used_words = ShenandoahHeapRegion::region_size_words();
     }
 
-    r->set_affiliation(req.affiliation());
+    r->set_affiliation(req.affiliation(), false);
     r->set_update_watermark(r->bottom());
     r->set_top(r->bottom());    // Set top to bottom so we can capture TAMS
     ctx->capture_top_at_mark_start(r);
@@ -650,7 +686,7 @@ void ShenandoahFreeSet::clear_internal() {
   _used = 0;
 }
 
-void ShenandoahFreeSet::rebuild() {
+void ShenandoahFreeSet::prepare_to_rebuild() {
   shenandoah_assert_heaplocked();
   clear();
 
@@ -672,6 +708,10 @@ void ShenandoahFreeSet::rebuild() {
       log_debug(gc)("  Setting Region " SIZE_FORMAT " _mutator_free_bitmap bit to true", idx);
     }
   }
+}
+
+void ShenandoahFreeSet::rebuild() {
+  shenandoah_assert_heaplocked();
 
   // Evac reserve: reserve trailing space for evacuations
   if (!_heap->mode()->is_generational()) {

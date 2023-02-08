@@ -38,7 +38,7 @@ class ShenandoahResetRegions : public ShenandoahHeapRegionClosure {
       region->make_trash();
       region->make_empty();
     }
-    region->set_affiliation(FREE);
+    region->set_affiliation(FREE, false);
     region->clear_live_data();
     region->set_top(region->bottom());
   }

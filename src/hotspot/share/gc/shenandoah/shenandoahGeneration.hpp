@@ -183,6 +183,12 @@ private:
   // Return the updated value of affiliated_region_count
   size_t decrement_affiliated_region_count();
 
+  // Return the updated value of affiliated_region_count
+  size_t increase_affiliated_region_count(size_t delta);
+
+  // Return the updated value of affiliated_region_count
+  size_t decrease_affiliated_region_count(size_t delta);
+
   void clear_used();
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);

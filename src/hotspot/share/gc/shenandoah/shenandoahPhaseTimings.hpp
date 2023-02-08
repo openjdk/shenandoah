@@ -187,6 +187,7 @@ class outputStream;
   f(pacing,                                         "Pacing")                          \
                                                                                        \
   f(heap_iteration_roots,                           "Heap Iteration")                  \
+  f(thread_iteration_roots,                         "Java Thread Iteration")           \
   SHENANDOAH_PAR_PHASE_DO(heap_iteration_roots_,    "  HI: ", f)                       \
   // end
 

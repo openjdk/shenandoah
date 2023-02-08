@@ -53,6 +53,14 @@ class ThreadTimeAccumulator : public ThreadClosure {
   }
 };
 
+double ShenandoahMmuTracker::mutator_thread_time_seconds() {
+  ThreadTimeAccumulator cl;
+  // We include only the gc threads because those are the only threads
+  // we are responsible for.
+  ShenandoahHeap::heap()->mutator_threads_do(&cl);
+  return double(cl.total_time) / NANOSECS_PER_SEC;
+}
+
 double ShenandoahMmuTracker::gc_thread_time_seconds() {
   ThreadTimeAccumulator cl;
   // We include only the gc threads because those are the only threads
@@ -84,11 +92,204 @@ ShenandoahMmuTracker::~ShenandoahMmuTracker() {
 }
 
 void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
-  shenandoah_assert_control_or_vm_thread();
+  shenandoah_assert_control_thread();
   double collector_time_s = gc_thread_time_seconds();
   double elapsed_gc_time_s = collector_time_s - _generational_reference_time_s;
   generation->add_collection_time(elapsed_gc_time_s);
   _generational_reference_time_s = collector_time_s;
+}
+
+void ShenandoahMmuTracker::initialize_ideal_log(double gcu, double gc_duration) {
+  _log_first = LOG_SIZE - 1;
+  for (int i = 0; i < LOG_SIZE; i++) {
+    _ideal_gcu[i] = gcu;
+    _ideal_gcu_duration[i] = gc_duration;
+  }
+}
+
+double ShenandoahMmuTracker::most_recent_gcu() {
+  return _most_recent_gcu;
+}
+
+void ShenandoahMmuTracker::worst_ideal_gcu(double &gcu, double &gc_duration) {
+  double result = _ideal_gcu[0];
+  double duration = _ideal_gcu_duration[0];
+  for (int i = 0; i < LOG_SIZE; i++) {
+    if (_ideal_gcu[i] > result) {
+      result = _ideal_gcu[i];
+      duration = _ideal_gcu_duration[i];
+    }
+  }
+  gcu = result;
+  gc_duration = duration;
+}
+
+double ShenandoahMmuTracker::weighted_avg_ideal_gcu() {
+  double sum = 0;
+  double span = 0;
+  int idx = _log_first;
+
+  // most recent entry gets weight 4
+  sum = 4 * _ideal_gcu[idx];
+  span = 4 * _ideal_gcu_duration[idx];
+  if (idx-- == 0) {
+    idx = LOG_SIZE - 1;
+  }
+  // penultimate entry gets weight 2
+  sum += 2 * _ideal_gcu[idx];
+  span += 2 * _ideal_gcu_duration[idx];
+
+  // all other entries get weight 1
+  for (int i = LOG_SIZE - 2; i >= 0; i--) {
+    if (idx-- == 0) {
+      idx = LOG_SIZE - 1;
+    }
+    sum += _ideal_gcu[idx];
+    span += _ideal_gcu_duration[idx];
+  }
+  return sum / span;
+}
+
+
+// Remember the most recent "best" young GC statistics.  The log always holds LOG_SIZE elements
+void ShenandoahMmuTracker::add_to_ideal_log(double gcu, double cycle_duration) {
+  _log_first++;
+  if (_log_first >= LOG_SIZE) {
+    _log_first = 0;
+  }
+  // Overwrite the oldest entry in the log.
+  _ideal_gcu[_log_first] = gcu;
+  _ideal_gcu_duration[_log_first] = cycle_duration;
+ }
+
+void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char *msg, bool update_log) {
+  record(generation);
+  double current = os::elapsedTime();
+  _most_recent_gcid = gcid;
+  _most_recent_is_full = false;
+
+  if (gcid == 0) {
+    _most_recent_timestamp = current;
+    _most_recent_process_time = process_time_seconds();
+    _most_recent_gc_time = gc_thread_time_seconds();
+  } else {
+#undef KELVIN_NOISE
+#ifdef KELVIN_NOISE
+    double o_most_recent_timestamp = _most_recent_timestamp;
+    double o_most_recent_process_time = _most_recent_process_time;
+    double o_most_recent_gc_time = _most_recent_gc_time;
+    double o_most_recent_gcu = _most_recent_gcu;
+    double o_most_recent_mutator_time = _most_recent_mutator_time;
+    double o_most_recent_mu = _most_recent_mu;
+
+#endif
+    double gc_cycle_duration = current - _most_recent_timestamp;
+    _most_recent_timestamp = current;
+
+#ifdef KELVIN_NOISE
+    double process_thread_time = process_time_seconds();
+    double process_time = process_thread_time - _most_recent_process_time;
+    _most_recent_process_time = process_thread_time;;
+#endif
+    double gc_thread_time = gc_thread_time_seconds();
+    double gc_time = gc_thread_time - _most_recent_gc_time;
+    _most_recent_gc_time = gc_thread_time;
+    _most_recent_gcu = gc_time / (_active_processors * gc_cycle_duration);
+
+    double mutator_thread_time = mutator_thread_time_seconds();
+    double mutator_time = mutator_thread_time - _most_recent_mutator_time;
+    _most_recent_mutator_time = mutator_thread_time;
+    _most_recent_mu = mutator_time / (_active_processors * gc_cycle_duration);
+
+    if (update_log && (_most_recent_gcu < weighted_avg_ideal_gcu())) {
+      add_to_ideal_log(_most_recent_gcu, gc_cycle_duration);
+    }
+    log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% for duration %.3fs",
+                       msg, _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_duration);
+#ifdef KELVIN_NOISE
+    double mmu = (process_time - gc_time) / process_time;
+    double traditional_ratio = gc_time / (process_time - gc_time);
+    double enlightened_ratio = _most_recent_gcu / _most_recent_mu;
+    log_info(gc, ergo)(" Traditional MMU calculation: %.1f%%, traditional ratio: %.3f, enlightened ratio: %.3f",
+                       mmu, traditional_ratio, enlightened_ratio);
+
+    log_info(gc, ergo)(" timestamp: %.3fs -> %.3fs, process_time: %.3fs -> %.3fs"
+                       ", gc_time: %.3fs -> %.3fs, GCU: %.1f%% -> %.1f%%"
+                       ", mutator_time: %.3fs -> %.3fs, MU: %.1f%% -> %.1f%%",
+                       o_most_recent_timestamp, _most_recent_timestamp, o_most_recent_process_time, _most_recent_process_time,
+                       o_most_recent_gc_time, _most_recent_gc_time, o_most_recent_gcu * 100, _most_recent_gcu * 100,
+                       o_most_recent_mutator_time, _most_recent_mutator_time, o_most_recent_mu * 100, _most_recent_mu * 100);
+                       
+#endif
+  }
+}
+
+void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, uint gcid) {
+  help_record_concurrent(generation, gcid, "Concurrent Young GC", true);
+}
+
+void ShenandoahMmuTracker::record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool candidates_for_mixed) {
+  // Not likely that this will represent an "ideal" GCU, but doesn't hurt to try
+  help_record_concurrent(generation, gcid, "Bootstrap Old GC", true);
+  if (candidates_for_mixed) {
+    _doing_mixed_evacuations = true;
+  }
+  // Else, there are no candidates for mixed evacuations, so we are not going to do mixed evacuations.
+}
+
+void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done,
+                                                        bool has_old_candidates) {
+  // No special processing for old marking
+  double duration = os::elapsedTime() - _most_recent_timestamp;
+  double process_time = process_time_seconds() - _most_recent_process_time;
+  double gc_time = gc_thread_time_seconds() - _most_recent_gc_time;
+  double gcu = gc_time / process_time;
+  if (has_old_candidates) {
+    _doing_mixed_evacuations = true;
+  }
+  log_info(gc, ergo)("At end of %s: GC Utilization: %.1f%% for duration %.3fs (which is subsumed in next concurrent gc report)",
+                     old_marking_done? "Last old marking increment": "Old marking increment",
+                     _most_recent_gcu * 100, duration);
+}
+
+void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done) {
+  // This is like young and boostrap, but no need to update ideal_gc_log, because we'll re-initiailze at end
+  help_record_concurrent(generation, gcid, "Mixed Concurrent GC", false);
+  if (_doing_mixed_evacuations && is_mixed_done) {
+    _doing_mixed_evacuations = false;
+    double gcu = weighted_avg_ideal_gcu() * 1.25;
+    initialize_ideal_log(gcu, 0.001);
+    log_info(gc, ergo)("Establishing ideal GC utilization as %.1f%%, duration: %.3fs", gcu, 0.001);
+  }
+}
+
+void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
+                                              uint gcid, bool is_old_bootstrap, bool is_mixed_done) {
+  if ((gcid == _most_recent_gcid) && _most_recent_is_full) {
+    // Do nothing.  This is a redundant recording for the full gc that just completed.
+  } else if (is_old_bootstrap) {
+    help_record_concurrent(generation, gcid, "Degenerated Bootstrap Old GC", false);
+    if (!is_mixed_done) {
+      _doing_mixed_evacuations = true;
+    }
+  } else {
+    help_record_concurrent(generation, gcid, "Degenerated Young GC", false);
+    if (_doing_mixed_evacuations && is_mixed_done) {
+      _doing_mixed_evacuations = false;
+      double gcu = weighted_avg_ideal_gcu() * 1.25;
+      initialize_ideal_log(gcu, 0.001);
+      log_info(gc, ergo)("Establishing ideal GC utilization as %.1f%%, duration: %.3fs", gcu, 0.001);
+    }
+  }
+}
+
+void ShenandoahMmuTracker::record_full(ShenandoahGeneration* generation, uint gcid) {
+  help_record_concurrent(generation, gcid, "Full GC", false);
+  _most_recent_is_full = true;
+  _doing_mixed_evacuations = false;
+  double gcu = weighted_avg_ideal_gcu() * 1.25;
+  initialize_ideal_log(gcu, 0.001);
+  log_info(gc, ergo)("Establishing ideal GC utilization as %.1f%%, duration: %.3fs", gcu, 0.001);
 }
 
 void ShenandoahMmuTracker::report() {
@@ -110,6 +311,11 @@ void ShenandoahMmuTracker::report() {
 }
 
 void ShenandoahMmuTracker::initialize() {
+  // initialize static data
+  _active_processors = os::initial_active_processor_count();
+
+  // Initialize with max utilization, very low duration, to diminish bias of initial values
+  initialize_ideal_log(1.0, 0.0001);
   _process_reference_time_s = process_time_seconds();
   _generational_reference_time_s = gc_thread_time_seconds();
   _collector_reference_time_s = _generational_reference_time_s;
@@ -202,6 +408,7 @@ void ShenandoahGenerationSizer::heap_size_changed(size_t heap_size) {
   recalculate_min_max_young_length(heap_size / ShenandoahHeapRegion::region_size_bytes());
 }
 
+#ifdef KELVIN_DEPRECATE
 bool ShenandoahGenerationSizer::adjust_generation_sizes() const {
   shenandoah_assert_generational();
   if (!use_adaptive_sizing()) {
@@ -238,7 +445,75 @@ bool ShenandoahGenerationSizer::adjust_generation_sizes() const {
     return transfer_capacity(young, old);
   }
 }
+#endif
 
+// Returns true iff transfer is successful
+bool ShenandoahGenerationSizer::transfer_to_old(size_t regions) const {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGeneration* old_gen = heap->old_generation();
+  ShenandoahGeneration* young_gen = heap->young_generation();
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  size_t bytes_to_transfer = regions * region_size_bytes;
+
+  if (young_gen->free_unaffiliated_regions() < regions) {
+    return false;
+  } else if (old_gen->max_capacity() + bytes_to_transfer > heap->max_size_for(old_gen)) {
+    return false;
+  } else if (young_gen->max_capacity() - bytes_to_transfer < heap->min_size_for(young_gen)) {
+    return false;
+  } else {
+    young_gen->decrease_capacity(bytes_to_transfer);
+    old_gen->increase_capacity(bytes_to_transfer);
+    size_t new_size = old_gen->max_capacity();
+    log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+                 regions, young_gen->name(), old_gen->name(),
+                 byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
+    return true;
+  }
+}
+
+void ShenandoahGenerationSizer::force_transfer_to_old(size_t regions) const {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGeneration* old_gen = heap->old_generation();
+  ShenandoahGeneration* young_gen = heap->young_generation();
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  size_t bytes_to_transfer = regions * region_size_bytes;
+
+  assert(young_gen->free_unaffiliated_regions() >= regions, "cannot transfer regions that are not present");
+  young_gen->decrease_capacity(bytes_to_transfer);
+  old_gen->increase_capacity(bytes_to_transfer);
+  size_t new_size = old_gen->max_capacity();
+  log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+               regions, young_gen->name(), old_gen->name(),
+               byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
+}
+
+
+bool ShenandoahGenerationSizer::transfer_to_young(size_t regions) const {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGeneration* old_gen = heap->old_generation();
+  ShenandoahGeneration* young_gen = heap->young_generation();
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  size_t bytes_to_transfer = regions * region_size_bytes;
+
+  if (old_gen->free_unaffiliated_regions() < regions) {
+    return false;
+  } else if (young_gen->max_capacity() + bytes_to_transfer > heap->max_size_for(young_gen)) {
+    return false;
+  } else if (old_gen->max_capacity() - bytes_to_transfer < heap->min_size_for(old_gen)) {
+    return false;
+  } else {
+    old_gen->decrease_capacity(bytes_to_transfer);
+    young_gen->increase_capacity(bytes_to_transfer);
+    size_t new_size = young_gen->max_capacity();
+    log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+                 regions, old_gen->name(), young_gen->name(),
+                 byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
+    return true;
+  }
+}
+ 
+#ifdef KELVIN_DEPRECATE
 bool ShenandoahGenerationSizer::transfer_capacity(ShenandoahGeneration* target) const {
   ShenandoahHeapLocker locker(ShenandoahHeap::heap()->lock());
   if (target->is_young()) {
@@ -307,6 +582,7 @@ size_t ShenandoahGenerationSizer::adjust_transfer_to_young(ShenandoahGeneration*
   }
   return regions_to_transfer;
 }
+#endif
 
 size_t ShenandoahGenerationSizer::min_young_size() const {
   return min_young_regions() * ShenandoahHeapRegion::region_size_bytes();
