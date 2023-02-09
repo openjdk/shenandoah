@@ -368,7 +368,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   size_t min_threshold = min_free_threshold();
 
-  if (allocation_headroom < min_threshold) {
+  if (available < min_threshold) {
     log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
                  _generation->name(),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
@@ -380,7 +380,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   const size_t max_learn = ShenandoahLearningSteps;
   if (_gc_times_learned < max_learn) {
     size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
-    if (allocation_headroom < init_threshold) {
+    if (available < init_threshold) {
       log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
                    _generation->name(), _gc_times_learned + 1, max_learn,
                    byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
