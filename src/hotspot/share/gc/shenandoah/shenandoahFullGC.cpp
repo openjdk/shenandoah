@@ -1490,7 +1490,25 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     }
 
     heap->collection_set()->clear();
-    heap->rebuild_free_set(false);
+    size_t young_cset_regions, old_cset_regions;
+    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
+
+    // We do not separately promote humongous after Full GC.  These have been handled by separate mechanism.
+
+    // We also do not expand old generation size following Full GC because we have scrambled age populations and
+    // no longer have object separted by age into distinct regions.
+
+    // TODO: Do we need to fix FullGC so that it maintains aged segregation of objects into distinct regions?
+    //       A partial solution would be to remember how many objects are of tenure age following Full GC, but
+    //       this is probably suboptimal, because most of these objects will not reside in a region that will be
+    //       selected for the next evacuation phase.
+
+    // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
+    heap->clear_promotion_potential();
+
+    // Invoke this in case we are able to transfer memory from OLD to YOUNG.  
+    heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
+    heap->free_set()->rebuild();
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);

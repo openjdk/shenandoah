@@ -449,8 +449,8 @@ public:
   void decrement_age() { if (_age-- == 0) { _age = 0; } }
   void reset_age()     { _age = 0; }
 
-  // Sets all remembered set cards to dirty.  Returns the number of regions spanned by the associated humongous object.
-  size_t promote_humongous();
+  // Sets all remembered set cards to dirty.
+  void promote_humongous();
 
 private:
   void do_commit();

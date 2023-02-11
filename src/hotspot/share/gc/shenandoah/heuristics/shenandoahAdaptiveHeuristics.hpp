@@ -39,7 +39,6 @@ class ShenandoahAllocationRate : public CHeapObj<mtGC> {
   double instantaneous_rate(size_t allocated) const;
   double upper_bound(double sds) const;
   bool is_spiking(double rate, double threshold) const;
-
  private:
 
   double instantaneous_rate(double time, size_t allocated) const;
@@ -47,7 +46,14 @@ class ShenandoahAllocationRate : public CHeapObj<mtGC> {
   double _last_sample_time;
   size_t _last_sample_value;
   double _interval_sec;
+#define KELVIN_HACK
+#ifdef KELVIN_HACK
+  public:
   TruncatedSeq _rate;
+  private:
+#else
+  TruncatedSeq _rate;
+#endif
   TruncatedSeq _rate_avg;
 };
 
@@ -72,7 +78,7 @@ public:
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
 
-  virtual size_t evac_slack();
+  virtual size_t evac_slack(size_t young_regions_to_be_recycled);
 
  private:
   // These are used to adjust the margin of error and the spike threshold

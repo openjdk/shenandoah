@@ -150,33 +150,52 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     return false;
   }
 
+#undef KELVIN_CONCGC
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about do do concurrent stack processing");
+#endif
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
     entry_thread_roots();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about do do concurrent weak roots");
+#endif
   // Process weak roots that might still point to regions that would be broken by cleanup
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do entry_cleanup early");
+#endif
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.  Note that
   // we will not age young-gen objects in the case that we skip evacuation.
   entry_cleanup_early();
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do freeset->log_status");
+#endif
   {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do class unloading");
+#endif
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
       heap->is_concurrent_weak_root_in_progress()) {
     entry_class_unloading();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do strong roots");
+#endif
   // Processing strong roots
   // This may be skipped if there is nothing to update/evacuate.
   // If so, strong_root_in_progress would be unset.
@@ -190,6 +209,9 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_global_coalesce_and_fill();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do concurrent evacuation");
+#endif
   // Continue the cycle with evacuation and optional update-refs.
   // This may be skipped if there is nothing to evacuate.
   // If so, evac_in_progress would be unset by collection set preparation code.
@@ -496,6 +518,11 @@ void ShenandoahConcurrentGC::entry_evacuate() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
+#undef KELVIN_EVAC
+#ifdef KELVIN_EVAC
+  log_info(gc, ergo)("entry_evacuate()");
+#endif
+
   static const char* msg = "Concurrent evacuation";
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_evac);
   EventMark em("%s", msg);
@@ -543,9 +570,56 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete, true /* log_heap_usage */);
   EventMark em("%s", msg);
 
+#define KELVIN_TRACE
+#ifdef KELVIN_TRACE
+  log_info(gc, ergo)("Beginning entry_cleanup_complete");
+#endif
   // This phase does not use workers, no need for setup
   heap->try_inject_alloc_failure();
   op_cleanup_complete();
+
+  // We defer generation resizing actions until after cset regions have been recycled.
+  if (heap->mode()->is_generational()) {
+    size_t old_region_surplus = heap->get_old_region_surplus();
+    size_t old_region_deficit = heap->get_old_region_deficit();
+    if (old_region_surplus) {
+      bool success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
+#ifdef KELVIN_TRACE
+      size_t old_available = heap->old_generation()->available();
+      size_t young_available = heap->young_generation()->available();
+      log_info(gc, ergo)("After %s " SIZE_FORMAT " to young in preparation for start of next gc, old available: "
+                         SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                         success? "successfully transferring": "failing to transfer", old_region_surplus,
+                         byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                         byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+#endif
+    } else if (old_region_deficit) {
+      bool success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
+#ifdef KELVIN_TRACE
+      size_t old_available = heap->old_generation()->available();
+      size_t young_available = heap->young_generation()->available();
+      log_info(gc, ergo)("After %s " SIZE_FORMAT " regions to old in preparation for start of next gc, old available: "
+                         SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                         success? "successfully transferring": "failing to trannsfer", old_region_deficit,
+                         byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                         byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+#endif
+      if (!success) {
+        ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_old_gc();
+      }
+    }
+    heap->set_old_region_surplus(0);
+    heap->set_old_region_deficit(0);
+
+#ifdef KELVIN_TRACE
+    size_t old_available = heap->old_generation()->available();
+    size_t young_available = heap->young_generation()->available();
+    log_info(gc, ergo)("After concurrent cleanup and resizing transfers, old available: " SIZE_FORMAT
+                       "%s, young_available: " SIZE_FORMAT "%s",
+                       byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+#endif
+  }
 }
 
 void ShenandoahConcurrentGC::entry_global_coalesce_and_fill() {
@@ -782,6 +856,10 @@ void ShenandoahConcurrentGC::op_final_mark() {
       }
     }
   }
+#undef KELVIN_FINAL_MARK
+#ifdef KELVIN_FINAL_MARK
+  log_info(gc, ergo)("finished with op_final_mark");
+#endif
 }
 
 class ShenandoahConcurrentEvacThreadClosure : public ThreadClosure {

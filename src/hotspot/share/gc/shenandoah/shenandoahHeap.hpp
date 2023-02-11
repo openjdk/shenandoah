@@ -705,6 +705,10 @@ public:
 // ---------- Allocation support
 //
 private:
+  // How many bytes to transfer between old and young after we have finished recycling collection set regions?
+  size_t _old_regions_surplus;
+  size_t _old_regions_deficit;
+
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region, bool is_promotion);
 
   inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);
@@ -737,6 +741,12 @@ public:
   void gclabs_retire(bool resize);
 
   void set_young_lab_region_flags();
+
+  inline void set_old_region_surplus(size_t surplus) { _old_regions_surplus = surplus; };
+  inline void set_old_region_deficit(size_t deficit) { _old_regions_deficit = deficit; };
+
+  inline size_t get_old_region_surplus() { return _old_regions_surplus; };
+  inline size_t get_old_region_deficit() { return _old_regions_deficit; };
 
 // ---------- Marking support
 //
@@ -837,7 +847,7 @@ public:
   void cancel_old_gc();
   bool is_old_gc_active();
   void coalesce_and_fill_old_regions();
-  bool adjust_generation_sizes_for_next_cycle(size_t old_xfer_limit);
+  void adjust_generation_sizes_for_next_cycle(size_t old_xfer_limit, size_t young_cset_regions, size_t old_cset_regions);
 
 // ---------- Helper functions
 //

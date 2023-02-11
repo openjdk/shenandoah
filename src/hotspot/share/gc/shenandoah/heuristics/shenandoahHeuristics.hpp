@@ -179,7 +179,7 @@ public:
   virtual bool is_experimental() = 0;
   virtual void initialize();
 
-  virtual size_t evac_slack();
+  virtual size_t evac_slack(size_t region_to_be_recycled);
 
   double elapsed_cycle_time() const;
 

@@ -81,13 +81,15 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   size_t old_consumed = 0;
   size_t promo_potential = 0;
+
+  heap->clear_promotion_potential();
   if (heap->mode()->is_generational()) {
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* region = heap->get_region(i);
       if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
         size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahPromoEvacWaste);
         if (old_consumed + promotion_need <= old_available) {
-#undef KELVIN_NOISE
+#define KELVIN_NOISE
 #ifdef KELVIN_NOISE
           log_info(gc, ergo)("Preselecting regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
                              ", garbage: " SIZE_FORMAT,
@@ -96,6 +98,10 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
 #undef KELVIN_NOISE
           old_consumed += promotion_need;
           preselected_regions[i] = true;
+        } else {
+          // We rejected this promotable region from the collection set because we had no room to hold its copy.
+          // Add this region to promo potential for next GC.
+          promo_potential += region->get_live_data_bytes();
         }
         // Note that we keep going even if one region is excluded from selection.  Subsequent regions may be selected
         // if they have smaller live data.
@@ -401,7 +407,7 @@ void ShenandoahHeuristics::initialize() {
   // Nothing to do by default.
 }
 
-size_t ShenandoahHeuristics::evac_slack() {
+size_t ShenandoahHeuristics::evac_slack(size_t young_regions_to_be_recycled) {
   assert(false, "evac_slack() only implemented for young Adaptive Heuristics");
   return 0;
 }

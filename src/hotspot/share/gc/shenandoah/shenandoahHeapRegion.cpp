@@ -950,7 +950,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(_update_watermark), p2i(ctx->top_bitmap(this)));
   }
 
-#define KELVIN_REBUILD
+#undef KELVIN_REBUILD
 #ifdef KELVIN_REBUILD
   if (new_affiliation == FREE) {
     log_info(gc, ergo)("setting affiliation of " SIZE_FORMAT " to FREE, was %s %s", index(), affiliation_name(region_affiliation),
@@ -1022,7 +1022,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
 }
 
 // Returns number of regions promoted, or zero if we choose not to promote.
-size_t ShenandoahHeapRegion::promote_humongous() {
+void ShenandoahHeapRegion::promote_humongous() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   assert(heap->active_generation()->is_mark_complete(), "sanity");
@@ -1105,5 +1105,7 @@ size_t ShenandoahHeapRegion::promote_humongous() {
                   index(), p2i(bottom()), p2i(bottom() + obj->size()));
     heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
   }
+#ifdef KELVIN_DEPRECATE
   return index_limit - index();
+#endif
 }

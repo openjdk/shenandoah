@@ -378,8 +378,10 @@ jint ShenandoahHeap::initialize() {
 
     // Initialize to complete
     _marking_context->mark_complete();
+    size_t young_cset_regions, old_cset_regions;
 
-    _free_set->prepare_to_rebuild();
+    // We are initializing free set.  We ignore cset region tallies.
+    _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
     _free_set->rebuild();
   }
 
@@ -930,6 +932,11 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // New object should fit the PLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
 
+#undef KELVIN_PLAB
+#ifdef KELVIN_PLAB
+  log_info(gc, ergo)("allocate_from_plab_slow(size: " SIZE_FORMAT ")", size);
+#endif
+
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
   size_t cur_size = ShenandoahThreadLocalData::plab_size(thread);
   if (cur_size == 0) {
@@ -1095,7 +1102,9 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
   parallel_heap_region_iterate(&coalesce);
 }
 
-bool ShenandoahHeap::adjust_generation_sizes_for_next_cycle(size_t xfer_limit) {
+void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
+  size_t xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
+
   // Make sure old-generation is large enough, but no larger, than is necessary to hold mixed evacuations
   // and promotions if we anticipate either.
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -1108,8 +1117,6 @@ bool ShenandoahHeap::adjust_generation_sizes_for_next_cycle(size_t xfer_limit) {
 
   // round down
   size_t max_old_region_xfer = xfer_limit / region_size_bytes;
-
-  clear_promotion_potential();
 
   // We can limit the reserve to the size of anticipated promotions
   size_t max_old_reserve = young_reserve * ShenandoahOldEvacRatioPercent / (100 - ShenandoahOldEvacRatioPercent);
@@ -1129,6 +1136,8 @@ bool ShenandoahHeap::adjust_generation_sizes_for_next_cycle(size_t xfer_limit) {
     old_reserve = (expanded_promo_load < max_old_reserve)? expanded_promo_load: max_old_reserve;
   }
 
+  size_t old_available = old_generation()->available() + old_cset_regions * region_size_bytes;
+  size_t young_available = young_generation()->available() + young_cset_regions * region_size_bytes;
   size_t old_region_deficit = 0;
   size_t old_region_surplus = 0;
 #define KELVIN_TRACE
@@ -1136,13 +1145,13 @@ bool ShenandoahHeap::adjust_generation_sizes_for_next_cycle(size_t xfer_limit) {
   log_info(gc, ergo)("Reserving for future GC (%s, %s), promo_potential: " SIZE_FORMAT,
                      doing_mixed? "mixed": "unmixed", doing_promotions? "promoting": "unpromoting", promo_load);
   log_info(gc, ergo)(" young_reserve: " SIZE_FORMAT ", max_old_reserve: " SIZE_FORMAT ", old_reserve: " SIZE_FORMAT
-                     ", old available: " SIZE_FORMAT,
-                     young_reserve, max_old_reserve, old_reserve, old_generation()->available());
+                     ", old available: " SIZE_FORMAT, young_reserve, max_old_reserve, old_reserve,
+                     old_generation()->available() + old_cset_regions * region_size_bytes);
 #endif
 
-  if (old_generation()->available() >= old_reserve) {
-    size_t old_excess = old_generation()->available() - old_reserve;
-    size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions();
+  if (old_available >= old_reserve) {
+    size_t old_excess = old_available - old_reserve;
+    size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions() + old_cset_regions;
     size_t unaffiliated_old = unaffiliated_old_regions * region_size_bytes;
     if (unaffiliated_old > old_excess) {
       // We can give the entirety of old_excess to young, rounded down
@@ -1154,57 +1163,35 @@ bool ShenandoahHeap::adjust_generation_sizes_for_next_cycle(size_t xfer_limit) {
   } else {
     // We need to request transfer from YOUNG.  Ignore that this will directly impact young_generation()->max_capacity(),
     // indirectly impacting young_reserve and old_reserve.  These computations are conservative.
-    size_t old_need = old_reserve - old_generation()->available();
+    size_t old_need = old_reserve - old_available;
     // Round up the number of regions needed from YOUNG
     old_region_deficit = (old_need + region_size_bytes - 1) / region_size_bytes;
   }
 
   if (old_region_deficit > max_old_region_xfer) {
     // If we're running short on young-gen memory, limit the xfer
+
+    // THE PROBLEM WITH THIS IS THAT WE MAY BE RUNNING SHORT ON
+    // YOUNG-GEN MEMORY BECAUSE WE HAVE FAILED TO PROMOTE.  
+
 #ifdef KELVIN_TRACE
-    log_info(gc, ergo)(" curtailing old-gen activities by shrinking original ask: " SIZE_FORMAT, old_region_deficit);
+    log_info(gc, ergo)(" curtailing old-gen activities by shrinking original ask: " SIZE_FORMAT " to " SIZE_FORMAT
+                       ", xfer_limit: " SIZE_FORMAT,
+                       old_region_deficit, max_old_region_xfer, xfer_limit);
 #endif  
 
     old_region_deficit = max_old_region_xfer;
     // old-gen collection activities will be curtailed if the budget is smaller than desired.
   }
 
-
 #ifdef KELVIN_TRACE
   log_info(gc, ergo)(" old_region_surplus: " SIZE_FORMAT ", old_region_deficit: " SIZE_FORMAT,
                      old_region_surplus, old_region_deficit);
 #endif  
   if (old_region_surplus) {
-    bool success = _generation_sizer.transfer_to_young(old_region_surplus);
-#ifdef KELVIN_TRACE
-    size_t old_available = old_generation()->available();
-    size_t young_available = young_generation()->available();
-    log_info(gc, ergo)("After %s " SIZE_FORMAT " to young in preparation for start of next gc, old available: "
-                       SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
-                       success? "successfully transferring": "failing to", old_region_surplus,
-                       byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
-#endif
-    return success;
+    set_old_region_surplus(old_region_surplus);
   } else if (old_region_deficit) {
-    bool success = _generation_sizer.transfer_to_old(old_region_deficit);
-#ifdef KELVIN_TRACE
-    size_t old_available = old_generation()->available();
-    size_t young_available = young_generation()->available();
-    log_info(gc, ergo)("After %s " SIZE_FORMAT " regions to old in preparation for start of next gc, old available: "
-                       SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
-                       success? "successfully transferring": "failing to trannsfer", old_region_deficit,
-                       byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
-#endif
-    if (!success) {
-      ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_gc();
-      return false;
-    } else {
-      return true;
-    }
-  } else {
-    return true;
+    set_old_region_deficit(old_region_deficit);
   }
 }
 
@@ -1656,11 +1643,22 @@ private:
   void do_work() {
     ShenandoahConcurrentEvacuateRegionObjectClosure cl(_sh);
     ShenandoahHeapRegion* r;
+    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
     while ((r = _regions->next()) != nullptr) {
-      log_debug(gc)("GenerationalEvacuationTask do_work(), looking at %s region " SIZE_FORMAT ", (age: %d) [%s, %s]",
+#undef KELVIN_EVAC
+#ifdef KELVIN_EVAC
+      log_info(gc, ergo)("do_evacuation_work() for %s region " SIZE_FORMAT ", (age: %d) [%s, %s, %s]",
+                         r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
+                         r->is_active()? "active": "inactive",
+                         r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular",
+                         r->is_cset()? "cset": "not-cset");
+#endif
+      log_debug(gc)("GenerationalEvacuationTask do_work(), looking at %s region " SIZE_FORMAT ", (age: %d) [%s, %s, %s]",
                     r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
                     r->is_active()? "active": "inactive",
-                    r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular");
+                    r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular",
+                    r->is_cset()? "cset": "not-cset");
+
       if (r->is_cset()) {
         assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
         _sh->marked_object_iterate(r, &cl);
@@ -1671,22 +1669,7 @@ private:
         // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
         // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
         // triggers the load-reference barrier (LRB) to copy on reference fetch.
-        if (r->promote_humongous() == 0) {
-#ifdef KELVIN_DEPRECATE
-          // promote_humongous() always succeeds.  No need for any of this.
-
-          // We chose not to promote because old-gen is out of memory.  Report and handle the promotion failure because
-          // this suggests need for expanding old-gen and/or performing collection of old-gen.
-          ShenandoahHeap* heap = ShenandoahHeap::heap();
-          oop obj = cast_to_oop(r->bottom());
-          size_t size = obj->size();
-          Thread* thread = Thread::current();
-          heap->report_promotion_failure(thread, size);
-          heap->handle_promotion_failure();
-#else
-          log_info(gc, ergo)("KELVIN not expecting to reach here because humongous promotion should always succeed!");
-#endif
-        }
+        r->promote_humongous();
       }
       // else, region is free, or OLD, or not in collection set, or humongous_continuation,
       // or is young humongous_start that is too young to be promoted
@@ -3058,15 +3041,14 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                           ShenandoahPhaseTimings::final_update_refs_rebuild_freeset :
                           ShenandoahPhaseTimings::degen_gc_final_update_refs_rebuild_freeset);
   ShenandoahHeapLocker locker(lock());
-  _free_set->prepare_to_rebuild();
+  size_t young_cset_regions, old_cset_regions;
+  _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
 
-  // promote the humongous
-  // At this point, account for newly promoted humongous objects.  We make adjustments now that collection set
-  // has been evacuated and its memory reclaimed.
+  // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
   size_t humongous_regions_promoted = young_generation()->heuristics()->get_promotable_humongous_regions();
   if (humongous_regions_promoted > 0) {
     size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
-#define KELVIN_VERBOSE
+#undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
     log_info(gc,ergo)("KELVIN: end of ConcGC, promoted humongous: " SIZE_FORMAT, humongous_bytes_promoted);
 #endif 
@@ -3083,11 +3065,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     young_generation()->decrease_used(humongous_bytes_promoted);
   }
 
-  size_t evac_slack = young_generation()->heuristics()->evac_slack();
+  // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.
+  // Note that transfer of humongous regions does not impact available.
+  size_t evac_slack = young_generation()->heuristics()->evac_slack(young_cset_regions);
+  adjust_generation_sizes_for_next_cycle(evac_slack, young_cset_regions, old_cset_regions);
 
-  // reserve for future use: limit old transfer to 7/8 of evac_slack
-  adjust_generation_sizes_for_next_cycle(evac_slack * 7 / 8);
-
+  // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild();
 }
 

@@ -686,10 +686,17 @@ void ShenandoahFreeSet::clear_internal() {
   _used = 0;
 }
 
-void ShenandoahFreeSet::prepare_to_rebuild() {
+// Return the amount of young-gen memory that is about to be reycled
+void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions) {
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  young_cset_regions = 0;
+  old_cset_regions = 0;
   shenandoah_assert_heaplocked();
   clear();
-
+#undef KELVIN_REBUILD
+#ifdef KELVIN_REBUILD
+  log_info(gc, ergo)("prepare for freeset->rebuild");
+#endif
   log_debug(gc)("Rebuilding FreeSet");
   for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
@@ -698,6 +705,13 @@ void ShenandoahFreeSet::prepare_to_rebuild() {
 
       // Do not add regions that would surely fail allocation
       if (has_no_alloc_capacity(region)) continue;
+      if (region->is_trash()) {
+        if (region->is_young()) {
+          young_cset_regions++;
+        } else {
+          old_cset_regions++;
+        }
+      }
 
       _capacity += alloc_capacity(region);
       assert(_used <= _capacity, "must not use more than we have");
@@ -710,9 +724,13 @@ void ShenandoahFreeSet::prepare_to_rebuild() {
   }
 }
 
+
 void ShenandoahFreeSet::rebuild() {
   shenandoah_assert_heaplocked();
 
+#ifdef KELVIN_REBUILD
+  log_info(gc, ergo)("free_set->rebuild");
+#endif
   // Evac reserve: reserve trailing space for evacuations
   if (!_heap->mode()->is_generational()) {
     size_t to_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;

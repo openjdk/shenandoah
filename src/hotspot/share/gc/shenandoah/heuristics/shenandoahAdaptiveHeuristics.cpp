@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
@@ -314,15 +315,16 @@ static double saturate(double value, double min, double max) {
 }
 
 // Return conservative estimate of how much memory can be allocated before we need to start GC
-size_t ShenandoahAdaptiveHeuristics::evac_slack() {
+size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_reclaimed) {
   assert(_generation->is_young(), "evac_slack is only meaningful for young-gen heuristic");
 
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
   size_t available = _generation->available();
   size_t allocated = _generation->bytes_allocated_since_gc_start();
-  
-  size_t allocation_headroom = available;
+
+  size_t anticipated_available = available + young_regions_to_be_reclaimed * ShenandoahHeapRegion::region_size_bytes();
+  size_t allocation_headroom = anticipated_available;
   size_t spike_headroom = capacity * ShenandoahAllocSpikeFactor / 100;
   size_t penalties      = capacity * _gc_time_penalties / 100;
 
@@ -348,37 +350,56 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack() {
   // but spike_evac_slack is only relevant if is_spiking, as defined below.
 
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+
+  // The observation is that GC time is approximately doubled when we perform promotions and/or mixed evacuations.
+  // If the caller takes action based on the value returned from evac_slack, the action will be to trigger promotion
+  // and/or mixed evacuation so double our understanding of cycle time.
+  avg_cycle_time *= 2;
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
 
+#define KELVIN_TRACE
+  log_info(gc, ergo)("evac_slack avg_cycle_time: %.3f, avg_alloc_rate: %.3f, rate: %.3f, available: " SIZE_FORMAT
+                     ", anticipated available: " SIZE_FORMAT
+                     ", penalties: " SIZE_FORMAT ", alloc_headroom: " SIZE_FORMAT ", spike_headroom: " SIZE_FORMAT
+                     ", allocated since start of gc: " SIZE_FORMAT,
+                     avg_cycle_time, avg_alloc_rate, rate, available, anticipated_available,
+                     penalties, allocation_headroom, spike_headroom, allocated);
+
   size_t evac_slack_avg;
-  if (available > avg_cycle_time * avg_alloc_rate + penalties + spike_headroom) {
-    evac_slack_avg = available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
+  if (anticipated_available > avg_cycle_time * avg_alloc_rate + penalties + spike_headroom) {
+    evac_slack_avg = anticipated_available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
   } else {
     // we have no slack because it's already time to trigger
     evac_slack_avg = 0;
   }
+#ifdef KELVIN_TRACE
+  double sd = _allocation_rate._rate.sd();
+  log_info(gc, ergo)("is_spiking(rate: %.3f, avg_rate: %.3f, sd: %.3f, threshold: %.3f, zscore: %.3f)",
+                     rate, _allocation_rate._rate.avg(), sd, _spike_threshold_sd,
+                     (rate - _allocation_rate._rate.avg())/sd);
+#endif
 
   bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
   size_t evac_slack_spiking;
   if (is_spiking) {
-    if (available > avg_cycle_time * rate + penalties + spike_headroom) {
-      evac_slack_spiking = available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
+    if (anticipated_available > avg_cycle_time * rate + penalties + spike_headroom) {
+      evac_slack_spiking = anticipated_available - (avg_cycle_time * rate + penalties + spike_headroom);
     } else {
       // we have no slack because it's already time to trigger
       evac_slack_spiking = 0;
     }
-    if (evac_slack_spiking < evac_slack_avg) {
-#define KELVIN_TRACE
-#ifdef KELVIN_TRACE
-      log_info(gc, ergo)("Evac slack returning spike: " SIZE_FORMAT, evac_slack_spiking);
-#endif
-      return evac_slack_spiking;
-    }
+  } else {
+    evac_slack_spiking = evac_slack_avg;
   }
+
+  size_t threshold = min_free_threshold();
+  size_t evac_min_threshold = (anticipated_available > threshold)? anticipated_available - threshold: 0;
+
 #ifdef KELVIN_TRACE
-  log_info(gc, ergo)("Evac slack returning avg: " SIZE_FORMAT, evac_slack_avg);
+  log_info(gc, ergo)("evac_slack returning min of threshold: " SIZE_FORMAT ", avg: " SIZE_FORMAT ", spike: " SIZE_FORMAT,
+                     evac_min_threshold, evac_slack_avg, evac_slack_spiking);
 #endif
-  return evac_slack_avg;
+  return MIN3(evac_slack_spiking, evac_slack_avg, evac_min_threshold);
 }
 
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
@@ -497,8 +518,16 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   // OLD generation is maintained to be as small as possible.  Depletion of free pool triggers do not apply
   // to old generation.
   if (!_generation->is_old()) {
-
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
     double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+    if (heap->mode()->is_generational()) {
+      if ((heap->get_promotion_potential() > 0) ||
+          (heap->is_old_compaction_enabled() &&
+           (((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->unprocessed_old_collection_candidates() > 0))) {
+        // Mixed and promoting GC passes may take roughly twice as long as a simple GC cycle
+        avg_cycle_time *= 2;
+      }
+    }
 
     size_t last_live_memory = get_last_live_memory();
     size_t penultimate_live_memory = get_penultimate_live_memory();
@@ -661,8 +690,8 @@ bool ShenandoahAllocationRate::is_spiking(double rate, double threshold) const {
   if (rate <= 0.0) {
     return false;
   }
-
   double sd = _rate.sd();
+
   if (sd > 0) {
     // There is a small chance that that rate has already been sampled, but it
     // seems not to matter in practice.

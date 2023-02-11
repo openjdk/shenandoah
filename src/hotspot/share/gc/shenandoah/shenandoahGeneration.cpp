@@ -888,7 +888,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                      byte_size_in_proper_unit(allocation_supplement), proper_unit_for_byte_size(allocation_supplement),
                      byte_size_in_proper_unit(excess), proper_unit_for_byte_size(excess));
 #else   // KELVIN_DEPRECATED
-#define KELVIN_SEE_THIS
+#undef KELVIN_SEE_THIS
 
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahOldGeneration* old_generation = heap->old_generation();
@@ -931,12 +931,20 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   assert(young_evacuated_reserve_used <= young_generation->available(), "Cannot evacuate more than is available in young");
   heap->set_young_evac_reserve(young_evacuated_reserve_used);
 
+#ifdef KELVIN_SEE_THIS
+  log_info(gc, ergo)("after setting young_evac_reserve");
+#endif
+
   // TODO: this reserves memory only for the advance promotion regions.  There may be some aged old-gen objects that are
   // scattered throughout young-gen regions which have not aged.  We can perhaps make room for these by establishing a
   // budget based on historical trends.  Not sure this is a priority.  The large majority of promotable objects reside in
   // aged regions.
   heap->set_promoted_reserve(young_advance_promoted_reserve_used);
   heap->reset_promoted_expended();
+
+#ifdef KELVIN_SEE_THIS
+  log_info(gc, ergo)("after resetting promoted_reserve");
+#endif
 
   // Now that we've established the collection set, we know how much memory is really required by old-gen for evacuation
   // and promotion reserves.  Try shrinking OLD now in case that gives us a bit more runway for mutator allocations during
@@ -945,6 +953,11 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   assert(old_consumed < old_generation->available(), "Cannot consume more than is available");
   size_t excess_old = old_generation->available() - old_consumed;
   size_t unaffiliated_old = old_generation->free_unaffiliated_regions() * region_size_bytes;
+
+#ifdef KELVIN_SEE_THIS
+  log_info(gc, ergo)("computed excess_old: " SIZE_FORMAT ", unaffiliated_old: " SIZE_FORMAT, excess_old, unaffiliated_old);
+#endif
+
   if (excess_old > unaffiliated_old) {
     // round down
     size_t excess_regions = (excess_old - unaffiliated_old) / region_size_bytes;
@@ -957,6 +970,11 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     }
   }
 #endif
+
+#ifdef KELVIN_SEE_THIS
+  log_info(gc, ergo)("returning from adjust_evacuation_budgets");
+#endif
+
 }
 
 void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
@@ -1013,12 +1031,19 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
     }
   }
+#ifdef KELVIN_SEE_THIS
+  log_info(gc, ergo)("returning from adjust_evacuation_budgets");
+#endif
 
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
                             ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
     ShenandoahHeapLocker locker(heap->lock());
-    heap->rebuild_free_set(true);
+    size_t young_cset_regions, old_cset_regions;
+
+    // We are preparing for evacuation.  At this time, we ignore cset region tallies.
+    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
+    heap->free_set()->rebuild();
   }
 }
 
@@ -1161,6 +1186,7 @@ void ShenandoahGeneration::clear_used() {
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
+#undef KELVIN_SEE_THIS
 #ifdef KELVIN_SEE_THIS
   if (is_old()) {
     log_info(gc, ergo)("increase_used for OLD by " SIZE_FORMAT ", yielding: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
@@ -1170,12 +1196,20 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
     }
   }
 #endif
+#undef KELVIN_TRACE_GENERATIONS
+#ifdef KELVIN_TRACE_GENERATIONS
+  log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), bytes, _used);
+#endif
+
   assert(_used <= _max_capacity, "cannot increase used beyond capacity");
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
+#ifdef KELVIN_TRACE_GENERATIONS
+  log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), bytes, _used);
+#endif
 }
 
 size_t ShenandoahGeneration::used_regions() const {
@@ -1238,6 +1272,9 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   _max_capacity += increment;
   _soft_max_capacity += increment;
   _adjusted_capacity += increment;
+#ifdef KELVIN_TRACE_GENERATIONS
+  log_info(gc, ergo)("increasing %s capacity by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), increment, _max_capacity);
+#endif
 }
 
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
@@ -1246,6 +1283,9 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;
   _adjusted_capacity -= decrement;
+#ifdef KELVIN_TRACE_GENERATIONS
+  log_info(gc, ergo)("decreasing %s capacity by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), decrement, _max_capacity);
+#endif
 }
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
