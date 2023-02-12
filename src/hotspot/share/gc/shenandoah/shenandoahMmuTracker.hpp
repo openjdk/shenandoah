@@ -29,7 +29,9 @@
 #include "utilities/numberSeq.hpp"
 
 class ShenandoahGeneration;
+#ifdef KELVIN_DEPRECATE
 class ShenandoahMmuTask;
+#endif
 
 /**
  * This class is responsible for tracking and adjusting the minimum mutator
@@ -74,7 +76,9 @@ private:
   bool _most_recent_is_full;
   bool _doing_mixed_evacuations;
 
+#ifdef KELVIN_DEPRECATE
   ShenandoahMmuTask* _mmu_periodic_task;
+#endif
   TruncatedSeq _mmu_average;
 
   void record(ShenandoahGeneration* generation);

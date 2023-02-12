@@ -32,7 +32,7 @@
 #include "runtime/os.hpp"
 #include "runtime/task.hpp"
 
-
+#ifdef KELVIN_DEPRECATE
 class ShenandoahMmuTask : public PeriodicTask {
   ShenandoahMmuTracker* _mmu_tracker;
 public:
@@ -43,6 +43,7 @@ public:
     _mmu_tracker->report();
   }
 };
+#endif
 
 class ThreadTimeAccumulator : public ThreadClosure {
  public:
@@ -53,12 +54,20 @@ class ThreadTimeAccumulator : public ThreadClosure {
   }
 };
 
+static double most_recent_gc_thread_time;
+
 double ShenandoahMmuTracker::mutator_thread_time_seconds() {
+  double process_real_time(0.0), process_user_time(0.0), process_system_time(0.0);
+  bool valid = os::getTimesSecs(&process_real_time, &process_user_time, &process_system_time);
+  assert(valid, "don't know why this would not be valid");
+  return (process_user_time + process_system_time) - most_recent_gc_thread_time;
+#ifdef KELVIN_DEPRECATE
   ThreadTimeAccumulator cl;
   // We include only the gc threads because those are the only threads
   // we are responsible for.
   ShenandoahHeap::heap()->mutator_threads_do(&cl);
   return double(cl.total_time) / NANOSECS_PER_SEC;
+#endif
 }
 
 double ShenandoahMmuTracker::gc_thread_time_seconds() {
@@ -66,7 +75,8 @@ double ShenandoahMmuTracker::gc_thread_time_seconds() {
   // We include only the gc threads because those are the only threads
   // we are responsible for.
   ShenandoahHeap::heap()->gc_threads_do(&cl);
-  return double(cl.total_time) / NANOSECS_PER_SEC;
+  most_recent_gc_thread_time = double(cl.total_time) / NANOSECS_PER_SEC;
+  return most_recent_gc_thread_time;
 }
 
 double ShenandoahMmuTracker::process_time_seconds() {
@@ -82,13 +92,17 @@ ShenandoahMmuTracker::ShenandoahMmuTracker() :
     _generational_reference_time_s(0.0),
     _process_reference_time_s(0.0),
     _collector_reference_time_s(0.0),
+#ifdef KELVIN_DEPRECATE
     _mmu_periodic_task(new ShenandoahMmuTask(this)),
+#endif
     _mmu_average(10, ShenandoahAdaptiveDecayFactor) {
 }
 
 ShenandoahMmuTracker::~ShenandoahMmuTracker() {
+#ifdef KELVIN_DEPRECATE
   _mmu_periodic_task->disenroll();
   delete _mmu_periodic_task;
+#endif
 }
 
 void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
@@ -191,6 +205,7 @@ void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generati
     double process_time = process_thread_time - _most_recent_process_time;
     _most_recent_process_time = process_thread_time;;
 #endif
+    // Always call gc_thread_time_seconds() "immediately before" calling mutator_thread_time_second
     double gc_thread_time = gc_thread_time_seconds();
     double gc_time = gc_thread_time - _most_recent_gc_time;
     _most_recent_gc_time = gc_thread_time;
@@ -319,7 +334,9 @@ void ShenandoahMmuTracker::initialize() {
   _process_reference_time_s = process_time_seconds();
   _generational_reference_time_s = gc_thread_time_seconds();
   _collector_reference_time_s = _generational_reference_time_s;
+#ifdef KELVIN_DEPRECATE
   _mmu_periodic_task->enroll();
+#endif
 }
 
 ShenandoahGenerationSizer::ShenandoahGenerationSizer(ShenandoahMmuTracker* mmu_tracker)
