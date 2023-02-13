@@ -376,14 +376,14 @@
           "old-generation heap size.")                                      \
           range(1,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahOldEvacRatioPercent, 67, EXPERIMENTAL,           \
+  product(uintx, ShenandoahOldEvacRatioPercent, 75, EXPERIMENTAL,           \
           "The maximum proportion of evacuation from old-gen memory, as "   \
-          "a percent ratio.  The default value 67 denotes that no more "    \
-          "than 67% of the collection set evacuation "                      \
-          "workload may be evacuate to old-gen heap regions.  This "        \
+          "a percent ratio.  The default value 75 denotes that no more "    \
+          "than 75% of the collection set evacuation "                      \
+          "workload may be evacuate to old-gen heap regions.  This limits " \
           "both the promotion of aged regions and the compaction of "       \
-          "existing old regions.  A value of 67 denotes than the normal "   \
-          "young-gen evacuation is increased by up to three fold. "         \
+          "existing old regions.  A value of 75 denotes that the normal "   \
+          "young-gen evacuation is increased by up to four fold. "          \
           "A larger value allows quicker promotion and allows"              \
           "a smaller number of mixed evacuations to process "               \
           "the entire list of old-gen collection candidates at the cost "   \

@@ -1466,6 +1466,11 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   log_info(gc, ergo)("KELVIN:F");
 #endif
 
+#define KELVIN_TLAB
+#ifdef KELVIN_TLAB
+  log_info(gc, ergo)("Recursing after shrinnking TLAB request to " SIZE_FORMAT " from " SIZE_FORMAT,
+                     req.size(), smaller_lab_size);
+#endif
   // We arrive here if the tlab allocation request can be resized to fit within young_available
   assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
          (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations");

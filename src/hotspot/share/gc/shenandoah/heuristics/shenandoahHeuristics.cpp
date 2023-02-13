@@ -38,6 +38,7 @@
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
+#include "utilities/quickSort.hpp"
 
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   if (a._garbage > b._garbage)
@@ -77,52 +78,88 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
+typedef struct {
+  ShenandoahHeapRegion* _region;
+  size_t _live_data;
+} AgedRegionData;
+
+static int compare_by_aged_live(AgedRegionData a, AgedRegionData b) {
+  if (a._live_data < b._live_data)
+    return -1;
+  else if (a._live_data > b._live_data)
+    return 1;
+  else return 0;
+}
+
+
 size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   size_t old_consumed = 0;
   size_t promo_potential = 0;
-
-  heap->clear_promotion_potential();
-  if (heap->mode()->is_generational()) {
-    for (size_t i = 0; i < num_regions; i++) {
-      ShenandoahHeapRegion* region = heap->get_region(i);
-      if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
-        size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahPromoEvacWaste);
-        if (old_consumed + promotion_need <= old_available) {
 #define KELVIN_NOISE
 #ifdef KELVIN_NOISE
-          log_info(gc, ergo)("Preselecting regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
+  log_info(gc, ergo)("selecting aged regions with budget " SIZE_FORMAT, old_available);
+#endif
+  heap->clear_promotion_potential();
+  if (heap->mode()->is_generational()) {
+    size_t candidates = 0;
+    // sort the promotion-eligible regions according to live-data-bytes so that we can first reclaim the larger numbers
+    // of regions that require less evacuation effort.  This prioritizes garbage first, expanding the allocation pool before
+    // we begin the work of reclaiming regions that require more effort.
+    AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
+    for (size_t i = 0; i < num_regions; i++) {
+      ShenandoahHeapRegion* r = heap->get_region(i);
+      if (in_generation(r) && !r->is_empty() && r->is_regular() && (r->age() >= InitialTenuringThreshold)) {
+        sorted_regions[candidates]._region = r;
+        sorted_regions[candidates++]._live_data = r->get_live_data_bytes();
+      } else {
+        if (in_generation(r) && !r->is_empty() && r->is_regular() && (r->age() + 1 == InitialTenuringThreshold)) {
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
                              ", garbage: " SIZE_FORMAT,
-                             region->index(), region->age(), region->get_live_data_bytes(), region->garbage());
+                             r->index(), r->age(), r->get_live_data_bytes(), r->garbage());
 #endif
-#undef KELVIN_NOISE
-          old_consumed += promotion_need;
-          preselected_regions[i] = true;
-        } else {
-          // We rejected this promotable region from the collection set because we had no room to hold its copy.
-          // Add this region to promo potential for next GC.
-          promo_potential += region->get_live_data_bytes();
+          promo_potential += r->get_live_data_bytes();
         }
-        // Note that we keep going even if one region is excluded from selection.  Subsequent regions may be selected
-        // if they have smaller live data.
-      } else if (in_generation(region) && !region->is_empty() && region->is_regular() &&
-                 (region->age() + 1 == InitialTenuringThreshold)) {
 #ifdef KELVIN_NOISE
-        log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
+        else if (in_generation(r) && !r->is_empty() && (r->age() + 1 == InitialTenuringThreshold)) {
+          log_info(gc, ergo)("Not anticipating promotion of humongous region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
+                             ", garbage: " SIZE_FORMAT,
+                             r->index(), r->age(), r->get_live_data_bytes(), r->garbage());
+        }
+#endif
+      }
+    }
+    // Sort in increasing order according to live data bytes.  Regions that are not promotion-eligible are considered to
+    // have live data that is twice the region size (to force them to the end of the sort order)
+    QuickSort::sort<AgedRegionData>(sorted_regions, candidates, compare_by_aged_live, false);
+
+    for (size_t i = 0; i < candidates; i++) {
+      size_t region_live_data = sorted_regions[i]._live_data;
+      size_t promotion_need = (size_t) (region_live_data * ShenandoahPromoEvacWaste);
+      if (old_consumed + promotion_need <= old_available) {
+        ShenandoahHeapRegion* region = sorted_regions[i]._region;
+#ifdef KELVIN_NOISE
+        log_info(gc, ergo)("Preselecting regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
                            ", garbage: " SIZE_FORMAT,
                            region->index(), region->age(), region->get_live_data_bytes(), region->garbage());
 #endif
-        promo_potential += region->get_live_data_bytes();
+        old_consumed += promotion_need;
+        preselected_regions[region->index()] = true;
+      } else {
+        // We rejected this promotable region from the collection set because we had no room to hold its copy.
+        // Add this region to promo potential for next GC.
+        promo_potential += region_live_data;
       }
-#ifdef KELVIN_NOISE
-      else if (in_generation(region) && !region->is_empty() && (region->age() + 1 == InitialTenuringThreshold)) {
-        log_info(gc, ergo)("Not anticipating promotion of humongous region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
-                           ", garbage: " SIZE_FORMAT,
-                           region->index(), region->age(), region->get_live_data_bytes(), region->garbage());
-      }
-#endif
+      // Note that we keep going even if one region is excluded from selection because we need to accumulate all
+      // eligible regions into promo_potential if not preselected.
     }
   }
+#ifdef KELVIN_NOISE
+  log_info(gc, ergo)("select_aged_regions consumed old reserve of " SIZE_FORMAT ", promo potential: " SIZE_FORMAT,
+                     old_consumed, promo_potential);
+#endif
+#undef KELVIN_NOISE
   heap->set_promotion_potential(promo_potential);
   return old_consumed;
 }

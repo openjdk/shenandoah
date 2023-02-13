@@ -87,9 +87,10 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!is_in(r), "Already in collection set");
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
-#undef KELVIN_CSET
+#define KELVIN_CSET
 #ifdef KELVIN_CSET
-  log_info(gc, ergo)("add_region " SIZE_FORMAT ": affiliation: %s", r->index(), affiliation_name(r->affiliation()));
+  log_info(gc, ergo)("add_region " SIZE_FORMAT ": affiliation: %s, available words: " SIZE_FORMAT,
+                     r->index(), affiliation_name(r->affiliation()), r->end() - r->top());
 #endif
   _cset_map[r->index()] = 1;
 
