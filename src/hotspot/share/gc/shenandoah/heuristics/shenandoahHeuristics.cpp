@@ -124,7 +124,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!in_generation(region)) {
+    if (is_generational && !in_generation(region)) {
       continue;
     }
 
@@ -213,8 +213,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
 
   log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                     "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                     "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%)",
+                     "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%) R: " SIZE_FORMAT ", "
+                     "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%) R: " SIZE_FORMAT,
 
                      byte_size_in_proper_unit(collectable_garbage),
                      proper_unit_for_byte_size(collectable_garbage),
@@ -223,10 +223,12 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      byte_size_in_proper_unit(immediate_garbage),
                      proper_unit_for_byte_size(immediate_garbage),
                      immediate_percent,
+                     immediate_regions,
 
                      byte_size_in_proper_unit(collection_set->garbage()),
                      proper_unit_for_byte_size(collection_set->garbage()),
-                     cset_percent);
+                     cset_percent,
+                     collection_set->count());
 
   if (collection_set->garbage() > 0) {
     size_t young_evac_bytes = collection_set->get_young_bytes_reserved_for_evacuation();
