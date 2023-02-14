@@ -146,6 +146,10 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       break;
   }
 
+  if (!_heap->mode()->is_generational()) {
+    assert(allow_new_region, "Generational constraint applied to non-generational mode!");
+  }
+
   switch (req.type()) {
     case ShenandoahAllocRequest::_alloc_tlab:
     case ShenandoahAllocRequest::_alloc_shared: {
@@ -255,6 +259,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
                   PTR_FORMAT " at transition from FREE to %s",
                   r->index(), p2i(ctx->top_bitmap(r)), affiliation_name(req.affiliation()));
   } else if (r->affiliation() != req.affiliation()) {
+    assert(!_heap->mode()->is_generational(), "Should not have conflicting affiliation in non-generational mode.");
     return NULL;
   }
 
@@ -265,6 +270,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   // req.size() is in words, r->free() is in bytes.
   if (ShenandoahElasticTLAB && req.is_lab_alloc()) {
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
+      assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
       // Need to assure that plabs are aligned on multiple of card region.
       size_t free = r->free();
       size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
@@ -334,6 +340,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
     }
   } else if (req.is_lab_alloc() && req.type() == ShenandoahAllocRequest::_alloc_plab) {
+    assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
     // inelastic PLAB
     size_t free = r->free();
     size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
@@ -377,6 +384,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       // Mutator allocations always pull from young gen.
+      // TODO: non-generational mode heuristic uses global generation instance for triggers
       _heap->young_generation()->increase_used(size * HeapWordSize);
       increase_used(size * HeapWordSize);
     } else {
@@ -570,6 +578,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     adjust_bounds();
   }
   assert_bounds();
+
   req.set_actual_size(words_size);
   return _heap->get_region(beg)->bottom();
 }
@@ -601,6 +610,7 @@ void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
 void ShenandoahFreeSet::recycle_trash() {
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
+
   for (size_t i = 0; i < _heap->num_regions(); i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_trash()) {
