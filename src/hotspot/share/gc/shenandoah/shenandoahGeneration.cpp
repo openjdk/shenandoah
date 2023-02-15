@@ -1043,7 +1043,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
-    heap->free_set()->rebuild();
+    heap->free_set()->rebuild((size_t)(collection_set->get_young_bytes_reserved_for_evacuation() * ShenandoahEvacWaste));
   }
 }
 

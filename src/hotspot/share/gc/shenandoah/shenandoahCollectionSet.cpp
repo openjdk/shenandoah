@@ -87,7 +87,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!is_in(r), "Already in collection set");
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
-#define KELVIN_CSET
+#undef KELVIN_CSET
 #ifdef KELVIN_CSET
   log_info(gc, ergo)("add_region " SIZE_FORMAT ": affiliation: %s, available words: " SIZE_FORMAT,
                      r->index(), affiliation_name(r->affiliation()), r->end() - r->top());
@@ -97,6 +97,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   if (r->affiliation() == YOUNG_GENERATION) {
     _young_region_count++;
     _young_bytes_to_evacuate += r->get_live_data_bytes();
+    _young_available_bytes_collected += (r->end() - r->top()) * HeapWordSize;
     if (r->age() >= InitialTenuringThreshold) {
       _young_bytes_to_promote += r->get_live_data_bytes();
     }
@@ -104,6 +105,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
     _old_region_count++;
     _old_bytes_to_evacuate += r->get_live_data_bytes();
     _old_garbage += r->garbage();
+    _old_available_bytes_collected += (r->end() - r->top()) * HeapWordSize;
   }
 
   _region_count++;
@@ -142,6 +144,9 @@ void ShenandoahCollectionSet::clear() {
 
   _old_region_count = 0;
   _old_bytes_to_evacuate = 0;
+
+  _young_available_bytes_collected = 0;
+  _old_available_bytes_collected = 0;
 
   _has_old_regions = false;
 }

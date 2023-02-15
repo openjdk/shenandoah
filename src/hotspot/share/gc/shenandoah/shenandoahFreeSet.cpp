@@ -171,9 +171,29 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_tlab:
     case ShenandoahAllocRequest::_alloc_shared: {
       // Try to allocate in the mutator view
+#undef KELVIN_ALLOCATE
+#ifdef KELVIN_ALLOCATE
+      size_t largest_available = 0;
+      size_t used_candidates = 0;
+      size_t free_candidates = 0;
+#endif
       for (size_t idx = _mutator_leftmost; idx <= _mutator_rightmost; idx++) {
         ShenandoahHeapRegion* r = _heap->get_region(idx);
         if (is_mutator_free(idx) && (allow_new_region || r->affiliation() != ShenandoahRegionAffiliation::FREE)) {
+#ifdef KELVIN_ALLOCATE
+          if (r->affiliation() == req.affiliation()) {
+            used_candidates++;
+            // KELVIN RECOMMENDS: allocate_with_affiliation(req.affiliation(), req, in_new_region)
+            //  followed by test of allow_new_region to try allocation with affiliation(FREE).
+            size_t region_available = (r->end() - r->top()) * HeapWordSize;
+            if (region_available > largest_available) {
+              largest_available = region_available;
+            }
+          } else if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
+            free_candidates++;
+          }
+#endif
+
           // try_allocate_in() increases used if the allocation is successful.
           HeapWord* result = try_allocate_in(r, req, in_new_region);
           if (result != NULL) {
@@ -181,6 +201,32 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           }
         }
       }
+#ifdef KELVIN_ALLOCATE
+      log_info(gc, ergo)("allocate_single(" SIZE_FORMAT ", min: " SIZE_FORMAT
+                         ") of tlab/shared failed to fulfill in range from " SIZE_FORMAT " to "
+                         SIZE_FORMAT " with " SIZE_FORMAT " free candidates and " SIZE_FORMAT
+                         " used candidates, largest available: " SIZE_FORMAT
+                         ", allow_new_region is: %d, young available: " SIZE_FORMAT,
+                         req.size(), req.is_lab_alloc()? req.min_size(): req.size(),
+                         _mutator_leftmost, _mutator_rightmost, free_candidates, used_candidates,
+                         largest_available, allow_new_region, _heap->young_generation()->available());
+      ShenandoahGeneration* young_gen = _heap->young_generation();
+      log_info(gc, ergo)(" young_capacity: " SIZE_FORMAT ", young_used: " SIZE_FORMAT ", young_regions_used: " SIZE_FORMAT
+                         ", young_unaffiliated_regions: " SIZE_FORMAT
+                         ", adjusted_unaffiliated_regions: " SIZE_FORMAT ", young available: " SIZE_FORMAT,
+                         young_gen->max_capacity(), young_gen->used(), young_gen->used_regions_size(),
+                         young_gen->free_unaffiliated_regions(),
+                         young_gen->adjusted_unaffiliated_regions(), young_gen->available());
+      ShenandoahGeneration* old_gen = _heap->old_generation();
+      log_info(gc, ergo)(" old_capacity: " SIZE_FORMAT ", old_used: " SIZE_FORMAT ", old_regions_used: " SIZE_FORMAT
+                         ", old_unaffiliated_regions: " SIZE_FORMAT
+                         ", adjusted_unaffiliated_regions: " SIZE_FORMAT ", old available: " SIZE_FORMAT,
+                         old_gen->max_capacity(), old_gen->used(), old_gen->used_regions_size(),
+                         old_gen->free_unaffiliated_regions(),
+                         old_gen->adjusted_unaffiliated_regions(), old_gen->available());
+
+      unsafe_peek_free();
+#endif
       // There is no recovery. Mutator does not touch collector view at all.
       break;
     }
@@ -614,7 +660,7 @@ bool ShenandoahFreeSet::can_allocate_from(ShenandoahHeapRegion *r) {
   return r->is_empty() || (r->is_trash() && !_heap->is_concurrent_weak_root_in_progress());
 }
 
-size_t ShenandoahFreeSet::alloc_capacity(ShenandoahHeapRegion *r) {
+size_t ShenandoahFreeSet::alloc_capacity(ShenandoahHeapRegion *r) const {
   if (r->is_trash()) {
     // This would be recycled on allocation path
     return ShenandoahHeapRegion::region_size_bytes();
@@ -689,13 +735,13 @@ void ShenandoahFreeSet::clear_internal() {
 // Return the amount of young-gen memory that is about to be reycled
 void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions) {
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-  young_cset_regions = 0;
-  old_cset_regions = 0;
   shenandoah_assert_heaplocked();
   clear();
 #undef KELVIN_REBUILD
 #ifdef KELVIN_REBUILD
   log_info(gc, ergo)("prepare for freeset->rebuild");
+  young_cset_regions = 0;
+  old_cset_regions = 0;
 #endif
   log_debug(gc)("Rebuilding FreeSet");
   for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
@@ -705,12 +751,21 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
 
       // Do not add regions that would surely fail allocation
       if (has_no_alloc_capacity(region)) continue;
+      if (region->is_old() && !region->is_trash()) {
+#ifdef KELVIN_REBUILD
+        log_info(gc, ergo)("OJO! Should not add treasured old region " SIZE_FORMAT " to mutator-is-free", region->index());
+#endif        
+        continue;
+      }
+
       if (region->is_trash()) {
+#ifdef KELVIN_REBUILD
         if (region->is_young()) {
           young_cset_regions++;
         } else {
           old_cset_regions++;
         }
+#endif
       }
 
       _capacity += alloc_capacity(region);
@@ -719,13 +774,21 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
       assert(!is_mutator_free(idx), "We are about to add it, it shouldn't be there already");
       _mutator_free_bitmap.set_bit(idx);
 
+#ifdef KELVIN_REBUILD
+      log_info(gc, ergo)("Setting Region " SIZE_FORMAT " _mutator_free_bitmap bit to true with available: " SIZE_FORMAT,
+                         idx, region->free());
+#endif
       log_debug(gc)("  Setting Region " SIZE_FORMAT " _mutator_free_bitmap bit to true", idx);
     }
   }
+#ifdef KELVIN_REBUILD
+
+#endif
 }
 
-
-void ShenandoahFreeSet::rebuild() {
+// If young_reserve equals zero, compute young reserve from ShenandoahEvacReserve.  Otherwise, use the value supplied
+// as input (which may be smaller than ShenandoanEvacReserve, as calculated from the know size of collection set.
+void ShenandoahFreeSet::rebuild(size_t young_reserve) {
   shenandoah_assert_heaplocked();
 
 #ifdef KELVIN_REBUILD
@@ -736,7 +799,14 @@ void ShenandoahFreeSet::rebuild() {
     size_t to_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
     reserve_regions(to_reserve);
   } else {
-    size_t young_reserve = (_heap->young_generation()->max_capacity() / 100) * ShenandoahEvacReserve;
+    if (young_reserve == 0) {
+      young_reserve = (_heap->young_generation()->max_capacity() / 100) * ShenandoahEvacReserve;
+    }
+#ifdef KELVIN_REBUILD
+    log_info(gc, ergo)("Rebuild reserving " SIZE_FORMAT ", default: " SIZE_FORMAT,
+                       young_reserve, (_heap->young_generation()->max_capacity() / 100) * ShenandoahEvacReserve);
+
+#endif
     // Note that all allocations performed from old-gen are performed by GC, generally using PLABs for both
     // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
     // which is reserved for promotion is enforced using thread-local variables that prescribe intentons within
@@ -753,12 +823,121 @@ void ShenandoahFreeSet::rebuild() {
 
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve) {
   size_t reserved = 0;
-
-  for (size_t idx = _heap->num_regions() - 1; idx > 0; idx--) {
-    if (reserved >= to_reserve) break;
-
+#ifdef KELVIN_REBUILD
+  size_t total_young_available = 0;
+  size_t young_available_reserved = 0;
+  size_t young_available_mutatable = 0;
+  size_t num_regions = _heap->num_regions();
+  size_t first_mutator = num_regions;
+  size_t last_mutator = 0;
+  size_t first_collector = num_regions;
+  size_t last_collector = 0;
+  size_t lost_available = 0;
+  size_t old_available = 0;
+#endif
+  for (size_t count = _heap->num_regions(); count > 0; count--) {
+    size_t idx = count - 1;
     ShenandoahHeapRegion* region = _heap->get_region(idx);
-    if (_mutator_free_bitmap.at(idx) && can_allocate_from(region)) {
+#ifdef KELVIN_REBUILD
+    if (reserved >= to_reserve) {
+      if (_mutator_free_bitmap.at(idx)) {
+        if (idx > last_mutator) {
+          last_mutator = idx;
+        }
+        if (idx < first_mutator) {
+          first_mutator = idx;
+        }
+        size_t ac = alloc_capacity(region);
+        if (can_allocate_from(region)) {
+          young_available_mutatable += ac;
+          total_young_available += ac;
+          log_info(gc, ergo)("Mutator free %s region " SIZE_FORMAT " with capacity " SIZE_FORMAT " remains",
+                             affiliation_name(region->affiliation()), idx, ac);
+        } else {
+          size_t available = (region->end() - region->top()) * HeapWordSize;
+          if (region->is_old()) {
+            old_available += available;
+          } else {
+            lost_available += available;
+          }
+          log_info(gc, ergo)("Cannot allocate from mutator-free region " SIZE_FORMAT
+                             " (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                             idx, region->is_old()? "old": region->is_young()? "young": region->affiliation() == FREE? "free": "unaffiliated",
+                             region->is_empty()? "empty": "not empty", region->is_trash()? "trash": "treasure", region->age(),
+                             available);
+        }
+      } else {
+        size_t available = region->free();
+        if (region->is_old()) {
+          old_available += available;
+        } else {
+          lost_available += available;
+        }
+        log_info(gc, ergo)("Region " SIZE_FORMAT " is not mutator_free (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                           idx, region->is_old()? "old": region->is_young()? "young": region->affiliation() == FREE? "free": "unaffiliated",
+                           region->is_empty()? "empty": "not empty", region->is_trash()? "trash": "treasure", region->age(),
+                           available);
+      }
+    } else
+#else
+    if (reserved >= to_reserve) break;
+#endif
+#ifdef KELVIN_REBUILD
+    if (_mutator_free_bitmap.at(idx)) {
+      if (region->free() > 0) {
+        _mutator_free_bitmap.clear_bit(idx);
+        _collector_free_bitmap.set_bit(idx);
+        size_t ac = alloc_capacity(region);
+        _capacity -= ac;
+        reserved += ac;
+
+        // kelvin logging
+        if (idx > last_collector) {
+          last_collector = idx;
+        }
+        if (idx < first_collector) {
+          first_collector = idx;
+        }
+
+        young_available_reserved += ac;
+        total_young_available += ac;
+        log_info(gc, ergo)("Shifting region " SIZE_FORMAT " with capacity " SIZE_FORMAT " from mutator_free to collector_free",
+                           idx, ac);
+      } else {
+        size_t available = (region->end() - region->top()) * HeapWordSize;
+        if (region->is_old()) {
+          old_available += available;
+        } else {
+          lost_available += available;
+        }
+        log_info(gc, ergo)("Cannot allocate from mutator-free region " SIZE_FORMAT
+                           " (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                           idx, region->is_old()? "old": region->is_young()? "young": region->affiliation() == FREE? "free": "unaffiliated",
+                           region->is_empty()? "empty": "not empty", region->is_trash()? "trash": "treasure", region->age(),
+                           available);
+
+        // leave this as mutator_Free
+        if (idx > last_mutator) {
+          last_mutator = idx;
+        }
+        if (idx < first_mutator) {
+          first_mutator = idx;
+        }
+      }
+    } else {
+      size_t available = (region->end() - region->top()) * HeapWordSize;
+      if (region->is_old()) {
+        old_available += available;
+      } else {
+        lost_available += available;
+      }
+      log_info(gc, ergo)("Region " SIZE_FORMAT " is not mutator_free (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                         idx, region->is_old()? "old": region->is_young()? "young": region->affiliation() == FREE? "free": "unaffiliated",
+                         region->is_empty()? "empty": "not empty", region->is_trash()? "trash": "treasure", region->age(),
+                         available);
+    }
+#else
+    if (_mutator_free_bitmap.at(idx) && (region->free() > 0)) {
       _mutator_free_bitmap.clear_bit(idx);
       _collector_free_bitmap.set_bit(idx);
       size_t ac = alloc_capacity(region);
@@ -766,7 +945,16 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve) {
       reserved += ac;
       log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to collector_free", idx);
     }
+#endif
   }
+#ifdef KELVIN_REBUILD
+  log_info(gc, ergo)("after reserve regions, total young available: " SIZE_FORMAT ", of which: " SIZE_FORMAT
+                     " is reserved for collector, lost available: " SIZE_FORMAT ", old_available: " SIZE_FORMAT,
+                     total_young_available, young_available_reserved, lost_available, old_available);
+  log_info(gc, ergo)("  first_mutator: " SIZE_FORMAT " last_mutator: " SIZE_FORMAT
+                     ", first_collector: " SIZE_FORMAT " last_collector: " SIZE_FORMAT,
+                     first_mutator, last_mutator, first_collector, last_collector);
+#endif
 }
 
 void ShenandoahFreeSet::log_status() {
@@ -889,6 +1077,101 @@ HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_
 
 size_t ShenandoahFreeSet::unsafe_peek_free() const {
   // Deliberately not locked, this method is unsafe when free set is modified.
+
+#ifdef KELVIN_ALLOCATE
+  {
+    size_t num_regions = _heap->num_regions();
+    size_t left_mutator = num_regions;
+    size_t right_mutator = 0;
+    size_t left_collector = num_regions;
+    size_t right_collector = 0;
+    size_t mutatable_free = 0;
+    size_t collectable_free = 0;
+
+    size_t total_old_regions = 0;
+    size_t total_young_regions = 0;
+    size_t total_free_regions = 0;
+    size_t total_old_used = 0;
+    size_t total_young_used = 0;
+    size_t total_old_avail_fragments = 0;
+    size_t total_young_avail_fragments = 0;
+
+    size_t total_mutator_regions = 0;
+    size_t total_collector_regions = 0;
+    size_t total_mutator_used = 0;
+    size_t total_collector_used = 0;
+    size_t total_mutator_avail_fragments = 0;
+    size_t total_collector_avail_fragments = 0;
+
+
+    {
+      // When called from allocate_single, we already own the lock I think
+      // ShenandoahHeapLocker locker(_heap->lock());
+      //
+      for (size_t index = 0; index < num_regions; index++) {
+        ShenandoahHeapRegion *r = _heap->get_region(index);
+        size_t available = r->free();
+        size_t usage = r->used();
+        if (r->is_old()) {
+          total_old_regions++;
+          total_old_used += usage;
+          total_old_avail_fragments += available;
+        } else if (r->is_young()) {
+          total_young_regions++;
+          total_young_used += usage;
+          total_young_avail_fragments += available;
+        } else if (r->affiliation() == FREE) {
+          total_free_regions++;
+        } else {
+          log_info(gc, ergo)("OJO! Region " SIZE_FORMAT " has unexpected affiliation: %s",
+                             r->index(), affiliation_name(r->affiliation()));
+        }
+
+        if (is_mutator_free(index)) {
+          log_info(gc, ergo)("Region " SIZE_FORMAT " is mutator_free (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                             r->index(), affiliation_name(r->affiliation()),
+                             r->is_empty()? "empty": "not empty", r->is_trash()? "trash": "treasure", r->age(),
+                             available);
+          mutatable_free += alloc_capacity(r);
+          if (index > right_mutator) {
+            right_mutator = index;
+          }
+          if (index < left_mutator) {
+            left_mutator = index;
+          }
+        } else if (is_collector_free(index)) {
+          log_info(gc, ergo)("Region " SIZE_FORMAT " is collector_free (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                             r->index(), affiliation_name(r->affiliation()),
+                             r->is_empty()? "empty": "not empty", r->is_trash()? "trash": "treasure", r->age(),
+                             available);
+          collectable_free += alloc_capacity(r);
+          if (index > right_collector) {
+            right_collector = index;
+          }
+          if (index < left_collector) {
+            left_collector = index;
+          }
+        } else {
+          log_info(gc, ergo)("Region " SIZE_FORMAT " is neither_free (%s, %s, %s, age: %d), available: " SIZE_FORMAT,
+                             r->index(), affiliation_name(r->affiliation()),
+                             r->is_empty()? "empty": "not empty", r->is_trash()? "trash": "treasure", r->age(),
+                             available);
+        }
+      }
+    }
+    log_info(gc, ergo)(" mutator_free: " SIZE_FORMAT " collector_free: " SIZE_FORMAT, mutatable_free, collectable_free);
+    log_info(gc, ergo)("  computed ranges for mutator (" SIZE_FORMAT ", " SIZE_FORMAT "), collector: (" SIZE_FORMAT ", " SIZE_FORMAT ")",
+                       left_mutator, right_mutator, left_collector, right_collector);
+    log_info(gc, ergo)("  remembered  ranges for mutator (" SIZE_FORMAT ", " SIZE_FORMAT "), collector: (" SIZE_FORMAT ", " SIZE_FORMAT ")",
+                       _mutator_leftmost, _mutator_rightmost, _collector_leftmost, _collector_rightmost);
+    log_info(gc, ergo)("  Tallied old regions: " SIZE_FORMAT " with " SIZE_FORMAT " used and " SIZE_FORMAT " available",
+                       total_old_regions, total_old_used, total_old_avail_fragments);
+    log_info(gc, ergo)("Tallied young regions: " SIZE_FORMAT " with " SIZE_FORMAT " used and " SIZE_FORMAT " available",
+                       total_young_regions, total_young_used, total_young_avail_fragments);
+    log_info(gc, ergo)(" Tallied free regions: " SIZE_FORMAT " with " SIZE_FORMAT " available",
+                       total_free_regions, total_free_regions * ShenandoahHeapRegion::region_size_bytes());
+  }
+#endif
 
   for (size_t index = _mutator_leftmost; index <= _mutator_rightmost; index++) {
     if (index < _max && is_mutator_free(index)) {

@@ -570,7 +570,7 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete, true /* log_heap_usage */);
   EventMark em("%s", msg);
 
-#define KELVIN_TRACE
+#undef KELVIN_TRACE
 #ifdef KELVIN_TRACE
   log_info(gc, ergo)("Beginning entry_cleanup_complete");
 #endif

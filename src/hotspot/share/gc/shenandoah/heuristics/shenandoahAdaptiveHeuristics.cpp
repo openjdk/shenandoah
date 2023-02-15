@@ -323,7 +323,9 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
   size_t available = _generation->available();
   size_t allocated = _generation->bytes_allocated_since_gc_start();
 
-  size_t anticipated_available = available + young_regions_to_be_reclaimed * ShenandoahHeapRegion::region_size_bytes();
+  size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_bytes_collected();
+  size_t anticipated_available =
+    available + young_regions_to_be_reclaimed * ShenandoahHeapRegion::region_size_bytes() - available_young_collected;
   size_t allocation_headroom = anticipated_available;
   size_t spike_headroom = capacity * ShenandoahAllocSpikeFactor / 100;
   size_t penalties      = capacity * _gc_time_penalties / 100;
@@ -351,20 +353,32 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
 
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
 
+  // TODO: There are other adjustments made in should_start_gc() to avg_cycle_time depending on degenerated cycles
+  // and expansion of the live-memory set.  To be totally in sync with behavior of GC trigger, the estimate of
+  // evacuation slack may want to incorporate the same adjustments.
+
+
+  // TODO: Consider making conservative adjustments to avg_cycle_time, as in:
+  //   avg_cycle_time *= 2;
   // The observation is that GC time is approximately doubled when we perform promotions and/or mixed evacuations.
   // If the caller takes action based on the value returned from evac_slack, the action will be to trigger promotion
-  // and/or mixed evacuation so double our understanding of cycle time.
-  avg_cycle_time *= 2;
+  // and/or mixed evacuation so double our understanding of cycle time.  Kelvin has experimented with this option.
+  // While it reduces the likelihood of TLAB allocation failures, it also causes excessively conservative transfer
+  // of memory to OLD, which ultimately prevents timely promotion of memory.
+
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
 
-#define KELVIN_TRACE
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
   log_info(gc, ergo)("evac_slack avg_cycle_time: %.3f, avg_alloc_rate: %.3f, rate: %.3f, available: " SIZE_FORMAT
-                     ", anticipated available: " SIZE_FORMAT
+                     ", anticipated available: " SIZE_FORMAT ", collected young regions: " SIZE_FORMAT
+                     ", collected available bytes: " SIZE_FORMAT
                      ", penalties: " SIZE_FORMAT ", alloc_headroom: " SIZE_FORMAT ", spike_headroom: " SIZE_FORMAT
                      ", allocated since start of gc: " SIZE_FORMAT,
                      avg_cycle_time, avg_alloc_rate, rate, available, anticipated_available,
+                     young_regions_to_be_reclaimed, available_young_collected,
                      penalties, allocation_headroom, spike_headroom, allocated);
-
+#endif
   size_t evac_slack_avg;
   if (anticipated_available > avg_cycle_time * avg_alloc_rate + penalties + spike_headroom) {
     evac_slack_avg = anticipated_available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
@@ -521,12 +535,25 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
     if (heap->mode()->is_generational()) {
+
       if ((heap->get_promotion_potential() > 0) ||
           (heap->is_old_compaction_enabled() &&
            (((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->unprocessed_old_collection_candidates() > 0))) {
-        // Mixed and promoting GC passes may take roughly twice as long as a simple GC cycle
-        avg_cycle_time *= 2;
+        // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
+        // more time than traditional young-generation cycles so start as soon as we can.
+        return true;
       }
+
+      // TODO: Consider making conservative adjustments to avg_cycle_time, as in:
+      //
+      // if ((heap->get_promotion_potential() > 0) ||
+      //     (heap->is_old_compaction_enabled() &&
+      //      (((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->unprocessed_old_collection_candidates() > 0))) {
+      //   Mixed and promoting GC passes may take roughly twice as long as a simple GC cycle
+      //   avg_cycle_time *= 2;
+      // }
+      // Kelvin has experimented with this alternative approach.  While this reduces the likelihood of TLAB allocation failures,
+      // which result in degenerated GC, it also hinders timely transfer of memory from young to old.
     }
 
     size_t last_live_memory = get_last_live_memory();
@@ -553,8 +580,8 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
     if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
       if (avg_cycle_time > original_cycle_time) {
-        log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention",
-                      _generation->name(), original_cycle_time, avg_cycle_time);
+        log_debug(gc)("%s: average GC time adjusted from: %.2f ms to %.2f ms because upward trend in live memory retention or because of recent degen cycles: %d",
+                      _generation->name(), original_cycle_time, avg_cycle_time, degenerated_cycles_in_a_row());
       }
 
       log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",

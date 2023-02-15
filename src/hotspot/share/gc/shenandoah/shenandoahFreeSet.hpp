@@ -73,7 +73,7 @@ private:
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   bool can_allocate_from(ShenandoahHeapRegion *r);
-  size_t alloc_capacity(ShenandoahHeapRegion *r);
+  size_t alloc_capacity(ShenandoahHeapRegion *r) const;
   bool has_no_alloc_capacity(ShenandoahHeapRegion *r);
 
 public:
@@ -87,7 +87,7 @@ public:
 
   void clear();
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions);
-  void rebuild();
+  void rebuild(size_t young_reserve);
 
   void recycle_trash();
 

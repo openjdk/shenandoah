@@ -1508,7 +1508,7 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
 
     // Invoke this in case we are able to transfer memory from OLD to YOUNG.  
     heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
-    heap->free_set()->rebuild();
+    heap->free_set()->rebuild(0);
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);
