@@ -3061,32 +3061,33 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   size_t young_cset_regions, old_cset_regions;
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
 
-  // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
-  size_t humongous_regions_promoted = young_generation()->heuristics()->get_promotable_humongous_regions();
-  if (humongous_regions_promoted > 0) {
-    size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
+  if (mode()->is_generational()) {
+    // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
+    size_t humongous_regions_promoted = young_generation()->heuristics()->get_promotable_humongous_regions();
+    if (humongous_regions_promoted > 0) {
+      size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
 #undef KELVIN_VERBOSE
 #ifdef KELVIN_VERBOSE
-    log_info(gc,ergo)("KELVIN: end of ConcGC, promoted humongous: " SIZE_FORMAT, humongous_bytes_promoted);
+      log_info(gc,ergo)("KELVIN: end of ConcGC, promoted humongous: " SIZE_FORMAT, humongous_bytes_promoted);
 #endif 
-    if (old_generation()->available() < humongous_bytes_promoted) {
-      size_t needed_expansion = humongous_bytes_promoted - old_generation()->available();
-      // round up to multiple of region size
-      size_t needed_regions = ((needed_expansion + ShenandoahHeapRegion::region_size_bytes() - 1)
-                               / ShenandoahHeapRegion::region_size_bytes());
-      generation_sizer()->force_transfer_to_old(needed_regions);
+      if (old_generation()->available() < humongous_bytes_promoted) {
+	size_t needed_expansion = humongous_bytes_promoted - old_generation()->available();
+	// round up to multiple of region size
+	size_t needed_regions = ((needed_expansion + ShenandoahHeapRegion::region_size_bytes() - 1)
+				 / ShenandoahHeapRegion::region_size_bytes());
+	generation_sizer()->force_transfer_to_old(needed_regions);
+      }
+      old_generation()->increase_affiliated_region_count(humongous_regions_promoted);
+      young_generation()->decrease_affiliated_region_count(humongous_regions_promoted);
+      old_generation()->increase_used(humongous_bytes_promoted);
+      young_generation()->decrease_used(humongous_bytes_promoted);
     }
-    old_generation()->increase_affiliated_region_count(humongous_regions_promoted);
-    young_generation()->decrease_affiliated_region_count(humongous_regions_promoted);
-    old_generation()->increase_used(humongous_bytes_promoted);
-    young_generation()->decrease_used(humongous_bytes_promoted);
+
+    // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.
+    // Note that transfer of humongous regions does not impact available.
+    size_t evac_slack = young_generation()->heuristics()->evac_slack(young_cset_regions);
+    adjust_generation_sizes_for_next_cycle(evac_slack, young_cset_regions, old_cset_regions);
   }
-
-  // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.
-  // Note that transfer of humongous regions does not impact available.
-  size_t evac_slack = young_generation()->heuristics()->evac_slack(young_cset_regions);
-  adjust_generation_sizes_for_next_cycle(evac_slack, young_cset_regions, old_cset_regions);
-
   // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild(0);
 }
