@@ -245,7 +245,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       } else {
         live_memory += region->get_live_data_bytes();
         if (region->age() >= InitialTenuringThreshold) {
-          oop obj = (oop) region->bottom();
+          oop obj = cast_to_oop(region->bottom());
           size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
           humongous_regions_promoted += humongous_regions;
 #undef KELVIN_NOISE
