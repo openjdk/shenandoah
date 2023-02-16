@@ -49,7 +49,7 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
 
 ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
   _generation(generation),
-  _region_data(NULL),
+  _region_data(nullptr),
   _degenerated_cycles_in_a_row(0),
   _successful_cycles_in_a_row(0),
   _guaranteed_gc_interval(0),

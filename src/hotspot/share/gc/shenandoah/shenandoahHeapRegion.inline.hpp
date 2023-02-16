@@ -117,7 +117,7 @@ HeapWord* ShenandoahHeapRegion::allocate(size_t size, ShenandoahAllocRequest req
 
     return obj;
   } else {
-    return NULL;
+    return nullptr;
   }
 }
 

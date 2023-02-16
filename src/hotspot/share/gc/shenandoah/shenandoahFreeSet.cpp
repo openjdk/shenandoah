@@ -155,7 +155,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
         if (is_mutator_free(idx) && (allow_new_region || r->affiliation() != ShenandoahRegionAffiliation::FREE)) {
           // try_allocate_in() increases used if the allocation is successful.
           HeapWord* result = try_allocate_in(r, req, in_new_region);
-          if (result != NULL) {
+          if (result != nullptr) {
             return result;
           }
         }
@@ -180,20 +180,20 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       } else {
         result = allocate_with_affiliation(req.affiliation(), req, in_new_region);
       }
-      if (result != NULL) {
+      if (result != nullptr) {
         return result;
       }
       if (allow_new_region) {
         // Then try a free region that is dedicated to GC allocations.
         result = allocate_with_affiliation(FREE, req, in_new_region);
-        if (result != NULL) {
+        if (result != nullptr) {
           return result;
         }
       }
 
       // No dice. Can we borrow space from mutator view?
       if (!ShenandoahEvacReserveOverflow) {
-        return NULL;
+        return nullptr;
       }
 
       if (allow_new_region) {
@@ -205,7 +205,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
             if (can_allocate_from(r)) {
               flip_to_gc(r);
               HeapWord *result = try_allocate_in(r, req, in_new_region);
-              if (result != NULL) {
+              if (result != nullptr) {
                 return result;
               }
             }
@@ -221,7 +221,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     default:
       ShouldNotReachHere();
   }
-  return NULL;
+  return nullptr;
 }
 
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
@@ -229,7 +229,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
   if (_heap->is_concurrent_weak_root_in_progress() &&
       r->is_trash()) {
-    return NULL;
+    return nullptr;
   }
   try_recycle_trashed(r);
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
@@ -259,7 +259,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   }
 
   in_new_region = r->is_empty();
-  HeapWord* result = NULL;
+  HeapWord* result = nullptr;
   size_t size = req.size();
 
   // req.size() is in words, r->free() is in bytes.
@@ -373,7 +373,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
   }
 
-  if (result != NULL) {
+  if (result != nullptr) {
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       // Mutator allocations always pull from young gen.
@@ -401,7 +401,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       }
     }
   }
-  if (result == NULL || has_no_alloc_capacity(r)) {
+  if (result == nullptr || has_no_alloc_capacity(r)) {
     // Region cannot afford this or future allocations. Retire it.
     //
     // While this seems a bit harsh, especially in the case when this large allocation does not
@@ -475,7 +475,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   // No regions left to satisfy allocation, bye.
   if (num > mutator_count() || (num > avail_young_regions)) {
-    return NULL;
+    return nullptr;
   }
 
   // Find the continuous interval of $num regions, starting from $beg and ending in $end,
@@ -487,7 +487,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   while (true) {
     if (end >= _max) {
       // Hit the end, goodbye
-      return NULL;
+      return nullptr;
     }
 
     // If regions are not adjacent, then current [beg; end] is useless, and we may fast-forward.
@@ -819,10 +819,10 @@ HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_
         in_new_region = false;
         assert(false, "Trying to allocate TLAB larger than the humongous threshold: " SIZE_FORMAT " > " SIZE_FORMAT,
                req.size(), ShenandoahHeapRegion::humongous_threshold_words());
-        return NULL;
+        return nullptr;
       default:
         ShouldNotReachHere();
-        return NULL;
+        return nullptr;
     }
   } else {
     return allocate_single(req, in_new_region);

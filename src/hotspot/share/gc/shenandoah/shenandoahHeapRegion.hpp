@@ -347,7 +347,7 @@ public:
     return _index;
   }
 
-  // Allocation (return NULL if full)
+  // Allocation (return null if full)
   inline HeapWord* allocate_aligned(size_t word_size, ShenandoahAllocRequest &req, size_t alignment_in_words);
 
   // Allocation (return NULL if full)
