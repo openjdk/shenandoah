@@ -92,7 +92,7 @@ public:
 
     if (_heap->mode()->is_generational()) {
       _generation = _heap->active_generation();
-      assert(_generation != NULL, "Expected active generation in this mode");
+      assert(_generation != nullptr, "Expected active generation in this mode");
     }
   }
 
@@ -125,7 +125,7 @@ private:
   }
 
   bool in_generation(oop obj) {
-    if (_generation == NULL) {
+    if (_generation == nullptr) {
       return true;
     }
 
@@ -598,10 +598,10 @@ public:
           _ld(ld),
           _claimed(0),
           _processed(0),
-          _generation(NULL) {
+          _generation(nullptr) {
     if (_heap->mode()->is_generational()) {
       _generation = _heap->active_generation();
-      assert(_generation != NULL, "Expected active generation in this mode.");
+      assert(_generation != nullptr, "Expected active generation in this mode.");
     }
   };
 
@@ -635,7 +635,7 @@ public:
   }
 
   bool in_generation(ShenandoahHeapRegion* r) {
-    return _generation == NULL || _generation->contains(r);
+    return _generation == nullptr || _generation->contains(r);
   }
 
   virtual void work_humongous(ShenandoahHeapRegion* r, ShenandoahVerifierStack& stack, ShenandoahVerifyOopClosure& cl) {
@@ -812,12 +812,12 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
   ShenandoahGeneration* generation;
   if (_heap->mode()->is_generational()) {
     generation = _heap->active_generation();
-    guarantee(generation != NULL, "Need to know which generation to verify.");
+    guarantee(generation != nullptr, "Need to know which generation to verify.");
   } else {
-    generation = NULL;
+    generation = nullptr;
   }
 
-  if (generation != NULL) {
+  if (generation != nullptr) {
     ShenandoahHeapLocker lock(_heap->lock());
 
     if (remembered == _verify_remembered_for_marking) {
@@ -855,7 +855,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
   // Internal heap region checks
   if (ShenandoahVerifyLevel >= 1) {
     ShenandoahVerifyHeapRegionClosure cl(label, regions);
-    if (generation != NULL) {
+    if (generation != nullptr) {
       generation->heap_region_iterate(&cl);
     } else {
       _heap->heap_region_iterate(&cl);
@@ -915,7 +915,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
   if (ShenandoahVerifyLevel >= 4 && marked == _verify_marked_complete && liveness == _verify_liveness_complete) {
     for (size_t i = 0; i < _heap->num_regions(); i++) {
       ShenandoahHeapRegion* r = _heap->get_region(i);
-      if (generation != NULL && !generation->contains(r)) {
+      if (generation != nullptr && !generation->contains(r)) {
         continue;
       }
 

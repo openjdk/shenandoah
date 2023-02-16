@@ -75,7 +75,7 @@ private:
     _gclab(nullptr),
     _gclab_size(0),
     _paced_time(0),
-    _plab(NULL),
+    _plab(nullptr),
     _plab_size(0),
     _plab_evacuated(0),
     _plab_promoted(0),
@@ -89,7 +89,7 @@ private:
     if (_gclab != nullptr) {
       delete _gclab;
     }
-    if (_plab != NULL) {
+    if (_plab != nullptr) {
       ShenandoahHeap::heap()->retire_plab(_plab);
       delete _plab;
     }

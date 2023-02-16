@@ -125,14 +125,14 @@ double HdrSeq::percentile(double level) const {
 // of any mutual exclusion as necessary.
 void HdrSeq::merge(HdrSeq& hdr2, bool clear_this) {
   for (int mag = 0; mag < MagBuckets; mag++) {
-    if (_hdr[mag] != NULL) {
+    if (_hdr[mag] != nullptr) {
       int* that_bucket = hdr2._hdr[mag];
-      if (that_bucket == NULL) {
+      if (that_bucket == nullptr) {
         if (clear_this) {
           // the target doesn't have any values, swap in ours.
           // Could this cause native memory fragmentation?
           hdr2._hdr[mag] = _hdr[mag];
-          _hdr[mag] = NULL;
+          _hdr[mag] = nullptr;
         } else {
           // We can't clear this, so we create the entries & add in below
           that_bucket = NEW_C_HEAP_ARRAY(int, ValBuckets, mtInternal);

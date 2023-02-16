@@ -303,7 +303,7 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
 
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
   HeapWord* obj;
-  if (plab == NULL) {
+  if (plab == nullptr) {
     assert(!thread->is_Java_thread() && !thread->is_Worker_thread(), "Performance: thread should have PLAB: %s", thread->name());
     // No PLABs in this thread, fallback to shared allocation
     return nullptr;
@@ -355,7 +355,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
       // Skip the potential promotion attempt for this one.
     } else if (r->age() + mark.age() >= InitialTenuringThreshold) {
       oop result = try_evacuate_object(p, thread, r, OLD_GENERATION);
-      if (result != NULL) {
+      if (result != nullptr) {
         return result;
       }
       // If we failed to promote this aged object, we'll fall through to code below and evacuate to young-gen.
@@ -436,7 +436,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         copy = allocate_memory(req, is_promotion);
         alloc_from_lab = false;
       }
-      // else, we leave copy equal to NULL, signaling a promotion failure below if appropriate.
+      // else, we leave copy equal to nullptr, signaling a promotion failure below if appropriate.
       // We choose not to promote objects smaller than PLAB::min_size() by way of shared allocations, as this is too
       // costly.  Instead, we'll simply "evacuate" to young-gen memory (using a GCLAB) and will promote in a future
       // evacuation pass.  This condition is denoted by: is_promotion && has_plab && (size <= PLAB::min_size())
@@ -452,7 +452,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         // Signal that promotion failed. Will evacuate this old object somewhere in young gen.
         report_promotion_failure(thread, size);
         handle_promotion_failure();
-        return NULL;
+        return nullptr;
       } else {
         // Remember that evacuation to old gen failed. We'll want to trigger a full gc to recover from this
         // after the evacuation threads have finished.
@@ -562,7 +562,7 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
     return true;
   }
 
-  if (active_generation() == NULL) {
+  if (active_generation() == nullptr) {
     // no collection is happening, only expect this to be called
     // when concurrent processing is active, but that could change
     return false;

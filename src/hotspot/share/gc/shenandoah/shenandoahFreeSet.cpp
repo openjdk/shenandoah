@@ -83,7 +83,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
     if (r->affiliation() == affiliation && !r->is_humongous()) {
       if (!r->is_cset() && !has_no_alloc_capacity(r)) {
         HeapWord* result = try_allocate_in(r, req, in_new_region);
-        if (result != NULL) {
+        if (result != nullptr) {
           return result;
         }
       }
@@ -100,13 +100,13 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliati
       ShenandoahHeapRegion* r = _heap->get_region(idx);
       if (r->affiliation() == affiliation) {
         HeapWord* result = try_allocate_in(r, req, in_new_region);
-        if (result != NULL) {
+        if (result != nullptr) {
           return result;
         }
       }
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& in_new_region) {
@@ -255,7 +255,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
                   PTR_FORMAT " at transition from FREE to %s",
                   r->index(), p2i(ctx->top_bitmap(r)), affiliation_name(req.affiliation()));
   } else if (r->affiliation() != req.affiliation()) {
-    return NULL;
+    return nullptr;
   }
 
   in_new_region = r->is_empty();
@@ -314,7 +314,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
           _heap->increase_used(padding);
         }
       }
-      // Otherwise, leave result == NULL because the adjusted size is smaller than min size.
+      // Otherwise, leave result == nullptr because the adjusted size is smaller than min size.
     } else {
       // This is a GCLAB or a TLAB allocation
       size_t free = align_down(r->free() >> LogHeapWordSize, MinObjAlignment);
@@ -327,7 +327,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
           // Record actual allocation size
           req.set_actual_size(size);
         }
-        assert (result != NULL, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
+        assert (result != nullptr, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
       } else {
         log_trace(gc, ergo)("Failed to shrink TLAB or GCLAB request (" SIZE_FORMAT ") in region " SIZE_FORMAT " to " SIZE_FORMAT
                            " because min_size() is " SIZE_FORMAT, req.size(), r->index(), size, req.min_size());

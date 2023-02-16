@@ -177,7 +177,7 @@ jlong ShenandoahHeapRegionCounters::encode_heap_status(ShenandoahHeap* heap) {
   } else {
     int phase = encode_phase(heap);
     ShenandoahGeneration* generation = heap->active_generation();
-    assert(generation != NULL, "Expected active generation in this mode.");
+    assert(generation != nullptr, "Expected active generation in this mode.");
     int shift = get_generation_shift(generation);
     status |= ((phase & 0x3) << shift);
     if (heap->is_concurrent_old_mark_in_progress()) {

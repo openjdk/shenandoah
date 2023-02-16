@@ -455,7 +455,7 @@ Node* ShenandoahBarrierSetC2::byte_map_base_node(GraphKit* kit) const {
   BarrierSet* bs = BarrierSet::barrier_set();
   ShenandoahBarrierSet* ctbs = barrier_set_cast<ShenandoahBarrierSet>(bs);
   CardTable::CardValue* card_table_base = ctbs->card_table()->byte_map_base();
-  if (card_table_base != NULL) {
+  if (card_table_base != nullptr) {
     return kit->makecon(TypeRawPtr::make((address)card_table_base));
   } else {
     return kit->null();
@@ -477,11 +477,11 @@ void ShenandoahBarrierSetC2::post_barrier(GraphKit* kit,
 
   ShenandoahBarrierSet* ctbs = barrier_set_cast<ShenandoahBarrierSet>(BarrierSet::barrier_set());
   CardTable* ct = ctbs->card_table();
-  // No store check needed if we're storing a NULL or an old object
+  // No store check needed if we're storing a nullptr or an old object
   // (latter case is probably a string constant). The concurrent
   // mark sweep garbage collector, however, needs to have all nonNull
   // oop updates flagged via card-marks.
-  if (val != NULL && val->is_Con()) {
+  if (val != nullptr && val->is_Con()) {
     // must be either an oop or NULL
     const Type* t = val->bottom_type();
     if (t == TypePtr::NULL_PTR || t == Type::TOP)
@@ -503,7 +503,7 @@ void ShenandoahBarrierSetC2::post_barrier(GraphKit* kit,
     adr = obj;
   }
   // (Else it's an array (or unknown), and we want more precise card marks.)
-  assert(adr != NULL, "");
+  assert(adr != nullptr, "");
 
   IdealKit ideal(kit, true);
 

@@ -195,7 +195,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   collection_set->set_immediate_trash(immediate_garbage);
 
   if (immediate_percent <= ShenandoahImmediateThreshold) {
-    if (old_heuristics != NULL) {
+    if (old_heuristics != nullptr) {
       old_heuristics->prime_collection_set(collection_set);
     }
     // else, this is global collection and doesn't need to prime_collection_set
