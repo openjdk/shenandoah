@@ -1348,7 +1348,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
           size_t young_words_available = young_generation()->adjusted_available() / HeapWordSize;
-          if (ShenandoahElasticTLAB && (req.min_size() < young_words_available)) {
+          if (ShenandoahElasticTLAB && req.is_lab_alloc() && (req.min_size() < young_words_available)) {
             // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
             // lab size because young memory has become too fragmented.
             try_smaller_lab_size = true;
