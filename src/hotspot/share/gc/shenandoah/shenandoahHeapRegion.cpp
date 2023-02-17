@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013, 2020, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -66,7 +67,7 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _index(index),
   _bottom(start),
   _end(start + RegionSizeWords),
-  _new_top(NULL),
+  _new_top(nullptr),
   _empty_time(os::elapsedTime()),
   _state(committed ? _empty_committed : _empty_uncommitted),
   _top(start),
@@ -468,7 +469,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
   while (obj_addr < t) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
       obj_addr += obj->size();
     } else {
       // Object is not marked.  Coalesce and fill dead object with dead neighbors.
@@ -513,7 +514,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   while (obj_addr < t) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
       obj_addr += obj->size();
     } else {
       // Object is not marked.  Coalesce and fill dead object with dead neighbors.
@@ -563,7 +564,7 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
   while (obj_addr < t) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
       // when promoting an entire region, we have to register the marked objects as well
       obj_addr += obj->oop_iterate_size(blk);
     } else {
@@ -696,7 +697,7 @@ HeapWord* ShenandoahHeapRegion::block_start(const void* p) const {
       last = cur;
       cur += cast_to_oop(cur)->size();
     }
-    shenandoah_assert_correct(NULL, cast_to_oop(last));
+    shenandoah_assert_correct(nullptr, cast_to_oop(last));
     return last;
   }
 }
@@ -799,12 +800,12 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
   // region size to regular page size.
 
   // Figure out page size to use, and aligns up heap to page size
-  int page_size = os::vm_page_size();
+  size_t page_size = os::vm_page_size();
   if (UseLargePages) {
     size_t large_page_size = os::large_page_size();
     max_heap_size = align_up(max_heap_size, large_page_size);
     if ((max_heap_size / align_up(region_size, large_page_size)) >= MIN_NUM_REGIONS) {
-      page_size = (int)large_page_size;
+      page_size = large_page_size;
     } else {
       // Should have been checked during argument initialization
       assert(!ShenandoahUncommit, "Uncommit requires region size aligns to large page size");
