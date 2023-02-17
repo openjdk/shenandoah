@@ -1300,7 +1300,7 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
          "Affiliated regions must hold more than what is currently used");
   assert(_used <= _max_capacity, "Cannot use more than capacity");
-  assert(_affiliated_region_count * ShenandoahHeapRegion::region_syze_bytes() <= capacity,
+  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() <= _max_capacity,
          "Cannot use more than capacity");
 
 #ifdef KELVIN_TRACE_GENERATIONS
