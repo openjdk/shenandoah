@@ -108,6 +108,22 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
 
   if (is_generational) {
+    for (size_t idx = 0; idx < size; idx++) {
+      if (cset->is_preselected(idx)) {
+        ShenandoahHeapRegion* r = data[idx]._region;
+        assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
+        // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
+        // This region has been pre-selected and its impact on promotion reserve is already accounted for.
+
+        // r->used() is r->garbage() + r->get_live_data_bytes()
+        // Since all live data in this region is being evacuated from young-gen, it is as if this memory
+        // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
+        // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
+        // within youn-gen memory.
+        cur_young_garbage += r->used();
+        cset->add_region(r);
+      }
+    }
     if (is_global) {
       size_t max_young_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
       size_t young_cur_cset = 0;
@@ -131,17 +147,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
             add_region = true;
             old_cur_cset = new_cset;
           }
-        } else if (cset->is_preselected(r->index())) {
-          assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
-          // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
-          // This region has been pre-selected and its impact on promotion reserve is already accounted for.
-          add_region = true;
-          // r->used() is r->garbage() + r->get_live_data_bytes()
-          // Since all live data in this region is being evacuated from young-gen, it is as if this memory
-          // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
-          // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
-          // within youn-gen memory.
-          cur_young_garbage += r->used();
         } else if (r->age() < InitialTenuringThreshold) {
           size_t new_cset = young_cur_cset + r->get_live_data_bytes();
           size_t region_garbage = r->garbage();
@@ -174,37 +179,19 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
-        bool add_region = false;
-
-        if (!r->is_old()) {
-          if (cset->is_preselected(r->index())) {
-            assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
-            // Entire region will be promoted, This region does not impact young-gen evacuation reserve.  Memory has already
-            // been set aside to hold evacuation results as advance_promotion_reserve.
-            add_region = true;
-            // Since all live data in this region is being evacuated from young-gen, it is as if this memory
-            // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
-            // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
-            // within youn-gen memory
-            cur_young_garbage += r->get_live_data_bytes();
-          } else if  (r->age() < InitialTenuringThreshold) {
-            size_t new_cset = cur_cset + r->get_live_data_bytes();
-            size_t region_garbage = r->garbage();
-            size_t new_garbage = cur_young_garbage + region_garbage;
-            bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
-            if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
-              add_region = true;
-              cur_cset = new_cset;
-              cur_young_garbage = new_garbage;
-            }
-          }
-          // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
-          // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
-
-          if (add_region) {
+        if  (r->age() < InitialTenuringThreshold) {
+          size_t new_cset = cur_cset + r->get_live_data_bytes();
+          size_t region_garbage = r->garbage();
+          size_t new_garbage = cur_young_garbage + region_garbage;
+          bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
+          if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
+            cur_cset = new_cset;
+            cur_young_garbage = new_garbage;
             cset->add_region(r);
           }
         }
+        // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
+        // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
       }
     }
   } else {
@@ -234,6 +221,15 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       }
     }
   }
+
+  size_t collected_old = cset->get_old_bytes_reserved_for_evacuation();
+  size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
+  size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
+
+  log_info(gc, ergo)("Chosen CSet evacuates old: " SIZE_FORMAT "%s, promoted: " SIZE_FORMAT "%s, young: " SIZE_FORMAT "%s",
+                     byte_size_in_proper_unit(collected_old),      proper_unit_for_byte_size(collected_old),
+                     byte_size_in_proper_unit(collected_promoted), proper_unit_for_byte_size(collected_promoted),
+                     byte_size_in_proper_unit(collected_young),    proper_unit_for_byte_size(collected_young));
 }
 
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {
@@ -535,12 +531,20 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
     if (heap->mode()->is_generational()) {
-
-      if ((heap->get_promotion_potential() > 0) ||
-          (heap->is_old_compaction_enabled() &&
-           (((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->unprocessed_old_collection_candidates() > 0))) {
-        // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
-        // more time than traditional young-generation cycles so start as soon as we can.
+      // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
+      // more time than traditional young-generation cycles so start them up as soon as possible.
+      size_t promo_potential = heap->get_promotion_potential();
+      ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) heap->old_generation()->heuristics();
+      size_t mixed_candidates = old_heuristics->unprocessed_old_collection_candidates();
+      if (promo_potential > 0) {
+        log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
+                     _generation->name(), byte_size_in_proper_unit(promo_potential), proper_unit_for_byte_size(promo_potential));
+        return true;
+      } else if (mixed_candidates > 0) {
+        // Expedite young GC even if !heap->is_old_compaction_enabled().  We need to run young GC in order to open up some
+        // free heap regions so we have someplace to copy the mixed evacuations to.
+        log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
+                     _generation->name(), mixed_candidates);
         return true;
       }
 
@@ -552,8 +556,8 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       //   Mixed and promoting GC passes may take roughly twice as long as a simple GC cycle
       //   avg_cycle_time *= 2;
       // }
-      // Kelvin has experimented with this alternative approach.  While this reduces the likelihood of TLAB allocation failures,
-      // which result in degenerated GC, it also hinders timely transfer of memory from young to old.
+      // Kelvin has experimented with this alternative approach.  While this may reduce degenerated GC triggers because it
+      // reduces the likelihood of TLAB allocation failures, it also hinders timely transfer of memory from young to old.
     }
 
     size_t last_live_memory = get_last_live_memory();

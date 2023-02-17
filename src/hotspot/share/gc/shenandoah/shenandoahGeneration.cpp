@@ -1201,13 +1201,18 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
   log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);
 #endif
-
+  // This detects arithmetic wraparound on _used
+  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+         "Affiliated regions must hold more than what is currently used");
   assert(_used <= _max_capacity, "cannot increase used beyond capacity");
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
+  // This detects arithmetic wraparound on _used
+  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+         "Affiliated regions must hold more than what is currently used");
 #ifdef KELVIN_TRACE_GENERATIONS
   log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT "vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);
@@ -1274,6 +1279,11 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   _max_capacity += increment;
   _soft_max_capacity += increment;
   _adjusted_capacity += increment;
+
+  // This detects arithmetic wraparound on _used
+  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+         "Affiliated regions must hold more than what is currently used");
+
 #ifdef KELVIN_TRACE_GENERATIONS
   log_info(gc, ergo)("increasing %s capacity by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), increment, _max_capacity);
 #endif
@@ -1285,6 +1295,14 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;
   _adjusted_capacity -= decrement;
+
+  // This detects arithmetic wraparound on _used
+  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+         "Affiliated regions must hold more than what is currently used");
+  assert(_used <= _max_capacity, "Cannot use more than capacity");
+  assert(_affiliated_region_count * ShenandoahHeapRegion::region_syze_bytes() <= capacity,
+         "Cannot use more than capacity");
+
 #ifdef KELVIN_TRACE_GENERATIONS
   log_info(gc, ergo)("decreasing %s capacity by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), decrement, _max_capacity);
 #endif
