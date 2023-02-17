@@ -1412,20 +1412,29 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
         ShenandoahThreadLocalData::reset_plab_promoted(thread);
         if (req.is_gc_alloc()) {
+	  bool disable_plab_promotions = false;
           if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
             if (promotion_eligible) {
               size_t actual_size = req.actual_size() * HeapWordSize;
-              // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
-              // When we retire this plab, we'll unexpend what we don't really use.
-              ShenandoahThreadLocalData::enable_plab_promotions(thread);
-              expend_promoted(actual_size);
-              assert(get_promoted_expended() <= get_promoted_reserve(), "Do not expend more promotion than budgeted");
-              ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
+	      // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries.
+	      // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
+	      if (get_promoted_expended() <= get_promoted_reserve()) {
+		// Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
+		// When we retire this plab, we'll unexpend what we don't really use.
+		ShenandoahThreadLocalData::enable_plab_promotions(thread);
+		expend_promoted(actual_size);
+		ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
+	      } else {
+		disable_plab_promotions = true;
+	      }
             } else {
+	      disable_plab_promotions = true;
+            }
+	    if (disable_plab_promotions) {
               // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
               ShenandoahThreadLocalData::disable_plab_promotions(thread);
               ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
-            }
+	    }
           } else if (is_promotion) {
             // Shared promotion.  Assume size is requested_bytes.
             expend_promoted(requested_bytes);
