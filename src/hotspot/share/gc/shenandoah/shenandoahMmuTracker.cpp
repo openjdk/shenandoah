@@ -383,12 +383,12 @@ ShenandoahGenerationSizer::ShenandoahGenerationSizer(ShenandoahMmuTracker* mmu_t
 
 size_t ShenandoahGenerationSizer::calculate_min_young_regions(size_t heap_region_count) {
   size_t min_young_regions = (heap_region_count * ShenandoahMinYoungPercentage) / 100;
-  return MAX2(uint(min_young_regions), 1U);
+  return MAX2(min_young_regions, (size_t) 1U);
 }
 
 size_t ShenandoahGenerationSizer::calculate_max_young_regions(size_t heap_region_count) {
   size_t max_young_regions = (heap_region_count * ShenandoahMaxYoungPercentage) / 100;
-  return MAX2(uint(max_young_regions), 1U);
+  return MAX2(max_young_regions, (size_t) 1U);
 }
 
 void ShenandoahGenerationSizer::recalculate_min_max_young_length(size_t heap_region_count) {

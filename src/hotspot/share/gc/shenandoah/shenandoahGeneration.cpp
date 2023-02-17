@@ -1198,7 +1198,8 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 #endif
 #undef KELVIN_TRACE_GENERATIONS
 #ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), bytes, _used);
+  log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
+		     name(), bytes, _used, _max_capacity);
 #endif
 
   assert(_used <= _max_capacity, "cannot increase used beyond capacity");
@@ -1208,7 +1209,8 @@ void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
 #ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), bytes, _used);
+  log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT "vs capacity: " SIZE_FORMAT,
+		     name(), bytes, _used, _max_capacity);
 #endif
 }
 

@@ -478,15 +478,21 @@ void ShenandoahHeap::initialize_generations() {
   // for old would be total heap - minimum capacity of young. This means the sum of the maximum
   // allowed for old and young could exceed the total heap size. It remains the case that the
   // _actual_ capacity of young + old = total.
-  _generation_sizer.heap_size_changed(soft_max_capacity());
-  size_t initial_capacity_young = _generation_sizer.max_young_size();
-  size_t max_capacity_young = _generation_sizer.max_young_size();
-  size_t initial_capacity_old = max_capacity() - max_capacity_young;
-  size_t max_capacity_old = max_capacity() - initial_capacity_young;
+  if (strcmp(ShenandoahGCMode, "generational") == 0) {
+    _generation_sizer.heap_size_changed(soft_max_capacity());
+    size_t initial_capacity_young = _generation_sizer.max_young_size();
+    size_t max_capacity_young = _generation_sizer.max_young_size();
+    size_t initial_capacity_old = max_capacity() - max_capacity_young;
+    size_t max_capacity_old = max_capacity() - initial_capacity_young;
 
-  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
-  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-  _global_generation = new ShenandoahGlobalGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
+    _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
+    _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
+    _global_generation = new ShenandoahGlobalGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
+  } else {
+    _young_generation = new ShenandoahYoungGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
+    _old_generation = new ShenandoahOldGeneration(_max_workers, 0L, 0L);
+    _global_generation = new ShenandoahGlobalGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
+  }
 }
 
 void ShenandoahHeap::initialize_heuristics() {
