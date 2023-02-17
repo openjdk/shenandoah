@@ -106,7 +106,8 @@ ShenandoahMmuTracker::~ShenandoahMmuTracker() {
 }
 
 void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
-  shenandoah_assert_control_thread();
+  // Degen and Full GC requests may arrive as VM thread
+  shenandoah_assert_control_or_vm_thread();
   double collector_time_s = gc_thread_time_seconds();
   double elapsed_gc_time_s = collector_time_s - _generational_reference_time_s;
   generation->add_collection_time(elapsed_gc_time_s);
