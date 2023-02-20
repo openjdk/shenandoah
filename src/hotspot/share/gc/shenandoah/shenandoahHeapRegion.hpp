@@ -449,8 +449,9 @@ public:
   void decrement_age() { if (_age-- == 0) { _age = 0; } }
   void reset_age()     { _age = 0; }
 
-  // Sets all remembered set cards to dirty.
+  // Set all remembered set cards to dirty.
   void promote_humongous();
+  void promote_in_place();
 
 private:
   void do_commit();

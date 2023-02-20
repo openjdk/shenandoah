@@ -108,10 +108,18 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
 
   if (is_generational) {
+#undef KELVIN_CSET
+#ifdef KELVIN_CSET
+    log_info(gc, ergo)("Looking for preselected from 0 .. " SIZE_FORMAT, size);
+#endif
     for (size_t idx = 0; idx < size; idx++) {
-      if (cset->is_preselected(idx)) {
-        ShenandoahHeapRegion* r = data[idx]._region;
+      ShenandoahHeapRegion* r = data[idx]._region;
+      if (cset->is_preselected(r->index())) {
         assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
+#ifdef KELVIN_CSET
+        log_info(gc, ergo)("Found preselected region " SIZE_FORMAT " (age: %d, used: " SIZE_FORMAT ", live: " SIZE_FORMAT ")",
+                           r->index(), r->age(), r->used(), r->get_live_data_bytes());
+#endif
         // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
         // This region has been pre-selected and its impact on promotion reserve is already accounted for.
 
@@ -120,6 +128,8 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
         // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
         // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
         // within youn-gen memory.
+
+        // KELVIN TO DO: getting this live memory out of young generation is not exactly the same as finding garbage.
         cur_young_garbage += r->used();
         cset->add_region(r);
       }
@@ -191,7 +201,8 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
           }
         }
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
-        // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
+        // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects or because
+        // they are to be promted in place..
       }
     }
   } else {

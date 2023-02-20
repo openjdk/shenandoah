@@ -1021,7 +1021,63 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   heap->set_affiliation(this, new_affiliation);
 }
 
-// Returns number of regions promoted, or zero if we choose not to promote.
+// When we promote a region in place, we can continue to use the established marking context to guide subsequent remembered
+// set scans of this region's content.  The region will be coalesced and filled prior to the next old-gen marking effort.
+// We identify the entirety of the region as DIRTY to force the next remembered set scan to identify the "interesting poitners"
+// contained herein.
+void ShenandoahHeapRegion::promote_in_place() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahMarkingContext* marking_context = heap->marking_context();
+  assert(heap->active_generation()->is_mark_complete(), "sanity");
+  assert(is_young(), "Only young regions can be promoted");
+  assert(is_regular(), "Use different service to promote humongous regions");
+  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
+
+  set_affiliation(OLD_GENERATION, true);
+
+  // Since this region may have served previously as OLD, it may hold obsolete object range info.
+  heap->card_scan()->reset_object_range(bottom(), end());
+  heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
+
+  HeapWord* tams = marking_context->top_at_mark_start(this);
+  HeapWord* obj_addr = bottom();
+
+#undef KELVIN_PIP
+#ifdef KELVIN_PIP
+  log_info(gc, ergo)("Promoting region " SIZE_FORMAT " in place, BTE: " PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT
+                     ", TAMS: " PTR_FORMAT,
+                     index(), p2i(bottom()), p2i(top()), p2i(end()), p2i(tams));
+#endif
+
+  while (obj_addr < tams) {
+    oop obj = cast_to_oop(obj_addr);
+    if (marking_context->is_marked(obj)) {
+      assert(obj->klass() != NULL, "klass should not be NULL");
+      // This thread is responsible for registering all objects in this region.  No need for lock.
+      heap->card_scan()->register_object_wo_lock(obj_addr);
+      obj_addr += obj->size();
+    } else {
+      // Coalescing and filling right now would is redundant with the effort that will be performed prior to start of next
+      // old-gen marking effort. 
+      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
+      assert(next_marked_obj <= tams, "next marked object cannot exceed tams");
+      obj_addr = next_marked_obj;
+    }
+  }
+  assert(obj_addr == tams, "Expect first loop to terminate when obj_addr equals tams");
+
+  // Any object above TAMS and below top() is considered live.
+  HeapWord *top_of_region = top();
+  while (obj_addr < top_of_region) {
+    oop obj = cast_to_oop(obj_addr);
+    heap->card_scan()->register_object_wo_lock(obj_addr);
+    obj_addr += obj->size();
+  }
+#ifdef KELVIN_PIP
+  log_info(gc, ergo)("Done promoting region " SIZE_FORMAT " in place", index());
+#endif
+}
+
 void ShenandoahHeapRegion::promote_humongous() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
@@ -1035,6 +1091,10 @@ void ShenandoahHeapRegion::promote_humongous() {
 
   oop obj = cast_to_oop(bottom());
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
+
+#ifdef KELVIN_PIP
+  log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (and cohorts) in place", index());
+#endif
 
   // TODO: Consider not promoting humongous objects that represent primitive arrays.  Leaving a primitive array
   // (obj->is_typeArray()) in young-gen is harmless because these objects are never relocated and they are not

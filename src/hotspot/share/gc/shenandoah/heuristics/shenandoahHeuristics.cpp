@@ -103,6 +103,13 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
   heap->clear_promotion_potential();
   if (heap->mode()->is_generational()) {
     size_t candidates = 0;
+    size_t old_garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold / 100;
+    size_t promote_in_place_regions = 0;
+    size_t promote_in_place_usage = 0;
+    size_t anticipated_candidates = 0;
+    size_t anticipated_promote_in_place_regions = 0;
+    size_t anticipated_promote_in_place_usage = 0;
+
     // sort the promotion-eligible regions according to live-data-bytes so that we can first reclaim the larger numbers
     // of regions that require less evacuation effort.  This prioritizes garbage first, expanding the allocation pool before
     // we begin the work of reclaiming regions that require more effort.
@@ -110,31 +117,75 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       if (in_generation(r) && !r->is_empty() && r->is_regular() && (r->age() >= InitialTenuringThreshold)) {
-        sorted_regions[candidates]._region = r;
-        sorted_regions[candidates++]._live_data = r->get_live_data_bytes();
+        if (r->garbage() < old_garbage_threshold) {
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Promote in place region " SIZE_FORMAT " (candidate: " SIZE_FORMAT ", age: %d, garbage: " SIZE_FORMAT " < " SIZE_FORMAT ")",
+                             i, promote_in_place_regions, r->age(), r->garbage(), old_garbage_threshold);
+#endif
+          promote_in_place_regions++;
+          promote_in_place_usage += r->used();
+        } else {
+          // After sorting and selecting best candidates below, we may decide to exclude this promotion-eligible region
+          // from the current collection sets.  If this happens, we will consider this region as part of the anticipated
+          // promotion potential for the next GC pass.
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Consider promoting region " SIZE_FORMAT " (candidate: " SIZE_FORMAT ", age: %d, garbage: " SIZE_FORMAT " >= " SIZE_FORMAT ")",
+                             i, candidates, r->age(), r->garbage(), old_garbage_threshold);
+#endif
+          sorted_regions[candidates]._region = r;
+          sorted_regions[candidates++]._live_data = r->get_live_data_bytes();
+        }
       } else {
+
+        // Only anticipate to promote regular regions if garbage() is above threshold.  Note that certain regions that are
+        // excluded from anticipated promotion because their garbage content is too low (causing us to anticipate that
+        // the region would be promoted in place) may be eligible for promotion by the time promotion takes place because
+        // more garbage is found within the region between now and then.  This should not happen if we are properly adapting
+        // the tenure age.  We won't tenure objects until they exhibit at least one full GC pass without further decline
+        // in population.
+        //
+        // If this does occur by accident, the most likely impact is that there will not be sufficient available space in
+        // old-gen to hold the live data to be copied out of this region, so the region will not be selected for the
+        // current collection set.  The region will be tallied into the anticipated promotion for the next cycle and
+        // will be collected at that time.
+        //
+        // TODO:
+        //   If we are auto-tuning the tenure age and this occurs, use this as guidance that tenure age should be increased.
+
         if (in_generation(r) && !r->is_empty() && r->is_regular() && (r->age() + 1 == InitialTenuringThreshold)) {
+          if (r->garbage() >= old_garbage_threshold) {
 #ifdef KELVIN_NOISE
-          log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
-                             ", garbage: " SIZE_FORMAT,
-                             r->index(), r->age(), r->get_live_data_bytes(), r->garbage());
+            log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " (candidate: " SIZE_FORMAT ", age %u, live: " SIZE_FORMAT
+                               ", garbage: " SIZE_FORMAT ")",
+                               r->index(), anticipated_candidates, r->age(), r->get_live_data_bytes(), r->garbage());
 #endif
-          promo_potential += r->get_live_data_bytes();
-        }
+            anticipated_candidates++;
+            promo_potential += r->get_live_data_bytes();
+          }
+          else {
 #ifdef KELVIN_NOISE
-        else if (in_generation(r) && !r->is_empty() && (r->age() + 1 == InitialTenuringThreshold)) {
-          log_info(gc, ergo)("Not anticipating promotion of humongous region " SIZE_FORMAT " with age %u, live: " SIZE_FORMAT
-                             ", garbage: " SIZE_FORMAT,
-                             r->index(), r->age(), r->get_live_data_bytes(), r->garbage());
-        }
+            log_info(gc, ergo)("Not anticipating promotion of %s region " SIZE_FORMAT " (candidate: " SIZE_FORMAT
+                               ", age %u, live: " SIZE_FORMAT ", garbage: " SIZE_FORMAT ")",
+                               r->is_regular()? "regular": "humongous",
+                               r->index(), anticipated_promote_in_place_regions, r->age(), r->get_live_data_bytes(), r->garbage());
 #endif
+            anticipated_promote_in_place_regions++;
+            anticipated_promote_in_place_usage += r->used();
+          }
+        }
       }
     }
 #ifdef KELVIN_NOISE
-    log_info(gc, ergo)("Preselect midpoint: promo candidates: " SIZE_FORMAT ", anticipated promo is: " SIZE_FORMAT, candidates, promo_potential);
+    log_info(gc, ergo)("Preselect midpoint: regular regions to promote in place: " SIZE_FORMAT ", representing " SIZE_FORMAT
+                       " usage, promo candidates: " SIZE_FORMAT,
+                       promote_in_place_regions, promote_in_place_usage, candidates);
+    log_info(gc, ergo)("  anticipated regular regions to promote in place: " SIZE_FORMAT ", representing " SIZE_FORMAT
+                       " usage, anticipated promo candidates: " SIZE_FORMAT " with promot potential: " SIZE_FORMAT,
+                       anticipated_promote_in_place_regions, anticipated_promote_in_place_usage,
+                       anticipated_candidates, promo_potential);
 #endif
-    // Sort in increasing order according to live data bytes.  Regions that are not promotion-eligible are considered to
-    // have live data that is twice the region size (to force them to the end of the sort order)
+    // Sort in increasing order according to live data bytes.  Note that candidates represents the number of regions
+    // that qualify to be promoted by evacuation.
     if (candidates > 0) {
       QuickSort::sort<AgedRegionData>(sorted_regions, candidates, compare_by_aged_live, false);
       for (size_t i = 0; i < candidates; i++) {
@@ -150,6 +201,14 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
           old_consumed += promotion_need;
           preselected_regions[region->index()] = true;
         } else {
+#ifdef KELVIN_NOISE
+          ShenandoahHeapRegion* region = sorted_regions[i]._region;
+          log_info(gc, ergo)("Region " SIZE_FORMAT " rejected because old_consumed: " SIZE_FORMAT ", budget: " SIZE_FORMAT
+                             ", adding to future promo potential (age: %d, live: " SIZE_FORMAT ", garbage: "
+                             SIZE_FORMAT " >= " SIZE_FORMAT ")", region->index(), old_consumed, old_available,
+                             region->age(), region->get_live_data_bytes(),
+                             region->garbage(), old_garbage_threshold);
+#endif
           // We rejected this promotable region from the collection set because we had no room to hold its copy.
           // Add this region to promo potential for next GC.
           promo_potential += region_live_data;
@@ -163,7 +222,6 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
   log_info(gc, ergo)("select_aged_regions consumed old reserve of " SIZE_FORMAT ", promo potential: " SIZE_FORMAT,
                      old_consumed, promo_potential);
 #endif
-#undef KELVIN_NOISE
   heap->set_promotion_potential(promo_potential);
   return old_consumed;
 }
@@ -195,9 +253,16 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t free_regions = 0;
   size_t live_memory = 0;
 
-  // This counts the number of humongous regions that we intend to promote in this cycle.
+  // This counts number of humongous regions that we intend to promote in this cycle.
   size_t humongous_regions_promoted = 0;
+  // This counts number of regular regions that will be promoted in place.
+  size_t regular_regions_promoted_in_place = 0;
+  // This counts bytes of memory used by regular regions to be promoted in place.
+  size_t regular_regions_promoted_usage = 0;
 
+#ifdef KELVIN_NOISE
+  log_info(gc, ergo)("Choosing collection set");
+#endif
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
     if (!in_generation(region)) {
@@ -218,14 +283,38 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       } else {
         assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
         live_memory += region->get_live_data_bytes();
+        bool is_candidate;
         // This is our candidate for later consideration.
-        candidates[cand_idx]._region = region;
         if (is_generational && collection_set->is_preselected(i)) {
-          // If region is preselected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
-          garbage = ShenandoahHeapRegion::region_size_bytes();
+          // If !is_generational, we cannot ask if is_preselected.  If is_preselected, we know
+          //   region->age() >= InitialTenuringThreshold).
+          // Set garbage value to maximum value to force this into the sorted collection set.
+          is_candidate = true;
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Preselected Region " SIZE_FORMAT " is placed in candidate set", region->index());
+#endif
+        } else if (is_generational && (region->age() >= InitialTenuringThreshold)) {
+          // This region is old enough to be promoted but it was not preselected, either because its garbage is below
+          // ShenandoahOldGarbageThreshold so it will be promoted in place, or because there is not sufficient room
+          // in old gen to hold the evacuated copies of this region's live data.  In both cases, we choose not to
+          // place this region into the collection set.
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Excluding region " SIZE_FORMAT ", will be promoted in place", region->index());
+#endif
+          regular_regions_promoted_in_place++;
+          regular_regions_promoted_usage += region->used();
+          is_candidate = false;
+        } else {
+          is_candidate = true;
         }
-        candidates[cand_idx]._garbage = garbage;
-        cand_idx++;
+        if (is_candidate) {
+#ifdef KELVIN_NOISE
+          log_info(gc, ergo)("Region " SIZE_FORMAT ", is candidate for evacuation", region->index());
+#endif
+          candidates[cand_idx]._region = region;
+          candidates[cand_idx]._garbage = garbage;
+          cand_idx++;
+        }
       }
     } else if (region->is_humongous_start()) {
       // Reclaim humongous regions here, and count them as the immediate garbage
@@ -248,7 +337,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
           oop obj = cast_to_oop(region->bottom());
           size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
           humongous_regions_promoted += humongous_regions;
-#undef KELVIN_NOISE
 #ifdef KELVIN_NOISE
           log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " humongous regions starting with index " SIZE_FORMAT,
                              humongous_regions, humongous_regions_promoted);
@@ -264,6 +352,14 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     }
   }
   reserve_promotable_humongous_regions(humongous_regions_promoted);
+  reserve_promotable_regular_regions(regular_regions_promoted_in_place);
+  reserve_promotable_regular_usage(regular_regions_promoted_usage);
+
+  log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
+                     " regular regions, spanning a total of " SIZE_FORMAT " used bytes",
+                     humongous_regions_promoted, regular_regions_promoted_in_place,
+                     humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes() + regular_regions_promoted_usage);
+
   save_last_live_memory(live_memory);
 
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,

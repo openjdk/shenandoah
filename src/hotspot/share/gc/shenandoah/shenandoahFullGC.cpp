@@ -323,6 +323,10 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     phase3_update_references();
 
     phase4_compact_objects(worker_slices);
+
+    if (heap->mode()->is_generational()) {
+      phase5_restore_generation_accounts();
+    }
   }
 
   {
@@ -1512,4 +1516,36 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);
+}
+
+void ShenandoahFullGC::phase5_restore_generation_accounts() {
+  GCTraceTime(Info, gc, phases) time("Phase 5: Restore generation accounts", _gc_timer);
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  size_t num_regions = heap->num_regions();
+  size_t young_usage = 0;
+  size_t young_regions = 0;
+  size_t old_usage = 0;
+  size_t old_regions = 0;
+  ShenandoahHeapRegion* r;
+
+  for (size_t i = 0; i < num_regions; i++) {
+    switch (heap->region_affiliation(i)) {
+      case ShenandoahRegionAffiliation::FREE:
+        break;
+      case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+        r = heap->get_region(i);
+        young_regions++;
+        young_usage += r->used();
+        break;
+      case ShenandoahRegionAffiliation::OLD_GENERATION:
+        r = heap->get_region(i);
+        old_regions++;
+        old_usage += r->used();
+        break;
+      default:
+        assert(false, "Should not reach");
+    }
+  }
+  heap->old_generation()->establish_usage(old_regions, old_usage);
+  heap->young_generation()->establish_usage(young_regions, young_usage);
 }

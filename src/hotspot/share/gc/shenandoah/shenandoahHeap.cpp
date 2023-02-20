@@ -1697,11 +1697,17 @@ private:
         if (ShenandoahPacing) {
           _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
-      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() >= InitialTenuringThreshold)) {
-        // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
-        // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
-        // triggers the load-reference barrier (LRB) to copy on reference fetch.
-        r->promote_humongous();
+      } else if (r->is_young() && r->is_active() && (r->age() >= InitialTenuringThreshold) && r->is_regular()) {
+        if (r->is_humongous_start()) {
+          // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
+          // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
+          // triggers the load-reference barrier (LRB) to copy on reference fetch.
+          r->promote_humongous();
+        } else if (r->is_regular() && (r->garbage() < (region_size_bytes * ShenandoahOldGarbageThreshold) / 100)) {
+          r->promote_in_place();
+        }
+        // Aged humongous continuation regions are handled with their start region.  If an aged regular region has
+        // more garbage than ShenandoahOldGarbageTrheshold, we'll promote by evacuation. 
       }
       // else, region is free, or OLD, or not in collection set, or humongous_continuation,
       // or is young humongous_start that is too young to be promoted
@@ -3079,23 +3085,29 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   if (mode()->is_generational()) {
     // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
     size_t humongous_regions_promoted = young_generation()->heuristics()->get_promotable_humongous_regions();
-    if (humongous_regions_promoted > 0) {
+    size_t regular_regions_promoted_in_place = young_generation()->heuristics()->get_regular_regions_promoted_in_place();
+    size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
+    size_t bytes_promoted_in_place = 0;
+    if (total_regions_promoted > 0) {
       size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-      log_info(gc,ergo)("KELVIN: end of ConcGC, promoted humongous: " SIZE_FORMAT, humongous_bytes_promoted);
-#endif 
-      if (old_generation()->available() < humongous_bytes_promoted) {
-	size_t needed_expansion = humongous_bytes_promoted - old_generation()->available();
-	// round up to multiple of region size
-	size_t needed_regions = ((needed_expansion + ShenandoahHeapRegion::region_size_bytes() - 1)
-				 / ShenandoahHeapRegion::region_size_bytes());
+      size_t regular_bytes_promoted_in_place = young_generation()->heuristics()->get_regular_usage_promoted_in_place();
+      bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
+
+      log_info(gc, ergo)("Promoted " SIZE_FORMAT " humongous and " SIZE_FORMAT " regular regions in place"
+                         ", representing total usage of " SIZE_FORMAT,
+                         humongous_regions_promoted, regular_regions_promoted_in_place, bytes_promoted_in_place);
+                         
+      size_t free_old_regions = old_generation()->free_unaffiliated_regions();
+
+      // Decrease usage within young before we transfer capacity to old in order to avoid certain assertion failures.
+      young_generation()->decrease_affiliated_region_count(total_regions_promoted);
+      young_generation()->decrease_used(bytes_promoted_in_place);
+      if (free_old_regions < total_regions_promoted) {
+        size_t needed_regions = total_regions_promoted - free_old_regions;
 	generation_sizer()->force_transfer_to_old(needed_regions);
       }
-      old_generation()->increase_affiliated_region_count(humongous_regions_promoted);
-      young_generation()->decrease_affiliated_region_count(humongous_regions_promoted);
-      old_generation()->increase_used(humongous_bytes_promoted);
-      young_generation()->decrease_used(humongous_bytes_promoted);
+      old_generation()->increase_affiliated_region_count(total_regions_promoted);
+      old_generation()->increase_used(bytes_promoted_in_place);
     }
 
     // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.

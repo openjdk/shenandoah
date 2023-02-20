@@ -66,6 +66,8 @@ class ShenandoahHeuristics : public CHeapObj<mtGC> {
 
 private:
   size_t _promotable_humongous_regions;
+  size_t _regular_regions_promoted_in_place;
+  size_t _regular_usage_promoted_in_place;
 
 protected:
   static const uint Moving_Average_Samples = 10; // Number of samples to store in moving averages
@@ -144,7 +146,15 @@ public:
 
   void reserve_promotable_humongous_regions(size_t region_count) { _promotable_humongous_regions = region_count; }
 
+  void reserve_promotable_regular_regions(size_t region_count) { _regular_regions_promoted_in_place = region_count; }
+
+  void reserve_promotable_regular_usage(size_t used_bytes) { _regular_usage_promoted_in_place = used_bytes; }
+
   size_t get_promotable_humongous_regions() { return _promotable_humongous_regions; }
+
+  size_t get_regular_regions_promoted_in_place() { return _regular_regions_promoted_in_place; }
+
+  size_t get_regular_usage_promoted_in_place() { return _regular_usage_promoted_in_place; }
 
   virtual void record_cycle_start();
 

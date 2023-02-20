@@ -490,6 +490,8 @@ bool ShenandoahGenerationSizer::transfer_to_old(size_t regions) const {
   }
 }
 
+// This is used when promoting humongous or highly utilized regular regions in place.  It is not required in this situation
+// that the transferred regions be unaffiliated.  In fact, we are transferring regions that already have high utilization.
 void ShenandoahGenerationSizer::force_transfer_to_old(size_t regions) const {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahGeneration* old_gen = heap->old_generation();
@@ -497,11 +499,10 @@ void ShenandoahGenerationSizer::force_transfer_to_old(size_t regions) const {
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t bytes_to_transfer = regions * region_size_bytes;
 
-  assert(young_gen->free_unaffiliated_regions() >= regions, "cannot transfer regions that are not present");
   young_gen->decrease_capacity(bytes_to_transfer);
   old_gen->increase_capacity(bytes_to_transfer);
   size_t new_size = old_gen->max_capacity();
-  log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+  log_info(gc)("Forcing transfer of " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
                regions, young_gen->name(), old_gen->name(),
                byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
 }

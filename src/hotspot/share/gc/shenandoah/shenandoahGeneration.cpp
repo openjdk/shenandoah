@@ -1178,6 +1178,12 @@ size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
   return _affiliated_region_count;
 }
 
+void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes) {
+  assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
+  _affiliated_region_count = num_regions;
+  _used = num_bytes;
+}
+
 void ShenandoahGeneration::clear_used() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
@@ -1210,9 +1216,11 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
-  // This detects arithmetic wraparound on _used
-  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+         _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
          "Affiliated regions must hold more than what is currently used");
+
 #ifdef KELVIN_TRACE_GENERATIONS
   log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT "vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);
