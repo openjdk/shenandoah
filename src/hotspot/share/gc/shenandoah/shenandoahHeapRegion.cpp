@@ -1028,6 +1028,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
 void ShenandoahHeapRegion::promote_in_place() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
+  HeapWord* tams = marking_context->top_at_mark_start(this);
   assert(heap->active_generation()->is_mark_complete(), "sanity");
   assert(is_young(), "Only young regions can be promoted");
   assert(is_regular(), "Use different service to promote humongous regions");
@@ -1035,11 +1036,16 @@ void ShenandoahHeapRegion::promote_in_place() {
 
   set_affiliation(OLD_GENERATION, true);
 
+  // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
+  // is_collector_free range.
+  restore_top_before_promote();
+  
+  assert(top() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
+
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   heap->card_scan()->reset_object_range(bottom(), end());
   heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
 
-  HeapWord* tams = marking_context->top_at_mark_start(this);
   HeapWord* obj_addr = bottom();
 
 #undef KELVIN_PIP
@@ -1047,6 +1053,9 @@ void ShenandoahHeapRegion::promote_in_place() {
   log_info(gc, ergo)("Promoting region " SIZE_FORMAT " in place, BTE: " PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT
                      ", TAMS: " PTR_FORMAT,
                      index(), p2i(bottom()), p2i(top()), p2i(end()), p2i(tams));
+  if (top() != tams) {
+    log_info(gc, ergo)("KELVIN IS SCREWED ROYAL!");
+  }
 #endif
 
   while (obj_addr < tams) {
@@ -1064,15 +1073,10 @@ void ShenandoahHeapRegion::promote_in_place() {
       obj_addr = next_marked_obj;
     }
   }
-  assert(obj_addr == tams, "Expect first loop to terminate when obj_addr equals tams");
 
-  // Any object above TAMS and below top() is considered live.
-  HeapWord *top_of_region = top();
-  while (obj_addr < top_of_region) {
-    oop obj = cast_to_oop(obj_addr);
-    heap->card_scan()->register_object_wo_lock(obj_addr);
-    obj_addr += obj->size();
-  }
+  // We do not need to scan above TAMS because top equals tams
+  assert(obj_addr == tams, "Expect loop to terminate when obj_addr equals tams");
+
 #ifdef KELVIN_PIP
   log_info(gc, ergo)("Done promoting region " SIZE_FORMAT " in place", index());
 #endif

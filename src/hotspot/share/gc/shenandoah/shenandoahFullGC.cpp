@@ -1509,6 +1509,7 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
 
     // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
     heap->clear_promotion_potential();
+    heap->clear_promotion_in_place_potential();
 
     // Invoke this in case we are able to transfer memory from OLD to YOUNG.  
     heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);

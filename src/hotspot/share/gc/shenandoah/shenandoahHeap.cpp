@@ -1675,7 +1675,9 @@ private:
   void do_work() {
     ShenandoahConcurrentEvacuateRegionObjectClosure cl(_sh);
     ShenandoahHeapRegion* r;
+    ShenandoahMarkingContext* const ctx = ShenandoahHeap::heap()->marking_context();
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+    size_t old_garbage_threshold = (region_size_bytes * ShenandoahOldGarbageThreshold) / 100;
     while ((r = _regions->next()) != nullptr) {
 #undef KELVIN_EVAC
 #ifdef KELVIN_EVAC
@@ -1697,17 +1699,25 @@ private:
         if (ShenandoahPacing) {
           _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
-      } else if (r->is_young() && r->is_active() && (r->age() >= InitialTenuringThreshold) && r->is_regular()) {
+      } else if (r->is_young() && r->is_active() && (r->age() >= InitialTenuringThreshold)) {
+        HeapWord* tams = ctx->top_at_mark_start(r);
         if (r->is_humongous_start()) {
           // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
           // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
           // triggers the load-reference barrier (LRB) to copy on reference fetch.
           r->promote_humongous();
-        } else if (r->is_regular() && (r->garbage() < (region_size_bytes * ShenandoahOldGarbageThreshold) / 100)) {
+        } else if (r->is_regular() && (r->garbage() < old_garbage_threshold) && (r->get_top_before_promote() == tams)) {
+          // Likewise, we cannot put promote-in-place regions into the collection set because that would also trigger
+          // the LRB to copy on reference fetch.
           r->promote_in_place();
         }
         // Aged humongous continuation regions are handled with their start region.  If an aged regular region has
-        // more garbage than ShenandoahOldGarbageTrheshold, we'll promote by evacuation. 
+        // more garbage than ShenandoahOldGarbageTrheshold, we'll promote by evacuation.  If there is room for evacuation
+        // in this cycle, the region will be in the collection set.  If there is not room, the region will be promoted
+        // by evacuation in some future GC cycle.
+
+        // If an aged regular region has received allocations during the current cycle, we do not promote because the
+        // newly allocated objects do not have appropriate age; this region's age will be reset to zero at end of cycle.
       }
       // else, region is free, or OLD, or not in collection set, or humongous_continuation,
       // or is young humongous_start that is too young to be promoted
@@ -3098,7 +3108,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                          humongous_regions_promoted, regular_regions_promoted_in_place, bytes_promoted_in_place);
                          
       size_t free_old_regions = old_generation()->free_unaffiliated_regions();
-
+#ifdef KELVIN_REBUILD
+      young_generation()->log_status("Before forced transfer");
+      log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+      old_generation()->log_status("Before forced transfer");
+      log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+#endif
       // Decrease usage within young before we transfer capacity to old in order to avoid certain assertion failures.
       young_generation()->decrease_affiliated_region_count(total_regions_promoted);
       young_generation()->decrease_used(bytes_promoted_in_place);
@@ -3109,6 +3124,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
       old_generation()->increase_affiliated_region_count(total_regions_promoted);
       old_generation()->increase_used(bytes_promoted_in_place);
     }
+#ifdef KELVIN_REBUILD
+    young_generation()->log_status("After forced transfer");
+      log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+      old_generation()->log_status("After forced transfer");
+      log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+#endif
 
     // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.
     // Note that transfer of humongous regions does not impact available.

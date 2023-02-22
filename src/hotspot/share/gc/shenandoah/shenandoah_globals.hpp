@@ -210,7 +210,7 @@
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
                                                                             \
-  product(uintx, ShenandoahGuaranteedYoungGCInterval, 5*60*1000,  EXPERIMENTAL,  \
+  product(uintx, ShenandoahGuaranteedYoungGCInterval, 15*1000,  EXPERIMENTAL,  \
           "Run a collection of the young generation at least this often. "    \
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \

@@ -238,6 +238,8 @@ private:
   // Rarely updated fields
   HeapWord* _new_top;
   double _empty_time;
+  
+  HeapWord* _top_before_promoted;
 
   // Seldom updated fields
   RegionState _state;
@@ -347,6 +349,10 @@ public:
     return _index;
   }
 
+  inline void save_top_before_promote();
+  inline HeapWord* get_top_before_promote() const { return _top_before_promoted; }
+  inline void restore_top_before_promote();
+
   // Allocation (return NULL if full)
   inline HeapWord* allocate_aligned(size_t word_size, ShenandoahAllocRequest &req, size_t alignment_in_words);
 
@@ -427,6 +433,7 @@ public:
 
   size_t capacity() const       { return byte_size(bottom(), end()); }
   size_t used() const           { return byte_size(bottom(), top()); }
+  size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
   size_t free() const           { return byte_size(top(),    end()); }
 
   inline void adjust_alloc_metadata(ShenandoahAllocRequest::Type type, size_t);
@@ -449,7 +456,7 @@ public:
   void decrement_age() { if (_age-- == 0) { _age = 0; } }
   void reset_age()     { _age = 0; }
 
-  // Set all remembered set cards to dirty.
+  // Register all objects.  Set all remembered set cards to dirty.
   void promote_humongous();
   void promote_in_place();
 

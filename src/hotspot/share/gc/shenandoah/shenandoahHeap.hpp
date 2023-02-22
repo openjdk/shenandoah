@@ -219,6 +219,7 @@ private:
            size_t _initial_size;
            size_t _minimum_size;
            size_t _promotion_potential;
+           size_t _promotion_in_place_potential;
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
   volatile size_t _used;
@@ -442,6 +443,10 @@ public:
   inline void clear_promotion_potential() { _promotion_potential = 0; };
   inline void set_promotion_potential(size_t val) { _promotion_potential = val; };
   inline size_t get_promotion_potential() { return _promotion_potential; };
+
+  inline void clear_promotion_in_place_potential() { _promotion_in_place_potential = 0; };
+  inline void set_promotion_in_place_potential(size_t val) { _promotion_in_place_potential = val; };
+  inline size_t get_promotion_in_place_potential() { return _promotion_in_place_potential; };
 
   // Returns previous value
   inline size_t set_promoted_reserve(size_t new_val);

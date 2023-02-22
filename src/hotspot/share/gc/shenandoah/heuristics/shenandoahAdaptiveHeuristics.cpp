@@ -129,8 +129,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
         // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
         // within youn-gen memory.
 
-        // KELVIN TO DO: getting this live memory out of young generation is not exactly the same as finding garbage.
-        cur_young_garbage += r->used();
+        cur_young_garbage += r->garbage();
         cset->add_region(r);
       }
     }
@@ -150,6 +149,9 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
+        if (cset->is_preselected(r->index())) {
+          continue;
+        }
         bool add_region = false;
         if (r->is_old()) {
           size_t new_cset = old_cur_cset + r->get_live_data_bytes();
@@ -187,22 +189,41 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                          byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                          byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
+#ifdef KELVIN_CSET
+      log_info(gc, ergo)(" cur_young_garbage: " SIZE_FORMAT " vs. min_garbage: " SIZE_FORMAT
+                         ", free_target: " SIZE_FORMAT
+                         ", garbage_threshold: " SIZE_FORMAT
+                         ", ignore_threshold: " SIZE_FORMAT ", young_evac_reserve: " SIZE_FORMAT,
+                         cur_young_garbage, min_garbage, free_target, garbage_threshold, ignore_threshold,
+                         heap->get_young_evac_reserve());
+#endif
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
+        if (cset->is_preselected(r->index())) {
+          continue;
+        }
         if  (r->age() < InitialTenuringThreshold) {
           size_t new_cset = cur_cset + r->get_live_data_bytes();
           size_t region_garbage = r->garbage();
           size_t new_garbage = cur_young_garbage + region_garbage;
           bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
+          assert(r->is_young(), "Only young candidates expected in the data array");
           if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
             cur_cset = new_cset;
             cur_young_garbage = new_garbage;
             cset->add_region(r);
           }
+#ifdef KELVIN_CSET
+          else {
+            log_info(gc, ergo)("Not adding region " SIZE_FORMAT ": new_cset: " SIZE_FORMAT ", max_cset: " SIZE_FORMAT
+                               ", region_garbage: " SIZE_FORMAT ", region live: " SIZE_FORMAT ", new_garbage: " SIZE_FORMAT,
+                               r->index(), new_cset, max_cset, region_garbage, r->get_live_data_bytes(), new_garbage);
+          }
+#endif
         }
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
         // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects or because
-        // they are to be promted in place..
+        // they are to be promted in place.
       }
     }
   } else {
@@ -545,11 +566,17 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
       // more time than traditional young-generation cycles so start them up as soon as possible.
       size_t promo_potential = heap->get_promotion_potential();
+      size_t promo_in_place_potential = heap->get_promotion_in_place_potential();
       ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) heap->old_generation()->heuristics();
       size_t mixed_candidates = old_heuristics->unprocessed_old_collection_candidates();
       if (promo_potential > 0) {
         log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
                      _generation->name(), byte_size_in_proper_unit(promo_potential), proper_unit_for_byte_size(promo_potential));
+        return true;
+      } else if (promo_in_place_potential > 0) {
+        log_info(gc)("Trigger (%s): expedite promotion in place of " SIZE_FORMAT "%s", _generation->name(),
+                     byte_size_in_proper_unit(promo_in_place_potential),
+                     proper_unit_for_byte_size(promo_in_place_potential));
         return true;
       } else if (mixed_candidates > 0) {
         // Expedite young GC even if !heap->is_old_compaction_enabled().  We need to run young GC in order to open up some

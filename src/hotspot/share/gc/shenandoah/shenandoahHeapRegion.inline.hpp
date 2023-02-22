@@ -230,4 +230,21 @@ inline bool ShenandoahHeapRegion::is_old() const {
   return ShenandoahHeap::heap()->region_affiliation(this) == OLD_GENERATION;
 }
 
+inline void ShenandoahHeapRegion::save_top_before_promote() {
+  _top_before_promoted = _top; 
+#undef KELVIN_B4_PROMOTE
+#ifdef KELVIN_B4_PROMOTE
+  log_info(gc, ergo)("Saving _top_before_promoted as " PTR_FORMAT " for region " SIZE_FORMAT, p2i(_top), index());
+#endif
+}
+
+inline void ShenandoahHeapRegion::restore_top_before_promote() {
+  _top = _top_before_promoted;
+#ifdef KELVIN_B4_PROMOTE
+  log_info(gc, ergo)("Restoring from _top_before_promoted to " PTR_FORMAT " for region " SIZE_FORMAT, p2i(_top), index());
+#endif
+ }
+
+
+
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP
