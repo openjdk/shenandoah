@@ -188,6 +188,17 @@ inline size_t ShenandoahHeapRegion::garbage() const {
   return result;
 }
 
+inline size_t ShenandoahHeapRegion::garbage_before_padded_for_promote() const {
+  size_t used_before_promote = byte_size(bottom(), get_top_before_promote());
+  assert(get_top_before_promote() != nullptr, "top before promote should not equal null");
+  assert(used_before_promote >= get_live_data_bytes(),
+         "Live Data must be a subset of used before promotion live: " SIZE_FORMAT " used: " SIZE_FORMAT,
+         get_live_data_bytes(), used_before_promote);
+  size_t result = used_before_promote - get_live_data_bytes();
+  return result;
+
+}
+
 inline HeapWord* ShenandoahHeapRegion::get_update_watermark() const {
   HeapWord* watermark = Atomic::load_acquire(&_update_watermark);
   assert(bottom() <= watermark && watermark <= top(), "within bounds");
@@ -240,6 +251,9 @@ inline void ShenandoahHeapRegion::save_top_before_promote() {
 
 inline void ShenandoahHeapRegion::restore_top_before_promote() {
   _top = _top_before_promoted;
+#ifdef ASSERT
+  _top_before_promoted = nullptr;
+#endif
 #ifdef KELVIN_B4_PROMOTE
   log_info(gc, ergo)("Restoring from _top_before_promoted to " PTR_FORMAT " for region " SIZE_FORMAT, p2i(_top), index());
 #endif

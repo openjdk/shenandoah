@@ -355,6 +355,14 @@ public:
     _garbage += r->garbage();
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
     _regions++;
+#undef KELVIN_STATS
+#ifdef KELVIN_STATS
+    log_info(gc, ergo)("ShenandoahCalculateRegionStatsClosure added " SIZE_FORMAT " for %s %s %s Region " SIZE_FORMAT
+                       ", yielding usage: " SIZE_FORMAT ", garbage: " SIZE_FORMAT ", committed: " SIZE_FORMAT
+                       ", regions: " SIZE_FORMAT,
+                       r->used(), affiliation_name(r->affiliation()), r->is_cset()? "cset": "retained",
+                       r->is_humongous()? "humongous": "regular", r->index(), _used, _garbage, _committed, _regions);
+#endif
   }
 
   size_t used() { return _used; }
@@ -377,11 +385,21 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       default:
         ShouldNotReachHere();
         return;
-      case FREE: return;
+      case FREE:
+#ifdef KELVIN_STATS
+        log_info(gc, ergo)("Ignoring FREE region " SIZE_FORMAT, r->index());
+#endif
+        return;
       case YOUNG_GENERATION:
+#ifdef KELVIN_STATS
+        log_info(gc, ergo)("Accumulating region " SIZE_FORMAT " as young", r->index());
+#endif
         young.heap_region_do(r);
         break;
       case OLD_GENERATION:
+#ifdef KELVIN_STATS
+        log_info(gc, ergo)("Accumulating region " SIZE_FORMAT " as old", r->index());
+#endif
         old.heap_region_do(r);
         break;
     }
@@ -395,15 +413,64 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
                   byte_size_in_proper_unit(stats.used()), proper_unit_for_byte_size(stats.used()));
   }
 
-  static void validate_usage(const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
+  static void validate_usage(const bool adjust_for_padding, const bool adjust_for_deferred_accounting,
+			     const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
     size_t generation_used = generation->used();
+    size_t generation_used_regions = generation->used_regions();
+#undef KELVIN_VERIFY
+#ifdef KELVIN_VERIFY
+    log_info(gc, ergo)("%s: validate_usage(label: %s, pad adjust: %d, accounting adjust: %d)",
+                       generation->name(), label, adjust_for_padding, adjust_for_deferred_accounting);
+#endif
+    if (adjust_for_deferred_accounting) {
+      ShenandoahHeap* heap = ShenandoahHeap::heap();
+      ShenandoahGeneration* young_generation = heap->young_generation();
+      size_t humongous_regions_promoted = young_generation->heuristics()->get_promotable_humongous_regions();
+      size_t regular_regions_promoted_in_place = young_generation->heuristics()->get_regular_regions_promoted_in_place();
+      size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
+      size_t bytes_promoted_in_place = 0;
+      if (total_regions_promoted > 0) {
+	size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
+	size_t regular_bytes_promoted_in_place = young_generation->heuristics()->get_regular_usage_promoted_in_place();
+	bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
+      }
+      if (generation->is_young()) {
+	generation_used -= bytes_promoted_in_place;
+	generation_used_regions -= total_regions_promoted;
+#ifdef KELVIN_VERIFY
+	log_info(gc, ergo)("validate_usage subtracting " SIZE_FORMAT " from young used to obtain " SIZE_FORMAT,
+			   bytes_promoted_in_place, generation_used);
+	log_info(gc, ergo)("  subtracting " SIZE_FORMAT " from young regions used to obtain " SIZE_FORMAT,
+			   total_regions_promoted, generation_used_regions);
+#endif
+      } else if (generation->is_old()) {
+	generation_used += bytes_promoted_in_place;
+	generation_used_regions += total_regions_promoted;
+#ifdef KELVIN_VERIFY
+	log_info(gc, ergo)("validate_usage adding " SIZE_FORMAT " to old used to obtain " SIZE_FORMAT,
+			   bytes_promoted_in_place, generation_used);
+	log_info(gc, ergo)("  adding " SIZE_FORMAT " to old regions used to obtain " SIZE_FORMAT,
+			   total_regions_promoted, generation_used_regions);
+#endif
+      }
+      // else, global validation doesn't care where the promoted-in-place data is tallied.
+    }
+    if (adjust_for_padding && (generation->is_young() || generation->is_global())) {
+      size_t pad = ShenandoahHeap::heap()->get_pad_for_promote_in_place();
+      generation_used += pad;
+#ifdef KELVIN_VERIFY
+      log_info(gc, ergo)("validate_usage adding pad " SIZE_FORMAT " from YOUNG usage to get " SIZE_FORMAT,
+                         pad, generation_used);
+#endif
+    }
+
     guarantee(stats.used() == generation_used,
               "%s: generation (%s) used size must be consistent: generation-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
               label, generation->name(),
               byte_size_in_proper_unit(generation_used), proper_unit_for_byte_size(generation_used),
               byte_size_in_proper_unit(stats.used()), proper_unit_for_byte_size(stats.used()));
 
-    guarantee(stats.regions() == generation->used_regions(),
+    guarantee(stats.regions() == generation_used_regions,
               "%s: generation (%s) used regions (" SIZE_FORMAT ") must equal regions that are in use (" SIZE_FORMAT ")",
               label, generation->name(), generation->used_regions(), stats.regions());
 
@@ -721,6 +788,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
                                              VerifyForwarded forwarded, VerifyMarked marked,
                                              VerifyCollectionSet cset,
                                              VerifyLiveness liveness, VerifyRegions regions,
+					     VerifySize sizeness,
                                              VerifyGCState gcstate) {
   guarantee(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "only when nothing else happens");
   guarantee(ShenandoahVerify, "only when enabled, and bitmap is initialized in ShenandoahHeap::initialize");
@@ -792,13 +860,25 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     ShenandoahCalculateRegionStatsClosure cl;
     _heap->heap_region_iterate(&cl);
-    size_t heap_used = _heap->used();
-    guarantee(cl.used() == heap_used,
-              "%s: heap used size must be consistent: heap-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
-              label,
-              byte_size_in_proper_unit(heap_used), proper_unit_for_byte_size(heap_used),
-              byte_size_in_proper_unit(cl.used()), proper_unit_for_byte_size(cl.used()));
-
+    size_t heap_used;
+    if (sizeness == _verify_size_adjusted_for_padding) {
+      // Prior to evacuation, regular regions that are to be evacuated in place are padded to prevent further allocations
+      heap_used = _heap->used() + _heap->get_pad_for_promote_in_place();
+#undef KELVIN_VERIFY
+#ifdef KELVIN_VERIFY
+      log_info(gc, ergo)("added " SIZE_FORMAT " to _heap->used(), yielding: " SIZE_FORMAT ", cl.used: " SIZE_FORMAT,
+			 _heap->get_pad_for_promote_in_place(), heap_used, cl.used());
+#endif
+    } else if (sizeness != _verify_size_disable) {
+      heap_used = _heap->used();
+    }
+    if (sizeness != _verify_size_disable) {
+      guarantee(cl.used() == heap_used,
+                "%s: heap used size must be consistent: heap-used = " SIZE_FORMAT "%s, regions-used = " SIZE_FORMAT "%s",
+                label,
+                byte_size_in_proper_unit(heap_used), proper_unit_for_byte_size(heap_used),
+                byte_size_in_proper_unit(cl.used()), proper_unit_for_byte_size(cl.used()));
+    }
     size_t heap_committed = _heap->committed();
     guarantee(cl.committed() == heap_committed,
               "%s: heap committed size must be consistent: heap-committed = " SIZE_FORMAT "%s, regions-committed = " SIZE_FORMAT "%s",
@@ -845,9 +925,36 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       ShenandoahGenerationStatsClosure::log_usage(_heap->global_generation(), cl.global);
     }
 
-    ShenandoahGenerationStatsClosure::validate_usage(label, _heap->old_generation(), cl.old);
-    ShenandoahGenerationStatsClosure::validate_usage(label, _heap->young_generation(), cl.young);
-    ShenandoahGenerationStatsClosure::validate_usage(label, _heap->global_generation(), cl.global);
+    if (sizeness == _verify_size_adjusted_for_deferred_accounting) {
+#ifdef KELVIN_VERIFY
+      log_info(gc, ergo)("_sizeness is verify_size_adjusted_for_deferred_accounting");
+#endif
+      ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->old_generation(), cl.old);
+      ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->young_generation(), cl.young);
+      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
+    } else if  (sizeness == _verify_size_adjusted_for_padding) {
+#ifdef KELVIN_VERIFY
+      log_info(gc, ergo)("_sizeness is verify_size_adjusted_for_padding");
+#endif
+      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
+      ShenandoahGenerationStatsClosure::validate_usage(true, false, label, _heap->young_generation(), cl.young);
+      ShenandoahGenerationStatsClosure::validate_usage(true, false, label, _heap->global_generation(), cl.global);
+    }
+    else if (sizeness == _verify_size_exact) {
+#ifdef KELVIN_VERIFY
+      log_info(gc, ergo)("_sizeness is verify_size_exact");
+#endif
+      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
+      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->young_generation(), cl.young);
+      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
+    }
+    // else: sizeness must equal _verify_size_disable
+#ifdef KELVIN_VERIFY
+    else {
+      log_info(gc, ergo)("_sizeness is verify_size_disable");
+    }
+#endif
+
   }
 
   log_debug(gc)("Safepoint verification finished remembered set verification");
@@ -959,6 +1066,7 @@ void ShenandoahVerifier::verify_generic(VerifyOption vo) {
           _verify_cset_disable,        // cset may be inconsistent
           _verify_liveness_disable,    // no reliable liveness data
           _verify_regions_disable,     // no reliable region data
+	  _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_disable      // no data about gcstate
   );
 }
@@ -972,6 +1080,7 @@ void ShenandoahVerifier::verify_before_concmark() {
           _verify_cset_none,           // UR should have fixed this
           _verify_liveness_disable,    // no reliable liveness data
           _verify_regions_notrash,     // no trash regions
+	  _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // there are no forwarded objects
   );
 }
@@ -985,6 +1094,7 @@ void ShenandoahVerifier::verify_after_concmark() {
           _verify_cset_none,           // no references to cset anymore
           _verify_liveness_complete,   // liveness data must be complete here
           _verify_regions_disable,     // trash regions not yet recycled
+	  _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable_weakroots  // heap is still stable, weakroots are in progress
   );
 }
@@ -998,6 +1108,8 @@ void ShenandoahVerifier::verify_before_evacuation() {
           _verify_cset_disable,                      // non-forwarded references to cset expected
           _verify_liveness_complete,                 // liveness data must be complete here
           _verify_regions_disable,                   // trash regions not yet recycled
+	  _verify_size_adjusted_for_padding,         // expect generation and heap sizes to match after adjustments
+	                                             //  for promote in place padding
           _verify_gcstate_stable_weakroots           // heap is still stable, weakroots are in progress
   );
 }
@@ -1011,6 +1123,7 @@ void ShenandoahVerifier::verify_during_evacuation() {
           _verify_cset_disable,       // some cset references are not forwarded yet
           _verify_liveness_disable,   // liveness data might be already stale after pre-evacs
           _verify_regions_disable,    // trash regions not yet recycled
+	  _verify_size_disable,       // we don't know how much of promote-in-place work has been completed
           _verify_gcstate_evacuation  // evacuation is in progress
   );
 }
@@ -1024,6 +1137,8 @@ void ShenandoahVerifier::verify_after_evacuation() {
           _verify_cset_forwarded,      // all cset refs are fully forwarded
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash,     // trash regions have been recycled already
+	  _verify_size_adjusted_for_deferred_accounting,
+	                               // expect generation and heap sizes to match after adjustments for promote in place
           _verify_gcstate_forwarded    // evacuation produced some forwarded objects
   );
 }
@@ -1037,10 +1152,14 @@ void ShenandoahVerifier::verify_before_updaterefs() {
           _verify_cset_forwarded,                      // all cset refs are fully forwarded
           _verify_liveness_disable,                    // no reliable liveness data anymore
           _verify_regions_notrash,                     // trash regions have been recycled already
+	  _verify_size_adjusted_for_deferred_accounting,
+	                                               // expect generation and heap sizes to match after adjustments
+	                                               //  for promote in place
           _verify_gcstate_updating                     // evacuation should have produced some forwarded objects
   );
 }
 
+// We have not yet cleanup (reclaimed) the collection set
 void ShenandoahVerifier::verify_after_updaterefs() {
   verify_at_safepoint(
           "After Updating References",
@@ -1050,6 +1169,8 @@ void ShenandoahVerifier::verify_after_updaterefs() {
           _verify_cset_none,           // no cset references, all updated
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_nocset,      // no cset regions, trash regions have appeared
+	  _verify_size_adjusted_for_deferred_accounting,
+                                       // expect generation and heap sizes to match after adjustments for promote in place
           _verify_gcstate_stable       // update refs had cleaned up forwarded objects
   );
 }
@@ -1063,6 +1184,7 @@ void ShenandoahVerifier::verify_after_degenerated() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
+	  _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // degenerated refs had cleaned up forwarded objects
   );
 }
@@ -1076,6 +1198,7 @@ void ShenandoahVerifier::verify_before_fullgc() {
           _verify_cset_disable,        // cset might be foobared
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_disable,     // no reliable region data here
+	  _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_disable      // no reliable gcstate data
   );
 }
@@ -1089,6 +1212,7 @@ void ShenandoahVerifier::verify_after_generational_fullgc() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
+	  _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // full gc cleaned up everything
   );
 }
@@ -1102,6 +1226,7 @@ void ShenandoahVerifier::verify_after_fullgc() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
+	  _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_stable        // full gc cleaned up everything
   );
 }

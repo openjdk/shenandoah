@@ -49,6 +49,9 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
 }
 
 ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
+  _promotable_humongous_regions(0),
+  _regular_regions_promoted_in_place(0),
+  _regular_usage_promoted_in_place(0),
   _generation(generation),
   _region_data(NULL),
   _degenerated_cycles_in_a_row(0),
@@ -102,14 +105,15 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
 #ifdef KELVIN_PRESELECT
   log_info(gc, ergo)("selecting aged regions with budget " SIZE_FORMAT, old_available);
 #endif
-  heap->clear_promotion_in_place_potential();
-  heap->clear_promotion_potential();
   if (heap->mode()->is_generational()) {
+    heap->clear_promotion_in_place_potential();
+    heap->clear_promotion_potential();
     size_t candidates = 0;
     size_t candidates_live = 0;
     size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
     size_t promote_in_place_regions = 0;
     size_t promote_in_place_live = 0;
+    size_t promote_in_place_pad = 0;
     size_t anticipated_candidates = 0;
     size_t anticipated_promote_in_place_regions = 0;
 
@@ -132,6 +136,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
             if (remnant_size > ShenandoahHeap::min_fill_size()) {
               ShenandoahHeap::fill_with_object(original_top, remnant_size);
               r->set_top(r->end());
+	      promote_in_place_pad += remnant_size * HeapWordSize;
             }
             // else, the remnant is too small to be allocated by any thread, so we don't have a problem.
 #ifdef KELVIN_PRESELECT
@@ -244,13 +249,14 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
         // eligible regions into promo_potential if not preselected.
       }
     }
+    heap->set_pad_for_promote_in_place(promote_in_place_pad);
+    heap->set_promotion_potential(promo_potential);
+    heap->set_promotion_in_place_potential(anticipated_promote_in_place_live);
   }
 #ifdef KELVIN_PRESELECT
   log_info(gc, ergo)("select_aged_regions consumed old reserve of " SIZE_FORMAT ", promo potential: " SIZE_FORMAT,
                      old_consumed, promo_potential);
 #endif
-  heap->set_promotion_potential(promo_potential);
-  heap->set_promotion_in_place_potential(anticipated_promote_in_place_live);
   return old_consumed;
 }
 
@@ -343,7 +349,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
           // ShenandoahOldGarbageThreshold so it will be promoted in place, or because there is not sufficient room
           // in old gen to hold the evacuated copies of this region's live data.  In both cases, we choose not to
           // place this region into the collection set.
-          if (region->garbage() < old_garbage_threshold) {
+          if (region->garbage_before_padded_for_promote() < old_garbage_threshold) {
 #ifdef KELVIN_CSET
             log_info(gc, ergo)("Excluding region " SIZE_FORMAT " which will be promoted in place has usage: " SIZE_FORMAT,
                                region->index(), region->used_before_promote());

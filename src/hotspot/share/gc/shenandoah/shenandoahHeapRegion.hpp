@@ -352,6 +352,7 @@ public:
   inline void save_top_before_promote();
   inline HeapWord* get_top_before_promote() const { return _top_before_promoted; }
   inline void restore_top_before_promote();
+  inline size_t garbage_before_padded_for_promote() const;
 
   // Allocation (return NULL if full)
   inline HeapWord* allocate_aligned(size_t word_size, ShenandoahAllocRequest &req, size_t alignment_in_words);

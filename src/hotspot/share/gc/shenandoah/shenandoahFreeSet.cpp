@@ -393,6 +393,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
           assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
           _heap->old_generation()->increase_used(padding);
           // For verification consistency, we need to report this padding to _heap
+#undef KELVIN_HEAP_USAGE
+#ifdef KELVIN_HEAP_USAGE
+          log_info(gc, ergo)("Increasing heap->_used by " SIZE_FORMAT " for plab padding, result: " SIZE_FORMAT,
+                             padding, _heap->used());
+#endif    
           _heap->increase_used(padding);
         }
       }
@@ -445,6 +450,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         _heap->old_generation()->increase_used(padding);
         // For verification consistency, we need to report this padding to _heap
         _heap->increase_used(padding);
+#undef KELVIN_HEAP_USAGE
+#ifdef KELVIN_HEAP_USAGE
+        log_info(gc, ergo)("Increasing heap->_used by " SIZE_FORMAT " plab padding, result: " SIZE_FORMAT,
+                           padding, _heap->used());
+#endif
       }
     }
   } else {
@@ -676,6 +686,11 @@ bool ShenandoahFreeSet::has_no_alloc_capacity(ShenandoahHeapRegion *r) {
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
   if (r->is_trash()) {
     _heap->decrease_used(r->used());
+#undef KELVIN_HEAP_USAGE
+#ifdef KELVIN_HEAP_USAGE
+    log_info(gc, ergo)("decreasing heap used by " SIZE_FORMAT " for recycle trash of region " SIZE_FORMAT ", result: " SIZE_FORMAT,
+                       r->used(), r->index(), _heap->used());
+#endif
     r->recycle();
   }
 }

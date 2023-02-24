@@ -735,6 +735,11 @@ void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {
   size_t bytes = words * HeapWordSize;
   if (!waste) {
     increase_used(bytes);
+#undef KELVIN_HEAP_USAGE
+#ifdef KELVIN_HEAP_USAGE
+    log_info(gc, ergo)("increasing heap usage by " SIZE_FORMAT " for notify_mutator_alloc_words, result: " SIZE_FORMAT,
+                       bytes, used());
+#endif
   }
 
   if (ShenandoahPacing) {
@@ -1331,6 +1336,10 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
       }
     } else {
       increase_used(actual_bytes);
+#ifdef KELVIN_HEAP_USAGE
+      log_info(gc, ergo)("increase heap usage by " SIZE_FORMAT " for gc allocation, result: " SIZE_FORMAT,
+                         actual_bytes, used());
+#endif
     }
   }
 
@@ -1706,7 +1715,7 @@ private:
           // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
           // triggers the load-reference barrier (LRB) to copy on reference fetch.
           r->promote_humongous();
-        } else if (r->is_regular() && (r->garbage() < old_garbage_threshold) && (r->get_top_before_promote() == tams)) {
+        } else if (r->is_regular() && (r->garbage_before_padded_for_promote() < old_garbage_threshold) && (r->get_top_before_promote() == tams)) {
           // Likewise, we cannot put promote-in-place regions into the collection set because that would also trigger
           // the LRB to copy on reference fetch.
           r->promote_in_place();
