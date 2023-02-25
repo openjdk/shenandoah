@@ -1162,14 +1162,15 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
 
   if (old_available >= old_reserve) {
     size_t old_excess = old_available - old_reserve;
+    size_t excess_regions = old_excess / region_size_bytes;
     size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions() + old_cset_regions;
     size_t unaffiliated_old = unaffiliated_old_regions * region_size_bytes;
-    if (unaffiliated_old > old_excess) {
-      // We can give the entirety of old_excess to young, rounded down
-      old_region_surplus = old_excess / region_size_bytes;
-    } else {
+    if (unaffiliated_old_regions < excess_regions) {
       // We'll give only unaffiliated old to young, which is known to be less than the excess.
       old_region_surplus = unaffiliated_old_regions;
+    } else {
+      // unaffiliated_old_regions > excess_regions, so we only give away the excess.
+      old_region_surplus = excess_regions;
     }
   } else {
     // We need to request transfer from YOUNG.  Ignore that this will directly impact young_generation()->max_capacity(),
