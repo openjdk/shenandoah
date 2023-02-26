@@ -940,7 +940,6 @@ size_t ShenandoahHeapRegion::pin_count() const {
 void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation,
                                            bool defer_affiliated_region_count_updates) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-
   ShenandoahRegionAffiliation region_affiliation = heap->region_affiliation(this);
   {
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();

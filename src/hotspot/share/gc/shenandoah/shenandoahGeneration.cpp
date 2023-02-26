@@ -1207,8 +1207,9 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
   log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);
 #endif
-  // This detects arithmetic wraparound on _used
-  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+  // This detects arithmetic wraparound on _used.  Non-generational mode does not keep track of _affiliated_region_count
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
   assert(_used <= _max_capacity, "cannot increase used beyond capacity");
 }
@@ -1217,8 +1218,10 @@ void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
 
-  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
-         _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+  // Non-generational mode does not maintain affiliated region counts
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
 
 #ifdef KELVIN_TRACE_GENERATIONS

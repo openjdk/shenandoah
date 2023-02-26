@@ -861,7 +861,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
     ShenandoahCalculateRegionStatsClosure cl;
     _heap->heap_region_iterate(&cl);
     size_t heap_used;
-    if (sizeness == _verify_size_adjusted_for_padding) {
+    if (_heap->mode()->is_generational() && (sizeness == _verify_size_adjusted_for_padding)) {
       // Prior to evacuation, regular regions that are to be evacuated in place are padded to prevent further allocations
       heap_used = _heap->used() + _heap->get_pad_for_promote_in_place();
 #undef KELVIN_VERIFY

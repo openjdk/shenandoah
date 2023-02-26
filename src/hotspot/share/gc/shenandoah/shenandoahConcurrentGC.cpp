@@ -802,58 +802,78 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();
 
-    ShenandoahGeneration* young_gen = heap->young_generation();
-    size_t humongous_regions_promoted = young_gen->heuristics()->get_promotable_humongous_regions();
-    size_t regular_regions_promoted_in_place = young_gen->heuristics()->get_regular_regions_promoted_in_place();
-    if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
-      // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
-      // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
+    if (heap->mode()->is_generational()) {
+      ShenandoahGeneration* young_gen = heap->young_generation();
+      size_t humongous_regions_promoted = young_gen->heuristics()->get_promotable_humongous_regions();
+      size_t regular_regions_promoted_in_place = young_gen->heuristics()->get_regular_regions_promoted_in_place();
+      if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
+        // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
+        // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 
-      // TODO: we do not need to run update-references following evacuation if collection_set->is_empty().
+        // TODO: we do not need to run update-references following evacuation if collection_set->is_empty().
 
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_before_evacuation();
-      }
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_before_evacuation();
+        }
 
-      heap->set_evacuation_in_progress(true);
-      // From here on, we need to update references.
-      heap->set_has_forwarded_objects(true);
+        heap->set_evacuation_in_progress(true);
+        // From here on, we need to update references.
+        heap->set_has_forwarded_objects(true);
 
-      // Verify before arming for concurrent processing.
-      // Otherwise, verification can trigger stack processing.
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_during_evacuation();
-      }
+        // Verify before arming for concurrent processing.
+        // Otherwise, verification can trigger stack processing.
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_during_evacuation();
+        }
 
-      // Arm nmethods/stack for concurrent processing
-      ShenandoahCodeRoots::arm_nmethods();
-      ShenandoahStackWatermark::change_epoch_id();
+        // Arm nmethods/stack for concurrent processing
+        ShenandoahCodeRoots::arm_nmethods();
+        ShenandoahStackWatermark::change_epoch_id();
 
-#ifdef KELVIN_DEPRECATE
-      if (heap->mode()->is_generational()) {
-        // Calculate the temporary evacuation allowance supplement to young-gen memory capacity (for allocations
-        // and young-gen evacuations).
-        size_t young_available = heap->young_generation()->adjust_available(heap->get_alloc_supplement_reserve());
-        // old_available is memory that can hold promotions and evacuations.  Subtract out the memory that is being
-        // loaned for young-gen allocations or evacuations.
-        size_t old_available = heap->old_generation()->adjust_available(-heap->get_alloc_supplement_reserve());
+        if (ShenandoahPacing) {
+          heap->pacer()->setup_for_evac();
+        }
+      } else {
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_after_concmark();
+        }
 
-        log_info(gc, ergo)("After generational memory budget adjustments, old available: " SIZE_FORMAT
-                           "%s, young_available: " SIZE_FORMAT "%s",
-                           byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                           byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
-      }
-#endif
-      if (ShenandoahPacing) {
-        heap->pacer()->setup_for_evac();
+        if (VerifyAfterGC) {
+          Universe::verify();
+        }
       }
     } else {
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_after_concmark();
-      }
+      // Not is_generational()
+      if (!heap->collection_set()->is_empty()) {
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_before_evacuation();
+        }
 
-      if (VerifyAfterGC) {
-        Universe::verify();
+        heap->set_evacuation_in_progress(true);
+        // From here on, we need to update references.
+        heap->set_has_forwarded_objects(true);
+
+        // Verify before arming for concurrent processing.
+        // Otherwise, verification can trigger stack processing.
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_during_evacuation();
+        }
+
+        // Arm nmethods/stack for concurrent processing
+        ShenandoahCodeRoots::arm_nmethods();
+        ShenandoahStackWatermark::change_epoch_id();
+
+        if (ShenandoahPacing) {
+          heap->pacer()->setup_for_evac();
+        }
+      } else {
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_after_concmark();
+        }
+
+        if (VerifyAfterGC) {
+          Universe::verify();
+        }
       }
     }
   }
