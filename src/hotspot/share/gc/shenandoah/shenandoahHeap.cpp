@@ -847,9 +847,7 @@ void ShenandoahHeap::handle_promotion_failure() {
 }
 
 void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
-  // We squelch excessive reports to reduce noise in logs.  Squelch enforcement is not "perfect" because
-  // this same code can be in-lined in multiple contexts, and each context will have its own copy of the static
-  // last_report_epoch and this_epoch_report_count variables.
+  // We squelch excessive reports to reduce noise in logs.
   const size_t MaxReportsPerEpoch = 4;
   static size_t last_report_epoch = 0;
   static size_t epoch_report_count = 0;
@@ -869,11 +867,19 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
     size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
     const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahGeneration* old_gen = heap->old_generation();
+    size_t old_capacity = old_gen->max_capacity();
+    size_t old_usage = old_gen->used();
+    size_t old_free_regions = old_gen->free_unaffiliated_regions();
 
     log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
-                       ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT,
-                       size, plab == nullptr? "no": "yes",
-                       words_remaining, promote_enabled, promotion_reserve, promotion_expended);
+                       ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT
+                       ", old capacity: " SIZE_FORMAT ", old_used: " SIZE_FORMAT ", old unaffiliated regions: " SIZE_FORMAT,
+                       size * HeapWordSize, plab == nullptr? "no": "yes",
+                       words_remaining * HeapWordSize, promote_enabled, promotion_reserve, promotion_expended,
+                       old_capacity, old_usage, old_free_regions);
+
     if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
       log_info(gc, ergo)("Squelching additional promotion failure reports for current epoch");
     } else if (gc_id != last_report_epoch) {
@@ -1125,7 +1131,11 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t old_reserve = 0;
   bool doing_mixed = collection_set()->has_old_regions();
   bool doing_promotions = promo_load > 0;
-
+#undef KELVIN_PROMO_BUDGET
+#ifdef KELVIN_PROMO_BUDGET
+  log_info(gc, ergo)("adjust_generation_sizes_for_next_cycle, promo_load: " SIZE_FORMAT,
+                     promo_load);
+#endif
   // round down
   size_t max_old_region_xfer = xfer_limit / region_size_bytes;
 
@@ -1143,7 +1153,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
     old_reserve = max_old_reserve;
   } else if (doing_promotions) {
     // We're only promoting and we have a maximum bound on the amount to be promoted
-    size_t expanded_promo_load = promo_load * ShenandoahPromoEvacWaste;
+    size_t expanded_promo_load = (size_t) (promo_load * ShenandoahPromoEvacWaste);
     old_reserve = (expanded_promo_load < max_old_reserve)? expanded_promo_load: max_old_reserve;
   }
 
@@ -1151,10 +1161,9 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t young_available = young_generation()->available() + young_cset_regions * region_size_bytes;
   size_t old_region_deficit = 0;
   size_t old_region_surplus = 0;
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
-  log_info(gc, ergo)("Reserving for future GC (%s, %s), promo_potential: " SIZE_FORMAT,
-                     doing_mixed? "mixed": "unmixed", doing_promotions? "promoting": "unpromoting", promo_load);
+#ifdef KELVIN_PROMO_BUDGET
+  log_info(gc, ergo)("Reserving for future GC (%s, %s), promo_potential: " SIZE_FORMAT ", xfer_limit: " SIZE_FORMAT,
+                     doing_mixed? "mixed": "unmixed", doing_promotions? "promoting": "unpromoting", promo_load, xfer_limit);
   log_info(gc, ergo)(" young_reserve: " SIZE_FORMAT ", max_old_reserve: " SIZE_FORMAT ", old_reserve: " SIZE_FORMAT
                      ", old available: " SIZE_FORMAT, young_reserve, max_old_reserve, old_reserve,
                      old_generation()->available() + old_cset_regions * region_size_bytes);
@@ -1186,7 +1195,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
     // THE PROBLEM WITH THIS IS THAT WE MAY BE RUNNING SHORT ON
     // YOUNG-GEN MEMORY BECAUSE WE HAVE FAILED TO PROMOTE.  
 
-#ifdef KELVIN_TRACE
+#ifdef KELVIN_PROMO_BUDGET
     log_info(gc, ergo)(" curtailing old-gen activities by shrinking original ask: " SIZE_FORMAT " to " SIZE_FORMAT
                        ", xfer_limit: " SIZE_FORMAT,
                        old_region_deficit, max_old_region_xfer, xfer_limit);

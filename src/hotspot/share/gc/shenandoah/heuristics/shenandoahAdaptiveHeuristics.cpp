@@ -209,6 +209,11 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
           bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
           assert(r->is_young(), "Only young candidates expected in the data array");
           if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
+#ifdef KELVIN_CSET
+            log_info(gc, ergo)("Adding region " SIZE_FORMAT ": new_cset: " SIZE_FORMAT ", max_cset: " SIZE_FORMAT
+                               ", region_garbage: " SIZE_FORMAT ", region live: " SIZE_FORMAT ", new_garbage: " SIZE_FORMAT,
+                               r->index(), new_cset, max_cset, region_garbage, r->get_live_data_bytes(), new_garbage);
+#endif
             cur_cset = new_cset;
             cur_young_garbage = new_garbage;
             cset->add_region(r);

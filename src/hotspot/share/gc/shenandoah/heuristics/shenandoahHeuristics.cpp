@@ -94,7 +94,7 @@ static int compare_by_aged_live(AgedRegionData a, AgedRegionData b) {
   else return 0;
 }
 
-
+// Returns bytes of old-gen memory consumed by selected aged regions
 size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* const ctx = heap->marking_context();
@@ -250,6 +250,10 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
       }
     }
     heap->set_pad_for_promote_in_place(promote_in_place_pad);
+#undef KELVIN_PROMO_POTENTIAL
+#ifdef KELVIN_PROMO_POTENTIAL
+    log_info(gc, ergo)("Establishing promo potential as " SIZE_FORMAT, promo_potential);
+#endif
     heap->set_promotion_potential(promo_potential);
     heap->set_promotion_in_place_potential(anticipated_promote_in_place_live);
   }

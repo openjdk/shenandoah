@@ -802,7 +802,15 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();
 
-    if (!heap->collection_set()->is_empty()) {
+    ShenandoahGeneration* young_gen = heap->young_generation();
+    size_t humongous_regions_promoted = young_gen->heuristics()->get_promotable_humongous_regions();
+    size_t regular_regions_promoted_in_place = young_gen->heuristics()->get_regular_regions_promoted_in_place();
+    if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
+      // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
+      // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
+
+      // TODO: we do not need to run update-references following evacuation if collection_set->is_empty().
+
       if (ShenandoahVerify) {
         heap->verifier()->verify_before_evacuation();
       }

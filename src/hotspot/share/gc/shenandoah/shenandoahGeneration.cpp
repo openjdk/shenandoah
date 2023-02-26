@@ -438,7 +438,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     maximum_young_evacuation_reserve * ShenandoahOldEvacRatioPercent / (100 - ShenandoahOldEvacRatioPercent);
   // Here's the algebra:
   //  TotalEvacuation = OldEvacuation + YoungEvacuation
-  //  OldEvacuation = TotalEvacuation*(ShenandoahOldEvacRatioPercent/100)
+  //  OldEvacuation = TotalEvacuation * (ShenandoahOldEvacRatioPercent/100)
   //  OldEvacuation = YoungEvacuation * (ShenandoahOldEvacRatioPercent/100)/(1 - ShenandoahOldEvacRatioPercent/100)
   //  OldEvacuation = YoungEvacuation * ShenandoahOldEvacRatioPercent/(100 - ShenandoahOldEvacRatioPercent)
 
@@ -446,7 +446,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   if (maximum_old_evacuation_reserve > old_generation->available()) {
     maximum_old_evacuation_reserve = old_generation->available();
     if (old_heuristics->unprocessed_old_collection_candidates() > 0) {
-      // At end of previous GC, we would have reserved maximum amount old_evacuation_reserve whenever
+      // At end of previous GC, we would have reserved maximum_old_evacuation_reserve whenever
       // unprocessed_old_collection_candidates() > 0 unless young-gen GC is in duress.  If we're in duress,
       // we'll skip old compaction on this cycle in order to avoid the "big hit" on update references.
       //
@@ -455,7 +455,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
       //       met the garbage threshold for compaction.  The regions to be promoted may be 100% live.  On the other hand,
       //       if we are operating with a "limited" evacuation budget, we are diminishing the value of the all-old-update-refs
       //       phase, because we would have to update references throughout all of old-gen after evacuating only a "smaller"
-      //       amount of old-gen regions.  Note also the evacuation threshold for old-gen candidates is much higher (e.g. 10%)
+      //       amount of old-gen regions.  Note also the evacuation threshold for old-gen candidates is much higher (e.g. 15%)
       //       than the evacuation threshold for young-gen candidates (25%) so promotable regions may have live memory sizes
       //       that are similar to the old-gen compaction candidates.
       young_gc_in_duress = true;
@@ -484,8 +484,8 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     old_promo_reserve = maximum_old_evacuation_reserve;
   }
 
-#undef KELVIN_EXAMINE
-#ifdef KELVIN_EXAMINE
+#undef KELVIN_PRESELECT
+#ifdef KELVIN_PRESELECT
   log_info(gc, ergo)("Preselecting region with promo evac budget: " SIZE_FORMAT ", computed from old available: " SIZE_FORMAT
                      ",  max_old_evac_reserve: " SIZE_FORMAT " with %u old-gen mixed evacuation candidates",
                      old_promo_reserve, old_generation->available(), maximum_old_evacuation_reserve,
