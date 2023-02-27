@@ -227,6 +227,7 @@ void ShenandoahOldGeneration::prepare_gc() {
                                 ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
                                 msg);
     ShenandoahGeneration::prepare_gc();
+    ShenandoahHeap::heap()->old_heuristics()->reset_promoted_in_place();
   }
   // Else, coalesce-and-fill has been preempted and we'll finish that effort in the future.  Do not invoke
   // ShenandoahGeneration::prepare_gc() until coalesce-and-fill is done because it resets the mark bitmap
@@ -259,6 +260,9 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   uint nworkers = workers->active_workers();
 
   log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
+  // TODO: In case coalesce-and-fill is preempted and resumed, we can save ourselves some effort by invoking
+  //  update_coalesce_and_fill_candidates rather than entirely rebuilding this list each time we resume the effort.
+  //  OTOH, it is expected to be very rare that we would encounter this situation.
   uint coalesce_and_fill_regions_count = old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);

@@ -1035,6 +1035,8 @@ void ShenandoahHeapRegion::promote_in_place() {
   assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
 
   set_affiliation(OLD_GENERATION, true);
+  // Arrange for this region to be coalesced and filled before next old-gen mark.
+  heap->old_heuristics()->add_promoted_in_place(this);
 
   // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
   // is_collector_free range.

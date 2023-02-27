@@ -38,6 +38,10 @@ private:
 
   static uint NOT_FOUND;
 
+  // Remember regions recently promoted in place.  These regions need to be coalesced and filled prior to next OLD GC effort.
+  ShenandoahHeapRegion** _promoted_in_place_regions;
+  size_t _promoted_in_place_count;
+
   // After final marking of the old generation, this heuristic will select
   // a set of candidate regions to be included in subsequent mixed collections.
   // The regions are sorted into a `_region_data` array (declared in base
@@ -94,8 +98,15 @@ private:
 
 public:
   ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahHeuristics* trigger_heuristic);
+  virtual ~ShenandoahOldHeuristics();
 
   virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) override;
+
+  // At start of old marking, discard all awareness of regions previously promoted in place.
+  void reset_promoted_in_place();
+
+  // Remember that this region was promoted in place since the most recent start of old-gen marking.
+  void add_promoted_in_place(ShenandoahHeapRegion* promoted_in_place_region);
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
@@ -126,6 +137,12 @@ public:
   // last_old_region_index() entries, or memory may be corrupted when this function overwrites the
   // end of the array.
   unsigned int get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
+
+  // In case coalesce-and-fill is preempted by a young-gen collection and the preempting young-gen collection promotes regions in place,
+  //  those regions need to be added to the list of candidates to be coalesced and filled.  Once coalesce-and-fill finishes, no
+  //  more regions can be promoted in place until after the start of the bootstrap GC (because the soonest possible promote-in-place
+  //  would occur during evacuation of the bootstrap GC).
+  unsigned int update_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer, unsigned int previous_count);
 
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being
   // held by this heuristic for supplying mixed collections.
