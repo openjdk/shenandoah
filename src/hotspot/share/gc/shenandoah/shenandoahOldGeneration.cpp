@@ -227,7 +227,6 @@ void ShenandoahOldGeneration::prepare_gc() {
                                 ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
                                 msg);
     ShenandoahGeneration::prepare_gc();
-    ShenandoahHeap::heap()->old_heuristics()->reset_promoted_in_place();
   }
   // Else, coalesce-and-fill has been preempted and we'll finish that effort in the future.  Do not invoke
   // ShenandoahGeneration::prepare_gc() until coalesce-and-fill is done because it resets the mark bitmap

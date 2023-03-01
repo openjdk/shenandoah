@@ -64,11 +64,6 @@ class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Degenerated_Penalty = 10; // how much to penalize average GC duration history on Degenerated GC
   static const intx Full_Penalty        = 20; // how much to penalize average GC duration history on Full GC
 
-private:
-  size_t _promotable_humongous_regions;
-  size_t _regular_regions_promoted_in_place;
-  size_t _regular_usage_promoted_in_place;
-
 protected:
   static const uint Moving_Average_Samples = 10; // Number of samples to store in moving averages
 
@@ -143,18 +138,6 @@ public:
   uint degenerated_cycles_in_a_row() {
     return _degenerated_cycles_in_a_row;
   }
-
-  void reserve_promotable_humongous_regions(size_t region_count) { _promotable_humongous_regions = region_count; }
-
-  void reserve_promotable_regular_regions(size_t region_count) { _regular_regions_promoted_in_place = region_count; }
-
-  void reserve_promotable_regular_usage(size_t used_bytes) { _regular_usage_promoted_in_place = used_bytes; }
-
-  size_t get_promotable_humongous_regions() { return _promotable_humongous_regions; }
-
-  size_t get_regular_regions_promoted_in_place() { return _regular_regions_promoted_in_place; }
-
-  size_t get_regular_usage_promoted_in_place() { return _regular_usage_promoted_in_place; }
 
   virtual void record_cycle_start();
 

@@ -36,8 +36,6 @@ uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahHeuristics* trigger_heuristic) :
   ShenandoahHeuristics(generation),
-  _promoted_in_place_regions(nullptr),
-  _promoted_in_place_count(0),
 #ifdef ASSERT
   _start_candidate(0),
 #endif
@@ -51,12 +49,6 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _special_trigger_request(false)
 {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
-  size_t num_regions = ShenandoahHeap::heap()->num_regions();
-  _promoted_in_place_regions = NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, num_regions, mtGC);
-}
-
-ShenandoahOldHeuristics::~ShenandoahOldHeuristics() {
-  FREE_C_HEAP_ARRAY(ShenandoahHeapRegion*, _promoted_in_place_regions);
 }
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
@@ -328,37 +320,13 @@ unsigned int ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(Shenandoa
   uint end = _last_old_region;
   uint index = _next_old_collection_candidate;
   while (index < end) {
+#undef KELVIN_PIP
+#ifdef KELVIN_PIP
+    log_info(gc, ergo)("get_coalesce_and_fill_candidates includes uncollected region " SIZE_FORMAT, _region_data[index]._region->index());
+#endif
     *buffer++ = _region_data[index++]._region;
   }
-  // Note: Any OLD region that was not collected following previous OLD mark will not be promoted in place.
-  for (index = 0; index < _promoted_in_place_count; index++) {
-    *buffer++ = _promoted_in_place_regions[index];
-  }
-  return (_last_old_region - _next_old_collection_candidate) + _promoted_in_place_count;
-}
-
-unsigned int ShenandoahOldHeuristics::update_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer, unsigned int original_count) {
-  unsigned int updated_count = (_last_old_region - _next_old_collection_candidate) + _promoted_in_place_count;
-  if (original_count != updated_count) {
-    unsigned int new_region_count = updated_count - original_count;
-    unsigned int index = _promoted_in_place_count - (new_region_count + 1);
-
-    // skip over the uncollected old regions and the previously recorded
-    buffer += original_count;
-    while (new_region_count-- > 0) {
-      *buffer++ = _promoted_in_place_regions[index++];
-    }
-  }
-  return updated_count;
-}
-
-void ShenandoahOldHeuristics::reset_promoted_in_place() {
-  _promoted_in_place_count = 0;
-}
-
-void ShenandoahOldHeuristics::add_promoted_in_place(ShenandoahHeapRegion* region) {
-  region->begin_preemptible_coalesce_and_fill();
-  _promoted_in_place_regions[_promoted_in_place_count++] = region;
+  return (_last_old_region - _next_old_collection_candidate);
 }
 
 void ShenandoahOldHeuristics::abandon_collection_candidates() {

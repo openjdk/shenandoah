@@ -49,9 +49,6 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
 }
 
 ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
-  _promotable_humongous_regions(0),
-  _regular_regions_promoted_in_place(0),
-  _regular_usage_promoted_in_place(0),
   _generation(generation),
   _region_data(NULL),
   _degenerated_cycles_in_a_row(0),
@@ -123,7 +120,15 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
     AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
-      if (in_generation(r) && !r->is_empty() && r->is_regular() && (r->age() >= InitialTenuringThreshold)) {
+      if (r->is_young() && !r->is_empty() && r->is_regular() && (r->age() >= InitialTenuringThreshold)) {
+#ifdef KELVIN_PRESELECT
+        log_info(gc, ergo)("Consider selection of region " SIZE_FORMAT " (candidate: " SIZE_FORMAT
+                           ", age: %d, garbage: " SIZE_FORMAT " < " SIZE_FORMAT ")"
+                           ", min_fill: " SIZE_FORMAT ", original top: " PTR_FORMAT,
+                           i, promote_in_place_regions, r->age(), r->garbage(), old_garbage_threshold,
+                           ShenandoahHeap::min_fill_size(), p2i(r->top()));
+#endif
+
         if ((r->garbage() < old_garbage_threshold)) {
           HeapWord* tams = ctx->top_at_mark_start(r);
           HeapWord* original_top = r->top();
@@ -184,7 +189,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
         // TODO:
         //   If we are auto-tuning the tenure age and this occurs, use this as guidance that tenure age should be increased.
 
-        if (in_generation(r) && !r->is_empty() && r->is_regular() && (r->age() + 1 == InitialTenuringThreshold)) {
+        if (r->is_young() && !r->is_empty() && r->is_regular() && (r->age() + 1 == InitialTenuringThreshold)) {
           if (r->garbage() >= old_garbage_threshold) {
 #ifdef KELVIN_PRESELECT
             log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " (candidate: " SIZE_FORMAT ", age %u, live: " SIZE_FORMAT
@@ -348,7 +353,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
           log_info(gc, ergo)("Preselected Region " SIZE_FORMAT " is placed in candidate set", region->index());
 #endif
           preselected_candidates++;
-        } else if (is_generational && (region->age() >= InitialTenuringThreshold)) {
+        } else if (is_generational && region->is_young() && (region->age() >= InitialTenuringThreshold)) {
+          // Note that for GLOBAL GC, region may be OLD, and OLD regions do not qualify for pre-selection
+
           // This region is old enough to be promoted but it was not preselected, either because its garbage is below
           // ShenandoahOldGarbageThreshold so it will be promoted in place, or because there is not sufficient room
           // in old gen to hold the evacuated copies of this region's live data.  In both cases, we choose not to
@@ -432,9 +439,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
       live_memory += region->get_live_data_bytes();
     }
   }
-  reserve_promotable_humongous_regions(humongous_regions_promoted);
-  reserve_promotable_regular_regions(regular_regions_promoted_in_place);
-  reserve_promotable_regular_usage(regular_regions_promoted_usage);
+  heap->reserve_promotable_humongous_regions(humongous_regions_promoted);
+  heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
+  heap->reserve_promotable_regular_usage(regular_regions_promoted_usage);
 
   log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
                      " regular regions, spanning a total of " SIZE_FORMAT " used bytes",

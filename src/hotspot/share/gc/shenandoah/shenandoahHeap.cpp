@@ -3111,15 +3111,21 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   size_t young_cset_regions, old_cset_regions;
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
 
+
   if (mode()->is_generational()) {
     // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
-    size_t humongous_regions_promoted = young_generation()->heuristics()->get_promotable_humongous_regions();
-    size_t regular_regions_promoted_in_place = young_generation()->heuristics()->get_regular_regions_promoted_in_place();
+    size_t humongous_regions_promoted = get_promotable_humongous_regions();
+    size_t regular_regions_promoted_in_place = get_regular_regions_promoted_in_place();
     size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
     size_t bytes_promoted_in_place = 0;
+#undef KELVIN_REBUILD
+#ifdef KELVIN_REBUILD
+    log_info(gc, ergo)("rebuild_free_set(%d), humongous_regions_promoted: " SIZE_FORMAT ", regular regions promoted: " SIZE_FORMAT,
+                       concurrent, humongous_regions_promoted, regular_regions_promoted_in_place);
+#endif
     if (total_regions_promoted > 0) {
       size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
-      size_t regular_bytes_promoted_in_place = young_generation()->heuristics()->get_regular_usage_promoted_in_place();
+      size_t regular_bytes_promoted_in_place = get_regular_usage_promoted_in_place();
       bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
 
       log_info(gc, ergo)("Promoted " SIZE_FORMAT " humongous and " SIZE_FORMAT " regular regions in place"
@@ -3131,7 +3137,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
       young_generation()->log_status("Before forced transfer");
       log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
       old_generation()->log_status("Before forced transfer");
-      log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+      log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, old_generation()->free_unaffiliated_regions());
 #endif
       // Decrease usage within young before we transfer capacity to old in order to avoid certain assertion failures.
       young_generation()->decrease_affiliated_region_count(total_regions_promoted);
@@ -3145,9 +3151,9 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     }
 #ifdef KELVIN_REBUILD
     young_generation()->log_status("After forced transfer");
-      log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
-      old_generation()->log_status("After forced transfer");
-      log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+    log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
+    old_generation()->log_status("After forced transfer");
+    log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, old_generation()->free_unaffiliated_regions());
 #endif
 
     // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.

@@ -606,7 +606,7 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   
     size_t old_available = heap->old_generation()->available();
     size_t young_available = heap->young_generation()->available();
-    log_info(gc, ergo)("At Concurrent cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
+    log_info(gc, ergo)("At Concurrent cleanup, %s " SIZE_FORMAT " regionsx to %s to prepare for next gc, old available: "
                        SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
                        success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
                        byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
@@ -804,8 +804,8 @@ void ShenandoahConcurrentGC::op_final_mark() {
 
     if (heap->mode()->is_generational()) {
       ShenandoahGeneration* young_gen = heap->young_generation();
-      size_t humongous_regions_promoted = young_gen->heuristics()->get_promotable_humongous_regions();
-      size_t regular_regions_promoted_in_place = young_gen->heuristics()->get_regular_regions_promoted_in_place();
+      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
+      size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
       if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.

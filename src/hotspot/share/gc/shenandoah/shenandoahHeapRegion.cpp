@@ -1034,8 +1034,10 @@ void ShenandoahHeapRegion::promote_in_place() {
   assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
 
   set_affiliation(OLD_GENERATION, true);
+#ifdef KELVIN_DEPRECATE
   // Arrange for this region to be coalesced and filled before next old-gen mark.
   heap->old_heuristics()->add_promoted_in_place(this);
+#endif
 
   // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
   // is_collector_free range.
@@ -1067,10 +1069,11 @@ void ShenandoahHeapRegion::promote_in_place() {
       heap->card_scan()->register_object_wo_lock(obj_addr);
       obj_addr += obj->size();
     } else {
-      // Coalescing and filling right now would is redundant with the effort that will be performed prior to start of next
-      // old-gen marking effort. 
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
       assert(next_marked_obj <= tams, "next marked object cannot exceed tams");
+      size_t fill_size = next_marked_obj - obj_addr;
+      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+      heap->card_scan()->register_object_wo_lock(obj_addr);
       obj_addr = next_marked_obj;
     }
   }

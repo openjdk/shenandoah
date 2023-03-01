@@ -106,6 +106,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
+  
 
   if (is_generational) {
 #undef KELVIN_CSET
@@ -150,6 +151,11 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
         if (cset->is_preselected(r->index())) {
+#undef KELVIN_GLOBAL
+#ifdef KELVIN_GLOBAL
+          log_info(gc, ergo)("Ignoring preselected %s region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT ")",
+                             affiliation_name(r->affiliation()), r->index(), r->used(), r->get_live_data_bytes());
+#endif
           continue;
         }
         bool add_region = false;
@@ -158,7 +164,17 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
           if ((new_cset <= max_old_cset) && (r->garbage() > garbage_threshold)) {
             add_region = true;
             old_cur_cset = new_cset;
+#ifdef KELVIN_GLOBAL
+            log_info(gc, ergo)("Adding old region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), old_cur_cset: " SIZE_FORMAT,
+                               r->index(), r->used(), r->get_live_data_bytes(), old_cur_cset);
+#endif
           }
+#ifdef KELVIN_GLOBAL
+          else {
+            log_info(gc, ergo)("Not adding old region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), old_cur_cset: "
+                               SIZE_FORMAT, r->index(), r->used(), r->get_live_data_bytes(), old_cur_cset);
+          }
+#endif
         } else if (r->age() < InitialTenuringThreshold) {
           size_t new_cset = young_cur_cset + r->get_live_data_bytes();
           size_t region_garbage = r->garbage();
@@ -168,8 +184,24 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
             add_region = true;
             young_cur_cset = new_cset;
             cur_young_garbage = new_garbage;
+#ifdef KELVIN_GLOBAL
+            log_info(gc, ergo)("Adding young region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), young_cur_cset: " SIZE_FORMAT,
+                               r->index(), r->used(), r->get_live_data_bytes(), young_cur_cset);
+#endif
           }
+#ifdef KELVIN_GLOBAL
+          else {
+            log_info(gc, ergo)("Not adding young region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), young_cur_cset: "
+                               SIZE_FORMAT, r->index(), r->used(), r->get_live_data_bytes(), young_cur_cset);
+          }
+#endif
         }
+#ifdef KELVIN_GLOBAL
+        else {
+          log_info(gc, ergo)("Not adding aged young region " SIZE_FORMAT " (age: %d, used: " SIZE_FORMAT ", live: " SIZE_FORMAT
+                             ") because not preselected", r->index(), r->age(), r->used(), r->get_live_data_bytes());
+        }
+#endif
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
         // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
 

@@ -425,14 +425,20 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     if (adjust_for_deferred_accounting) {
       ShenandoahHeap* heap = ShenandoahHeap::heap();
       ShenandoahGeneration* young_generation = heap->young_generation();
-      size_t humongous_regions_promoted = young_generation->heuristics()->get_promotable_humongous_regions();
-      size_t regular_regions_promoted_in_place = young_generation->heuristics()->get_regular_regions_promoted_in_place();
+      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
+      size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
       size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
       size_t bytes_promoted_in_place = 0;
       if (total_regions_promoted > 0) {
 	size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
-	size_t regular_bytes_promoted_in_place = young_generation->heuristics()->get_regular_usage_promoted_in_place();
+	size_t regular_bytes_promoted_in_place = heap->get_regular_usage_promoted_in_place();
 	bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
+#ifdef KELVIN_VERIFY
+	log_info(gc, ergo)("bytes_promoted_in_place: " SIZE_FORMAT
+                           " computed from humongous_bytes_promoted: " SIZE_FORMAT
+                           " plus regular_bytes_promoted: " SIZE_FORMAT,
+			   bytes_promoted_in_place, humongous_bytes_promoted, regular_bytes_promoted_in_place);
+#endif
       }
       if (generation->is_young()) {
 	generation_used -= bytes_promoted_in_place;
@@ -776,7 +782,7 @@ private:
 public:
   VerifyThreadGCState(const char* label, char expected) : _label(label), _expected(expected) {}
   void do_thread(Thread* t) {
-    char actual = ShenandoahThreadLocalData::gc_state(t);
+    char actual = ShenandoahThreadLocalData::gc_state(t) & ~ShenandoahHeap::MIXED_EVACUATIONS_ENABLED;
     if (actual != _expected && !(actual & ShenandoahHeap::OLD_MARKING)) {
       fatal("%s: Thread %s: expected gc-state %d, actual %d", _label, t->name(), _expected, actual);
     }
@@ -840,7 +846,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
     }
 
     if (enabled) {
-      char actual = _heap->gc_state();
+      char actual = _heap->gc_state() & ~ShenandoahHeap::MIXED_EVACUATIONS_ENABLED;
       // Old generation marking is allowed in all states.
       if (actual != expected && !(actual & ShenandoahHeap::OLD_MARKING)) {
         fatal("%s: Global gc-state: expected %d, actual %d", label, expected, actual);

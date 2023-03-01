@@ -221,6 +221,10 @@ private:
            size_t _promotion_potential;
            size_t _promotion_in_place_potential;
            size_t _pad_for_promote_in_place;    // bytes of filler
+           size_t _promotable_humongous_regions;
+           size_t _regular_regions_promoted_in_place;
+           size_t _regular_usage_promoted_in_place;
+
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
   volatile size_t _used;
@@ -451,6 +455,14 @@ public:
 
   inline void set_pad_for_promote_in_place(size_t pad) { _pad_for_promote_in_place = pad; }
   inline size_t get_pad_for_promote_in_place() { return _pad_for_promote_in_place; }
+
+  inline void reserve_promotable_humongous_regions(size_t region_count) { _promotable_humongous_regions = region_count; }
+  inline void reserve_promotable_regular_regions(size_t region_count) { _regular_regions_promoted_in_place = region_count; }
+  inline void reserve_promotable_regular_usage(size_t used_bytes) { _regular_usage_promoted_in_place = used_bytes; }
+
+  inline size_t get_promotable_humongous_regions() { return _promotable_humongous_regions; }
+  inline size_t get_regular_regions_promoted_in_place() { return _regular_regions_promoted_in_place; }
+  inline size_t get_regular_usage_promoted_in_place() { return _regular_usage_promoted_in_place; }
 
   // Returns previous value
   inline size_t set_promoted_reserve(size_t new_val);
