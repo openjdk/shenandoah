@@ -46,7 +46,9 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _trigger_heuristic(trigger_heuristic),
   _old_generation(generation),
   _promotion_failed(false),
-  _special_trigger_request(false)
+  _cannot_expand_trigger(false),
+  _fragmentation_trigger(false),
+  _growth_trigger(false)
 {
   assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
 }
@@ -199,6 +201,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t num_regions = heap->num_regions();
   size_t immediate_garbage = 0;
   size_t immediate_regions = 0;
+  size_t live_data = 0;
 
   RegionData* candidates = _region_data;
   for (size_t i = 0; i < num_regions; i++) {
@@ -209,6 +212,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
     size_t garbage = region->garbage();
     total_garbage += garbage;
+    live_data += region->get_live_data_bytes();
 
     if (region->is_regular() || region->is_pinned()) {
       if (!region->has_live()) {
@@ -239,6 +243,8 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       immediate_garbage += garbage;
     }
   }
+
+  ((ShenandoahOldGeneration*) (heap->old_generation()))->set_live_bytes_after_last_mark(live_data);
 
   // TODO: Consider not running mixed collects if we recovered some threshold percentage of memory from immediate garbage.
   // This would be similar to young and global collections shortcutting evacuation, though we'd probably want a separate
@@ -349,7 +355,9 @@ void ShenandoahOldHeuristics::handle_promotion_failure() {
 
 void ShenandoahOldHeuristics::record_cycle_start() {
   _promotion_failed = false;
-  _special_trigger_request = false;
+  _cannot_expand_trigger = false;
+  _fragmentation_trigger = false;
+  _growth_trigger = false;
   _trigger_heuristic->record_cycle_start();
 }
 
@@ -375,8 +383,18 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   }
 #endif
 
-  if (_special_trigger_request) {
+  if (_cannot_expand_trigger) {
     log_info(gc)("Trigger: Old expansion failure");
+    return true;
+  }
+
+  if (_fragmentation_trigger) {
+    log_info(gc)("Trigger: Old has become fragmented");
+    return true;
+  }
+
+  if (_growth_trigger) {
+    log_info(gc)("Trigger: Old has overgrown");
     return true;
   }
 

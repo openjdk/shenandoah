@@ -594,7 +594,7 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
       region_destination = "old";
       region_xfer = old_region_deficit;
       if (!success) {
-        ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_old_gc();
+        ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_cannot_expand();
       }
     } else {
       region_destination = "none";

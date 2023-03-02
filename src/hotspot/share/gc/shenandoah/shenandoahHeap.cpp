@@ -3116,6 +3116,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
     size_t humongous_regions_promoted = get_promotable_humongous_regions();
     size_t regular_regions_promoted_in_place = get_regular_regions_promoted_in_place();
+    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
     size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
     size_t bytes_promoted_in_place = 0;
 #undef KELVIN_REBUILD
@@ -3124,7 +3125,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                        concurrent, humongous_regions_promoted, regular_regions_promoted_in_place);
 #endif
     if (total_regions_promoted > 0) {
-      size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
+      size_t humongous_bytes_promoted = humongous_regions_promoted * region_size_bytes;
       size_t regular_bytes_promoted_in_place = get_regular_usage_promoted_in_place();
       bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
 
@@ -3160,6 +3161,27 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // Note that transfer of humongous regions does not impact available.
     size_t evac_slack = young_generation()->heuristics()->evac_slack(young_cset_regions);
     adjust_generation_sizes_for_next_cycle(evac_slack, young_cset_regions, old_cset_regions);
+
+    // Total old_available may have been expanded to hold anticipated promotions.  We trigger if the fragmented available
+    // memory represents more than 16 regions worth of data.  Note that fragmentation may increase when we promote regular
+    // regions in place when many of these regular regions have an abundant amount of available memory within them.  Fragmentation
+    // will decrease as promote-by-copy consumes the available memory within these partially consumed regions.
+    //
+    // TODO: test whether 16 is the "right" multiplier.  should this be adaptive?
+    size_t threshold_fragmentation = 16 * region_size_bytes;
+    size_t old_unaffiliated_available = old_generation()->free_unaffiliated_regions() * region_size_bytes;
+    size_t old_available = old_generation()->available();
+    size_t old_fragmented_available = old_available - old_unaffiliated_available;
+    if (old_fragmented_available > threshold_fragmentation) {
+      ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_is_fragmented();
+    }
+
+    size_t old_used = old_generation()->used();
+    size_t trigger_threshold = old_generation()->usage_trigger_threshold();
+
+    if (old_used > trigger_threshold) {
+      ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_has_grown();
+    }
   }
   // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild(0);

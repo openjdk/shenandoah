@@ -174,11 +174,29 @@ class ShenandoahConcurrentCoalesceAndFillTask : public WorkerTask {
 ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
   : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity),
     _coalesce_and_fill_region_array(NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC)),
-    _state(IDLE)
+    _state(IDLE),
+    _growth_before_compaction(INITIAL_GROWTH_BEFORE_COMPACTION)
 {
+  _live_bytes_after_last_mark = ShenandoahHeap::heap()->capacity() * INITIAL_LIVE_FRACTION / FRACTIONAL_DENOMINATOR;
   // Always clear references for old generation
   ref_processor()->set_soft_reference_policy(true);
 }
+
+size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
+  return _live_bytes_after_last_mark;
+}
+
+void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
+  _live_bytes_after_last_mark = bytes;
+  if (_growth_before_compaction > MINIMUM_GROWTH_BEFORE_COMPACTION) {
+    _growth_before_compaction /= 2;
+  }
+}
+
+size_t ShenandoahOldGeneration::usage_trigger_threshold() const {
+  return _live_bytes_after_last_mark + _live_bytes_after_last_mark * _growth_before_compaction / FRACTIONAL_DENOMINATOR;
+}
+
 
 const char* ShenandoahOldGeneration::name() const {
   return "OLD";

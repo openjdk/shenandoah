@@ -83,10 +83,11 @@ private:
   // old generation collection begins (by control thread).
   volatile bool _promotion_failed;
 
-
-  // Flag is set when promotion failure is detected (by gc thread), and cleared when
-  // old generation collection begins (by control thread).
-  volatile bool _special_trigger_request;
+  // Flags are set when promotion failure is detected (by gc thread), and cleared when
+  // old generation collection begins (by control thread).  Flags are set and cleared at safepoints.
+  bool _cannot_expand_trigger;
+  bool _fragmentation_trigger;
+  bool _growth_trigger;
 
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
@@ -136,7 +137,9 @@ public:
   // an old collection as soon as possible.
   void handle_promotion_failure();
 
-  void trigger_old_gc() { _special_trigger_request = true; };
+  void trigger_cannot_expand() { _cannot_expand_trigger = true; };
+  void trigger_old_is_fragmented() { _fragmentation_trigger = true; }
+  void trigger_old_has_grown() { _growth_trigger = true; }
 
   virtual void record_cycle_start() override;
 

@@ -300,7 +300,7 @@ void ShenandoahDegenGC::op_degenerated() {
                              byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
 #endif
           if (!success) {
-            ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_old_gc();
+            ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_cannot_expand();
           }
         }
         heap->set_old_region_surplus(0);

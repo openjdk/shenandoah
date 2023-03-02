@@ -48,9 +48,10 @@ private:
 
   double _collection_thread_time_s;
 
+  size_t _affiliated_region_count;
+
 protected:
   // Usage
-  size_t _affiliated_region_count;
   volatile size_t _used;
   volatile size_t _bytes_allocated_since_gc_start;
   size_t _max_capacity;
