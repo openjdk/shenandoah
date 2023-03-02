@@ -234,23 +234,21 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       // No dice. Do not try to mix mutator and GC allocations, because
       // URWM moves due to GC allocations would expose unparsable mutator
       // allocations.
-
       break;
     }
     default:
       ShouldNotReachHere();
   }
-
   return nullptr;
 }
 
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->index());
 
-  if (_heap->is_concurrent_weak_root_in_progress() && r->is_trash()) {
+  if (_heap->is_concurrent_weak_root_in_progress() &&
+      r->is_trash()) {
     return nullptr;
   }
-
   try_recycle_trashed(r);
   if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
@@ -758,12 +756,11 @@ void ShenandoahFreeSet::log_status() {
       size_t total_free = 0;
       size_t total_free_ext = 0;
 
-      ls.print_cr("Mutator regions: [" SIZE_FORMAT ", " SIZE_FORMAT "]", _mutator_leftmost, _mutator_rightmost);
       for (size_t idx = _mutator_leftmost; idx <= _mutator_rightmost; idx++) {
         if (is_mutator_free(idx)) {
           ShenandoahHeapRegion *r = _heap->get_region(idx);
           size_t free = alloc_capacity(r);
-          assert(free > 0, "Mutator free region " SIZE_FORMAT " has no allocation capacity", idx);
+
           max = MAX2(max, free);
 
           if (r->is_empty()) {
@@ -775,10 +772,6 @@ void ShenandoahFreeSet::log_status() {
             }
           } else {
             empty_contig = 0;
-          }
-
-          if (r->used() > 0) {
-            r->print_on(&ls);
           }
 
           total_used += r->used();
@@ -837,16 +830,6 @@ void ShenandoahFreeSet::log_status() {
                   byte_size_in_proper_unit(total_free), proper_unit_for_byte_size(total_free),
                   byte_size_in_proper_unit(max),        proper_unit_for_byte_size(max),
                   byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used));
-
-      ls.print_cr("Collector regions: [" SIZE_FORMAT ", " SIZE_FORMAT "]", _collector_leftmost, _collector_rightmost);
-      for (size_t idx = _collector_leftmost; idx <= _collector_rightmost; idx++) {
-        if (is_collector_free(idx)) {
-          ShenandoahHeapRegion *r = _heap->get_region(idx);
-          if (r->used() > 0) {
-            r->print_on(&ls);
-          }
-        }
-      }
     }
   }
 }
