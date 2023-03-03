@@ -55,7 +55,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-#define KELVIN_PRIME
+#undef KELVIN_PRIME
 #ifdef KELVIN_PRIME
   log_info(gc, ergo)("prime_collection_set(), old_candidates: %u, old_collection:enabled: yes",
                      unprocessed_old_collection_candidates());
@@ -420,6 +420,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     size_t used = old_gen->used();
     size_t used_regions_size = old_gen->used_regions_size();
     size_t used_regions = old_gen->used_regions();
+    assert(used_regions_size > used_regions, "Cannot have more used than used regions");
     size_t fragmented_free = used_regions_size - used;
     double percent = 100.0 * ((double) fragmented_free) / used_regions_size;
     log_info(gc)("Trigger (OLD): Old has become fragmented: "

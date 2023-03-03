@@ -445,7 +445,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   //  OldEvacuation = YoungEvacuation * ShenandoahOldEvacRatioPercent/(100 - ShenandoahOldEvacRatioPercent)
 
   if (maximum_old_evacuation_reserve > old_generation->available()) {
-#define KELVIN_DURESS
+#undef KELVIN_DURESS
 #ifdef KELVIN_DURESS
     log_info(gc, ergo)("YOUNG GC IN DURESS! maximum_old_evacuation_reserve: " SIZE_FORMAT ", old available: " SIZE_FORMAT
                        ", mixed-evac candidates: %u",

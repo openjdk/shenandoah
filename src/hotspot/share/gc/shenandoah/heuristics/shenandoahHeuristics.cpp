@@ -130,7 +130,10 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
     AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
-      if (r->is_young() && !r->is_empty() && r->is_regular() && (r->age() >= InitialTenuringThreshold)) {
+      if (r->is_empty() || !r->has_live() || !r->is_young() || !r->is_regular()) {
+        continue;
+      }
+      if (r->age() >= InitialTenuringThreshold) {
 #ifdef KELVIN_PRESELECT
         log_info(gc, ergo)("Consider selection of region " SIZE_FORMAT " (candidate: " SIZE_FORMAT
                            ", age: %d, garbage: " SIZE_FORMAT " < " SIZE_FORMAT ")"
@@ -199,7 +202,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
         // TODO:
         //   If we are auto-tuning the tenure age and this occurs, use this as guidance that tenure age should be increased.
 
-        if (r->is_young() && !r->is_empty() && r->is_regular() && (r->age() + 1 == InitialTenuringThreshold)) {
+        if (r->age() + 1 == InitialTenuringThreshold) {
           if (r->garbage() >= old_garbage_threshold) {
 #ifdef KELVIN_PRESELECT
             log_info(gc, ergo)("Anticipating promotion of regular region " SIZE_FORMAT " (candidate: " SIZE_FORMAT ", age %u, live: " SIZE_FORMAT

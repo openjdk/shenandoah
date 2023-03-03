@@ -774,13 +774,12 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
       }
 
       if (region->is_trash()) {
-#ifdef KELVIN_REBUILD
         if (region->is_young()) {
           young_cset_regions++;
         } else {
+          assert(region->is_old(), "Better be old if not young");
           old_cset_regions++;
         }
-#endif
       }
 
       _capacity += alloc_capacity(region);
@@ -796,8 +795,10 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
       log_debug(gc)("  Setting Region " SIZE_FORMAT " _mutator_free_bitmap bit to true", idx);
     }
   }
-#ifdef KELVIN_REBUILD
-
+#undef KELVIN_REGION_TALLIES
+#ifdef KELVIN_REGION_TALLIES
+  log_info(gc, ergo)("Young cset regions: " SIZE_FORMAT ", Old cset regions: " SIZE_FORMAT,
+                    young_cset_regions, old_cset_regions);
 #endif
 }
 

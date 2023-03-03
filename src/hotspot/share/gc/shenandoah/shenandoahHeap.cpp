@@ -1134,7 +1134,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t old_reserve = 0;
   bool doing_mixed = old_heuristics()->unprocessed_old_collection_candidates() > 0;
   bool doing_promotions = promo_load > 0;
-#define KELVIN_PROMO_BUDGET
+#undef KELVIN_PROMO_BUDGET
 #ifdef KELVIN_PROMO_BUDGET
   log_info(gc, ergo)("adjust_generation_sizes_for_next_cycle, doing_mixed: %d, promo_load: " SIZE_FORMAT
                      ", xfer_limit: " SIZE_FORMAT ", young cset: " SIZE_FORMAT ", old cset: " SIZE_FORMAT,
@@ -3172,8 +3172,15 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
 
     size_t old_used = old_generation()->used();
     size_t trigger_threshold = old_generation()->usage_trigger_threshold();
+    // Detects unsigned arithmetic underflow
+    assert(old_used < ShenandoahHeap::heap()->capacity(), "Old used must be less than heap capacity");
 
     if (old_used > trigger_threshold) {
+#undef KELVIN_OLD_TRIGGER
+#ifdef KELVIN_OLD_TRIGGER
+      log_info(gc, ergo)("Triggering old-has-grown, usage: " SIZE_FORMAT ", trigger threshold: " SIZE_FORMAT,
+                         old_used, trigger_threshold);
+#endif
       ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_has_grown();
     }
   }

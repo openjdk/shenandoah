@@ -405,7 +405,7 @@
           "to be less than this.")                                          \
           range(0, 100)                                                     \
                                                                             \
-  product(uintx, ShenandoahMaxYoungPercentage, 95,                          \
+  product(uintx, ShenandoahMaxYoungPercentage, 100,                         \
           "The maximum percentage of the heap to use for the young "        \
           "generation. Heuristics will not adjust the young generation "    \
           "to be more than this.")                                          \
