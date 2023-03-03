@@ -69,7 +69,10 @@ protected:
 
   typedef struct {
     ShenandoahHeapRegion* _region;
-    size_t _garbage;
+    union {
+      size_t _garbage;          // Not used by old-gen heuristics.
+      size_t _live_data;        // Only used for old-gen heuristics, which prioritizes retention of _live_data over garbage reclaim
+    } _u;
   } RegionData;
 
   ShenandoahGeneration* _generation;
@@ -108,6 +111,7 @@ protected:
   ShenandoahSharedFlag _metaspace_oom;
 
   static int compare_by_garbage(RegionData a, RegionData b);
+  static int compare_by_live(RegionData a, RegionData b);
 
   // TODO: We need to enhance this API to give visibility to accompanying old-gen evacuation effort.
   // In the case that the old-gen evacuation effort is small or zero, the young-gen heuristics

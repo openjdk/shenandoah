@@ -607,17 +607,20 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) heap->old_generation()->heuristics();
       size_t mixed_candidates = old_heuristics->unprocessed_old_collection_candidates();
       if (promo_potential > 0) {
+        // Detect unsigned arithmetic underflow
+        assert(promo_potential < heap->capacity(), "Sanity");
         log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
                      _generation->name(), byte_size_in_proper_unit(promo_potential), proper_unit_for_byte_size(promo_potential));
         return true;
       } else if (promo_in_place_potential > 0) {
+        // Detect unsigned arithmetic underflow
+        assert(promo_in_place_potential < heap->capacity(), "Sanity");
         log_info(gc)("Trigger (%s): expedite promotion in place of " SIZE_FORMAT "%s", _generation->name(),
                      byte_size_in_proper_unit(promo_in_place_potential),
                      proper_unit_for_byte_size(promo_in_place_potential));
         return true;
       } else if (mixed_candidates > 0) {
-        // Expedite young GC even if !heap->is_old_compaction_enabled().  We need to run young GC in order to open up some
-        // free heap regions so we have someplace to copy the mixed evacuations to.
+        // We need to run young GC in order to open up some free heap regions so we can finish mixed evacuations.
         log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
                      _generation->name(), mixed_candidates);
         return true;
@@ -626,8 +629,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       // TODO: Consider making conservative adjustments to avg_cycle_time, as in:
       //
       // if ((heap->get_promotion_potential() > 0) ||
-      //     (heap->is_old_compaction_enabled() &&
-      //      (((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->unprocessed_old_collection_candidates() > 0))) {
+      //     (((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->unprocessed_old_collection_candidates() > 0))) {
       //   Mixed and promoting GC passes may take roughly twice as long as a simple GC cycle
       //   avg_cycle_time *= 2;
       // }

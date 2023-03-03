@@ -173,6 +173,8 @@ void ShenandoahGeneration::log_status(const char *msg) const {
                    byte_size_in_proper_unit(v_max_capacity), proper_unit_for_byte_size(v_max_capacity),
                    byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available),
                    byte_size_in_proper_unit(v_adjusted_avail), proper_unit_for_byte_size(v_adjusted_avail));
+  // This detects arithmetic underflow of unsigned usage value
+  assert(v_used < ShenandoahHeap::heap()->capacity(), "Generation capacity must be less heap capacity");
 }
 
 void ShenandoahGeneration::reset_mark_bitmap() {
@@ -442,29 +444,16 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   //  OldEvacuation = YoungEvacuation * (ShenandoahOldEvacRatioPercent/100)/(1 - ShenandoahOldEvacRatioPercent/100)
   //  OldEvacuation = YoungEvacuation * ShenandoahOldEvacRatioPercent/(100 - ShenandoahOldEvacRatioPercent)
 
-  bool young_gc_in_duress = false;
-  bool enable_old_compaction = true;
   if (maximum_old_evacuation_reserve > old_generation->available()) {
+#undef KELVIN_DURESS
+#ifdef KELVIN_DURESS
+    log_info(gc, ergo)("YOUNG GC IN DURESS! maximum_old_evacuation_reserve: " SIZE_FORMAT ", old available: " SIZE_FORMAT
+                       ", mixed-evac candidates: %u",
+                       maximum_old_evacuation_reserve, old_generation->available(),
+                       old_heuristics->unprocessed_old_collection_candidates());
+#endif
+
     maximum_old_evacuation_reserve = old_generation->available();
-    if (old_heuristics->unprocessed_old_collection_candidates() > 0) {
-      // At end of previous GC, we would have reserved maximum_old_evacuation_reserve whenever
-      // unprocessed_old_collection_candidates() > 0 unless young-gen GC is in duress.  If we're in duress,
-      // we'll skip old compaction on this cycle in order to avoid the "big hit" on update references.
-      //
-      // TODO: Evaluate whether this is the right tradeoff.  It may be that we would reclaim more regions by compacting old
-      //       than by promoting young given that old regions were specifically selected as candidates because they have
-      //       met the garbage threshold for compaction.  The regions to be promoted may be 100% live.  On the other hand,
-      //       if we are operating with a "limited" evacuation budget, we are diminishing the value of the all-old-update-refs
-      //       phase, because we would have to update references throughout all of old-gen after evacuating only a "smaller"
-      //       amount of old-gen regions.  Note also the evacuation threshold for old-gen candidates is much higher (e.g. 15%)
-      //       than the evacuation threshold for young-gen candidates (25%) so promotable regions may have live memory sizes
-      //       that are similar to the old-gen compaction candidates.
-      young_gc_in_duress = true;
-      if (!is_global()) {
-        // Disabling old compaction eliminates need to update-references in all of old-gen (even non-dirty cards), allows quicker GC cycles.
-        enable_old_compaction = false;
-      }
-    }
   }
 
   // Second priority is to reclaim garbage out of old-gen if there are old-gen collection candidates.  Third priority
@@ -475,10 +464,10 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // do not add to the update-refs burden of GC.
 
   size_t old_promo_reserve;
-  if (!young_gc_in_duress && (old_heuristics->unprocessed_old_collection_candidates() > 0)) {
+  if (old_heuristics->unprocessed_old_collection_candidates() > 0) {
     // We reserved all old-gen memory at end of previous GC to hold anticipated evacuations to old-gen.  If this is
     // mixed evacuation, reserve all of this memory for compaction of old-gen and do not promote.  Prioritize compaction
-    // over promotion in order to reduce floating garbage in old-gen.
+    // over promotion in order to defragment OLD so that it will be better prepared to efficiently receive promoted memory.
     old_evacuation_reserve = maximum_old_evacuation_reserve;
     old_promo_reserve = 0;
   } else {
@@ -486,7 +475,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     old_evacuation_reserve = 0;
     old_promo_reserve = maximum_old_evacuation_reserve;
   }
-  heap->set_old_compaction_enabled(enable_old_compaction);
 
 #undef KELVIN_PRESELECT
 #ifdef KELVIN_PRESELECT

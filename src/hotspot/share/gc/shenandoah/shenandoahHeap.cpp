@@ -687,7 +687,7 @@ ShenandoahOldHeuristics* ShenandoahHeap::old_heuristics() {
 }
 
 bool ShenandoahHeap::doing_mixed_evacuations() {
-  return (old_heuristics()->unprocessed_old_collection_candidates() > 0) && is_old_compaction_enabled();;
+  return (old_heuristics()->unprocessed_old_collection_candidates() > 0);
 }
 
 bool ShenandoahHeap::is_old_bitmap_stable() const {
@@ -1119,6 +1119,7 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
   parallel_heap_region_iterate(&coalesce);
 }
 
+// xfer_limit is the maximum we're able to transfer from young to old
 void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
 
@@ -1133,8 +1134,8 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   bool doing_promotions = promo_load > 0;
 #undef KELVIN_PROMO_BUDGET
 #ifdef KELVIN_PROMO_BUDGET
-  log_info(gc, ergo)("adjust_generation_sizes_for_next_cycle, promo_load: " SIZE_FORMAT,
-                     promo_load);
+  log_info(gc, ergo)("adjust_generation_sizes_for_next_cycle, doing_mixed: %d, promo_load: " SIZE_FORMAT
+                     ", xfer_limit: " SIZE_FORMAT, doing_mixed, promo_load, xfer_limit);
 #endif
   // round down
   size_t max_old_region_xfer = xfer_limit / region_size_bytes;
@@ -1166,7 +1167,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
                      doing_mixed? "mixed": "unmixed", doing_promotions? "promoting": "unpromoting", promo_load, xfer_limit);
   log_info(gc, ergo)(" young_reserve: " SIZE_FORMAT ", max_old_reserve: " SIZE_FORMAT ", old_reserve: " SIZE_FORMAT
                      ", old available: " SIZE_FORMAT, young_reserve, max_old_reserve, old_reserve,
-                     old_generation()->available() + old_cset_regions * region_size_bytes);
+                     old_available);
 #endif
 
   if (old_available >= old_reserve) {
@@ -1191,16 +1192,11 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
 
   if (old_region_deficit > max_old_region_xfer) {
     // If we're running short on young-gen memory, limit the xfer
-
-    // THE PROBLEM WITH THIS IS THAT WE MAY BE RUNNING SHORT ON
-    // YOUNG-GEN MEMORY BECAUSE WE HAVE FAILED TO PROMOTE.  
-
 #ifdef KELVIN_PROMO_BUDGET
     log_info(gc, ergo)(" curtailing old-gen activities by shrinking original ask: " SIZE_FORMAT " to " SIZE_FORMAT
                        ", xfer_limit: " SIZE_FORMAT,
                        old_region_deficit, max_old_region_xfer, xfer_limit);
 #endif  
-
     old_region_deficit = max_old_region_xfer;
     // old-gen collection activities will be curtailed if the budget is smaller than desired.
   }
@@ -2643,10 +2639,6 @@ void ShenandoahHeap::set_has_forwarded_objects(bool cond) {
   set_gc_state_mask(HAS_FORWARDED, cond);
 }
 
-void ShenandoahHeap::set_old_compaction_enabled(bool cond) {
-  set_gc_state_mask(MIXED_EVACUATIONS_ENABLED, cond);
-}
-
 void ShenandoahHeap::set_unload_classes(bool uc) {
   _unload_classes.set_cond(uc);
 }
@@ -2830,7 +2822,6 @@ private:
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();
-    assert(_heap->is_old_compaction_enabled() || !is_mixed, "cannot be mixed if !old_compaction_enabled");
     while (r != NULL) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");

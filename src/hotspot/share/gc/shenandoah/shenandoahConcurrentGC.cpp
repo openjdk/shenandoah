@@ -606,7 +606,7 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   
     size_t old_available = heap->old_generation()->available();
     size_t young_available = heap->young_generation()->available();
-    log_info(gc, ergo)("At Concurrent cleanup, %s " SIZE_FORMAT " regionsx to %s to prepare for next gc, old available: "
+    log_info(gc, ergo)("At Concurrent cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
                        SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
                        success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
                        byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),

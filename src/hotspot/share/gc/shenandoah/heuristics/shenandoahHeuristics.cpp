@@ -40,10 +40,20 @@
 #include "runtime/globals_extension.hpp"
 #include "utilities/quickSort.hpp"
 
+// sort by decreasing garbage (so most garbage comes first)
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
-  if (a._garbage > b._garbage)
+  if (a._u._garbage > b._u._garbage)
     return -1;
-  else if (a._garbage < b._garbage)
+  else if (a._u._garbage < b._u._garbage)
+    return 1;
+  else return 0;
+}
+
+// sort by increasing live (so least live comes first)
+int ShenandoahHeuristics::compare_by_live(RegionData a, RegionData b) {
+  if (a._u._live_data < b._u._live_data)
+    return -1;
+  else if (a._u._live_data > b._u._live_data)
     return 1;
   else return 0;
 }
@@ -307,7 +317,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
 #undef KELVIN_CSET
 #ifdef KELVIN_CSET
-  log_info(gc, ergo)("Choosing collection set, confirm that young capacity greater than used_regions");
+  log_info(gc, ergo)("Choosing collection set, confirm that young capacity greater than used_regions, old_heuristics: %s",
+                     old_heuristics? "NOT NULL": "NULL");
   heap->young_generation()->log_status("At start choose_collection set");
 #endif
   for (size_t i = 0; i < num_regions; i++) {
@@ -384,7 +395,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         }
         if (is_candidate) {
           candidates[cand_idx]._region = region;
-          candidates[cand_idx]._garbage = garbage;
+          candidates[cand_idx]._u._garbage = garbage;
           cand_idx++;
         }
       }
@@ -464,7 +475,19 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
   collection_set->set_immediate_trash(immediate_garbage);
 
-  if ((preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
+  ShenandoahGeneration* young_gen = heap->young_generation();
+  bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
+#ifdef KELVIN_CSET
+  log_info(gc, ergo)("Promoted in place regions: " SIZE_FORMAT ", preselected_candidates: " SIZE_FORMAT
+                     ", immediate_percent: " SIZE_FORMAT ", threshold: " SIZE_FORMAT,
+                     humongous_regions_promoted + regular_regions_promoted_in_place, preselected_candidates,
+                     immediate_percent, ShenandoahImmediateThreshold);
+#endif
+  if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
+#ifdef KELVIN_CSET
+    log_info(gc, ergo)("Prime the collection set here, old_heuristics: %s",
+                       old_heuristics? "NOT NULL": "NULL");
+#endif
     if (old_heuristics != NULL) {
       old_heuristics->prime_collection_set(collection_set);
     }

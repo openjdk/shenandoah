@@ -55,7 +55,12 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if ((unprocessed_old_collection_candidates() == 0) || !heap->is_old_compaction_enabled()) {
+#undef KELVIN_PRIME
+#ifdef KELVIN_PRIME
+  log_info(gc, ergo)("prime_collection_set(), old_candidates: %u, old_collection:enabled: yes",
+                     unprocessed_old_collection_candidates());
+#endif
+  if (unprocessed_old_collection_candidates() == 0) {
     return false;
   }
 
@@ -160,7 +165,7 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
       RegionData& added_to_cset = _region_data[write_index];
       assert(added_to_cset._region->is_cset(), "Can only overwrite slots used by regions added to the collection set.");
       added_to_cset._region = skipped._region;
-      added_to_cset._garbage = skipped._garbage;
+      added_to_cset._u._live_data = skipped._u._live_data;
       --write_index;
     }
   }
@@ -211,8 +216,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
 
     size_t garbage = region->garbage();
+    size_t live_bytes = region->get_live_data_bytes();
     total_garbage += garbage;
-    live_data += region->get_live_data_bytes();
+    live_data += live_bytes;
 
     if (region->is_regular() || region->is_pinned()) {
       if (!region->has_live()) {
@@ -223,7 +229,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       } else {
         region->begin_preemptible_coalesce_and_fill();
         candidates[cand_idx]._region = region;
-        candidates[cand_idx]._garbage = garbage;
+        candidates[cand_idx]._u._live_data = live_bytes;
         cand_idx++;
       }
     } else if (region->is_humongous_start()) {
@@ -250,36 +256,50 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // This would be similar to young and global collections shortcutting evacuation, though we'd probably want a separate
   // threshold for the old generation.
 
-  // Prioritize regions to select garbage-first regions
-  QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_garbage, false);
+  // Unlike young, we are more interested in efficiently packing OLD-gen than in reclaiming garbage first.  We set by live-data.
+  // Note that regular regions may be promoted in place with no garbage but also with very little live data.  When we "compact"
+  // old-gen, we want to pack these underutilized regions together so we can have more unaffiliated (unfragmented) free regions
+  // in old-gen.
+  QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_live, false);
 
   // Any old-gen region that contains (ShenandoahOldGarbageThreshold (default value 25))% garbage or more is to
   // be evacuated.
   //
   // TODO: allow ShenandoahOldGarbageThreshold to be determined adaptively, by heuristics.
 
-
+  // The convention is to collect regions that have more than this amount of garbage.
   const size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold / 100;
+
+  // Englightened interpretation: collect regions that have less than this amount of live.
+  const size_t live_threshold = ShenandoahHeapRegion::region_size_bytes() - garbage_threshold;
+
   size_t candidates_garbage = 0;
   _last_old_region = (uint)cand_idx;
   _last_old_collection_candidate = (uint)cand_idx;
   _next_old_collection_candidate = 0;
 
+  size_t unfragmented = 0;
+
   for (size_t i = 0; i < cand_idx; i++) {
-    if (candidates[i]._garbage < garbage_threshold) {
-      // Candidates are sorted in decreasing order of garbage, so no regions after this will be above the threshold
+    size_t region_garbage = candidates[i]._region->garbage();
+    size_t unused = ShenandoahHeapRegion::region_size_bytes() - candidates[i]._u._live_data;
+    if (unused < garbage_threshold) {
+      // Candidates are sorted in increasing order of live data, so no regions after this will be below the threshold.
       _last_old_collection_candidate = (uint)i;
       break;
     }
-    candidates_garbage += candidates[i]._garbage;
+    candidates_garbage += region_garbage;
+    unfragmented += unused;
   }
 
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   size_t collectable_garbage = immediate_garbage + candidates_garbage;
-  log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s over " UINT32_FORMAT " regions, "
+  log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s consolidated with free: "
+               SIZE_FORMAT "%s, over " UINT32_FORMAT " regions, "
                "Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
-               byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage), _last_old_collection_candidate,
+               byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
+               byte_size_in_proper_unit(unfragmented), proper_unit_for_byte_size(unfragmented), _last_old_collection_candidate,
                byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage), immediate_regions);
 
   if (unprocessed_old_collection_candidates() == 0) {
@@ -378,23 +398,46 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   // If there's been a promotion failure (and we don't have regions already scheduled for evacuation),
   // start a new old generation collection.
   if (_promotion_failed) {
-    log_info(gc)("Trigger: Promotion Failure");
+    log_info(gc)("Trigger (OLD): Promotion Failure");
     return true;
   }
 #endif
 
   if (_cannot_expand_trigger) {
-    log_info(gc)("Trigger: Old expansion failure");
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahOldGeneration* old_gen = heap->old_generation();
+    size_t old_gen_capacity = old_gen->max_capacity();
+    size_t heap_capacity = heap->capacity();
+    double percent = 100.0 * ((double) old_gen_capacity) / heap_capacity;
+    log_info(gc)("Trigger (OLD): Expansion failure, current size: " SIZE_FORMAT "%s which is %.1f%% of total heap size",
+                 byte_size_in_proper_unit(old_gen_capacity), proper_unit_for_byte_size(old_gen_capacity), percent);
     return true;
   }
 
   if (_fragmentation_trigger) {
-    log_info(gc)("Trigger: Old has become fragmented");
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahOldGeneration* old_gen = heap->old_generation();
+    size_t used = old_gen->used();
+    size_t used_regions_size = old_gen->used_regions_size();
+    size_t used_regions = old_gen->used_regions();
+    size_t fragmented_free = used_regions_size - used;
+    double percent = 100.0 * ((double) fragmented_free) / used_regions_size;
+    log_info(gc)("Trigger (OLD): Old has become fragmented: "
+                 SIZE_FORMAT "%s available bytes spread between " SIZE_FORMAT " regions (%.1f%% free)",
+                 byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free), used_regions, percent);
     return true;
   }
 
   if (_growth_trigger) {
-    log_info(gc)("Trigger: Old has overgrown");
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahOldGeneration* old_gen = heap->old_generation();
+    size_t current_usage = old_gen->used();
+    size_t live_at_previous_old = old_gen->get_live_bytes_after_last_mark();
+    double percent_growth = 100.0 * ((double) current_usage - live_at_previous_old) / live_at_previous_old;
+    log_info(gc)("Trigger (OLD): Old has overgrown, live at end of previous OLD marking: "
+                 SIZE_FORMAT "%s, current usage: " SIZE_FORMAT "%s, percent growth: %.1f%%",
+                 byte_size_in_proper_unit(live_at_previous_old), proper_unit_for_byte_size(live_at_previous_old),
+                 byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage), percent_growth);
     return true;
   }
 
