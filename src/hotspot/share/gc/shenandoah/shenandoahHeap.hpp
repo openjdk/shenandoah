@@ -383,10 +383,18 @@ private:
 
   bool _upgraded_to_full;
 
+  // TODO: ysr: this is a rather large structure. An age table consists of slots for
+  // each age from 0 through max tenuring threshold (i.e. 15). We maintain a global
+  // table for each of the last 15 collections (we may rethink this). In addition,
+  // we maintain per worker age tables into which census for the current minor GC is
+  // tracked during marking. The scratch tables are cleared after each marking cycle,
+  // once the per-worked data is consolidated into the appropriate table for this minor
+  // collection. So we have 16 x n entries, one for each age per worker, then we have
+  // 16 x 16 entries one for each of the last 16 minor gc's.
+  AgeTable* _age_table;                // Age table to track object ages
+
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
-
-
 
 public:
   char gc_state() const;
@@ -455,6 +463,9 @@ public:
   // young-gen evacuation.  In case we cannot borrow much, this value might be negative.
   inline intptr_t set_alloc_supplement_reserve(intptr_t new_val);
   inline intptr_t get_alloc_supplement_reserve() const;
+
+  // TODO: ysr: Get the appropriate age table entry for a specific worker 
+  AgeTable* get_age_table(uint worker_id) const { return _age_table; }
 
 private:
   void manage_satb_barrier(bool active);

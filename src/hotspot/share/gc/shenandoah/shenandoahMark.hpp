@@ -25,6 +25,7 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHMARK_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHMARK_HPP
 
+#include "gc/shared/ageTable.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "gc/shared/taskTerminator.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.hpp"
@@ -62,10 +63,14 @@ public:
 
   inline ShenandoahGeneration* generation() { return _generation; };
 
-// ---------- Marking loop and tasks
 private:
-  template <class T, StringDedupMode STRING_DEDUP>
-  inline void do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task);
+  template <GenerationMode GENERATION>
+  inline AgeTable* get_age_table(uint worker_id) const;
+
+// ---------- Marking loop and tasks
+
+  template <class T, StringDedupMode STRING_DEDUP, GenerationMode GENERATION>
+  inline void do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task, uint worker_id);
 
   template <class T>
   inline void do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, oop array, bool weak);
@@ -73,7 +78,8 @@ private:
   template <class T>
   inline void do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop array, int chunk, int pow, bool weak);
 
-  inline void count_liveness(ShenandoahLiveData* live_data, oop obj);
+  template <GenerationMode GENERATION>
+  inline void count_liveness(ShenandoahLiveData* live_data, oop obj, uint worker_id);
 
   template <class T, GenerationMode GENERATION, bool CANCELLABLE, StringDedupMode STRING_DEDUP>
   void mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *t, StringDedup::Requests* const req);

@@ -56,8 +56,8 @@ void ShenandoahMark::dedup_string(oop obj, StringDedup::Requests* const req) {
   }
 }
 
-template <class T, StringDedupMode STRING_DEDUP>
-void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task) {
+template <class T, StringDedupMode STRING_DEDUP, GenerationMode GENERATION>
+void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task, uint worker_id) {
   oop obj = task->obj();
 
   // TODO: This will push array chunks into the mark queue with no regard for
@@ -98,7 +98,7 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
     // Avoid double-counting objects that are visited twice due to upgrade
     // from final- to strong mark.
     if (task->count_liveness()) {
-      count_liveness(live_data, obj);
+      count_liveness<GENERATION>(live_data, obj, worker_id);
     }
   } else {
     // Case 4: Array chunk, has sensible chunk id. Process it.
@@ -106,11 +106,43 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
   }
 }
 
-inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj) {
+template <GenerationMode GENERATION>
+inline AgeTable* ShenandoahMark::get_age_table(uint worker_id) const {
+
+  assert(GENERATION==YOUNG, "Only for young generation collections");
+  const ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  return heap->get_age_table(worker_id);
+}
+
+
+template <GenerationMode GENERATION>
+inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, uint worker_id) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   size_t region_idx = heap->heap_region_index_containing(obj);
   ShenandoahHeapRegion* region = heap->get_region(region_idx);
   size_t size = obj->size();
+
+  // ysr: add this object to the agetable census for this epoch.
+  // Epochs and age table cursor are updated at the start of marking.
+  //
+  // Age table is consulted for determining the tenuring threshold for evacuation
+  // at the end of marking. The tenuring threshold is used for the evacuation
+  // phase.
+  // Incremental change for the first round is to move the age table census collection
+  // from during the evacuation to the marking phase here when counting liveness (these
+  // are then topped up with the "age 0" census when we walk over the regions for the
+  // objects that were allocated after the start of marking. We may want to somewhat distinguish
+  // between these two sets of objects since the latter are live by fiat while the other age 0
+  // objects -- those allocated in this epoch but before the start of marking are those that survived
+  // the collection. Indeed, it may make sense to call the objects above TAMS age 0 objects and to
+  // increment the age of marked objects here and call them age 1 objects, and so forth. However,
+  // I wonder if this may throw off degenerate and full collections, so I will hold off on this
+  // for now.
+
+  if (GENERATION==YOUNG) {
+    uint age = ShenandoahHeap::get_object_age(obj);
+    get_age_table<GENERATION>(worker_id)->add(age, size);
+  }
 
   if (!region->is_humongous_start()) {
     assert(!region->is_humongous(), "Cannot have continuations here");
