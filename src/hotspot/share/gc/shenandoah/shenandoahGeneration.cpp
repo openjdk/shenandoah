@@ -174,7 +174,7 @@ void ShenandoahGeneration::log_status(const char *msg) const {
                    byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available),
                    byte_size_in_proper_unit(v_adjusted_avail), proper_unit_for_byte_size(v_adjusted_avail));
   // This detects arithmetic underflow of unsigned usage value
-  assert(v_used < ShenandoahHeap::heap()->capacity(), "Generation capacity must be less heap capacity");
+  assert(v_used <= ShenandoahHeap::heap()->capacity(), "Generation capacity must be less than heap capacity");
 }
 
 void ShenandoahGeneration::reset_mark_bitmap() {
@@ -266,7 +266,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     //   3. ((young_gen->capacity * ShenandoahEvacReserve / 100) * ShenandoahOldEvacRatioPercent) / 100
     //       (e.g. old evacuation should be no larger than 12% of young-gen evacuation)
     old_evacuation_reserve = old_generation->available();
-    assert(old_evacuation_reserve > minimum_evacuation_reserve, "Old-gen available has not been preserved!");
+    assert(old_evacuation_reserve >= minimum_evacuation_reserve, "Old-gen available has not been preserved!");
     size_t old_evac_reserve_max = old_generation->soft_max_capacity() * ShenandoahOldEvacReserve / 100;
     if (old_evac_reserve_max < old_evacuation_reserve) {
       old_evacuation_reserve = old_evac_reserve_max;
@@ -599,7 +599,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   // and promotion reserves.  Try shrinking OLD now in case that gives us a bit more runway for mutator allocations during
   // evac and update phases.
   size_t old_consumed = old_evacuated_committed + young_advance_promoted_reserve_used;
-  assert(old_consumed < old_generation->available(), "Cannot consume more than is available");
+  assert(old_consumed <= old_generation->available(), "Cannot consume more than is available");
   size_t excess_old = old_generation->available() - old_consumed;
   size_t unaffiliated_old = old_generation->free_unaffiliated_regions() * region_size_bytes;
 
