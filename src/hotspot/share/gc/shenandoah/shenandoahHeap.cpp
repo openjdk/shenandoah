@@ -542,6 +542,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_generation(NULL),
   _prepare_for_old_mark(false),
   _initial_size(0),
+  _promotion_potential(0),
+  _promotion_in_place_potential(0),
   _used(0),
   _committed(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
@@ -1130,12 +1132,13 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   // The free set will reserve this amount of memory to hold young evacuations
   size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
   size_t old_reserve = 0;
-  bool doing_mixed = collection_set()->has_old_regions();
+  bool doing_mixed = old_heuristics()->unprocessed_old_collection_candidates() > 0;
   bool doing_promotions = promo_load > 0;
-#undef KELVIN_PROMO_BUDGET
+#define KELVIN_PROMO_BUDGET
 #ifdef KELVIN_PROMO_BUDGET
   log_info(gc, ergo)("adjust_generation_sizes_for_next_cycle, doing_mixed: %d, promo_load: " SIZE_FORMAT
-                     ", xfer_limit: " SIZE_FORMAT, doing_mixed, promo_load, xfer_limit);
+                     ", xfer_limit: " SIZE_FORMAT ", young cset: " SIZE_FORMAT ", old cset: " SIZE_FORMAT,
+                     doing_mixed, promo_load, xfer_limit, young_cset_regions, old_cset_regions);
 #endif
   // round down
   size_t max_old_region_xfer = xfer_limit / region_size_bytes;
