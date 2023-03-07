@@ -451,14 +451,29 @@ bool ShenandoahOldHeuristics::should_degenerate_cycle() {
 }
 
 void ShenandoahOldHeuristics::record_success_concurrent(bool abbreviated) {
+  // Forget any triggers that occured while OLD GC was ongoing.  If we really need to start another, it will retrigger.
+  _promotion_failed = false;
+  _cannot_expand_trigger = false;
+  _fragmentation_trigger = false;
+  _growth_trigger = false;
   _trigger_heuristic->record_success_concurrent(abbreviated);
 }
 
 void ShenandoahOldHeuristics::record_success_degenerated() {
+  // Forget any triggers that occured while OLD GC was ongoing.  If we really need to start another, it will retrigger.
+  _promotion_failed = false;
+  _cannot_expand_trigger = false;
+  _fragmentation_trigger = false;
+  _growth_trigger = false;
   _trigger_heuristic->record_success_degenerated();
 }
 
 void ShenandoahOldHeuristics::record_success_full() {
+  // Forget any triggers that occured while OLD GC was ongoing.  If we really need to start another, it will retrigger.
+  _promotion_failed = false;
+  _cannot_expand_trigger = false;
+  _fragmentation_trigger = false;
+  _growth_trigger = false;
   _trigger_heuristic->record_success_full();
 }
 

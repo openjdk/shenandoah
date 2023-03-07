@@ -426,11 +426,12 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       ShenandoahHeap* heap = ShenandoahHeap::heap();
       ShenandoahGeneration* young_generation = heap->young_generation();
       size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
+      size_t humongous_bytes_promoted = heap->get_promotable_humongous_usage();
       size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
       size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
       size_t bytes_promoted_in_place = 0;
       if (total_regions_promoted > 0) {
-	size_t humongous_bytes_promoted = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
+	size_t humongous_bytes_promoted = humongous_bytes_promoted;
 	size_t regular_bytes_promoted_in_place = heap->get_regular_usage_promoted_in_place();
 	bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
 #ifdef KELVIN_VERIFY

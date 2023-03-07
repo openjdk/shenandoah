@@ -313,6 +313,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
   // This counts number of humongous regions that we intend to promote in this cycle.
   size_t humongous_regions_promoted = 0;
+  // This counts bytes of memory used by hunongous regions to be promoted in place.
+  size_t humongous_bytes_promoted = 0;
   // This counts number of regular regions that will be promoted in place.
   size_t regular_regions_promoted_in_place = 0;
   // This counts bytes of memory used by regular regions to be promoted in place.
@@ -426,9 +428,11 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
           oop obj = cast_to_oop(region->bottom());
           size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
           humongous_regions_promoted += humongous_regions;
+          humongous_bytes_promoted = obj->size() * HeapWordSize;
 #ifdef KELVIN_CSET
-          log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " humongous regions starting with index " SIZE_FORMAT,
-                             humongous_regions, humongous_regions_promoted);
+          log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " humongous regions starting with index " SIZE_FORMAT
+                             ", representing " SIZE_FORMAT " used (live) bytes",
+                             humongous_regions, humongous_regions_promoted,  obj->size() * HeapWordSize);
 #endif
         }
 #ifdef KELVIN_CSET
@@ -454,6 +458,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     }
   }
   heap->reserve_promotable_humongous_regions(humongous_regions_promoted);
+  heap->reserve_promotable_humongous_usage(humongous_bytes_promoted);
   heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
   heap->reserve_promotable_regular_usage(regular_regions_promoted_usage);
 
@@ -528,11 +533,12 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      proper_unit_for_byte_size(collection_set->garbage()),
                      cset_percent);
 
-  if (collection_set->garbage() > 0) {
+  if (!collection_set->is_empty()) {
     size_t young_evac_bytes = collection_set->get_young_bytes_reserved_for_evacuation();
     size_t promote_evac_bytes = collection_set->get_young_bytes_to_be_promoted();
     size_t old_evac_bytes = collection_set->get_old_bytes_reserved_for_evacuation();
     size_t total_evac_bytes = young_evac_bytes + promote_evac_bytes + old_evac_bytes;
+
     log_info(gc, ergo)("Evacuation Targets: YOUNG: " SIZE_FORMAT "%s, "
                        "PROMOTE: " SIZE_FORMAT "%s, "
                        "OLD: " SIZE_FORMAT "%s, "

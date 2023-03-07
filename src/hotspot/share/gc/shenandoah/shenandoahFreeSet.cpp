@@ -73,25 +73,24 @@ bool ShenandoahFreeSet::is_collector_free(size_t idx) const {
 HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region) {
   ShenandoahRegionAffiliation affiliation = ShenandoahRegionAffiliation::OLD_GENERATION;
 
-#ifdef KELVIN_DEPRECATE
-  size_t rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
-  size_t leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
-#else
   size_t o_rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
   size_t o_leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
   size_t rightmost = _heap->num_regions() - 1;
   size_t leftmost = 0;
-#endif
+
   for (size_t c = rightmost + 1; c > leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
     if (r->affiliation() == affiliation && !r->is_humongous()) {
       if (!r->is_cset() && !has_no_alloc_capacity(r)) {
+#undef KELVIN_AWOA
+#ifdef KELVIN_AWOA
+        log_info(gc, ergo)("awoa tries region " SIZE_FORMAT " which has " SIZE_FORMAT " free", r->index(), r->free());
+#endif
         HeapWord* result = try_allocate_in(r, req, in_new_region);
         if (result != NULL) {
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
+#ifdef KELVIN_AWOA
           log_info(gc, ergo)("awoa(size: " SIZE_FORMAT ", plab: %s, min_size: " SIZE_FORMAT ") succeeds @" PTR_FORMAT
                              ", region " SIZE_FORMAT ", actual_size: " SIZE_FORMAT,
                              req.size(), req.is_lab_alloc()? "yes": "no", req.is_lab_alloc()? req.min_size(): 0L, p2i(result),
@@ -106,7 +105,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
       }
     }
   }
-#ifdef KELVIN_TRACE
+#ifdef KELVIN_AWOA
   log_info(gc, ergo)("awoa(size: " SIZE_FORMAT ", plab: %s, min_size: " SIZE_FORMAT ") fails",
                      req.size(), req.is_lab_alloc()? "yes": "no", req.is_lab_alloc()? req.min_size(): 0L);
 #endif
@@ -166,7 +165,10 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       ShouldNotReachHere();
       break;
   }
-
+#undef KELVIN_PLAB_ALLOCATE
+#ifdef KELVIN_PLAB_ALLOCATE
+  log_info(gc, ergo)("alloc_single(), allow_new_region is %d", allow_new_region);
+#endif
   switch (req.type()) {
     case ShenandoahAllocRequest::_alloc_tlab:
     case ShenandoahAllocRequest::_alloc_shared: {
@@ -241,6 +243,9 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       // First try to fit into a region that is already in use in the same generation.
       HeapWord* result;
       if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+#ifdef KELVIN_PLAB_ALLOCATE
+        log_info(gc, ergo)("Found way to allocate_with_old_affiliation");
+#endif
         // TODO: this is a work around to address a deficiency in FreeSet representation.  A better solution fixes
         // the FreeSet implementation to deal more efficiently with old-gen regions as being in the "collector free set"
         result = allocate_with_old_affiliation(req, in_new_region);
@@ -643,11 +648,15 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   // While individual regions report their true use, all humongous regions are
   // marked used in the free set.
-  increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
+  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+  size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
+  increase_used(total_humongous_size);
   if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
     _heap->young_generation()->increase_used(words_size * HeapWordSize);
+    _heap->young_generation()->increase_humongous_waste(humongous_waste);
   } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
     _heap->old_generation()->increase_used(words_size * HeapWordSize);
+    _heap->old_generation()->increase_humongous_waste(humongous_waste);
   }
 
   if (remainder != 0) {

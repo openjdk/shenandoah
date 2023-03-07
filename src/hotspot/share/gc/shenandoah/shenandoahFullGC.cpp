@@ -1317,10 +1317,24 @@ public:
 
     // Update final usage for generations
     if (is_generational && live != 0) {
+      size_t humongous_waste = 0;
+      if (r->is_humongous()) {
+        ShenandoahHeapRegion* start = r->humongous_start_region();
+        HeapWord* obj_addr = start->bottom();
+        oop obj = cast_to_oop(obj_addr);
+        size_t word_size = obj->size();
+        HeapWord* end_addr = obj_addr + word_size;
+        if (end_addr > r->bottom()) {
+          humongous_waste = (r->top() - end_addr) * HeapWordSize;
+        }
+        // else, this region is entirely spanned by humongous object so contributes no humongous waste
+      }
       if (r->is_young()) {
         _heap->young_generation()->increase_used(live);
+        _heap->young_generation()->increase_humongous_waste(humongous_waste);
       } else if (r->is_old()) {
         _heap->old_generation()->increase_used(live);
+        _heap->old_generation()->increase_humongous_waste(humongous_waste);
       }
     }
 

@@ -264,7 +264,7 @@ void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* ge
     _doing_mixed_evacuations = true;
   }
   log_info(gc, ergo)("At end of %s: GC Utilization: %.1f%% for duration %.3fs (which is subsumed in next concurrent gc report)",
-                     old_marking_done? "Last old marking increment": "Old marking increment",
+                     old_marking_done? "last OLD marking increment": "OLD marking increment",
                      _most_recent_gcu * 100, duration);
 }
 

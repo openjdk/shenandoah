@@ -49,6 +49,7 @@ private:
   double _collection_thread_time_s;
 
   size_t _affiliated_region_count;
+  size_t _humongous_waste;      // how much waste for padding in humongous objects
 
 protected:
   // Usage
@@ -195,6 +196,10 @@ private:
   void clear_used();
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);
+
+  void increase_humongous_waste(size_t bytes) { _humongous_waste += bytes; };
+  void decrease_humongous_waste(size_t bytes) { assert(_humongous_waste > bytes, "Sanity"); _humongous_waste -= bytes; }
+  size_t get_humongous_waste() const { return _humongous_waste; }
 
   virtual bool is_concurrent_mark_in_progress() = 0;
   void confirm_heuristics_mode();
