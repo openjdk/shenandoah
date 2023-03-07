@@ -431,7 +431,6 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
       size_t bytes_promoted_in_place = 0;
       if (total_regions_promoted > 0) {
-	size_t humongous_bytes_promoted = humongous_bytes_promoted;
 	size_t regular_bytes_promoted_in_place = heap->get_regular_usage_promoted_in_place();
 	bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
 #ifdef KELVIN_VERIFY
