@@ -163,16 +163,16 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   size_t v_max_capacity = max_capacity();
   size_t v_available = available();
   size_t v_adjusted_avail = adjusted_available();
+  size_t v_humongous_waste = get_humongous_waste();
   LogGcInfo::print("%s: %s generation used: " SIZE_FORMAT "%s, used regions: " SIZE_FORMAT "%s, "
-                   "soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, available: " SIZE_FORMAT "%s, "
-                   "adjusted available: " SIZE_FORMAT "%s",
-                   msg, name(),
+                   "humongous waste: " SIZE_FORMAT "%s, soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, "
+                   "available: " SIZE_FORMAT "%s", msg, name(),
                    byte_size_in_proper_unit(v_used), proper_unit_for_byte_size(v_used),
                    byte_size_in_proper_unit(v_used_regions), proper_unit_for_byte_size(v_used_regions),
+                   byte_size_in_proper_unit(v_humongous_waste), proper_unit_for_byte_size(v_humongous_waste),
                    byte_size_in_proper_unit(v_soft_max_capacity), proper_unit_for_byte_size(v_soft_max_capacity),
                    byte_size_in_proper_unit(v_max_capacity), proper_unit_for_byte_size(v_max_capacity),
-                   byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available),
-                   byte_size_in_proper_unit(v_adjusted_avail), proper_unit_for_byte_size(v_adjusted_avail));
+                   byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available));
 }
 
 void ShenandoahGeneration::reset_mark_bitmap() {
@@ -888,7 +888,7 @@ ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
   _task_queues(new ShenandoahObjToScanQueueSet(max_workers)),
   _ref_processor(new ShenandoahReferenceProcessor(MAX2(max_workers, 1U))),
   _collection_thread_time_s(0.0),
-  _affiliated_region_count(0), _used(0), _bytes_allocated_since_gc_start(0),
+  _affiliated_region_count(0), _humongous_waste(0), _used(0), _bytes_allocated_since_gc_start(0),
   _max_capacity(max_capacity), _soft_max_capacity(soft_max_capacity),
   _adjusted_capacity(soft_max_capacity), _heuristics(nullptr) {
   _is_marking_complete.set();
@@ -939,7 +939,10 @@ size_t ShenandoahGeneration::increment_affiliated_region_count() {
 }
 
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
+  assert(_affiliated_region_count > 0, "affiliated_region_count cannot be negative");
   _affiliated_region_count--;
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "used + humongous cannot exceed regions");
   return _affiliated_region_count;
 }
 
@@ -951,11 +954,26 @@ void ShenandoahGeneration::clear_used() {
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "used cannot exceed regions");
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
+}
+
+void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  _humongous_waste += bytes;
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "waste cannot exceed regions");
+}
+
+void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  assert(_humongous_waste >= bytes, "Waste cannot be negative");
+  _humongous_waste -= bytes;
 }
 
 size_t ShenandoahGeneration::used_regions() const {
@@ -977,7 +995,7 @@ size_t ShenandoahGeneration::used_regions_size() const {
 }
 
 size_t ShenandoahGeneration::available() const {
-  size_t in_use = used();
+  size_t in_use = used() + get_humongous_waste();
   size_t soft_capacity = soft_max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
@@ -1000,7 +1018,7 @@ size_t ShenandoahGeneration::unadjust_available() {
 }
 
 size_t ShenandoahGeneration::adjusted_available() const {
-  size_t in_use = used();
+  size_t in_use = used() + get_humongous_waste();
   size_t capacity = _adjusted_capacity;
   return in_use > capacity ? 0 : capacity - in_use;
 }
