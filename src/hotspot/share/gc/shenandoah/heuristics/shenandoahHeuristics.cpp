@@ -141,11 +141,10 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
                            i, promote_in_place_regions, r->age(), r->garbage(), old_garbage_threshold,
                            ShenandoahHeap::min_fill_size(), p2i(r->top()));
 #endif
-
+        r->save_top_before_promote();
         if ((r->garbage() < old_garbage_threshold)) {
           HeapWord* tams = ctx->top_at_mark_start(r);
           HeapWord* original_top = r->top();
-          r->save_top_before_promote();
           if (tams == original_top) {
             // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,
             // newly allocated objects will not be parseable when promote in place tries to register them.  Furthermore, any
