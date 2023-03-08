@@ -676,7 +676,7 @@ void ShenandoahHeapRegion::recycle() {
     oop obj = cast_to_oop(obj_addr);
     size_t word_size = obj->size();
     HeapWord* end_addr = obj_addr + word_size;
-    if (end_addr <= end()) {
+    if (end_addr < end()) {
       humongous_waste = (end() - end_addr) * HeapWordSize;
     }
     // else, this region is entirely spanned by humongous object so contributes no humongous waste
