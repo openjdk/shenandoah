@@ -197,8 +197,8 @@ private:
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);
 
-  void increase_humongous_waste(size_t bytes) { _humongous_waste += bytes; };
-  void decrease_humongous_waste(size_t bytes) { assert(_humongous_waste >= bytes, "Sanity"); _humongous_waste -= bytes; }
+  void increase_humongous_waste(size_t bytes);
+  void decrease_humongous_waste(size_t bytes);
   size_t get_humongous_waste() const { return _humongous_waste; }
 
   virtual bool is_concurrent_mark_in_progress() = 0;

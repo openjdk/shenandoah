@@ -3219,9 +3219,9 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
 #ifdef KELVIN_USAGE
       log_info(gc, ergo)("KELVIN adjusting usage to prepare for next cycle");
 #endif
-      young_generation()->decrease_affiliated_region_count(total_regions_promoted);
-      young_generation()->decrease_used(bytes_promoted_in_place);
       young_generation()->decrease_humongous_waste(humongous_waste_promoted);
+      young_generation()->decrease_used(bytes_promoted_in_place);
+      young_generation()->decrease_affiliated_region_count(total_regions_promoted);
       if (free_old_regions < total_regions_promoted) {
         size_t needed_regions = total_regions_promoted - free_old_regions;
 	generation_sizer()->force_transfer_to_old(needed_regions);
@@ -3236,6 +3236,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     old_generation()->log_status("After forced transfer");
     log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, old_generation()->free_unaffiliated_regions());
 #endif
+    assert(verify_generation_usage(true, old_generation()->used_regions(),
+                                   old_generation()->used(), old_generation()->get_humongous_waste(),
+                                   true, young_generation()->used_regions(),
+                                   young_generation()->used(), young_generation()->get_humongous_waste()),
+           "Generation accounts are inaccurate");
 
     // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.
     // Note that transfer of humongous regions does not impact available.
@@ -3510,6 +3515,57 @@ void ShenandoahGenerationRegionClosure<OLD>::heap_region_do(ShenandoahHeapRegion
 template<>
 void ShenandoahGenerationRegionClosure<GLOBAL>::heap_region_do(ShenandoahHeapRegion* region) {
   _cl->heap_region_do(region);
+}
+
+bool ShenandoahHeap::verify_generation_usage(bool verify_old, size_t old_regions, size_t old_bytes, size_t old_waste,
+                                             bool verify_young, size_t young_regions, size_t young_bytes, size_t young_waste) {
+  size_t tally_old_regions = 0;
+  size_t tally_old_bytes = 0;
+  size_t tally_old_waste = 0;
+  size_t tally_young_regions = 0;
+  size_t tally_young_bytes = 0;
+  size_t tally_young_waste = 0;
+
+  shenandoah_assert_heaplocked_or_safepoint();
+  for (size_t i = 0; i < num_regions(); i++) {
+    ShenandoahHeapRegion* r = get_region(i);
+    if (r->is_old()) {
+      tally_old_regions++;
+      tally_old_bytes += r->used();
+      if (r->is_humongous()) {
+        ShenandoahHeapRegion* start = r->humongous_start_region();
+        HeapWord* obj_addr = start->bottom();
+        oop obj = cast_to_oop(obj_addr);
+        size_t word_size = obj->size();
+        HeapWord* end_addr = obj_addr + word_size;
+        if (end_addr <= r->end()) {
+          tally_old_waste += (r->end() - end_addr) * HeapWordSize;
+        }
+      }
+    } else if (r->is_young()) {
+      tally_young_regions++;
+      tally_young_bytes += r->used();
+      if (r->is_humongous()) {
+        ShenandoahHeapRegion* start = r->humongous_start_region();
+        HeapWord* obj_addr = start->bottom();
+        oop obj = cast_to_oop(obj_addr);
+        size_t word_size = obj->size();
+        HeapWord* end_addr = obj_addr + word_size;
+        if (end_addr <= r->end()) {
+          tally_young_waste += (r->end() - end_addr) * HeapWordSize;
+        }
+      }
+    }
+  }
+  if (verify_young &&
+      ((young_regions != tally_young_regions) || (young_bytes != tally_young_bytes) || (young_waste != tally_young_waste))) {
+    return false;
+  } else if (verify_old &&
+             ((old_regions != tally_old_regions) || (old_bytes != tally_old_bytes) || (old_waste != tally_old_waste))) {
+    return false;
+  } else {
+    return true;
+  }
 }
 
 // Assure that the remember set has a dirty card everywhere there is an interesting pointer.

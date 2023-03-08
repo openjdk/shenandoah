@@ -656,6 +656,7 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
 }
 
 size_t ShenandoahGeneration::increment_affiliated_region_count() {
+  shenandoah_assert_heaplocked_or_safepoint();
   _affiliated_region_count++;
 #undef KELVIN_AFFILIATIONS
 #ifdef KELVIN_AFFILIATIONS
@@ -665,7 +666,10 @@ size_t ShenandoahGeneration::increment_affiliated_region_count() {
 }
 
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
+  shenandoah_assert_heaplocked_or_safepoint();
   _affiliated_region_count--;
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "used + humongous cannot exceed regions");
 #ifdef KELVIN_AFFILIATIONS
   log_info(gc, ergo)("%s --affiliated_region_count yields " SIZE_FORMAT, name(), _affiliated_region_count);
 #endif
@@ -673,6 +677,7 @@ size_t ShenandoahGeneration::decrement_affiliated_region_count() {
 }
 
 size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
+  shenandoah_assert_heaplocked_or_safepoint();
   _affiliated_region_count += delta;
 #ifdef KELVIN_AFFILIATIONS
   log_info(gc, ergo)("%s (affiliated_region_count += " SIZE_FORMAT " yields " SIZE_FORMAT, name(), delta,
@@ -682,7 +687,12 @@ size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
 }
 
 size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  assert(_affiliated_region_count > delta, "Affiliated region count cannot be negative");
+
   _affiliated_region_count -= delta;
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "used + humongous cannot exceed regions");
 #ifdef KELVIN_AFFILIATIONS
   log_info(gc, ergo)("%s (affiliated_region_count -= " SIZE_FORMAT " yields " SIZE_FORMAT, name(), delta,
                      _affiliated_region_count);
@@ -713,7 +723,21 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
-  assert(_used <= _max_capacity, "cannot increase used beyond capacity");
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "used cannot exceed regions");
+}
+
+void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  _humongous_waste += bytes;
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+         "waste cannot exceed regions");
+}
+
+void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  assert(_humongous_waste >= bytes, "Waste cannot be negative");
+  _humongous_waste -= bytes;
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
@@ -789,6 +813,7 @@ size_t ShenandoahGeneration::adjusted_unaffiliated_regions() const {
 void ShenandoahGeneration::increase_capacity(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_size_for(this), "Cannot increase generation capacity beyond maximum.");
+  assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   _max_capacity += increment;
   _soft_max_capacity += increment;
   _adjusted_capacity += increment;
@@ -805,6 +830,8 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_max_capacity - decrement >= ShenandoahHeap::heap()->min_size_for(this), "Cannot decrease generation capacity beyond minimum.");
+  assert(decrement % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
+
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;
   _adjusted_capacity -= decrement;
