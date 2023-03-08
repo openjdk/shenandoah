@@ -1325,7 +1325,7 @@ public:
         size_t word_size = obj->size();
         HeapWord* end_addr = obj_addr + word_size;
         if (end_addr > r->bottom()) {
-          humongous_waste = (r->top() - end_addr) * HeapWordSize;
+          humongous_waste = (r->end() - end_addr) * HeapWordSize;
         }
         // else, this region is entirely spanned by humongous object so contributes no humongous waste
       }
