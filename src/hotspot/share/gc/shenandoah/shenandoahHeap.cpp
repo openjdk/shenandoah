@@ -234,6 +234,17 @@ jint ShenandoahHeap::initialize() {
     size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
+    const int max_age = markWord::max_age;
+    _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_age, mtGC);
+    // TODO: ysr fix this monstrosity
+    _global_age_table[0] = new AgeTable(true);
+    for (int i = 1; i < max_age; i++) {
+      _global_age_table[i] = new AgeTable(false);
+    }
+    _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, _max_workers, mtGC);
+    for (uint i = 0; i < _max_workers; i++) {
+      _local_age_table[i] = new AgeTable(false);
+    }
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
@@ -550,6 +561,9 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _young_evac_reserve(0),
   _captured_old_usage(0),
   _previous_promotion(0),
+  _global_age_table(nullptr),
+  _local_age_table(nullptr),
+  _epoch(0),
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),

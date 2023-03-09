@@ -65,7 +65,7 @@ public:
 
 private:
   template <GenerationMode GENERATION>
-  inline AgeTable* get_age_table(uint worker_id) const;
+  inline AgeTable* get_local_age_table(uint worker_id) const;
 
 // ---------- Marking loop and tasks
 

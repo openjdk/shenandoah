@@ -25,6 +25,7 @@
 #ifndef SHARE_GC_SHARED_AGETABLE_HPP
 #define SHARE_GC_SHARED_AGETABLE_HPP
 
+#include "memory/allocation.hpp"
 #include "oops/markWord.hpp"
 #include "oops/oop.hpp"
 #include "runtime/perfDataTypes.hpp"
@@ -36,7 +37,7 @@
 //
 // Note: all sizes are in oops
 
-class AgeTable {
+class AgeTable: public CHeapObj<mtGC> {
   friend class VMStructs;
 
  public:
@@ -57,7 +58,7 @@ class AgeTable {
   inline void add(oop p, size_t oop_size);
 
   void add(uint age, size_t oop_size) {
-    assert(age > 0 && age < table_size, "invalid age of object");
+    assert(age < table_size, "invalid age of object");
     sizes[age] += oop_size;
   }
 
