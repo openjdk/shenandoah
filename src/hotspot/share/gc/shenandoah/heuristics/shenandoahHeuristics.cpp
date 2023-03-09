@@ -427,7 +427,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
           oop obj = cast_to_oop(region->bottom());
           size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
           humongous_regions_promoted += humongous_regions;
-          humongous_bytes_promoted = obj->size() * HeapWordSize;
+          humongous_bytes_promoted += obj->size() * HeapWordSize;
 #ifdef KELVIN_CSET
           log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " humongous regions starting with index " SIZE_FORMAT
                              ", representing " SIZE_FORMAT " used (live) bytes",
