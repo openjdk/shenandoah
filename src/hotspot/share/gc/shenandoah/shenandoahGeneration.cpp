@@ -723,14 +723,16 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used cannot exceed regions");
 }
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
   shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _humongous_waste += bytes;
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "waste cannot exceed regions");
 }
 
