@@ -656,7 +656,7 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
 }
 
 size_t ShenandoahGeneration::increment_affiliated_region_count() {
-  shenandoah_assert_heaplocked_or_safepoint();
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _affiliated_region_count++;
 #undef KELVIN_AFFILIATIONS
 #ifdef KELVIN_AFFILIATIONS
@@ -666,7 +666,7 @@ size_t ShenandoahGeneration::increment_affiliated_region_count() {
 }
 
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
-  shenandoah_assert_heaplocked_or_safepoint();
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _affiliated_region_count--;
   assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
          "used + humongous cannot exceed regions");
@@ -677,7 +677,7 @@ size_t ShenandoahGeneration::decrement_affiliated_region_count() {
 }
 
 size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
-  shenandoah_assert_heaplocked_or_safepoint();
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _affiliated_region_count += delta;
 #ifdef KELVIN_AFFILIATIONS
   log_info(gc, ergo)("%s (affiliated_region_count += " SIZE_FORMAT " yields " SIZE_FORMAT, name(), delta,
@@ -687,7 +687,7 @@ size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
 }
 
 size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
-  shenandoah_assert_heaplocked_or_safepoint();
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
   assert(_affiliated_region_count > delta, "Affiliated region count cannot be negative");
 
   _affiliated_region_count -= delta;
@@ -728,14 +728,14 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 }
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
-  shenandoah_assert_heaplocked_or_safepoint();
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _humongous_waste += bytes;
   assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
          "waste cannot exceed regions");
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
-  shenandoah_assert_heaplocked_or_safepoint();
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
   assert(_humongous_waste >= bytes, "Waste cannot be negative");
   _humongous_waste -= bytes;
 }
