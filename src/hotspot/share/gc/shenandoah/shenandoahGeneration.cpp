@@ -941,7 +941,8 @@ size_t ShenandoahGeneration::increment_affiliated_region_count() {
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
   assert(_affiliated_region_count > 0, "affiliated_region_count cannot be negative");
   _affiliated_region_count--;
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used + humongous cannot exceed regions");
   return _affiliated_region_count;
 }
@@ -954,7 +955,8 @@ void ShenandoahGeneration::clear_used() {
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used cannot exceed regions");
 }
 
@@ -966,7 +968,8 @@ void ShenandoahGeneration::decrease_used(size_t bytes) {
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
   _humongous_waste += bytes;
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "waste cannot exceed regions");
 }
 
