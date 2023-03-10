@@ -668,7 +668,8 @@ size_t ShenandoahGeneration::increment_affiliated_region_count() {
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
   shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _affiliated_region_count--;
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used + humongous cannot exceed regions");
 #ifdef KELVIN_AFFILIATIONS
   log_info(gc, ergo)("%s --affiliated_region_count yields " SIZE_FORMAT, name(), _affiliated_region_count);
@@ -691,7 +692,8 @@ size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
   assert(_affiliated_region_count > delta, "Affiliated region count cannot be negative");
 
   _affiliated_region_count -= delta;
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used + humongous cannot exceed regions");
 #ifdef KELVIN_AFFILIATIONS
   log_info(gc, ergo)("%s (affiliated_region_count -= " SIZE_FORMAT " yields " SIZE_FORMAT, name(), delta,

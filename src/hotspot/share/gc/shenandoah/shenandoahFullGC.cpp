@@ -183,6 +183,12 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
            "Old generation affiliated regions must be less than capacity");
     assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->adjusted_capacity(),
            "Young generation affiliated regions must be less than capacity");
+
+    assert((heap->young_generation()->used() + heap->young_generation()->get_humongous_waste())
+           <= heap->young_generation()->used_regions_size(), "Young consumed can be no larger than span of affiliated regions");
+    assert((heap->old_generation()->used() + heap->old_generation()->get_humongous_waste())
+           <= heap->old_generation()->used_regions_size(), "Old consumed can be no larger than span of affiliated regions");
+
   }
   if (metrics.is_good_progress()) {
     ShenandoahHeap::heap()->notify_gc_progress();
