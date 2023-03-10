@@ -483,7 +483,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
-    _evac_tracker->end_evacuation(thread, size * HeapWordSize, ShenandoahHeap::get_object_age(copy_val));
+    _evac_tracker->end_evacuation(thread, size * HeapWordSize);
     if (mode()->is_generational() && target_gen == OLD_GENERATION) {
       handle_old_evacuation(copy, size, from_region->is_young());
     }

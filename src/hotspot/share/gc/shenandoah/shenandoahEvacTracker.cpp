@@ -32,20 +32,17 @@
 
 ShenandoahEvacuationStats::ShenandoahEvacuationStats()
   : _evacuations_completed(0), _bytes_completed(0),
-    _evacuations_attempted(0), _bytes_attempted(0),
-    _age_table(false) {}
+    _evacuations_attempted(0), _bytes_attempted(0) {
+}
 
 void ShenandoahEvacuationStats::begin_evacuation(size_t bytes) {
   ++_evacuations_attempted;
   _bytes_attempted += bytes;
 }
 
-void ShenandoahEvacuationStats::end_evacuation(size_t bytes, uint age) {
+void ShenandoahEvacuationStats::end_evacuation(size_t bytes) {
   ++_evacuations_completed;
   _bytes_completed += bytes;
-  if (age > 0) {
-    _age_table.add(age, bytes / oopSize);
-  }
 }
 
 void ShenandoahEvacuationStats::accumulate(const ShenandoahEvacuationStats* other) {
@@ -53,14 +50,11 @@ void ShenandoahEvacuationStats::accumulate(const ShenandoahEvacuationStats* othe
   _bytes_completed += other->_bytes_completed;
   _evacuations_attempted += other->_evacuations_attempted;
   _bytes_attempted += other->_bytes_attempted;
-
-  _age_table.merge(&other->_age_table);
 }
 
 void ShenandoahEvacuationStats::reset() {
   _evacuations_completed = _evacuations_attempted = 0;
   _bytes_completed = _bytes_attempted = 0;
-  _age_table.clear();
 }
 
 void ShenandoahEvacuationStats::print_on(outputStream* st) {
@@ -72,7 +66,6 @@ void ShenandoahEvacuationStats::print_on(outputStream* st) {
             proper_unit_for_byte_size(_bytes_completed), _evacuations_completed,
             byte_size_in_proper_unit(abandoned_size),
             proper_unit_for_byte_size(abandoned_size), abandoned_count);
-  _age_table.print_on(st, InitialTenuringThreshold);
 }
 
 void ShenandoahEvacuationTracker::print_global_on(outputStream* st) {
@@ -89,6 +82,7 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
   mutators->print_on(st);
   st->cr();
 
+/*
   AgeTable region_ages(false);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (uint i = 0; i < heap->num_regions(); ++i) {
@@ -99,6 +93,7 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
   }
   st->print("Regions: ");
   region_ages.print_on(st, InitialTenuringThreshold);
+*/
 }
 
 class ShenandoahStatAggregator : public ThreadClosure {
@@ -132,6 +127,6 @@ void ShenandoahEvacuationTracker::begin_evacuation(Thread* thread, size_t bytes)
   ShenandoahThreadLocalData::begin_evacuation(thread, bytes);
 }
 
-void ShenandoahEvacuationTracker::end_evacuation(Thread* thread, size_t bytes, uint age) {
-  ShenandoahThreadLocalData::end_evacuation(thread, bytes, age);
+void ShenandoahEvacuationTracker::end_evacuation(Thread* thread, size_t bytes) {
+  ShenandoahThreadLocalData::end_evacuation(thread, bytes);
 }

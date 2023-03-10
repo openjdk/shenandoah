@@ -25,7 +25,6 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHEVACTRACKER_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHEVACTRACKER_HPP
 
-#include "gc/shared/ageTable.hpp"
 #include "utilities/ostream.hpp"
 
 class ShenandoahEvacuationStats : public CHeapObj<mtGC> {
@@ -35,12 +34,10 @@ class ShenandoahEvacuationStats : public CHeapObj<mtGC> {
   size_t _evacuations_attempted;
   size_t _bytes_attempted;
 
-  AgeTable _age_table;
-
  public:
   ShenandoahEvacuationStats();
   void begin_evacuation(size_t bytes);
-  void end_evacuation(size_t bytes, uint age);
+  void end_evacuation(size_t bytes);
 
   void print_on(outputStream* st);
   void accumulate(const ShenandoahEvacuationStats* other);
@@ -59,7 +56,7 @@ class ShenandoahEvacuationTracker : public CHeapObj<mtGC> {
 
  public:
   void begin_evacuation(Thread* thread, size_t bytes);
-  void end_evacuation(Thread* thread, size_t bytes, uint age);
+  void end_evacuation(Thread* thread, size_t bytes);
 
   void print_global_on(outputStream* st);
   static void print_evacuations_on(outputStream* st, ShenandoahEvacuationStats* workers, ShenandoahEvacuationStats* mutators);
