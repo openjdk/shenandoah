@@ -3340,6 +3340,7 @@ void ShenandoahHeap::update_epoch() {
   }
   // Merge data from local age tables into the global age table for the epoch,
   // clearing the local tables.
+  _global_age_table[_epoch]->clear();
   for (uint i = 0; i < max_workers(); i++) {
     _global_age_table[_epoch]->merge(_local_age_table[i]);
     _local_age_table[i]->clear();
