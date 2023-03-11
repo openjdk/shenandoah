@@ -117,10 +117,10 @@ inline AgeTable* ShenandoahMark::get_local_age_table(uint worker_id) const {
 
 template <GenerationMode GENERATION>
 inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, uint worker_id) {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  size_t region_idx = heap->heap_region_index_containing(obj);
-  ShenandoahHeapRegion* region = heap->get_region(region_idx);
-  size_t size = obj->size();
+  const ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  const size_t region_idx = heap->heap_region_index_containing(obj);
+  ShenandoahHeapRegion* const region = heap->get_region(region_idx);
+  const size_t size = obj->size();
 
   // Epochs and age table cursor are updated at the start of marking.
   //

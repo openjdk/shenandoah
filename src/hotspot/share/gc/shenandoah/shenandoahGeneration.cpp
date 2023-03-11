@@ -779,6 +779,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
+  
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_region_states);
@@ -798,6 +799,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
+
+    // Age table updates
+    heap->update_epoch();
 
     collection_set->clear();
     ShenandoahHeapLocker locker(heap->lock());

@@ -236,15 +236,15 @@ jint ShenandoahHeap::initialize() {
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
     const int max_age = markWord::max_age;
     _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_age, mtGC);
-    // TODO: ysr fix this monstrosity
-    _global_age_table[0] = new AgeTable(true);
-    for (int i = 1; i < max_age; i++) {
+    for (int i = 0; i < max_age; i++) {
       _global_age_table[i] = new AgeTable(false);
+      // Note that we don't now get perfdata from age_table
     }
     _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, _max_workers, mtGC);
     for (uint i = 0; i < _max_workers; i++) {
       _local_age_table[i] = new AgeTable(false);
     }
+    _epoch = max_age - 1;  // see update_epoch()
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
@@ -3329,5 +3329,30 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
   } else {
     global_generation()->log_status(msg);
   }
+}
+
+// Update the epoch for the global age tables,
+// and merge local age tables into the global age table.
+void ShenandoahHeap::update_epoch() {
+  assert(mode()->is_generational(), "Only in generational mode");
+  if (++_epoch == markWord::max_age) {
+    _epoch=0;
+  }
+  // Merge data from local age tables into the global age table for the epoch,
+  // clearing the local tables.
+  for (uint i = 0; i < max_workers(); i++) {
+    _global_age_table[_epoch]->merge(_local_age_table[i]);
+    _local_age_table[i]->clear();
+  }
+  _global_age_table[_epoch]->print_age_table(InitialTenuringThreshold);
+}
+
+// Reset the epoch for the global age tables,
+// clearing all history.
+void ShenandoahHeap::reset_epoch() {
+  for (uint i = 0; i < markWord::max_age; i++) {
+    _global_age_table[i]->clear();
+  }
+  _epoch = markWord::max_age - 1;
 }
 

@@ -467,13 +467,11 @@ public:
   inline intptr_t set_alloc_supplement_reserve(intptr_t new_val);
   inline intptr_t get_alloc_supplement_reserve() const;
 
+  // Methods related to age tables in generational mode for Young Gen
   AgeTable* get_local_age_table(uint worker_id) const { return (AgeTable*) _local_age_table[worker_id]; }
   AgeTable* get_age_table()                     const { return (AgeTable*) _global_age_table[_epoch];   }
-  void      update_epoch() {
-    if (++_epoch == markWord::max_age) {
-      _epoch=0;
-    }
-  }
+  void update_epoch();
+  void reset_epoch();
 
 private:
   void manage_satb_barrier(bool active);
