@@ -281,11 +281,29 @@ void ShenandoahHeapRegion::make_trash() {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
-    case _cset:
-      // Reclaiming cset regions
     case _humongous_start:
     case _humongous_cont:
-      // Reclaiming humongous regions
+    {
+      // Reclaiming humongous regions and reclaim humongous waste.  When this region is eventually recycled, we'll reclaim
+      // its used memory.  At recycle time, we no longer recognize this as a humongous region.
+      ShenandoahHeapRegion* start = humongous_start_region();
+      HeapWord* obj_addr = start->bottom();
+      oop obj = cast_to_oop(obj_addr);
+      size_t word_size = obj->size();
+      HeapWord* end_addr = obj_addr + word_size;
+      if (end_addr < end()) {
+        size_t humongous_waste = (end() - end_addr) * HeapWordSize;
+        if (is_old()) {
+          ShenandoahHeap::heap()->old_generation()->decrease_humongous_waste(humongous_waste);
+        } else {
+          ShenandoahHeap::heap()->young_generation()->decrease_humongous_waste(humongous_waste);
+        }
+      }
+      // else, this region is entirely spanned by humongous object so contributes no humongous waste
+    }
+
+    case _cset:
+      // Reclaiming cset regions
     case _regular:
       // Immediate region reclaim
       set_state(_trash);
