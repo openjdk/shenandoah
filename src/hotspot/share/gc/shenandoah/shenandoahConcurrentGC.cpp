@@ -913,6 +913,7 @@ ShenandoahConcurrentEvacThreadClosure::ShenandoahConcurrentEvacThreadClosure(Oop
 void ShenandoahConcurrentEvacThreadClosure::do_thread(Thread* thread) {
   JavaThread* const jt = JavaThread::cast(thread);
   StackWatermarkSet::finish_processing(jt, _oops, StackWatermarkKind::gc);
+  ShenandoahThreadLocalData::enable_plab_promotions(thread);
 }
 
 class ShenandoahConcurrentEvacUpdateThreadTask : public WorkerTask {
@@ -926,6 +927,9 @@ public:
   }
 
   void work(uint worker_id) {
+    Thread* worker_thread = Thread::current();
+    ShenandoahThreadLocalData::enable_plab_promotions(worker_thread);
+
     // ShenandoahEvacOOMScope has to be setup by ShenandoahContextEvacuateUpdateRootsClosure.
     // Otherwise, may deadlock with watermark lock
     ShenandoahContextEvacuateUpdateRootsClosure oops_cl;
