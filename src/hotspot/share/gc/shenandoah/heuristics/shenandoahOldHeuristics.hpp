@@ -140,6 +140,7 @@ public:
   void trigger_cannot_expand() { _cannot_expand_trigger = true; };
   void trigger_old_is_fragmented() { _fragmentation_trigger = true; }
   void trigger_old_has_grown() { _growth_trigger = true; }
+  void clear_triggers();
 
   virtual void record_cycle_start() override;
 

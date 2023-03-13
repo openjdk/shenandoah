@@ -101,12 +101,12 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   size_t usage_trigger_threshold() const;
 
  private:
-  static const uint16_t FRACTIONAL_DENOMINATOR = 64536;
-  static const uint16_t INITIAL_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR;              // 100%
-  static const uint16_t MINIMUM_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 8;          //  12.5%
+  static const size_t FRACTIONAL_DENOMINATOR = 64536;
+  static const size_t INITIAL_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 2;          //  50.0%
+  static const size_t MINIMUM_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 8;          //  12.5%
 
-  // First old-collection trigger is at 12.5% of heap size: i.e. initial_live_fraction has doubled
-  static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 16;                    //   6.25%
+  // First old-collection trigger is at 4.6875% of heap size: i.e. 50% grown beyond 3.125%
+  static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                    //   3.125%
 
   bool entry_coalesce_and_fill();
   bool coalesce_and_fill();
@@ -115,7 +115,7 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   ShenandoahOldHeuristics* _old_heuristics;
   State _state;
   size_t _live_bytes_after_last_mark;
-  uint16_t _growth_before_compaction; // How much growth in usage before we trigger old collection, per 65_536
+  size_t _growth_before_compaction; // How much growth in usage before we trigger old collection, per 65_536
 };
 
 

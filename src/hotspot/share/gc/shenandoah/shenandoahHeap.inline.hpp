@@ -453,7 +453,8 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         // previously has been resolved.  Typical scenario is that we have begun a new GC cycle and the promotion
         // budget has been refreshed,
         ShenandoahThreadLocalData::enable_plab_promotions(thread);
-        return try_evacuate_object(p, thread, from_region, target_gen);
+
+        // Let promotion of this object fail; leave copy equal to NULL.
       }
       // else, we leave copy equal to NULL, signaling a promotion failure below if appropriate.
       // We choose not to promote objects smaller than PLAB::min_size() by way of shared allocations as this is too

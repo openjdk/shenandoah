@@ -191,10 +191,22 @@ void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
   if (_growth_before_compaction > MINIMUM_GROWTH_BEFORE_COMPACTION) {
     _growth_before_compaction /= 2;
   }
+#undef KELVIN_OLD_TRIGGER
+#ifdef KELVIN_OLD_TRIGGER
+  log_info(gc, ergo)("set_live_bytes_after_last_mark(" SIZE_FORMAT "), _growth_before_compaction adjusted to: " SIZE_FORMAT
+                     ", MIN_GROWTH_B4_COMPACTION: " SIZE_FORMAT,
+                     bytes, _growth_before_compaction, MINIMUM_GROWTH_BEFORE_COMPACTION);
+#endif
 }
 
 size_t ShenandoahOldGeneration::usage_trigger_threshold() const {
-  return _live_bytes_after_last_mark + _live_bytes_after_last_mark * _growth_before_compaction / FRACTIONAL_DENOMINATOR;
+  size_t result = _live_bytes_after_last_mark + (_live_bytes_after_last_mark * _growth_before_compaction) / FRACTIONAL_DENOMINATOR;
+#ifdef KELVIN_OLD_TRIGGER
+  double growth_ratio = ((double) _growth_before_compaction) / FRACTIONAL_DENOMINATOR;
+  log_info(gc, ergo)("usage_trigger_threshold(_live_bytes_at_last_mark: " SIZE_FORMAT ", growth_ratio: %.3f, result: " SIZE_FORMAT,
+                     _live_bytes_after_last_mark, growth_ratio, result);
+#endif
+  return result;
 }
 
 

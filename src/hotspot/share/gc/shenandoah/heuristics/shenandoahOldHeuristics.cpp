@@ -123,6 +123,8 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
 
   if (unprocessed_old_collection_candidates() == 0) {
+    // Any triggers that occurred during mixed evacuations may no longer be valid.  They can retrigger if appropriate.
+    clear_triggers();
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   }
 
@@ -374,16 +376,25 @@ void ShenandoahOldHeuristics::handle_promotion_failure() {
 }
 
 void ShenandoahOldHeuristics::record_cycle_start() {
-  _promotion_failed = false;
-  _cannot_expand_trigger = false;
-  _fragmentation_trigger = false;
-  _growth_trigger = false;
   _trigger_heuristic->record_cycle_start();
 }
 
 void ShenandoahOldHeuristics::record_cycle_end() {
   _trigger_heuristic->record_cycle_end();
+  // Clear triggers that might have been set during OLD marking.  Conditions are different now that this phase has finished.
+  _promotion_failed = false;
+  _cannot_expand_trigger = false;
+  _fragmentation_trigger = false;
+  _growth_trigger = false;
 }
+
+void ShenandoahOldHeuristics::clear_triggers() {
+  // Clear any triggers that were set during mixed evacuations.  Conditions are different now that this phase has finished.
+  _promotion_failed = false;
+  _cannot_expand_trigger = false;
+  _fragmentation_trigger = false;
+  _growth_trigger = false;
+ }
 
 bool ShenandoahOldHeuristics::should_start_gc() {
   // Cannot start a new old-gen GC until previous one has finished.

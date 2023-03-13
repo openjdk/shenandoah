@@ -280,12 +280,30 @@ void ShenandoahHeapRegion::make_trash() {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
-    case _cset:
-      // Reclaiming cset regions
     case _humongous_start:
     case _humongous_cont:
-      // Reclaiming humongous regions
-    case _regular:
+    {
+      // Reclaiming humongous regions and reclaim humongous waste.  When this region is eventually recycled, we'll reclaim
+      // its used memory.  At recycle time, we no longer recognize this as a humongous region.
+      ShenandoahHeapRegion* start = humongous_start_region();
+      HeapWord* obj_addr = start->bottom();
+      oop obj = cast_to_oop(obj_addr);
+      size_t word_size = obj->size();
+      HeapWord* end_addr = obj_addr + word_size;
+      if (end_addr < end()) {
+        size_t humongous_waste = (end() - end_addr) * HeapWordSize;
+        if (is_old()) {
+          ShenandoahHeap::heap()->old_generation()->decrease_humongous_waste(humongous_waste);
+        } else {
+          ShenandoahHeap::heap()->young_generation()->decrease_humongous_waste(humongous_waste);
+        }
+      }
+      // else, this region is entirely spanned by humongous object so contributes no humongous waste
+    }
+
+  case _cset:
+      // Reclaiming cset regions
+  case _regular:
       // Immediate region reclaim
       set_state(_trash);
       return;
@@ -667,7 +685,18 @@ void ShenandoahHeapRegion::recycle() {
 
 #undef KELVIN_USAGE
 #ifdef KELVIN_USAGE
-  log_info(gc, ergo)("KELVIN adjusting usage with recycle region " SIZE_FORMAT, index());
+  log_info(gc, ergo)("Recycle %s %s (%d) region " SIZE_FORMAT " with " SIZE_FORMAT " used", 
+                     affiliation_name(affiliation()),
+                     is_trash()? "trash": (
+                       is_cset()? "cset": (
+                         is_regular()? "regular": is_humongous_start()? "humongous start": (
+                           is_humongous_continuation()? "humongous continuation": "unexpected"))),
+                     state_ordinal(), index(), used());
+  if (is_humongous_start()) {
+    HeapWord* obj_addr = bottom();
+    oop obj = cast_to_oop(obj_addr);
+    log_info(gc, ergo)("Humongous object length (bytes): " SIZE_FORMAT, obj->size() * HeapWordSize);
+  }
 #endif
   size_t humongous_waste = 0;
   if (is_humongous()) {

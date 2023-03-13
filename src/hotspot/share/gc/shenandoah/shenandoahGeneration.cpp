@@ -732,16 +732,28 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
   shenandoah_assert_heaplocked_or_fullgc_safepoint();
-  _humongous_waste += bytes;
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
-         "waste cannot exceed regions");
+  if (bytes > 0) {
+    _humongous_waste += bytes;
+    assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+           (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
+           "waste cannot exceed regions");
+#ifdef KELVIN_TRACE_GENERATIONS
+    log_info(gc, ergo)("increasing %s humongous waste by " SIZE_FORMAT ", yielding " SIZE_FORMAT,
+                       name(), bytes, _humongous_waste);
+#endif
+  }
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
-  shenandoah_assert_heaplocked_or_fullgc_safepoint();
-  assert(_humongous_waste >= bytes, "Waste cannot be negative");
-  _humongous_waste -= bytes;
+  if (bytes > 0) {
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+    assert(_humongous_waste >= bytes, "Waste cannot be negative");
+    _humongous_waste -= bytes;
+#ifdef KELVIN_TRACE_GENERATIONS
+    log_info(gc, ergo)("decreasing %s humongous waste by " SIZE_FORMAT ", yielding " SIZE_FORMAT,
+                       name(), bytes, _humongous_waste);
+#endif
+  }
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
@@ -755,7 +767,7 @@ void ShenandoahGeneration::decrease_used(size_t bytes) {
          "Affiliated regions must hold more than what is currently used");
 
 #ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT "vs capacity: " SIZE_FORMAT,
+  log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);
 #endif
 }

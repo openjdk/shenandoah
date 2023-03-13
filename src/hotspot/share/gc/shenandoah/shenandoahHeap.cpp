@@ -1188,6 +1188,9 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
 
   size_t reserve_for_mixed, reserve_for_promo;
   if (doing_mixed) {
+    assert(old_generation()->available() >= old_generation()->free_unaffiliated_regions() * region_size_bytes,
+           "Unaffiliated available must be less than total available");
+
     // We want this much memory to be unfragmented in order to reliably evacuate old.  This is conservative because we
     // only have to evacuate the live memory within mixed candidate.
     size_t max_evac_need = (size_t) (mixed_candidates * region_size_bytes * ShenandoahOldEvacWaste);
@@ -2117,7 +2120,6 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
   generation->heuristics()->record_cycle_end();
-
   if (mode()->is_generational() &&
       ((generation->generation_mode() == GLOBAL) || upgraded_to_full())) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
@@ -3181,6 +3183,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   ShenandoahGCPhase phase(concurrent ?
                           ShenandoahPhaseTimings::final_update_refs_rebuild_freeset :
                           ShenandoahPhaseTimings::degen_gc_final_update_refs_rebuild_freeset);
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahHeapLocker locker(lock());
   size_t young_cset_regions, old_cset_regions;
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
@@ -3192,7 +3195,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t humongous_waste_promoted =
       humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes() - humongous_bytes_promoted;
     size_t regular_regions_promoted_in_place = get_regular_regions_promoted_in_place();
-    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
     size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
     size_t bytes_promoted_in_place = 0;
 #undef KELVIN_REBUILD
@@ -3254,17 +3256,38 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     //
     // We consider old-gen to have excessive fragmentation if more than 12.5% of old-gen is free memory that resides
     // within partially consumed regions of memory.
+  }
+  // Rebuild free set based on adjusted generation sizes.
+  _free_set->rebuild(0);
 
+  if (mode()->is_generational()) {
     size_t old_available = old_generation()->available();
     size_t old_unaffiliated_available = old_generation()->free_unaffiliated_regions() * region_size_bytes;
-    size_t old_fragmented_available = old_available - old_unaffiliated_available;
+    size_t old_fragmented_available;
+    assert(old_available >= old_unaffiliated_available, "unaffiliated available is a subset of total available");
+    if (old_available >= old_unaffiliated_available) {
+      old_fragmented_available = old_available - old_unaffiliated_available;
+    } else {
+      // WE SHOULD NOT NEED THIS CONDITIONAL CODE, BUT KELVIN HAS NOT
+      // YET FIGURED OUT HOW THIS CONDITION IS VIOLATED.
+      old_fragmented_available = 0;
+    }
     size_t old_capacity = old_generation()->max_capacity();
-    size_t old_heap_capacity = capacity();
-    if ((old_capacity > old_heap_capacity / 8) && (old_fragmented_available > old_capacity / 8)) {
+    size_t heap_capacity = capacity();
+    if ((old_capacity > heap_capacity / 8) && (old_fragmented_available > old_capacity / 8)) {
+#undef KELVIN_FRAG_TRIGGER
+#ifdef KELVIN_FRAG_TRIGGER
+      log_info(gc, ergo)("Triggering old is fragmented, old_capacity: " SIZE_FORMAT ", heap_capacity: " SIZE_FORMAT
+                         ", old_fragmented_available: " SIZE_FORMAT ", old_unaffiliated_available: " SIZE_FORMAT
+                         ", old_used: " SIZE_FORMAT ", old_humongous_waste: " SIZE_FORMAT,
+                         old_capacity, heap_capacity, old_fragmented_available, old_unaffiliated_available,
+                         old_generation()->used(), old_generation()->get_humongous_waste());
+#endif
+      
       ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_is_fragmented();
     }
 
-    size_t old_used = old_generation()->used();
+    size_t old_used = old_generation()->used() + old_generation()->get_humongous_waste();
     size_t trigger_threshold = old_generation()->usage_trigger_threshold();
     // Detects unsigned arithmetic underflow
     assert(old_used < ShenandoahHeap::heap()->capacity(), "Old used must be less than heap capacity");
@@ -3278,8 +3301,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
       ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_has_grown();
     }
   }
-  // Rebuild free set based on adjusted generation sizes.
-  _free_set->rebuild(0);
 }
 
 void ShenandoahHeap::print_extended_on(outputStream *st) const {
