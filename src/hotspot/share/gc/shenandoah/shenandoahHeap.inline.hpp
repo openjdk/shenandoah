@@ -439,7 +439,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
         ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
         copy = allocate_memory(req, is_promotion);
         alloc_from_lab = false;
-      } else if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread) &&
+      }
+#ifdef KELVIN_DEPRECATE
+      else if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread) &&
                  (get_promoted_expended() + 1024 * PLAB::min_size() <= get_promoted_reserve())) {
 #undef KELVIN_PROMONOTION
 #ifdef KELVIN_PROMONOTION
@@ -456,6 +458,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
         // Let promotion of this object fail; leave copy equal to NULL.
       }
+#endif
       // else, we leave copy equal to NULL, signaling a promotion failure below if appropriate.
       // We choose not to promote objects smaller than PLAB::min_size() by way of shared allocations as this is too
       // costly.  Instead, we'll simply "evacuate" to young-gen memory (using a GCLAB) and will promote in a future
