@@ -148,7 +148,6 @@ void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* ge
 }
 
 void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done) {
-  // This is like young and boostrap, but no need to update ideal_gc_log, because we'll re-initiailze at end
   help_record_concurrent(generation, gcid, "Mixed Concurrent GC", false);
 }
 

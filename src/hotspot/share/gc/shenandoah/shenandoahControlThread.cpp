@@ -532,7 +532,12 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
       // We only record GC results if GC was successful
       ShenandoahMmuTracker* mmu_tracker = heap->mmu_tracker();
       if (generation == YOUNG) {
-        mmu_tracker->record_young(the_generation, GCId::current());
+        if (heap->collection_set()->has_old_regions()) {
+          bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
+          mmu_tracker->record_mixed(the_generation, GCId::current(), mixed_is_done);
+        } else {
+          mmu_tracker->record_young(the_generation, GCId::current());
+        }
       } else {
         mmu_tracker->record_bootstrap(the_generation, GCId::current(), heap->collection_set()->has_old_regions());
       }

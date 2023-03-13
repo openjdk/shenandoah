@@ -495,10 +495,10 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     log_info(gc, ergo)("Prime the collection set here, old_heuristics: %s",
                        old_heuristics? "NOT NULL": "NULL");
 #endif
-    if (old_heuristics != NULL) {
+    if (heap->mode()->is_generational() && (old_heuristics != NULL)) {
       old_heuristics->prime_collection_set(collection_set);
     }
-    // else, this is global collection and doesn't need to prime_collection_set
+    // else, this is non-generational or global collection and doesn't need to prime_collection_set
 
     // Add young-gen regions into the collection set.  This is a virtual call, implemented differently by each
     // of the heuristics subclasses.

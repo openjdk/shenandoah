@@ -428,7 +428,8 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
   switch (new_state) {
     case IDLE:
       assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become idle during old mark.");
-      assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot become idle with collection candidates");
+      assert(!heap->mode()->is_generational() ||
+             (_old_heuristics->unprocessed_old_collection_candidates() == 0), "Cannot become idle with collection candidates");
       assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot become idle while making old generation parseable.");
       assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become idle when setup for bootstrapping.");
       return true;
@@ -448,6 +449,7 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
       return true;
     case WAITING:
       assert(_state == MARKING, "Cannot have old collection candidates without first marking.");
+      assert(heap->mode()->is_generational(), "WAITING state is only relevant to generational mode");
       assert(_old_heuristics->unprocessed_old_collection_candidates() > 0, "Must have collection candidates here.");
       return true;
     default:
