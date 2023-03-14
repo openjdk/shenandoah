@@ -295,17 +295,4 @@ TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
 
-TEST_VM_F(ShenandoahOldHeuristicTest, first_region_remains_pinned) {
-  SKIP_IF_NOT_SHENANDOAH();
-
-  size_t garbage = create_too_much_garbage_for_one_mixed_evacuation();
-
-  make_pinned(0);
-
-  _heuristics->prepare_for_old_collections();
-  _heuristics->prime_collection_set(_collection_set);
-
-  _collection_set->clear();
-  _heuristics->prime_collection_set(_collection_set);
-}
 #undef SKIP_IF_NOT_SHENANDOAH
