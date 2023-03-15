@@ -1096,6 +1096,17 @@ void ShenandoahHeapRegion::promote_in_place() {
     size_t promo_reserve = heap->get_promoted_reserve() + promoted_free;
     young_gen->decrease_used(promoted_used);
     young_gen->decrement_affiliated_region_count();
+
+    // Unconditionally transfer one region from young to old to represent the newly promoted region.
+    // This expands old and shrinks new by the size of one region.  Strictly, we do not "need" to expand old
+    // if there are already enough unaffiliated regions in old to account for this newly promoted region.
+    // However, if we do not transfer the capacities, we end up reducing the amount of memory that would have
+    // otherwise been available to hold old evacuations, because old available is max_capacity - used and now
+    // we would be trading a fully empty region for a partially used region.
+    //
+    // Note that we will rebalance the generation sizes at the end of this GC cycle.
+    heap->generation_sizer()->force_transfer_to_old(1);
+
     old_gen->increase_used(promoted_used);
     old_gen->increment_affiliated_region_count();
 
