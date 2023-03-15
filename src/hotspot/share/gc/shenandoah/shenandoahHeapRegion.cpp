@@ -1107,8 +1107,8 @@ void ShenandoahHeapRegion::promote_in_place() {
     // Note that we will rebalance the generation sizes at the end of this GC cycle.
     heap->generation_sizer()->force_transfer_to_old(1);
 
-    old_gen->increase_used(promoted_used);
     old_gen->increment_affiliated_region_count();
+    old_gen->increase_used(promoted_used);
 
     // Might as well make the free memory within newly promoted region available to hold promotions that we were not able
     // to budget for previously.
