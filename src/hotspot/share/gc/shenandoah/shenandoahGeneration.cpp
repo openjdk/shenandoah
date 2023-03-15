@@ -723,9 +723,6 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 #endif
   // This detects arithmetic wraparound on _used.  Non-generational mode does not keep track of _affiliated_region_count
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
-         "Affiliated regions must hold more than what is currently used");
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
          (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used cannot exceed regions");
 }
