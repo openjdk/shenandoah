@@ -5,6 +5,7 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include <cstdarg>
 
 // These tests will all be skipped (unless Shenandoah becomes the default
 // collector). To execute these tests, you must enable Shenandoah, which
@@ -110,6 +111,26 @@ class ShenandoahOldHeuristicTest : public ::testing::Test {
   size_t collection_threshold() const {
     return ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold / 100;
   }
+
+  bool collection_set_is(size_t r1) { return _collection_set_is(1, r1); }
+  bool collection_set_is(size_t r1, size_t r2) { return _collection_set_is(2, r1, r2); }
+  bool collection_set_is(size_t r1, size_t r2, size_t r3) { return _collection_set_is(3, r1, r2, r3); }
+
+  bool _collection_set_is(size_t count, ...) {
+    va_list args;
+    va_start(args, count);
+    EXPECT_EQ(count, _collection_set->count());
+    bool result = true;
+    for (size_t i = 0; i < count; ++i) {
+      size_t index = va_arg(args, size_t);
+      if (!_collection_set->is_in(index)) {
+        result = false;
+        break;
+      }
+    }
+    va_end(args);
+    return result;
+  }
 };
 
 TEST_VM_F(ShenandoahOldHeuristicTest, select_no_old_regions) {
@@ -150,7 +171,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, prime_one_old_region) {
   _heuristics->prepare_for_old_collections();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(10UL));
+  EXPECT_TRUE(collection_set_is(10UL));
   EXPECT_EQ(garbage, _collection_set->get_old_garbage());
   EXPECT_EQ(0U, _heuristics->unprocessed_old_collection_candidates());
 }
@@ -163,8 +184,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, prime_many_old_regions) {
   _heuristics->prepare_for_old_collections();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(100UL));
-  EXPECT_TRUE(_collection_set->is_in(101UL));
+  EXPECT_TRUE(collection_set_is(100UL, 101UL));
   EXPECT_EQ(g1 + g2, _collection_set->get_old_garbage());
   EXPECT_EQ(0U, _heuristics->unprocessed_old_collection_candidates());
 }
@@ -201,8 +221,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, skip_pinned_regions) {
   // The two unpinned regions should be added to the collection set and the pinned
   // region should be retained at the front of the list of candidates as it would be
   // likely to become unpinned by the next mixed collection cycle.
-  EXPECT_TRUE(_collection_set->is_in(0UL));
-  EXPECT_TRUE(_collection_set->is_in(2UL));
+  EXPECT_TRUE(collection_set_is(0UL, 2UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g3);
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 1UL);
 
@@ -213,7 +232,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, skip_pinned_regions) {
   _heuristics->prime_collection_set(_collection_set);
 
   EXPECT_EQ(_collection_set->get_old_garbage(), g2);
-  EXPECT_TRUE(_collection_set->is_in(1UL));
+  EXPECT_TRUE(collection_set_is(1UL));
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
 
@@ -229,15 +248,14 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_first) {
   _heuristics->prepare_for_old_collections();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(1UL));
-  EXPECT_TRUE(_collection_set->is_in(2UL));
+  EXPECT_TRUE(collection_set_is(1UL, 2UL));
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 1UL);
 
   make_unpinned(0);
   _collection_set->clear();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(0UL));
+  EXPECT_TRUE(collection_set_is(0UL));
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
 
@@ -253,8 +271,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_last) {
   _heuristics->prepare_for_old_collections();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(0UL));
-  EXPECT_TRUE(_collection_set->is_in(1UL));
+  EXPECT_TRUE(collection_set_is(0UL, 1UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g2);
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 1UL);
 
@@ -262,7 +279,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_last) {
   _collection_set->clear();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(2UL));
+  EXPECT_TRUE(collection_set_is(2UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g3);
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
@@ -280,7 +297,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
   _heuristics->prepare_for_old_collections();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(1UL));
+  EXPECT_TRUE(collection_set_is(1UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g2);
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 2UL);
 
@@ -289,8 +306,7 @@ TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
   _collection_set->clear();
   _heuristics->prime_collection_set(_collection_set);
 
-  EXPECT_TRUE(_collection_set->is_in(0UL));
-  EXPECT_TRUE(_collection_set->is_in(2UL));
+  EXPECT_TRUE(collection_set_is(0UL, 2UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g3);
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
