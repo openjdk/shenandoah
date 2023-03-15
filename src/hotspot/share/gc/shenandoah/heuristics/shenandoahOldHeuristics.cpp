@@ -141,8 +141,8 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
     }
   }
 
-  // If we could not find an unpinned region, it means _all_ of the candidate
-  // regions were pinned. In this case, we just reset our next index in the
+  // If we could not find an unpinned region, it means there are no slots available
+  // to move up the pinned regions. In this case, we just reset our next index in the
   // hopes that some of these regions will become unpinned before the next mixed
   // collection. We may want to bailout of here instead, as it should be quite
   // rare to have so many pinned regions and may indicate something is wrong.
@@ -171,11 +171,16 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
     }
   }
 
+  // Update to read from the leftmost pinned region. Plus one here because we decremented
+  // the write index to hold the next found pinned region. We are just moving it back now
+  // to point to the first pinned region.
+  _next_old_collection_candidate = write_index + 1;
+
   // Everything left should already be in the cset
   // [ r x x p p p p r ]
   //   ^   ^         ^
   //   |   |         | next pointer points at the first region which was not added to the collection set.
-  //   |   | After the above loop, the write pointer is at the start of the pinned regions
+  //   |   | After the above loop, the write pointer is just left of the start of the pinned regions
   //   | Start index maintains the pointer to the beginning of the regions we scanned on this cycle.
 #ifdef ASSERT
   for (size_t check = write_index; check != _start_candidate; --check) {
@@ -184,9 +189,6 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
   }
   _start_candidate = _next_old_collection_candidate;
 #endif
-
-  // Update to read from the leftmost pinned region.
-  _next_old_collection_candidate = write_index + 1;
 }
 
 // Both arguments are don't cares for old-gen collections
