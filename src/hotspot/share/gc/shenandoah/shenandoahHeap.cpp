@@ -3195,7 +3195,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t humongous_waste_promoted =
       humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes() - humongous_bytes_promoted;
     size_t regular_regions_promoted_in_place = get_regular_regions_promoted_in_place();
+#ifdef KELVIN_DEPRECATE
     size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
+#else
+    size_t total_regions_promoted = humongous_regions_promoted;
+#endif
     size_t bytes_promoted_in_place = 0;
 #undef KELVIN_REBUILD
 #ifdef KELVIN_REBUILD
@@ -3203,8 +3207,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                        concurrent, humongous_regions_promoted, regular_regions_promoted_in_place);
 #endif
     if (total_regions_promoted > 0) {
+#ifdef KELVIN_DEPRECATE
       size_t regular_bytes_promoted_in_place = get_regular_usage_promoted_in_place();
       bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
+#else
+      bytes_promoted_in_place = humongous_bytes_promoted;
+#endif
 
       log_info(gc, ergo)("Promoted " SIZE_FORMAT " humongous and " SIZE_FORMAT " regular regions in place"
                          ", representing total usage of " SIZE_FORMAT,

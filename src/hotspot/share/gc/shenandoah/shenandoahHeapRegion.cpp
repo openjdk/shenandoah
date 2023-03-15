@@ -1080,16 +1080,32 @@ void ShenandoahHeapRegion::promote_in_place() {
   assert(is_regular(), "Use different service to promote humongous regions");
   assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
 
-  set_affiliation(OLD_GENERATION, true);
-#ifdef KELVIN_DEPRECATE
-  // Arrange for this region to be coalesced and filled before next old-gen mark.
-  heap->old_heuristics()->add_promoted_in_place(this);
-#endif
+  ShenandoahOldGeneration* old_gen = heap->old_generation();
+  ShenandoahYoungGeneration* young_gen = heap->young_generation();
 
-  // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
-  // is_collector_free range.
-  restore_top_before_promote();
-  
+  {
+    ShenandoahHeapLocker locker(heap->lock());
+
+    set_affiliation(OLD_GENERATION, true);
+    // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
+    // is_collector_free range.
+    restore_top_before_promote();
+
+    size_t promoted_used = this->used();
+    size_t promoted_free = this->free();
+    size_t promo_reserve = heap->get_promoted_reserve() + promoted_free;
+    young_gen->decrease_used(promoted_used);
+    young_gen->decrement_affiliated_region_count();
+    old_gen->increase_used(promoted_used);
+    old_gen->increment_affiliated_region_count();
+
+    // Might as well make the free memory within newly promoted region available to hold promotions that we were not able
+    // to budget for previously.
+    heap->set_promoted_reserve(promo_reserve);
+
+    // TODO: adjust bounds in the free set
+  }
+
   assert(top() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
 
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
