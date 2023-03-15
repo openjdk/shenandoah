@@ -141,11 +141,14 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
     }
   }
 
+  // If we could not find an unpinned region, it means _all_ of the candidate
+  // regions were pinned. In this case, we just reset our next index in the
+  // hopes that some of these regions will become unpinned before the next mixed
+  // collection. We may want to bailout of here instead, as it should be quite
+  // rare to have so many pinned regions and may indicate something is wrong.
   if (write_index == NOT_FOUND) {
-    // TODO: What if first pinned candidate _is_ zero?
-    if (_first_pinned_candidate > 0) {
-      _next_old_collection_candidate = _first_pinned_candidate;
-    }
+    assert(_first_pinned_candidate != NOT_FOUND, "Should only be here if there are pinned regions.");
+    _next_old_collection_candidate = _first_pinned_candidate;
     return;
   }
 
