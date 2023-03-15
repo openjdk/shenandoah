@@ -683,10 +683,7 @@ bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
 }
 
 size_t ShenandoahHeuristics::min_free_threshold() {
-  size_t min_free_threshold =
-      _generation->generation_mode() == GenerationMode::OLD
-          ? ShenandoahOldMinFreeThreshold
-          : ShenandoahMinFreeThreshold;
+  size_t min_free_threshold = ShenandoahMinFreeThreshold;
   return _generation->soft_max_capacity() / 100 * min_free_threshold;
 }
 

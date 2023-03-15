@@ -527,8 +527,6 @@ void ShenandoahHeap::initialize_heuristics() {
   if (mode()->is_generational()) {
     _young_generation->initialize_heuristics(_gc_mode);
     _old_generation->initialize_heuristics(_gc_mode);
-
-    ShenandoahEvacWaste = ShenandoahGenerationalEvacWaste;
   }
 }
 

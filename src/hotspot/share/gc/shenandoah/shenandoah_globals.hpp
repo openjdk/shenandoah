@@ -127,14 +127,6 @@
           "size.")                                                          \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahOldMinFreeThreshold, 0, EXPERIMENTAL,            \
-          "Percentage of free old generation heap memory below which most " \
-          "  KELVIN TO DEPRECATE THIS PARAMETER "         \
-          "heuristics trigger collection independent of other triggers. "   \
-          "Provides a safety margin for many heuristics. In percents of "   \
-          "(soft) max heap size.")                                          \
-          range(0,100)                                                      \
-                                                                            \
   product(uintx, ShenandoahAllocationThreshold, 0, EXPERIMENTAL,            \
           "How many new allocations should happen since the last GC cycle " \
           "before some heuristics trigger the collection. In percents of "  \
@@ -321,20 +313,6 @@
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
                                                                             \
-  product(double, ShenandoahGenerationalEvacWaste, 1.2, EXPERIMENTAL,       \
-          "For generational mode, how much waste evacuations produce "      \
-          "within the reserved space.  Larger values make evacuations "     \
-          "more resilient against evacuation conflicts, at expense of "     \
-          "evacuating less on each GC cycle.  Smaller values increase "     \
-          "the risk of evacuation failures, which will trigger "            \
-          "stop-the-world Full GC passes.  The default value for "          \
-          "generational mode is 2.0.  The reason for the higher default "   \
-          "  KELVIN WANTS TO DEPRECATE THIS "                               \
-          "value in generational mode is because generational mode "        \
-          "enforces the evacuation budget, triggering degenerated GC "      \
-          "which upgrades to full GC whenever the budget is exceeded.")     \
-          range(1.0,100.0)                                                  \
-                                                                            \
   product(uintx, ShenandoahMaxEvacLABRatio, 16, EXPERIMENTAL,               \
           "Potentially, each running thread maintains a PLAB for "          \
           "evacuating objects into old-gen memory and a GCLAB for "         \
@@ -360,21 +338,6 @@
           "will make evacuations more resilient when evacuation "           \
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
-                                                                            \
-  product(uintx, ShenandoahOldEvacReserve, 2, EXPERIMENTAL,                 \
-          "How much of old-generation heap to reserve for old-generation "  \
-          "evacuations.  Larger values allow GC to evacuate more live "     \
-          "old-generation objects on every cycle, while potentially "       \
-          " KELVIN TO DEPRECATE" \
-          "creating greater impact on the cadence at which the young- "     \
-          "generation allocation pool is replenished.  During mixed "       \
-          "evacuations, the bound on amount of old-generation heap "        \
-          "regions included in the collecdtion set is the smaller "         \
-          "of the quantities specified by this parameter and the "          \
-          "size of ShenandoahEvacReserve as adjusted by the value of "      \
-          "ShenandoahOldEvacRatioPercent.  In percents of total "           \
-          "old-generation heap size.")                                      \
-          range(1,100)                                                      \
                                                                             \
   product(uintx, ShenandoahOldEvacRatioPercent, 75, EXPERIMENTAL,           \
           "The maximum proportion of evacuation from old-gen memory, as "   \
@@ -535,21 +498,6 @@
   product(bool, ShenandoahSelfFixing, true, DIAGNOSTIC,                     \
           "Fix references with load reference barrier. Disabling this "     \
           "might degrade performance.")                                     \
-                                                                            \
-  product(uintx, ShenandoahBorrowPercent, 30, EXPERIMENTAL,                 \
-          "During evacuation and reference updating in generational "       \
-          "mode, new allocations are allowed to borrow from old-gen "       \
-          "memory up to ShenandoahBorrowPercent / 100 amount of the "       \
-          "young-generation content of the current collection set.  "       \
-          "Any memory borrowed from old-gen during evacuation and "         \
-          "update-references phases of GC will be repaid from the "         \
-          "abundance of young-gen memory produced when the collection "     \
-          " KELVIN TO DEPRECATE" \
-          "set is recycled at the end of updating references.  The "        \
-          "default value of 30 reserves 70% of the to-be-reclaimed "        \
-          "young collection set memory to be allocated during the "         \
-          "subsequent concurrent mark phase of GC.")                        \
-          range(0, 100)                                                     \
                                                                             \
   product(uintx, ShenandoahOldCompactionReserve, 8, EXPERIMENTAL,           \
           "During generational GC, prevent promotions from filling "        \

@@ -832,7 +832,7 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   // We do not enforce that new capacity >= heap->max_size_for(this).  The maximum generation size is treated as a rule of thumb
   // which may be violated during certain transitions, such as when we are forcing transfers for the purpose of promoting regions
   // in place.
-  assert(_max_capacity + increment <= ShenancoahHeap::heap()->max_capacity(), "Generation cannot be larger than heap size");
+  assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_capacity(), "Generation cannot be larger than heap size");
   assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   _max_capacity += increment;
   _soft_max_capacity += increment;
