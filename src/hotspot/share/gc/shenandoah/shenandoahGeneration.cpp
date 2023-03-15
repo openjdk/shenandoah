@@ -702,10 +702,11 @@ size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
   return _affiliated_region_count;
 }
 
-void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes) {
+void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   _affiliated_region_count = num_regions;
   _used = num_bytes;
+  _humongous_waste = humongous_waste;
 }
 
 void ShenandoahGeneration::clear_used() {
@@ -825,7 +826,13 @@ size_t ShenandoahGeneration::adjusted_unaffiliated_regions() const {
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
+#ifdef KELVIN_DEPRECATE
   assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_size_for(this), "Cannot increase generation capacity beyond maximum.");
+#endif
+  // We do not enforce that new capacity >= heap->max_size_for(this).  The maximum generation size is treated as a rule of thumb
+  // which may be violated during certain transitions, such as when we are forcing transfers for the purpose of promoting regions
+  // in place.
+  assert(_max_capacity + increment <= ShenancoahHeap::heap()->max_capacity(), "Generation cannot be larger than heap size");
   assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   _max_capacity += increment;
   _soft_max_capacity += increment;
@@ -842,8 +849,14 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
 
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   shenandoah_assert_heaplocked_or_safepoint();
+#ifdef KELVIN_DEPRECATE
   assert(_max_capacity - decrement >= ShenandoahHeap::heap()->min_size_for(this), "Cannot decrease generation capacity beyond minimum.");
+#endif
+  // We do not enforce that new capacity >= heap->min_size_for(this).  The minimum generation size is treated as a rule of thumb
+  // which may be violated during certain transitions, such as when we are forcing transfers for the purpose of promoting regions
+  // in place.
   assert(decrement % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
+  assert(_max_capacity >= decrement, "Generation capacity cannot be negative");
 
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;

@@ -1546,8 +1546,10 @@ void ShenandoahFullGC::phase5_restore_generation_accounts() {
   size_t num_regions = heap->num_regions();
   size_t young_usage = 0;
   size_t young_regions = 0;
+  size_t young_humongous_waste = 0;
   size_t old_usage = 0;
   size_t old_regions = 0;
+  size_t old_humongous_waste = 0;
   ShenandoahHeapRegion* r;
 
   for (size_t i = 0; i < num_regions; i++) {
@@ -1558,16 +1560,40 @@ void ShenandoahFullGC::phase5_restore_generation_accounts() {
         r = heap->get_region(i);
         young_regions++;
         young_usage += r->used();
+        if (r->is_humongous()) {
+          ShenandoahHeapRegion* start = r->humongous_start_region();
+          HeapWord* obj_addr = start->bottom();
+          oop obj = cast_to_oop(obj_addr);
+          size_t word_size = obj->size();
+          HeapWord* end_addr = obj_addr + word_size;
+          if (end_addr < r->end()) {
+            size_t humongous_waste = (r->end() - end_addr) * HeapWordSize;
+            young_humongous_waste += humongous_waste;
+          }
+          // else, this region is entirely spanned by humongous object so contributes no humongous waste
+        }
         break;
       case ShenandoahRegionAffiliation::OLD_GENERATION:
         r = heap->get_region(i);
         old_regions++;
         old_usage += r->used();
+        if (r->is_humongous()) {
+          ShenandoahHeapRegion* start = r->humongous_start_region();
+          HeapWord* obj_addr = start->bottom();
+          oop obj = cast_to_oop(obj_addr);
+          size_t word_size = obj->size();
+          HeapWord* end_addr = obj_addr + word_size;
+          if (end_addr < r->end()) {
+            size_t humongous_waste = (r->end() - end_addr) * HeapWordSize;
+            old_humongous_waste += humongous_waste;
+          }
+          // else, this region is entirely spanned by humongous object so contributes no humongous waste
+        }
         break;
       default:
         assert(false, "Should not reach");
     }
   }
-  heap->old_generation()->establish_usage(old_regions, old_usage);
-  heap->young_generation()->establish_usage(young_regions, young_usage);
+  heap->old_generation()->establish_usage(old_regions, old_usage, old_humongous_waste);
+  heap->young_generation()->establish_usage(young_regions, young_usage, young_humongous_waste);
 }
