@@ -457,6 +457,7 @@ public:
   size_t promote_humongous();
 
 private:
+  void decrement_humongous_waste() const;
   void do_commit();
   void do_uncommit();
 
