@@ -423,11 +423,23 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         immediate_garbage += garbage;
       } else {
         live_memory += region->get_live_data_bytes();
-        if (region->age() >= InitialTenuringThreshold) {
+        if (region->is_young() && region->age() >= InitialTenuringThreshold) {
           oop obj = cast_to_oop(region->bottom());
           size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
           humongous_regions_promoted += humongous_regions;
           humongous_bytes_promoted += obj->size() * HeapWordSize;
+
+#undef KELVIN_REPROMOTE
+#ifdef KELVIN_REPROMOTE
+          HeapWord* end_addr = region->bottom() + obj->size();
+          size_t waste = (region->bottom() + humongous_regions * ShenandoahHeapRegion::region_size_bytes()) - end_addr;
+          waste *= HeapWordSize;
+          log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " %s humongous regions starting with index " SIZE_FORMAT
+                             ", representing " SIZE_FORMAT " used (live) bytes, waste: " SIZE_FORMAT,
+                             humongous_regions, affiliation_name(region->affiliation()),
+                             region->index(),  obj->size() * HeapWordSize, waste);
+#endif
+
 #ifdef KELVIN_CSET
           log_info(gc, ergo)("Planning to promote " SIZE_FORMAT " humongous regions starting with index " SIZE_FORMAT
                              ", representing " SIZE_FORMAT " used (live) bytes",

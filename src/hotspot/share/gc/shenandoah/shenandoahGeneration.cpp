@@ -717,7 +717,7 @@ void ShenandoahGeneration::clear_used() {
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
-#undef KELVIN_TRACE_GENERATIONS
+#define KELVIN_TRACE_GENERATIONS
 #ifdef KELVIN_TRACE_GENERATIONS
   log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);
@@ -745,7 +745,8 @@ void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
   if (bytes > 0) {
     shenandoah_assert_heaplocked_or_fullgc_safepoint();
-    assert(_humongous_waste >= bytes, "Waste cannot be negative");
+    assert(_humongous_waste >= bytes, "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")",
+           _humongous_waste, bytes);
     _humongous_waste -= bytes;
 #ifdef KELVIN_TRACE_GENERATIONS
     log_info(gc, ergo)("decreasing %s humongous waste by " SIZE_FORMAT ", yielding " SIZE_FORMAT,
