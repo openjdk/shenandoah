@@ -27,6 +27,7 @@
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
+#include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
@@ -1106,6 +1107,8 @@ void ShenandoahHeapRegion::promote_in_place() {
     //
     // Note that we will rebalance the generation sizes at the end of this GC cycle.
     heap->generation_sizer()->force_transfer_to_old(1);
+
+    heap->free_set()->add_old_collector_free_region(this);
 
     old_gen->increment_affiliated_region_count();
     old_gen->increase_used(promoted_used);

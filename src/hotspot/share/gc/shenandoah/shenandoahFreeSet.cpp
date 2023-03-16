@@ -36,6 +36,13 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
+// In the existing implementatation, plab allocations are taken from is-mutator-free regions and/or existing old regions.
+// 
+// The plan is to introduce a new is_old_collector_free qualifier in order to distinguish the regions dedicated to old-promotions
+// and evacuations from regions that are dedicated to mutator allocations and young-evacuations.  This macro symbol identifies
+// some of the code segments that will be affected when we incorporate this change.
+#define REMOVE_WHEN_FREESET_DOES_OLD_COLLECTED_FREE 1
+
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
   _mutator_free_bitmap(max_regions, mtGC),
@@ -49,9 +56,41 @@ void ShenandoahFreeSet::increase_used(size_t num_bytes) {
   shenandoah_assert_heaplocked();
   _used += num_bytes;
 
+#ifndef REMOVE_WHEN_FREESET_DOES_OLD_COLLECTED_FREE
+  // The intention as originally implemented is that free-set capacity represents the budget for mutator allocations.
+  // This assert is currently disabled because plab and old shared allocations are taken from mutator-free regions and/or
+  // from existing old-gen regions which are not mutator-free and may not be collector-free.  Work is in progress to
+  // create a new mode for regions, which is "old-collector-free".  When that's implemented and we properly distinguish
+  // regions that are dedicated to old-gen allocations, we'll reenable this assert.
   assert(_used <= _capacity, "must not use more than we have: used: " SIZE_FORMAT
          ", capacity: " SIZE_FORMAT ", num_bytes: " SIZE_FORMAT, _used, _capacity, num_bytes);
+#endif
 }
+
+void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* region) {
+  shenandoah_assert_heaplocked();
+  size_t idx = region->index();
+  assert(!is_mutator_free(idx) & !is_collector_free(idx), "Promoted in place region should not be mutator_free or collector_free");
+  // TODO: we really want to label this as old-collector-free but that is not yet implemented.
+  _mutator_free_bitmap.set_bit(region->index());
+  // This region was previously not 
+  adjust_bounds_for_additional_old_collector_free_region(idx);
+}
+
+void ShenandoahFreeSet::adjust_bounds_for_additional_old_collector_free_region(size_t idx) {
+  // TODO: this should modify _old_collector_leftmost and _old_collector_rightmost, when they are implemented,
+  ShenandoahHeapRegion* r = _heap->get_region(idx);
+
+  // TODO: add available to _old_capacity rather than _capacity below.
+  _capacity += r->free();
+  // Only adjust _mutator_leftmost and _mutator_rightmost.
+  if (idx < _mutator_leftmost) {
+    _mutator_leftmost = idx;
+  } else if (idx > _mutator_rightmost) {
+    _mutator_rightmost = idx;
+  }
+}
+
 
 bool ShenandoahFreeSet::is_mutator_free(size_t idx) const {
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
@@ -69,6 +108,8 @@ bool ShenandoahFreeSet::is_collector_free(size_t idx) const {
 // TODO:
 //   Remove this function after restructing FreeSet representation.  A problem in the existing implementation is that old-gen
 //   regions are not considered to reside within the is_collector_free range.
+//   Eventually, we'll keep a separate range for old_collector_free_range and we'll give preference to allocating from
+//     a region that is_old_collector_free().  If that's not available, we may try to flip a region that is_mutator_free.
 //
 HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region) {
   ShenandoahRegionAffiliation affiliation = ShenandoahRegionAffiliation::OLD_GENERATION;
@@ -352,8 +393,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   // req.size() is in words, r->free() is in bytes.
   if (ShenandoahElasticTLAB && req.is_lab_alloc()) {
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
-      assert(is_collector_free(r->index()), "PLABS must be allocated in collector_free regions");
-
+#ifndef REMOVE_WHEN_FREESET_DOES_OLD_COLLECTED_FREE
+      assert(is_old_collector_free(r->index()), "PLABS must be allocated in old_collector_free regions");
+#endif
       // Need to assure that plabs are aligned on multiple of card region.
       size_t free = r->free();
       size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
@@ -396,7 +438,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         if (free > usable_free) {
           // Account for the alignment padding
           size_t padding = (free - usable_free) * HeapWordSize;
-#ifdef KELVIN_DEPRECATE
+#ifdef REMOVE_WHEN_FREESET_DOES_OLD_COLLECTED_FREE
           // PLABS reside in old-gen.  Their regions should not be is_mutator_free.  So we should not increase_used().
           increase_used(padding);
 #endif
@@ -455,7 +497,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       if (free > usable_free) {
         // Account for the alignment padding
         size_t padding = (free - usable_free) * HeapWordSize;
-#ifdef KELVIN_DEPRECATE
+
+#ifdef REMOVE_WHEN_FREESET_DOES_OLD_COLLECTED_FREE
         // PLAB allocations are collector_is_free.  We only increase_Used for mutator allocations.
         increase_used(padding);
 #endif
@@ -845,6 +888,9 @@ void ShenandoahFreeSet::rebuild(size_t young_reserve) {
     // which is reserved for promotion is enforced using thread-local variables that prescribe intentons within
     // each PLAB.  We do not reserve any of old-gen memory in order to facilitate the loaning of old-gen memory
     // to young-gen purposes.
+
+    // All old allocations are performed by the GC rather than the mutator, so these allocations need to be
+    // satisfied by is_collector_free regions.
     size_t old_reserve = 0;
     size_t to_reserve = young_reserve + old_reserve;
     reserve_regions(to_reserve);

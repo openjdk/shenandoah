@@ -63,6 +63,8 @@ private:
 
   void flip_to_gc(ShenandoahHeapRegion* r);
 
+  void adjust_bounds_for_additional_old_collector_free_region(size_t idx);
+
   void recompute_bounds();
   void adjust_bounds();
   bool touches_bounds(size_t num) const;
@@ -88,6 +90,8 @@ public:
   void clear();
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions);
   void rebuild(size_t young_reserve);
+
+  void add_old_collector_free_region(ShenandoahHeapRegion* region);
 
   void recycle_trash();
 
