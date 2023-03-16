@@ -529,74 +529,73 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   size_t min_threshold = min_free_threshold();
 
-  if (allocation_headroom < min_threshold) {
-    log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
-                 _generation->name(),
-                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                 byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
-#ifdef KELVIN_DEPRECATE
-    return resize_and_evaluate();
-#else
-    return true;
-#endif
-  }
-
-  // Check if we need to learn a bit about the application
-  const size_t max_learn = ShenandoahLearningSteps;
-  // Only run learning cycles on young generation
-  if (!_generation->is_old() && _gc_times_learned < max_learn) {
-    size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
-    if (allocation_headroom < init_threshold) {
-      log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
-                   _generation->name(), _gc_times_learned + 1, max_learn,
-                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                   byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
-      return true;
-    }
-  }
-
-  //  Rationale:
-  //    The idea is that there is an average allocation rate and there are occasional abnormal bursts (or spikes) of
-  //    allocations that exceed the average allocation rate.  What do these spikes look like?
-  //
-  //    1. At certain phase changes, we may discard large amounts of data and replace it with large numbers of newly
-  //       allocated objects.  This "spike" looks more like a phase change.  We were in steady state at M bytes/sec
-  //       allocation rate and now we're in a "reinitialization phase" that looks like N bytes/sec.  We need the "spike"
-  //       accomodation to give us enough runway to recalibrate our "average allocation rate".
-  //
-  //   2. The typical workload changes.  "Suddenly", our typical workload of N TPS increases to N+delta TPS.  This means
-  //       our average allocation rate needs to be adjusted.  Once again, we need the "spike" accomodation to give us
-  //       enough runway to recalibrate our "average allocation rate".
-  //
-  //    3. Though there is an "average" allocation rate, a given workload's demand for allocation may be very bursty.  We
-  //       allocate a bunch of LABs during the 5 ms that follow completion of a GC, then we perform no more allocations for
-  //       the next 150 ms.  It seems we want the "spike" to represent the maximum divergence from average within the
-  //       period of time between consecutive evaluation of the should_start_gc() service.  Here's the thinking:
-  //
-  //       a) Between now and the next time I ask whether should_start_gc(), we might experience a spike representing
-  //          the anticipated burst of allocations.  If that would put us over budget, then we should start GC immediately.
-  //       b) Between now and the anticipated depletion of allocation pool, there may be two or more bursts of allocations.
-  //          If there are more than one of these bursts, we can "approximate" that these will be separated by spans of
-  //          time with very little or no allocations so the "average" allocation rate should be a suitable approximation
-  //          of how this will behave.
-  //
-  //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
-  //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
-  //    computations an independent effort.
-
-
-  // TODO: Account for inherent delays in responding to GC triggers
-  //  1. It has been observed that delays of 200 ms or greater are common between the moment we return true from should_start_gc()
-  //     and the moment at which we begin execution of the concurrent reset phase.  Add this time into the calculation of
-  //     avg_cycle_time below.  (What is "this time"?  Perhaps we should remember recent history of this delay for the
-  //     running workload and use the maximum delay recently seen for "this time".)
-  //  2. The frequency of inquiries to should_start_gc() is adaptive, ranging between ShenandoahControlIntervalMin and
-  //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
-  //     the calculation of avg_cycle_time below.
-
   // OLD generation is maintained to be as small as possible.  Depletion of free pool triggers do not apply
   // to old generation.
   if (!_generation->is_old()) {
+
+    if (allocation_headroom < min_threshold) {
+      log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)", _generation->name(),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
+      return true;
+    }
+
+    // Check if we need to learn a bit about the application.  Only run learning cycles on young generation
+    const size_t max_learn = ShenandoahLearningSteps;
+
+    if (_gc_times_learned < max_learn) {
+      size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
+      if (allocation_headroom < init_threshold) {
+        log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT
+                     ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
+                     _generation->name(), _gc_times_learned + 1, max_learn,
+                     byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                     byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
+        return true;
+      }
+    }
+
+    //  Rationale:
+    //    The idea is that there is an average allocation rate and there are occasional abnormal bursts (or spikes) of
+    //    allocations that exceed the average allocation rate.  What do these spikes look like?
+    //
+    //    1. At certain phase changes, we may discard large amounts of data and replace it with large numbers of newly
+    //       allocated objects.  This "spike" looks more like a phase change.  We were in steady state at M bytes/sec
+    //       allocation rate and now we're in a "reinitialization phase" that looks like N bytes/sec.  We need the "spike"
+    //       accomodation to give us enough runway to recalibrate our "average allocation rate".
+    //
+    //   2. The typical workload changes.  "Suddenly", our typical workload of N TPS increases to N+delta TPS.  This means
+    //       our average allocation rate needs to be adjusted.  Once again, we need the "spike" accomodation to give us
+    //       enough runway to recalibrate our "average allocation rate".
+    //
+    //    3. Though there is an "average" allocation rate, a given workload's demand for allocation may be very bursty.  We
+    //       allocate a bunch of LABs during the 5 ms that follow completion of a GC, then we perform no more allocations for
+    //       the next 150 ms.  It seems we want the "spike" to represent the maximum divergence from average within the
+    //       period of time between consecutive evaluation of the should_start_gc() service.  Here's the thinking:
+    //
+    //       a) Between now and the next time I ask whether should_start_gc(), we might experience a spike representing
+    //          the anticipated burst of allocations.  If that would put us over budget, then we should start GC immediately.
+    //       b) Between now and the anticipated depletion of allocation pool, there may be two or more bursts of allocations.
+    //          If there are more than one of these bursts, we can "approximate" that these will be separated by spans of
+    //          time with very little or no allocations so the "average" allocation rate should be a suitable approximation
+    //          of how this will behave.
+    //
+    //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
+    //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
+    //    computations an independent effort.
+
+    // TODO: Account for inherent delays in responding to GC triggers
+    //  1. It has been observed that delays of 200 ms or greater are common between the moment we return true from
+    //     should_start_gc() and the moment at which we begin execution of the concurrent reset phase.  Add this time into
+    //     the calculation of avg_cycle_time below.  (What is "this time"?  Perhaps we should remember recent history of
+    //     this delay for the running workload and use the maximum delay recently seen for "this time".)  These obervations
+    //     of long delays for this transition were from early in the development of generational mode.  They may have
+    //     resuilted from errors in the implementation which were subsequently fixed.  More recently, these long delays
+    //     have not been observed.
+    //  2. The frequency of inquiries to should_start_gc() is adaptive, ranging between ShenandoahControlIntervalMin and
+    //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
+    //     the calculation of avg_cycle_time below.
+
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
     if (heap->mode()->is_generational()) {

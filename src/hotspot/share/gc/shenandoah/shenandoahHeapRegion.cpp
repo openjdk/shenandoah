@@ -1177,6 +1177,18 @@ void ShenandoahHeapRegion::promote_humongous() {
   oop obj = cast_to_oop(bottom());
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
+#undef KELVIN_REPROMOTE
+#ifdef KELVIN_REPROMOTE
+  size_t required_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+  HeapWord* end_addr = bottom() + obj->size();
+  size_t waste = (bottom() + required_regions * ShenandoahHeapRegion::region_size_bytes()) - end_addr;
+  waste *= HeapWordSize;
+  log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (" SIZE_FORMAT
+                     " total regions with cohorts) in place for object of size " SIZE_FORMAT ", waste: " SIZE_FORMAT,
+                     index(), required_regions, obj->size() * HeapWordSize, waste);
+#endif
+
+
 #ifdef KELVIN_PIP
   log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (and cohorts) in place", index());
 #endif
