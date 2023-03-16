@@ -717,7 +717,7 @@ void ShenandoahGeneration::clear_used() {
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
-#define KELVIN_TRACE_GENERATIONS
+#undef KELVIN_TRACE_GENERATIONS
 #ifdef KELVIN_TRACE_GENERATIONS
   log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
 		     name(), bytes, _used, _max_capacity);

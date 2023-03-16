@@ -119,12 +119,13 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
   size_t rightmost = _heap->num_regions() - 1;
   size_t leftmost = 0;
 
+  size_t min_size = req.is_lab_alloc()? req.min_size(): req.size();
   for (size_t c = rightmost + 1; c > leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
     if (r->affiliation() == affiliation && !r->is_humongous()) {
-      if (!r->is_cset() && !has_no_alloc_capacity(r)) {
+      if (!r->is_cset() && (alloc_capacity(r) >= min_size)) {
 #undef KELVIN_AWOA
 #ifdef KELVIN_AWOA
         log_info(gc, ergo)("awoa tries region " SIZE_FORMAT " which has " SIZE_FORMAT " free", r->index(), r->free());
@@ -236,10 +237,10 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
             free_candidates++;
           }
 #endif
-
           // try_allocate_in() increases used if the allocation is successful.
-          HeapWord* result = try_allocate_in(r, req, in_new_region);
-          if (result != NULL) {
+          HeapWord* result;
+          size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab)? req.min_size(): req.size();
+          if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
             return result;
           }
         }
