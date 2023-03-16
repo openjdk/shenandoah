@@ -352,6 +352,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   // req.size() is in words, r->free() is in bytes.
   if (ShenandoahElasticTLAB && req.is_lab_alloc()) {
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
+      assert(is_collector_free(r->index()), "PLABS must be allocated in collector_free regions");
+
       // Need to assure that plabs are aligned on multiple of card region.
       size_t free = r->free();
       size_t usable_free = (free / CardTable::card_size()) << CardTable::card_shift();
@@ -394,7 +396,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         if (free > usable_free) {
           // Account for the alignment padding
           size_t padding = (free - usable_free) * HeapWordSize;
+#ifdef KELVIN_DEPRECATE
+          // PLABS reside in old-gen.  Their regions should not be is_mutator_free.  So we should not increase_used().
           increase_used(padding);
+#endif
           assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
           _heap->old_generation()->increase_used(padding);
           // For verification consistency, we need to report this padding to _heap
@@ -450,7 +455,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       if (free > usable_free) {
         // Account for the alignment padding
         size_t padding = (free - usable_free) * HeapWordSize;
+#ifdef KELVIN_DEPRECATE
+        // PLAB allocations are collector_is_free.  We only increase_Used for mutator allocations.
         increase_used(padding);
+#endif
         assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
         _heap->old_generation()->increase_used(padding);
         // For verification consistency, we need to report this padding to _heap
