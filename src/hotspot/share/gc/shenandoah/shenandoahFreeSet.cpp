@@ -551,11 +551,15 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   // While individual regions report their true use, all humongous regions are
   // marked used in the free set.
-  increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
+  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+  size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
+  increase_used(total_humongous_size);
   if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
     _heap->young_generation()->increase_used(words_size * HeapWordSize);
+    _heap->young_generation()->increase_humongous_waste(humongous_waste);
   } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
     _heap->old_generation()->increase_used(words_size * HeapWordSize);
+    _heap->old_generation()->increase_humongous_waste(humongous_waste);
   }
 
   if (remainder != 0) {

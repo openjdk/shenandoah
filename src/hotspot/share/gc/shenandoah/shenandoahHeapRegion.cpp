@@ -672,25 +672,7 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_heaplocked();
 
-  size_t humongous_waste = 0;
-  if (is_humongous()) {
-    ShenandoahHeapRegion* start = humongous_start_region();
-    HeapWord* obj_addr = start->bottom();
-    oop obj = cast_to_oop(obj_addr);
-    size_t word_size = obj->size();
-    HeapWord* end_addr = obj_addr + word_size;
-    if (end_addr < end()) {
-      humongous_waste = (end() - end_addr) * HeapWordSize;
-    }
-    // else, this region is entirely spanned by humongous object so contributes no humongous waste
-  }
-  if (affiliation() == YOUNG_GENERATION) {
-    heap->young_generation()->decrease_used(used());
-    heap->young_generation()->decrease_humongous_waste(humongous_waste);
-  } else if (affiliation() == OLD_GENERATION) {
-    heap->old_generation()->decrease_used(used());
-    heap->old_generation()->decrease_humongous_waste(humongous_waste);
-  }
+  heap->generation_for(affiliation())->decrease_used(used());
 
   set_top(bottom());
   clear_live_data();
