@@ -71,8 +71,8 @@ void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* regi
   shenandoah_assert_heaplocked();
   size_t idx = region->index();
   assert(!is_mutator_free(idx) & !is_collector_free(idx), "Promoted in place region should not be mutator_free or collector_free");
-  // TODO: we really want to label this as old-collector-free but that is not yet implemented.
-  _mutator_free_bitmap.set_bit(region->index());
+  // TODO: we really want to label this as old_collector_free but that is not yet implemented.
+  _mutator_free_bitmap.set_bit(idx);
   // This region was previously not 
   adjust_bounds_for_additional_old_collector_free_region(idx);
 }
@@ -81,12 +81,15 @@ void ShenandoahFreeSet::adjust_bounds_for_additional_old_collector_free_region(s
   // TODO: this should modify _old_collector_leftmost and _old_collector_rightmost, when they are implemented,
   ShenandoahHeapRegion* r = _heap->get_region(idx);
 
-  // TODO: add available to _old_capacity rather than _capacity below.
+  // TODO: add available to _old_collector_capacity rather than _capacity, because we'll mark this region as is_old_collector_free
   _capacity += r->free();
   // Only adjust _mutator_leftmost and _mutator_rightmost.
+  // In the case that there were previously zero is_mutator_free regions, we will have to adjust both leftmost and rightmost
+  // because leftmost will equal _max and rightmost will equal 0.
   if (idx < _mutator_leftmost) {
     _mutator_leftmost = idx;
-  } else if (idx > _mutator_rightmost) {
+  }
+  if (idx > _mutator_rightmost) {
     _mutator_rightmost = idx;
   }
 }
