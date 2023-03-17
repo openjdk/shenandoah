@@ -724,6 +724,7 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 #endif
   // This detects arithmetic wraparound on _used.  Non-generational mode does not keep track of _affiliated_region_count
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used cannot exceed regions");
 }
@@ -733,6 +734,7 @@ void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
   if (bytes > 0) {
     _humongous_waste += bytes;
     assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+           ShenandoahHeap::heap()->is_full_gc_in_progress() ||
            (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
            "waste cannot exceed regions");
 #ifdef KELVIN_TRACE_GENERATIONS
@@ -745,8 +747,8 @@ void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
   if (bytes > 0) {
     shenandoah_assert_heaplocked_or_fullgc_safepoint();
-    assert(_humongous_waste >= bytes, "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")",
-           _humongous_waste, bytes);
+    assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
+           "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")", _humongous_waste, bytes);
     _humongous_waste -= bytes;
 #ifdef KELVIN_TRACE_GENERATIONS
     log_info(gc, ergo)("decreasing %s humongous waste by " SIZE_FORMAT ", yielding " SIZE_FORMAT,
@@ -827,9 +829,6 @@ size_t ShenandoahGeneration::adjusted_unaffiliated_regions() const {
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
-#ifdef KELVIN_DEPRECATE
-  assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_size_for(this), "Cannot increase generation capacity beyond maximum.");
-#endif
   // We do not enforce that new capacity >= heap->max_size_for(this).  The maximum generation size is treated as a rule of thumb
   // which may be violated during certain transitions, such as when we are forcing transfers for the purpose of promoting regions
   // in place.
@@ -840,7 +839,8 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   _adjusted_capacity += increment;
 
   // This detects arithmetic wraparound on _used
-  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
 
 #ifdef KELVIN_TRACE_GENERATIONS
@@ -864,10 +864,12 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   _adjusted_capacity -= decrement;
 
   // This detects arithmetic wraparound on _used
-  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used,
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
   assert(_used <= _max_capacity, "Cannot use more than capacity");
-  assert(_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() <= _max_capacity,
+  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() <= _max_capacity),
          "Cannot use more than capacity");
 
 #ifdef KELVIN_TRACE_GENERATIONS

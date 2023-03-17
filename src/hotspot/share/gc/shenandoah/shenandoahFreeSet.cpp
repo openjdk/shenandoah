@@ -70,11 +70,25 @@ void ShenandoahFreeSet::increase_used(size_t num_bytes) {
 void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
   size_t idx = region->index();
-  assert(!is_mutator_free(idx) & !is_collector_free(idx), "Promoted in place region should not be mutator_free or collector_free");
+  // TODO: the region that has been promoted in place may have been previously identified as is_collector_free or
+  // is_mutator_free.  When we restructure the implementation of ShenandoahFreeSet to give special handling to
+  // is_old_collector_free, we should also enforce that the region to be promoted, which is YOUNG and has no
+  // available memory after its promote-in-place-pad has been inserted above original top, is identified as neither
+  // is_mutator_free nor is_collecor_free nor is_old_collector_free.
+
   // TODO: we really want to label this as old_collector_free but that is not yet implemented.
-  _mutator_free_bitmap.set_bit(idx);
-  // This region was previously not 
-  adjust_bounds_for_additional_old_collector_free_region(idx);
+  if (!is_mutator_free(idx)) {
+  } else {
+    if (is_collector_free(idx)) {
+      _collector_free_bitmap.clear_bit(idx);
+      if (touches_bounds(idx)) {
+        adjust_bounds();
+      }
+    }
+    _mutator_free_bitmap.set_bit(idx);
+    adjust_bounds_for_additional_old_collector_free_region(idx);
+  }
+  // Else, there's nothing to do.  Region is already identified is_mutator_free and the bounds are already set as such.
 }
 
 void ShenandoahFreeSet::adjust_bounds_for_additional_old_collector_free_region(size_t idx) {
