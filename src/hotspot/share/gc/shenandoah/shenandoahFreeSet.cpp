@@ -36,7 +36,7 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
-#define KELVIN_MONITOR
+#undef KELVIN_MONITOR
 
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
@@ -863,8 +863,15 @@ void ShenandoahFreeSet::rebuild() {
       was_collector_free = true;
     }
 #endif
+
+    // We move all young available regions into mutator_free set and then we take back the regions we need for our
+    // reserve.  This allows us to "compact" the collector_free (survivor) regions at the high end of the heap.
+    _mutator_free_bitmap.clear_bit(idx);
+    _collector_free_bitmap.clear_bit(idx);
+    _old_collector_free_bitmap.clear_bit(idx);
+
     if (region->is_alloc_allowed() || region->is_trash()) {
-      assert(!region->is_cset(), "Shouldn't be adding those to the free set");
+      assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
 
 #ifdef KELVIN_MONITOR_X
       if (has_no_alloc_capacity(region)) {
@@ -1006,8 +1013,8 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     }
   }
 #ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("Successfully reserved: " SIZE_FORMAT " between " SIZE_FORMAT " and " SIZE_FORMAT
-                     ", old reserved: " SIZE_FORMAT " between " SIZE_FORMAT " and " SIZE_FORMAT
+  log_info(gc, ergo)("Successfully reserved for young: " SIZE_FORMAT " between " SIZE_FORMAT " and " SIZE_FORMAT
+                     ", reserved for old: " SIZE_FORMAT " between " SIZE_FORMAT " and " SIZE_FORMAT
                      " (of which " SIZE_FORMAT " is scattered)"
                      ", with remaining allocation capacity: " SIZE_FORMAT,
                      reserved, leftmost_reserved, rightmost_reserved,
@@ -1018,14 +1025,17 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
-#ifdef KELVIN_MONITOR
+#ifdef ASSERT
+  // Dump of the FreeSet details is only enabled if assertions are enabled
   {
 #define BUFFER_SIZE 80
     char buffer[BUFFER_SIZE];
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
-    log_info(gc, ergo)("ShenandoahFreeSet::log_status() reporting for duty with " SIZE_FORMAT " regions", _heap->num_regions());
+    log_info(gc, ergo)("FreeSet map legend: m - mutator_free, c - collector_free, C - old_collector_free");
+    log_info(gc, ergo)("                    h - humongous young, H - humongous old, ~ - unavailable old, - - unavailable young");
+    log_info(gc, ergo)("                    Various unexpected error conditions represented by *, $, !, #");
     log_info(gc, ergo)(" mutator left: " SIZE_FORMAT " and right: " SIZE_FORMAT 
                        ", collector left: " SIZE_FORMAT " and right: " SIZE_FORMAT
                        ", old collector left: " SIZE_FORMAT " and right: " SIZE_FORMAT,
@@ -1056,7 +1066,9 @@ void ShenandoahFreeSet::log_status() {
       } else if (is_old_collector_free(i)) {
         buffer[idx] = 'C';
       }
-      else {
+      else if (r->is_humongous()) {
+        buffer[idx] = (r->is_old())? 'H': 'h';
+      } else {
         buffer[idx] = (r->is_old())? '~': '-';
       }
     }
