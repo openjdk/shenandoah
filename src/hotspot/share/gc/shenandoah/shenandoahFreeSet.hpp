@@ -50,6 +50,9 @@ private:
   size_t _old_capacity;
   size_t _used;
 
+  // When is_old_collector_free regions sparsely populate the lower address ranges of the heap, we search from left to
+  // right in order to consume (and remove from the is_old_collector_free range) these sparsely distributed regions.
+  // This allows us to more quickly condense the range of addresses that represent old_collector_free regions.
   bool _old_collector_search_left_to_right = true;
 
 

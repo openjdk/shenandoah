@@ -949,7 +949,7 @@ void ShenandoahFreeSet::rebuild() {
   recompute_bounds();
   assert_bounds();
 #ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("After rebuild and reserve and recomputing bounds, search left to right is: %s",
+  log_info(gc, ergo)("After rebuild and reserve and recomputing bounds, allocate old left to right is: %s",
                      _old_collector_search_left_to_right? "true": "false");
   log_status();
 #endif
@@ -1033,12 +1033,13 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
-    log_info(gc, ergo)("FreeSet map legend: m - mutator_free, c - collector_free, C - old_collector_free");
-    log_info(gc, ergo)("                    h - humongous young, H - humongous old, ~ - unavailable old, - - unavailable young");
-    log_info(gc, ergo)("                    Various unexpected error conditions represented by *, $, !, #");
-    log_info(gc, ergo)(" mutator left: " SIZE_FORMAT " and right: " SIZE_FORMAT 
-                       ", collector left: " SIZE_FORMAT " and right: " SIZE_FORMAT
-                       ", old collector left: " SIZE_FORMAT " and right: " SIZE_FORMAT,
+    log_info(gc, ergo)("FreeSet map legend:\n"
+                       "      m - mutator_free, c - collector_free, C - old_collector_free\n"
+                       "      h - humongous young, H - humongous old, ~ - unavailable old, - - unavailable young\n\n"
+                       "      Various unexpected error conditions represented by *, $, !, #");
+    log_info(gc, ergo)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
+                       " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
+                       "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "]",
                        _mutator_leftmost, _mutator_rightmost, _collector_leftmost, _collector_rightmost,
                        _old_collector_leftmost, _old_collector_rightmost);
     for (uint i = 0; i < _heap->num_regions(); i++) {
