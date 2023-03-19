@@ -81,7 +81,10 @@ private:
 
   void recompute_bounds();
   void adjust_bounds();
+  bool adjust_mutator_bounds_if_touched(size_t idx);
   bool touches_bounds(size_t num) const;
+  bool expand_collector_bounds_maybe(size_t idx);
+  bool expand_old_collector_bounds_maybe(size_t idx);
 
   void increase_used(size_t amount);
   void clear_internal();

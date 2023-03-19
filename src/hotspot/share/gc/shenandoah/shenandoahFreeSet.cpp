@@ -511,6 +511,22 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   return result;
 }
 
+// If idx represents a mutator bound, recompute the mutator bounds, returning true iff bounds were adjusted.
+bool ShenandoahFreeSet::adjust_mutator_bounds_if_touched(size_t idx) {
+  if (idx == _mutator_leftmost || idx == _mutator_rightmost) {
+    // Rewind both mutator bounds until the next bit.
+    while (_mutator_leftmost < _max && !is_mutator_free(_mutator_leftmost)) {
+      _mutator_leftmost++;
+    }
+    while (_mutator_rightmost > 0 && !is_mutator_free(_mutator_rightmost)) {
+      _mutator_rightmost--;
+    }
+    return true;
+  } else {
+    return false;
+  }
+}
+
 bool ShenandoahFreeSet::touches_bounds(size_t num) const {
   return (num == _collector_leftmost || num == _collector_rightmost ||
           num == _old_collector_leftmost || num == _old_collector_rightmost ||
@@ -548,7 +564,33 @@ void ShenandoahFreeSet::recompute_bounds() {
     _old_collector_search_left_to_right = (old_collector_available_in_second_half > old_collector_available_in_first_half);
   }
 }
-  
+
+bool ShenandoahFreeSet::expand_collector_bounds_maybe(size_t idx) {
+  bool result = false;
+  if (idx < _collector_leftmost) {
+    _collector_leftmost = idx;
+    result = true;
+  }
+  if (idx > _collector_rightmost) {
+    _collector_rightmost = idx;
+    result = true;
+  }
+  return result;
+}
+
+bool ShenandoahFreeSet::expand_old_collector_bounds_maybe(size_t idx) {
+  bool result = false;
+  if (idx < _old_collector_leftmost) {
+    _old_collector_leftmost = idx;
+    result = true;
+  }
+  if (idx > _old_collector_rightmost) {
+    _old_collector_rightmost = idx;
+    result = true;
+  }
+  return result;
+}
+
 void ShenandoahFreeSet::adjust_bounds() {
 #ifdef KELVIN_MONITOR
   size_t original_m_left = _mutator_leftmost;
@@ -773,20 +815,15 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
 #endif
   _mutator_free_bitmap.clear_bit(idx);
   _old_collector_free_bitmap.set_bit(idx);
-  _old_collector_leftmost = MIN2(idx, _old_collector_leftmost);
-  _old_collector_rightmost = MAX2(idx, _old_collector_rightmost);
-
+  bool result = expand_old_collector_bounds_maybe(idx);
 #ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("Flipping region " SIZE_FORMAT " to OLD GC, collector range: [" SIZE_FORMAT "-" SIZE_FORMAT "] to ["
-                     SIZE_FORMAT "-" SIZE_FORMAT "]",
-                     idx, original_left, original_right, _old_collector_leftmost, _old_collector_rightmost);
+  log_info(gc, ergo)("Flipping region " SIZE_FORMAT " to OLD GC, %s collector range: [" SIZE_FORMAT "-" SIZE_FORMAT "] to ["
+                     SIZE_FORMAT "-" SIZE_FORMAT "]", idx, result? "expanded": "preserved",
+ original_left, original_right, _old_collector_leftmost, _old_collector_rightmost);
 #endif
 
   _capacity -= alloc_capacity(r);
-
-  if (touches_bounds(idx)) {
-    adjust_bounds();
-  }
+  adjust_mutator_bounds_if_touched(idx);
   assert_bounds();
 
   // We do not ensure that the region is no longer trash,
@@ -806,9 +843,7 @@ void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
 #endif
   _mutator_free_bitmap.clear_bit(idx);
   _collector_free_bitmap.set_bit(idx);
-  _collector_leftmost = MIN2(idx, _collector_leftmost);
-  _collector_rightmost = MAX2(idx, _collector_rightmost);
-
+  bool result = expand_collector_bounds_maybe(idx);
 #ifdef KELVIN_MONITOR
   log_info(gc, ergo)("Flipping region " SIZE_FORMAT " to GC, collector range: [" SIZE_FORMAT "-" SIZE_FORMAT "] to ["
                      SIZE_FORMAT "-" SIZE_FORMAT "]",
@@ -816,10 +851,7 @@ void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
 #endif
 
   _capacity -= alloc_capacity(r);
-
-  if (touches_bounds(idx)) {
-    adjust_bounds();
-  }
+  adjust_mutator_bounds_if_touched(idx);
   assert_bounds();
 
   // We do not ensure that the region is no longer trash,
