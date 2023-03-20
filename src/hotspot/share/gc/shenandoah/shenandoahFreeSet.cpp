@@ -992,8 +992,6 @@ void ShenandoahFreeSet::rebuild() {
     // which is reserved for promotion is enforced using thread-local variables that prescribe intentons within
     // each PLAB.  We do not reserve any of old-gen memory in order to facilitate the loaning of old-gen memory
     // to young-gen purposes.
-
- <<<<<<< HEAD
     if (_heap->has_evacuation_reserve_quantities()) {
       // We are rebuilding at the end of final mark, having established evacuation budgets for this GC pass.
       young_reserve = _heap->get_young_evac_reserve();
@@ -1011,30 +1009,6 @@ void ShenandoahFreeSet::rebuild() {
       log_info(gc, ergo)("Freeset for next evacuation, young reserve: " SIZE_FORMAT ", old reserve: " SIZE_FORMAT,
                          young_reserve, old_reserve);
 #endif
-
-
-=======
-  recompute_bounds();
-  assert_bounds();
-}
-
-void ShenandoahFreeSet::reserve_regions(size_t to_reserve) {
-  size_t reserved = 0;
-
-  for (size_t idx = _heap->num_regions() - 1; idx > 0; idx--) {
-    if (reserved >= to_reserve) break;
-
-    ShenandoahHeapRegion* region = _heap->get_region(idx);
-    if (_mutator_free_bitmap.at(idx) && can_allocate_from(region)) {
-      _mutator_free_bitmap.clear_bit(idx);
-      _collector_free_bitmap.set_bit(idx);
-      size_t ac = alloc_capacity(region);
-      _capacity -= ac;
-      reserved += ac;
-      log_debug(gc, free)("  Shifting Region " SIZE_FORMAT " (Free: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s) to collector free set",
-                          idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
-                               byte_size_in_proper_unit(region->used()), proper_unit_for_byte_size(region->used()));
->>>>>>> GitFarmTrunk/shenandoah
     }
   }
   reserve_regions(young_reserve, old_reserve);
@@ -1065,14 +1039,14 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
       log_info(gc, ergo)("Resevations are done");
     }
 #endif
-    ShenandoahHeapRegion* region = _heap->get_region(idx);
-    if (_mutator_free_bitmap.at(idx) && (alloc_capacity(region) > 0)) {
-      assert(!region->is_old(), "mutator is free regions should not be affiliated OLD");
+    ShenandoahHeapRegion* r = _heap->get_region(idx);
+    if (_mutator_free_bitmap.at(idx) && (alloc_capacity(r) > 0)) {
+      assert(!r->is_old(), "mutator is free regions should not be affiliated OLD");
       // OLD regions that have available memory are already in the old_collector free set
       if ((_old_capacity < to_reserve_old) && (r->is_trash() || (r->affiliation() == ShenandoahRegionAffiliation::FREE))) {
         _mutator_free_bitmap.clear_bit(idx);
         _old_collector_free_bitmap.set_bit(idx);
-        size_t ac = alloc_capacity(region);
+        size_t ac = alloc_capacity(r);
         _capacity -= ac;
         _old_capacity += ac;
 #ifdef KELVIN_MONITOR
@@ -1089,7 +1063,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
         // ephemeral objects.  It also delays aging of regions, causing promotion in place to be delayed.
         _mutator_free_bitmap.clear_bit(idx);
         _collector_free_bitmap.set_bit(idx);
-        size_t ac = alloc_capacity(region);
+        size_t ac = alloc_capacity(r);
         _capacity -= ac;
         reserved += ac;
 #ifdef KELVIN_MONITOR
