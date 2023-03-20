@@ -93,7 +93,7 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (uint i = 0; i < heap->num_regions(); ++i) {
     ShenandoahHeapRegion* r = heap->get_region(i);
-    if (r->age() > 0 && r->age() < AgeTable::table_size) {
+    if (r->is_young() && r->age() > 0 && r->age() < AgeTable::table_size) {
       region_ages.add(r->age(), r->get_live_data_words());
     }
   }
