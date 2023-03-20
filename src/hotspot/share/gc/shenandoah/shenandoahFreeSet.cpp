@@ -1067,8 +1067,8 @@ void ShenandoahFreeSet::log_status() {
     }
     log_info(gc, ergo)("FreeSet map legend:\n"
                        "      m - mutator_free, c - collector_free, C - old_collector_free\n"
-                       "      h - humongous young, H - humongous old, ~ - unavailable old, - - unavailable young\n\n"
-                       "      Various unexpected error conditions represented by *, $, !, #");
+                       "      h - humongous young, H - humongous old, ~ - unavailable old, _ - unavailable young\n"
+                       "      Read The Source for unexpected codes: *, $, !, #");
     log_info(gc, ergo)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "]",
@@ -1102,7 +1102,7 @@ void ShenandoahFreeSet::log_status() {
       else if (r->is_humongous()) {
         buffer[idx] = (r->is_old())? 'H': 'h';
       } else {
-        buffer[idx] = (r->is_old())? '~': '-';
+        buffer[idx] = (r->is_old())? '~': '_';
       }
     }
     uint remnant = _heap->num_regions() % 64;
