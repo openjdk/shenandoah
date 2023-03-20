@@ -983,8 +983,8 @@ void ShenandoahFreeSet::rebuild() {
 #ifdef KELVIN_MONITOR
   log_info(gc, ergo)("After rebuild and reserve and recomputing bounds, allocate old left to right is: %s",
                      _old_collector_search_left_to_right? "true": "false");
-  log_status();
 #endif
+  log_status();
 }
 
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
@@ -1198,7 +1198,25 @@ void ShenandoahFreeSet::log_status() {
         }
       }
 
-      ls.print_cr("Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s",
+      ls.print_cr("Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s",
+                  byte_size_in_proper_unit(total_free), proper_unit_for_byte_size(total_free),
+                  byte_size_in_proper_unit(max),        proper_unit_for_byte_size(max));
+    }
+
+    {
+      size_t max = 0;
+      size_t total_free = 0;
+
+      for (size_t idx = _old_collector_leftmost; idx <= _old_collector_rightmost; idx++) {
+        if (is_old_collector_free(idx)) {
+          ShenandoahHeapRegion *r = _heap->get_region(idx);
+          size_t free = alloc_capacity(r);
+          max = MAX2(max, free);
+          total_free += free;
+        }
+      }
+
+      ls.print_cr("Old Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s",
                   byte_size_in_proper_unit(total_free), proper_unit_for_byte_size(total_free),
                   byte_size_in_proper_unit(max),        proper_unit_for_byte_size(max));
     }
