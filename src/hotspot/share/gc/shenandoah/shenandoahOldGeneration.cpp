@@ -54,18 +54,14 @@
 class ShenandoahFlushAllSATB : public ThreadClosure {
  private:
   SATBMarkQueueSet& _satb_qset;
-  uintx _claim_token;
 
  public:
   explicit ShenandoahFlushAllSATB(SATBMarkQueueSet& satb_qset) :
-    _satb_qset(satb_qset),
-    _claim_token(Threads::thread_claim_token()) { }
+    _satb_qset(satb_qset) {}
 
   void do_thread(Thread* thread) {
-    if (thread->claim_threads_do(true, _claim_token)) {
-      // Transfer any partial buffer to the qset for completed buffer processing.
-      _satb_qset.flush_queue(ShenandoahThreadLocalData::satb_mark_queue(thread));
-    }
+    // Transfer any partial buffer to the qset for completed buffer processing.
+    _satb_qset.flush_queue(ShenandoahThreadLocalData::satb_mark_queue(thread));
   }
 };
 
@@ -90,7 +86,7 @@ class ShenandoahProcessOldSATB : public SATBBufferClosure {
       oop *p = (oop *) &buffer[i];
       ShenandoahHeapRegion* region = _heap->heap_region_containing(*p);
       if (region->is_old() && region->is_active()) {
-          ShenandoahMark::mark_through_ref<oop, OLD>(p, _queue, NULL, _mark_context, false);
+          ShenandoahMark::mark_through_ref<oop, OLD>(p, _queue, nullptr, _mark_context, false);
       } else {
         ++_trashed_oops;
       }
@@ -122,7 +118,7 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahSATBMarkQueueSet &satb_queues = ShenandoahBarrierSet::satb_mark_queue_set();
     ShenandoahFlushAllSATB flusher(satb_queues);
-    Threads::threads_do(&flusher);
+    Threads::possibly_parallel_threads_do(true /* is_par */, &flusher);
 
     ShenandoahObjToScanQueue* mark_queue = _mark_queues->queue(worker_id);
     ShenandoahProcessOldSATB processor(mark_queue);
@@ -421,7 +417,7 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
 #endif
 
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
-  assert(ShenandoahOldGCHeuristics != NULL, "ShenandoahOldGCHeuristics should not equal NULL");
+  assert(ShenandoahOldGCHeuristics != nullptr, "ShenandoahOldGCHeuristics should not be unset");
   ShenandoahHeuristics* trigger;
   if (strcmp(ShenandoahOldGCHeuristics, "static") == 0) {
     trigger = new ShenandoahStaticHeuristics(this);
@@ -432,7 +428,7 @@ ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahM
   } else {
     vm_exit_during_initialization("Unknown -XX:ShenandoahOldGCHeuristics option (must be one of: static, adaptive, compact)");
     ShouldNotReachHere();
-    return NULL;
+    return nullptr;
   }
   trigger->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
   _old_heuristics = new ShenandoahOldHeuristics(this, trigger);

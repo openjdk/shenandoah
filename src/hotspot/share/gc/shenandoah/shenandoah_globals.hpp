@@ -147,7 +147,7 @@
           "cases. In percents of (soft) max heap size.")                    \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahLearningSteps, 5, EXPERIMENTAL,                  \
+  product(uintx, ShenandoahLearningSteps, 10, EXPERIMENTAL,                 \
           "The number of cycles some heuristics take to collect in order "  \
           "to learn application and GC performance.")                       \
           range(0,100)                                                      \
@@ -181,7 +181,7 @@
           "the heuristic is to allocation spikes. Decreasing this number "  \
           "increases the sensitivity. ")                                    \
                                                                             \
-  product(double, ShenandoahAdaptiveDecayFactor, 0.5, EXPERIMENTAL,         \
+  product(double, ShenandoahAdaptiveDecayFactor, 0.1, EXPERIMENTAL,         \
           "The decay factor (alpha) used for values in the weighted "       \
           "moving average of cycle time and allocation rate. "              \
           "Larger values give more weight to recent values.")               \
@@ -240,12 +240,6 @@
           "Sampling rate for heap region sampling. In milliseconds between "\
           "the samples. Higher values provide more fidelity, at expense "   \
           "of more sampling overhead.")                                     \
-                                                                            \
-  product(ccstr, ShenandoahRegionSamplingFile,                              \
-          "./shenandoahSnapshots_pid%p.log",                                \
-          "If ShenandoahLogRegionSampling is on, save sampling data stream "\
-          "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
-          "(%p replaced with pid)")                                         \
                                                                             \
   product(uintx, ShenandoahControlIntervalMin, 1, EXPERIMENTAL,             \
           "The minimum sleep interval for the control loop that drives "    \
@@ -317,7 +311,7 @@
           "which upgrades to full GC whenever the budget is exceeded.")     \
           range(1.0,100.0)                                                  \
                                                                             \
-  product(uintx, ShenandoahMaxEvacLABRatio, 16, EXPERIMENTAL,               \
+  product(uintx, ShenandoahMaxEvacLABRatio, 0, EXPERIMENTAL,                \
           "Potentially, each running thread maintains a PLAB for "          \
           "evacuating objects into old-gen memory and a GCLAB for "         \
           "evacuating objects into young-gen memory.  Each time a thread "  \
@@ -333,7 +327,7 @@
           "stop-the-world pauses.  This is because a large value "          \
           "allows individual threads to consume large percentages of "      \
           "the total evacuation budget without necessarily effectively "    \
-          "filling their local evcauation buffers with evacuated "          \
+          "filling their local evacuation buffers with evacuated "          \
           "objects.  A value of zero means no maximum size is enforced.")   \
           range(0, 1024)                                                    \
                                                                             \

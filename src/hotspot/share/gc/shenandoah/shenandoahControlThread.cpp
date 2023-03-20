@@ -62,7 +62,7 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _requested_gc_cause(GCCause::_no_cause_specified),
   _requested_generation(GenerationMode::GLOBAL),
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
-  _degen_generation(NULL),
+  _degen_generation(nullptr),
   _allocs_seen(0),
   _mode(none) {
   set_name("Shenandoah Control Thread");
@@ -143,7 +143,7 @@ void ShenandoahControlThread::run_service() {
       if (degen_point == ShenandoahGC::_degenerated_outside_cycle) {
         _degen_generation = heap->mode()->is_generational() ? heap->young_generation() : heap->global_generation();
       } else {
-        assert(_degen_generation != NULL, "Need to know which generation to resume.");
+        assert(_degen_generation != nullptr, "Need to know which generation to resume.");
       }
 
       ShenandoahHeuristics* heuristics = _degen_generation->heuristics();
@@ -267,12 +267,18 @@ void ShenandoahControlThread::run_service() {
         ShenandoahHeapLocker locker(heap->lock());
         heap->free_set()->log_status();
       }
-
+      // In case this is a degenerated cycle, remember whether original cycle was aging.
+      bool was_aging_cycle = heap->is_aging_cycle();
       heap->set_aging_cycle(false);
       {
         switch (_mode) {
           case concurrent_normal: {
-            if ((generation == YOUNG) && (age_period-- == 0)) {
+            // At this point:
+            //  if (generation == YOUNG), this is a normal YOUNG cycle
+            //  if (generation == OLD), this is a bootstrap OLD cycle
+            //  if (generation == GLOBAL), this is a GLOBAL cycle triggered by System.gc()
+            // In all three cases, we want to age old objects if this is an aging cycle
+            if (age_period-- == 0) {
               heap->set_aging_cycle(true);
               age_period = ShenandoahAgingCyclePeriod - 1;
             }
@@ -280,6 +286,7 @@ void ShenandoahControlThread::run_service() {
             break;
           }
           case stw_degenerated: {
+            heap->set_aging_cycle(was_aging_cycle);
             if (!service_stw_degenerated_cycle(cause, degen_point)) {
               // The degenerated GC was upgraded to a Full GC
               generation = GLOBAL;
@@ -287,6 +294,10 @@ void ShenandoahControlThread::run_service() {
             break;
           }
           case stw_full: {
+            if (age_period-- == 0) {
+              heap->set_aging_cycle(true);
+              age_period = ShenandoahAgingCyclePeriod - 1;
+            }
             service_stw_full_cycle(cause);
             break;
           }
@@ -475,10 +486,14 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(
       ShouldNotReachHere();
   }
   const char* msg;
-  if (heap->cancelled_gc()) {
-    msg = (generation == YOUNG)? "At end of Interrupted Concurrent Young GC": "At end of Interrupted Concurrent Bootstrap GC";
+  if (heap->mode()->is_generational()) {
+    if (heap->cancelled_gc()) {
+      msg = (generation == YOUNG)? "At end of Interrupted Concurrent Young GC": "At end of Interrupted Concurrent Bootstrap GC";
+    } else {
+      msg = (generation == YOUNG)? "At end of Concurrent Young GC": "At end of Concurrent Bootstrap GC";
+    }
   } else {
-    msg = (generation == YOUNG)? "At end of Concurrent Young GC": "At end of Concurrent Bootstrap GC";
+    msg = heap->cancelled_gc() ? "At end of cancelled GC" : "At end of GC";
   }
   heap->log_heap_status(msg);
 }
@@ -791,10 +806,11 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
          cause == GCCause::_codecache_GC_aggressive ||
          cause == GCCause::_codecache_GC_threshold ||
          cause == GCCause::_full_gc_alot ||
+         cause == GCCause::_wb_young_gc ||
          cause == GCCause::_wb_full_gc ||
          cause == GCCause::_wb_breakpoint ||
          cause == GCCause::_scavenge_alot,
-         "only requested GCs here");
+         "only requested GCs here: %s", GCCause::to_string(cause));
 
   if (is_explicit_gc(cause)) {
     if (!DisableExplicitGC) {

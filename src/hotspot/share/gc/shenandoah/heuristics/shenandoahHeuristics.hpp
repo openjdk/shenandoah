@@ -65,6 +65,8 @@ class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Full_Penalty        = 20; // how much to penalize average GC duration history on Full GC
 
 protected:
+  static const uint Moving_Average_Samples = 10; // Number of samples to store in moving averages
+
   typedef struct {
     ShenandoahHeapRegion* _region;
     size_t _garbage;
@@ -77,7 +79,7 @@ protected:
   // if (_generation->generation_mode() == OLD) _region_data represents
   //  the results of most recently completed old-gen marking pass
   // if (_generation->generation_mode() == YOUNG) _region_data represents
-  //  the resulits of most recently completed young-gen marking pass
+  //  the results of most recently completed young-gen marking pass
   //
   // Note that there is some redundancy represented in _region_data because
   // each instance is an array large enough to hold all regions.  However,
@@ -98,9 +100,6 @@ protected:
   size_t _gc_times_learned;
   intx _gc_time_penalties;
   TruncatedSeq* _gc_cycle_time_history;
-
-  size_t _live_memory_last_cycle;
-  size_t _live_memory_penultimate_cycle;
 
   // There may be many threads that contend to set this flag
   ShenandoahSharedFlag _metaspace_oom;
@@ -171,10 +170,6 @@ public:
   virtual void initialize();
 
   double elapsed_cycle_time() const;
-
-  void save_last_live_memory(size_t live_memory);
-  size_t get_last_live_memory();
-  size_t get_penultimate_live_memory();
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEURISTICS_HPP

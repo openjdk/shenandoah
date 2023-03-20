@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2016, 2023, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,13 +43,14 @@ ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedS
   _has_old_regions(false),
   _garbage(0),
   _used(0),
+  _live(0),
   _region_count(0),
   _old_garbage(0),
   _current_index(0) {
 
   // The collection set map is reserved to cover the entire heap *and* zero addresses.
-  // This is needed to accept in-cset checks for both heap oops and NULLs, freeing
-  // high-performance code from checking for NULL first.
+  // This is needed to accept in-cset checks for both heap oops and nulls, freeing
+  // high-performance code from checking for null first.
   //
   // Since heap_base can be far away, committing the entire map would waste memory.
   // Therefore, we only commit the parts that are needed to operate: the heap view,
@@ -61,7 +62,7 @@ ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedS
 
   MemTracker::record_virtual_memory_type(_map_space.base(), mtGC);
 
-  size_t page_size = (size_t)os::vm_page_size();
+  size_t page_size = os::vm_page_size();
 
   if (!_map_space.special()) {
     // Commit entire pages that cover the heap cset map.
@@ -105,6 +106,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _has_old_regions |= r->is_old();
   _garbage += r->garbage();
   _used += r->used();
+  _live += r->get_live_data_bytes();
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
 }
@@ -122,6 +124,7 @@ void ShenandoahCollectionSet::clear() {
   _garbage = 0;
   _old_garbage = 0;
   _used = 0;
+  _live = 0;
 
   _region_count = 0;
   _current_index = 0;
@@ -158,7 +161,7 @@ ShenandoahHeapRegion* ShenandoahCollectionSet::claim_next() {
       }
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 ShenandoahHeapRegion* ShenandoahCollectionSet::next() {
@@ -173,11 +176,15 @@ ShenandoahHeapRegion* ShenandoahCollectionSet::next() {
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 void ShenandoahCollectionSet::print_on(outputStream* out) const {
-  out->print_cr("Collection Set : " SIZE_FORMAT "", count());
+  out->print_cr("Collection Set: Regions: "
+                SIZE_FORMAT ", Garbage: " SIZE_FORMAT "%s, Live: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s", count(),
+                byte_size_in_proper_unit(garbage()), proper_unit_for_byte_size(garbage()),
+                byte_size_in_proper_unit(live()), proper_unit_for_byte_size(live()),
+                byte_size_in_proper_unit(used()), proper_unit_for_byte_size(used()));
 
   debug_only(size_t regions = 0;)
   for (size_t index = 0; index < _heap->num_regions(); index ++) {
