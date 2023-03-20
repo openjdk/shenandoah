@@ -22,12 +22,17 @@
  *
  */
 
-/* @test
+/* @test id=default
  * @summary test C1 arraycopy intrinsic
  * @requires vm.gc.Shenandoah
  * @run main/othervm -XX:TieredStopAtLevel=1 -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive TestC1ArrayCopyNPE
  */
 
+/* @test id=generational
+ * @summary test C1 arraycopy intrinsic
+ * @requires vm.gc.Shenandoah
+ * @run main/othervm -XX:TieredStopAtLevel=1 -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational TestC1ArrayCopyNPE
+ */
 public class TestC1ArrayCopyNPE {
 
     private static final int NUM_RUNS = 10000;

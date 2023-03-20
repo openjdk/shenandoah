@@ -22,7 +22,7 @@
  */
 
 /**
- * @test
+ * @test id=default
  * @bug 8258393 8263376
  * @summary Shenandoah: "graph should be schedulable" assert failure
  * @requires vm.flavor == "server"
@@ -31,6 +31,17 @@
  * @run main/othervm -XX:+UseShenandoahGC -XX:-BackgroundCompilation TestBadRawMemoryAfterCall
  *
  */
+
+ /**
+  * @test id=generational
+  * @bug 8258393 8263376
+  * @summary Shenandoah: "graph should be schedulable" assert failure
+  * @requires vm.flavor == "server"
+  * @requires vm.gc.Shenandoah
+  *
+  * @run main/othervm -XX:+UseShenandoahGC -XX:-BackgroundCompilation -XX:ShenandoahGCMode=generational TestBadRawMemoryAfterCall
+  *
+  */
 
 public class TestBadRawMemoryAfterCall {
     public static void main(String[] args) {

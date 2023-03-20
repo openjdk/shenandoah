@@ -22,7 +22,7 @@
  */
 
 /**
- * @test
+ * @test id=default
  * @enablePreview
  * @bug 8259937
  * @summary guarantee(loc != NULL) failed: missing saved register with native invoke
@@ -36,6 +36,20 @@
  *
  */
 
+/**
+ * @test id=generational
+ * @enablePreview
+ * @bug 8259937
+ * @summary guarantee(loc != NULL) failed: missing saved register with native invoke
+ *
+ * @requires vm.flavor == "server"
+ * @requires ((os.arch == "amd64" | os.arch == "x86_64") & sun.arch.data.model == "64") | os.arch == "aarch64"
+ * @requires vm.gc.Shenandoah
+ *
+ * @run main/othervm --enable-native-access=ALL-UNNAMED -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational TestLinkToNativeRBP
+ *
+ */
 import java.lang.foreign.Linker;
 import java.lang.foreign.FunctionDescriptor;
 

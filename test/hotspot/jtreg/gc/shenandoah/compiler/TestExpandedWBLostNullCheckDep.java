@@ -22,7 +22,7 @@
  */
 
 /**
- * @test
+ * @test id=default
  * @key stress randomness
  * @summary Logic that moves a null check in the expanded barrier may cause a memory access that doesn't depend on the barrier to bypass the null check
  * @requires vm.gc.Shenandoah
@@ -32,6 +32,16 @@
  *                   -XX:+StressGCM -XX:+StressLCM TestExpandedWBLostNullCheckDep
  */
 
+/**
+ * @test id=generational
+ * @key stress randomness
+ * @summary Logic that moves a null check in the expanded barrier may cause a memory access that doesn't depend on the barrier to bypass the null check
+ * @requires vm.gc.Shenandoah
+ * @requires vm.flavor == "server"
+ * @run main/othervm -XX:-BackgroundCompilation -XX:-UseOnStackReplacement -XX:-TieredCompilation
+ *                   -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
+ *                   -XX:+StressGCM -XX:+StressLCM TestExpandedWBLostNullCheckDep
+ */
 public class TestExpandedWBLostNullCheckDep {
 
     static void test(int i, int[] arr) {

@@ -22,7 +22,7 @@
  */
 
 /**
- * @test
+ * @test id=default
  * @summary cast before unsafe access moved in dominating null check null path causes crash
  * @requires vm.gc.Shenandoah
  * @modules java.base/jdk.internal.misc:+open
@@ -32,6 +32,18 @@
  *
  * @run main/othervm -XX:-UseOnStackReplacement -XX:-BackgroundCompilation -XX:-TieredCompilation
  *                   -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC
+ *                   TestMaybeNullUnsafeAccess
+ *
+ */
+
+/**
+ * @test id=generational
+ * @summary cast before unsafe access moved in dominating null check null path causes crash
+ * @requires vm.gc.Shenandoah
+ * @modules java.base/jdk.internal.misc:+open
+ *
+ * @run main/othervm -XX:-UseOnStackReplacement -XX:-BackgroundCompilation -XX:-TieredCompilation
+ *                   -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
  *                   TestMaybeNullUnsafeAccess
  *
  */

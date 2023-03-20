@@ -22,7 +22,7 @@
  */
 
 /**
- * @test
+ * @test id=default
  * @bug 8237837 8244721
  * @summary  Shenandoah: assert(mem == __null) failed: only one safepoint
  * @requires vm.flavor == "server"
@@ -30,10 +30,31 @@
  *
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -Xcomp -XX:CompileOnly=BarrierInInfiniteLoop::test1
  *                   -XX:CompileOnly=BarrierInInfiniteLoop::test2 -XX:CompileOnly=BarrierInInfiniteLoop::test3 -XX:CompileCommand=quiet BarrierInInfiniteLoop
- * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -Xcomp -XX:CompileOnly=BarrierInInfiniteLoop::test1
- *                   -XX:CompileOnly=BarrierInInfiniteLoop::test2 -XX:CompileOnly=BarrierInInfiniteLoop::test3 -XX:CompileCommand=quiet BarrierInInfiniteLoop
- *
  */
+
+ /**
+  * @test id=iu
+  * @bug 8237837 8244721
+  * @summary  Shenandoah: assert(mem == __null) failed: only one safepoint
+  * @requires vm.flavor == "server"
+  * @requires vm.gc.Shenandoah
+  *
+  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -Xcomp -XX:CompileOnly=BarrierInInfiniteLoop::test1
+  *                   -XX:CompileOnly=BarrierInInfiniteLoop::test2 -XX:CompileOnly=BarrierInInfiniteLoop::test3 -XX:CompileCommand=quiet BarrierInInfiniteLoop
+  *
+  */
+
+  /**
+   * @test id=generational
+   * @bug 8237837 8244721
+   * @summary  Shenandoah: assert(mem == __null) failed: only one safepoint
+   * @requires vm.flavor == "server"
+   * @requires vm.gc.Shenandoah
+   *
+   * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -Xcomp -XX:CompileOnly=BarrierInInfiniteLoop::test1
+   *                   -XX:CompileOnly=BarrierInInfiniteLoop::test2 -XX:CompileOnly=BarrierInInfiniteLoop::test3 -XX:CompileCommand=quiet BarrierInInfiniteLoop
+   *
+   */
 
 public class BarrierInInfiniteLoop {
     private static Object field1 = new Object();

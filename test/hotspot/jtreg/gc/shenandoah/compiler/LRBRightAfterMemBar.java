@@ -22,7 +22,7 @@
  */
 
 /**
- * @test
+ * @test id=default
  * @bug 8237007 8260637
  * @summary Shenandoah: assert(_base == Tuple) failure during C2 compilation
  * @requires vm.flavor == "server"
@@ -31,6 +31,17 @@
  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:-BackgroundCompilation -XX:+UseShenandoahGC LRBRightAfterMemBar
  *
  */
+
+ /**
+  * @test id=generational
+  * @bug 8237007 8260637
+  * @summary Shenandoah: assert(_base == Tuple) failure during C2 compilation
+  * @requires vm.flavor == "server"
+  * @requires vm.gc.Shenandoah
+  *
+  * @run main/othervm -XX:+UnlockExperimentalVMOptions -XX:-BackgroundCompilation -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational LRBRightAfterMemBar
+  *
+  */
 
 public class LRBRightAfterMemBar {
     private static A field1;
