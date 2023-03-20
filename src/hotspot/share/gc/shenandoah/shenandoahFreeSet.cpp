@@ -1198,7 +1198,7 @@ void ShenandoahFreeSet::log_status() {
         }
       }
 
-      ls.print_cr("Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s",
+      ls.print("Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; ",
                   byte_size_in_proper_unit(total_free), proper_unit_for_byte_size(total_free),
                   byte_size_in_proper_unit(max),        proper_unit_for_byte_size(max));
     }
