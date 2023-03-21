@@ -72,7 +72,7 @@ private:
   ShenandoahMmuTask* _mmu_periodic_task;
   TruncatedSeq _mmu_average;
 
-  void help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char* msg, bool update_log);
+  void help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char* msg);
   static double process_time_seconds();
   static void fetch_cpu_times(double &gc_time, double &mutator_time);
 
@@ -129,8 +129,6 @@ private:
   // given the number of heap regions depending on the kind of sizing algorithm.
   void recalculate_min_max_young_length(size_t heap_region_count);
 
-  void help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char *msg, bool update_log);
-
 public:
   explicit ShenandoahGenerationSizer(ShenandoahMmuTracker* mmu_tracker);
 
@@ -159,7 +157,6 @@ public:
   
   // force transfer is used when we promote humongous objects.  May violate min/max limits on generation sizes
   void force_transfer_to_old(size_t regions) const;
-
 };
 
 #endif //SHARE_GC_SHENANDOAH_SHENANDOAHMMUTRACKER_HPP

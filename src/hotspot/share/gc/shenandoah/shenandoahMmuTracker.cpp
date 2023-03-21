@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Amazon, Inc. All rights reserved.
+ * Copyright (c) 2022, 2023 Amazon, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,6 +52,23 @@ class ThreadTimeAccumulator : public ThreadClosure {
   }
 };
 
+ShenandoahMmuTracker::ShenandoahMmuTracker() :
+    _most_recent_timestamp(0.0),
+    _most_recent_gc_time(0.0),
+    _most_recent_gcu(0.0),
+    _most_recent_mutator_time(0.0),
+    _most_recent_mu(0.0),
+    _most_recent_periodic_time_stamp(0.0),
+    _most_recent_periodic_gc_time(0.0),
+    _most_recent_periodic_mutator_time(0.0),
+    _mmu_periodic_task(new ShenandoahMmuTask(this)) {
+}
+
+ShenandoahMmuTracker::~ShenandoahMmuTracker() {
+  _mmu_periodic_task->disenroll();
+  delete _mmu_periodic_task;
+}
+
 void ShenandoahMmuTracker::fetch_cpu_times(double &gc_time, double &mutator_time) {
   ThreadTimeAccumulator cl;
   // We include only the gc threads because those are the only threads
@@ -75,24 +92,7 @@ double ShenandoahMmuTracker::process_time_seconds() {
   return 0.0;
 }
 
-ShenandoahMmuTracker::ShenandoahMmuTracker() :
-    _most_recent_timestamp(0.0),
-    _most_recent_gc_time(0.0),
-    _most_recent_gcu(0.0),
-    _most_recent_mutator_time(0.0),
-    _most_recent_mu(0.0),
-    _most_recent_periodic_time_stamp(0.0),
-    _most_recent_periodic_gc_time(0.0),
-    _most_recent_periodic_mutator_time(0.0),
-    _mmu_periodic_task(new ShenandoahMmuTask(this)) {
-}
-
-ShenandoahMmuTracker::~ShenandoahMmuTracker() {
-  _mmu_periodic_task->disenroll();
-  delete _mmu_periodic_task;
-}
-
-void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char *msg, bool update_log) {
+void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char *msg) {
   double current = os::elapsedTime();
   _most_recent_gcid = gcid;
   _most_recent_is_full = false;
@@ -119,12 +119,12 @@ void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generati
 }
 
 void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, uint gcid) {
-  help_record_concurrent(generation, gcid, "Concurrent Young GC", true);
+  help_record_concurrent(generation, gcid, "Concurrent Young GC");
 }
 
 void ShenandoahMmuTracker::record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool candidates_for_mixed) {
   // Not likely that this will represent an "ideal" GCU, but doesn't hurt to try
-  help_record_concurrent(generation, gcid, "Bootstrap Old GC", true);
+  help_record_concurrent(generation, gcid, "Bootstrap Old GC");
   if (candidates_for_mixed) {
     _doing_mixed_evacuations = true;
   }
@@ -148,7 +148,7 @@ void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* ge
 }
 
 void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done) {
-  help_record_concurrent(generation, gcid, "Mixed Concurrent GC", false);
+  help_record_concurrent(generation, gcid, "Mixed Concurrent GC");
 }
 
 void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
@@ -156,17 +156,17 @@ void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
   if ((gcid == _most_recent_gcid) && _most_recent_is_full) {
     // Do nothing.  This is a redundant recording for the full gc that just completed.
   } else if (is_old_bootstrap) {
-    help_record_concurrent(generation, gcid, "Degenerated Bootstrap Old GC", false);
+    help_record_concurrent(generation, gcid, "Degenerated Bootstrap Old GC");
     if (!is_mixed_done) {
       _doing_mixed_evacuations = true;
     }
   } else {
-    help_record_concurrent(generation, gcid, "Degenerated Young GC", false);
+    help_record_concurrent(generation, gcid, "Degenerated Young GC");
   }
 }
 
 void ShenandoahMmuTracker::record_full(ShenandoahGeneration* generation, uint gcid) {
-  help_record_concurrent(generation, gcid, "Full GC", false);
+  help_record_concurrent(generation, gcid, "Full GC");
   _most_recent_is_full = true;
   _doing_mixed_evacuations = false;
 }

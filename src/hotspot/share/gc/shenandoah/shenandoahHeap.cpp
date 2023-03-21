@@ -1278,16 +1278,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   }
 }
 
-#ifdef KELVIN_DEPRECATE
-bool ShenandoahHeap::adjust_generation_sizes() {
-  // Actually, we may want to remove this function entirely.
-  if (mode()->is_generational()) {
-    return _generation_sizer.adjust_generation_sizes();
-  }
-  return false;
-}
-#endif
-
 // Called from stubs in JIT code or interpreter
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
@@ -2108,12 +2098,6 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 
   shenandoah_policy()->record_cycle_start();
   generation->heuristics()->record_cycle_start();
-
-#ifdef KELVIN_DEPRECATE
-  // When a cycle starts, attribute any thread activity when the collector
-  // is idle to the global generation.
-  _mmu_tracker.record(global_generation());
-#endif
 }
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
@@ -2125,11 +2109,6 @@ void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
     old_generation()->heuristics()->record_cycle_end();
   }
   set_gc_cause(GCCause::_no_gc);
-
-#ifdef KELVIN_DEPRECATE
-  // When a cycle ends, the thread activity is attributed to the respective generation
-  _mmu_tracker.record(generation);
-#endif
 }
 
 void ShenandoahHeap::verify(VerifyOption vo) {

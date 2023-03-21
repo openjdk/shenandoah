@@ -93,13 +93,6 @@ public:
   const static double LOWEST_EXPECTED_AVAILABLE_AT_END;
   const static double HIGHEST_EXPECTED_AVAILABLE_AT_END;
 
-  // At least this many cycles must execute before the heuristic will attempt
-  // to resize its generation. This is to prevent the heuristic from rapidly
-  // maxing out the generation size (which only forces the collector for the
-  // other generation to run more frequently, defeating the purpose of improving
-  // MMU).
-  const static uint MINIMUM_RESIZE_INTERVAL;
-
   friend class ShenandoahAllocationRate;
 
   // Used to record the last trigger that signaled to start a GC.
@@ -113,8 +106,6 @@ public:
   void adjust_last_trigger_parameters(double amount);
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
-
-  bool resize_and_evaluate();
 
   ShenandoahAllocationRate _allocation_rate;
 
@@ -143,10 +134,6 @@ public:
   // establishes what is 'normal' for the application and is used as a
   // source of feedback to adjust trigger parameters.
   TruncatedSeq _available;
-
-  // Do not attempt to resize the generation for this heuristic until this
-  // value is greater than MINIMUM_RESIZE_INTERVAL.
-  uint _cycles_since_last_resize;
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP

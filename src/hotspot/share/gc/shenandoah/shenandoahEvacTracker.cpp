@@ -95,12 +95,6 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
     ShenandoahHeapRegion* r = heap->get_region(i);
     if (r->is_young() && r->age() > 0 && r->age() < AgeTable::table_size) {
       region_ages.add(r->age(), r->get_live_data_words());
-#undef KELVIN_NOISE
-#ifdef KELVIN_NOISE
-      log_info(gc, ergo)("%s Region " SIZE_FORMAT " age: %u, has live bytes: " SIZE_FORMAT,
-                         r->is_regular()? "Regular": r->is_humongous()? "Humongous": "Unknown",
-                         r->index(), r->age(), r->get_live_data_bytes());
-#endif
     }
   }
   st->print("Regions: ");

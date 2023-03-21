@@ -364,14 +364,6 @@ void ShenandoahOldHeuristics::abandon_collection_candidates() {
 }
 
 void ShenandoahOldHeuristics::handle_promotion_failure() {
-#ifdef KELVIN_DEPRECATE
-  if (!_promotion_failed) {
-    if (ShenandoahHeap::heap()->generation_sizer()->transfer_capacity(_old_generation)) {
-      log_info(gc)("Increased size of old generation due to promotion failure.");
-    }
-    // TODO: Increase tenuring threshold to push back on promotions.
-  }
-#endif
   _promotion_failed = true;
 }
 

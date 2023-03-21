@@ -56,8 +56,6 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-const uint ShenandoahAdaptiveHeuristics::MINIMUM_RESIZE_INTERVAL = 10;
-
 ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation) :
   ShenandoahHeuristics(generation),
   _margin_of_error_sd(ShenandoahAdaptiveInitialConfidence),
@@ -304,7 +302,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {
   ShenandoahHeuristics::record_cycle_start();
   _allocation_rate.allocation_counter_reset();
-  ++_cycles_since_last_resize;
 }
 
 void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
@@ -677,11 +674,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                          byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
 
       _last_trigger = RATE;
-#ifdef KELVIN_DEPRECATE
-      return resize_and_evaluate();
-#else
       return true;
-#endif
     }
 
     bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
@@ -692,42 +685,11 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                    byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                    _spike_threshold_sd);
       _last_trigger = SPIKE;
-#ifdef KELVIN_DEPRECATE
-      return resize_and_evaluate();
-#else
       return true;
-#endif
     }
   }
 
   return ShenandoahHeuristics::should_start_gc();
-}
-
-bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (!heap->mode()->is_generational()) {
-    // We only attempt to resize the generations in generational mode.
-    return true;
-  }
-
-#ifdef KELVIN_DEPRECATE
-  if (_cycles_since_last_resize <= MINIMUM_RESIZE_INTERVAL) {
-    log_info(gc, ergo)("Not resizing %s for another " UINT32_FORMAT " cycles.",
-        _generation->name(),  _cycles_since_last_resize);
-    return true;
-  }
-
-  if (!heap->generation_sizer()->transfer_capacity(_generation)) {
-    // We could not enlarge our generation, so we must start a gc cycle.
-    log_info(gc, ergo)("Could not increase size of %s, begin gc cycle.", _generation->name());
-    return true;
-  }
-
-  log_info(gc)("Increased size of %s generation, re-evaluate trigger criteria", _generation->name());
-  return should_start_gc();
-#else
-  return true;
-#endif
 }
 
 void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount) {
