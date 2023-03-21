@@ -109,7 +109,7 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahRegionAffil
         } else {
           // else, this is a FREE region that is "reserved" for old-collector-free set.  we'll use this free region only
           // if we fail to find the requested memory within a region already affiliated OLD.
-          assert(r->affiliation() == ShenandoahAffiliation::FREE, "is_old_collector_free requires affiliation OLD or FREE");
+          assert(r->affiliation() == ShenandoahRegionAffiliation::FREE, "is_old_collector_free requires affiliation OLD or FREE");
         }
       }
     }
