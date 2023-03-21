@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2020, Red Hat, Inc. and/or its affiliates.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -64,16 +64,16 @@ HeapWord* ShenandoahMarkBitMap::get_next_marked_addr(const HeapWord* addr,
   ShenandoahHeapRegion* r = heap->heap_region_containing(addr);
   ShenandoahMarkingContext* ctx = heap->marking_context();
   HeapWord* tams = ctx->top_at_mark_start(r);
-  assert(limit != NULL, "limit must not be NULL");
-  assert(limit <= tams, "limit must be less than TAMS");
+  assert(limit != nullptr, "limit must not be null");
+  assert(limit <= r->top(), "limit must be less than top");
+  assert(addr <= tams, "addr must be less than TAMS");
 #endif
 
   // Round addr up to a possible object boundary to be safe.
   size_t const addr_offset = address_to_index(align_up(addr, HeapWordSize << LogMinObjAlignment));
   size_t const limit_offset = address_to_index(limit);
   size_t const nextOffset = get_next_one_offset(addr_offset, limit_offset);
-  HeapWord* result = index_to_address(nextOffset);
-  return result;
+  return index_to_address(nextOffset);
 }
 
 void ShenandoahMarkBitMap::clear_range_within_word(idx_t beg, idx_t end) {

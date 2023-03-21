@@ -234,12 +234,6 @@
           "the samples. Higher values provide more fidelity, at expense "   \
           "of more sampling overhead.")                                     \
                                                                             \
-  product(ccstr, ShenandoahRegionSamplingFile,                              \
-          "./shenandoahSnapshots_pid%p.log",                                \
-          "If ShenandoahLogRegionSampling is on, save sampling data stream "\
-          "to this file [default: ./shenandoahSnapshots_pid%p.log] "        \
-          "(%p replaced with pid)")                                         \
-                                                                            \
   product(uintx, ShenandoahControlIntervalMin, 1, EXPERIMENTAL,             \
           "The minimum sleep interval for the control loop that drives "    \
           "the cycles. Lower values would increase GC responsiveness "      \
@@ -313,7 +307,7 @@
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
                                                                             \
-  product(uintx, ShenandoahMaxEvacLABRatio, 16, EXPERIMENTAL,               \
+  product(uintx, ShenandoahMaxEvacLABRatio, 0, EXPERIMENTAL,                \
           "Potentially, each running thread maintains a PLAB for "          \
           "evacuating objects into old-gen memory and a GCLAB for "         \
           "evacuating objects into young-gen memory.  Each time a thread "  \
@@ -329,7 +323,7 @@
           "stop-the-world pauses.  This is because a large value "          \
           "allows individual threads to consume large percentages of "      \
           "the total evacuation budget without necessarily effectively "    \
-          "filling their local evcauation buffers with evacuated "          \
+          "filling their local evacuation buffers with evacuated "          \
           "objects.  A value of zero means no maximum size is enforced.")   \
           range(0, 1024)                                                    \
                                                                             \

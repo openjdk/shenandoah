@@ -112,7 +112,7 @@ public:
 
   virtual void work(uint worker_id) {
     ShenandoahHeapRegion* r = _regions.next();
-    while (r != NULL) {
+    while (r != nullptr) {
       if (r->is_committed()) {
         os::pretouch_memory(r->bottom(), r->end(), _page_size);
       }
@@ -136,7 +136,7 @@ public:
 
   virtual void work(uint worker_id) {
     ShenandoahHeapRegion* r = _regions.next();
-    while (r != NULL) {
+    while (r != nullptr) {
       size_t start = r->index()       * ShenandoahHeapRegion::region_size_bytes() / MarkBitMap::heap_map_factor();
       size_t end   = (r->index() + 1) * ShenandoahHeapRegion::region_size_bytes() / MarkBitMap::heap_map_factor();
       assert (end <= _bitmap_size, "end is sane: " SIZE_FORMAT " < " SIZE_FORMAT, end, _bitmap_size);
@@ -189,9 +189,9 @@ jint ShenandoahHeap::initialize() {
   initialize_generations();
   initialize_heuristics();
 
-  size_t heap_page_size   = UseLargePages ? (size_t)os::large_page_size() : (size_t)os::vm_page_size();
-  size_t bitmap_page_size = UseLargePages ? (size_t)os::large_page_size() : (size_t)os::vm_page_size();
-  size_t region_page_size = UseLargePages ? (size_t)os::large_page_size() : (size_t)os::vm_page_size();
+  size_t heap_page_size   = UseLargePages ? os::large_page_size() : os::vm_page_size();
+  size_t bitmap_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
+  size_t region_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
 
   //
   // Reserve and commit memory for heap
@@ -237,7 +237,7 @@ jint ShenandoahHeap::initialize() {
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
-  if (_workers == NULL) {
+  if (_workers == nullptr) {
     vm_exit_during_initialization("Failed necessary allocation.");
   } else {
     _workers->initialize_workers();
@@ -347,7 +347,7 @@ jint ShenandoahHeap::initialize() {
       }
     }
 
-    if (_collection_set == NULL) {
+    if (_collection_set == nullptr) {
       ReservedSpace cset_rs(cset_size, cset_align, os::vm_page_size());
       _collection_set = new ShenandoahCollectionSet(this, cset_rs, sh_rs.base());
     }
@@ -440,7 +440,7 @@ jint ShenandoahHeap::initialize() {
     _pacer = new ShenandoahPacer(this);
     _pacer->setup_for_idle();
   } else {
-    _pacer = NULL;
+    _pacer = nullptr;
   }
 
   _control_thread = new ShenandoahControlThread();
@@ -496,7 +496,7 @@ void ShenandoahHeap::initialize_generations() {
 }
 
 void ShenandoahHeap::initialize_heuristics() {
-  if (ShenandoahGCMode != NULL) {
+  if (ShenandoahGCMode != nullptr) {
     if (strcmp(ShenandoahGCMode, "satb") == 0) {
       _gc_mode = new ShenandoahSATBMode();
     } else if (strcmp(ShenandoahGCMode, "iu") == 0) {
@@ -537,7 +537,7 @@ void ShenandoahHeap::initialize_heuristics() {
 
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
-  _gc_generation(NULL),
+  _gc_generation(nullptr),
   _prepare_for_old_mark(false),
   _initial_size(0),
   _promotion_potential(0),
@@ -545,12 +545,12 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _used(0),
   _committed(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
-  _workers(NULL),
-  _safepoint_workers(NULL),
+  _workers(nullptr),
+  _safepoint_workers(nullptr),
   _heap_region_special(false),
   _num_regions(0),
-  _regions(NULL),
-  _affiliations(NULL),
+  _regions(nullptr),
+  _affiliations(nullptr),
   _update_refs_iterator(this),
   _alloc_supplement_reserve(0),
   _promoted_reserve(0),
@@ -560,37 +560,37 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _captured_old_usage(0),
   _previous_promotion(0),
   _cancel_requested_time(0),
-  _young_generation(NULL),
-  _global_generation(NULL),
-  _old_generation(NULL),
-  _control_thread(NULL),
-  _regulator_thread(NULL),
+  _young_generation(nullptr),
+  _global_generation(nullptr),
+  _old_generation(nullptr),
+  _control_thread(nullptr),
+  _regulator_thread(nullptr),
   _shenandoah_policy(policy),
-  _free_set(NULL),
-  _pacer(NULL),
-  _verifier(NULL),
-  _phase_timings(NULL),
+  _free_set(nullptr),
+  _pacer(nullptr),
+  _verifier(nullptr),
+  _phase_timings(nullptr),
   _evac_tracker(new ShenandoahEvacuationTracker()),
   _mmu_tracker(),
   _generation_sizer(&_mmu_tracker),
-  _monitoring_support(NULL),
-  _memory_pool(NULL),
-  _young_gen_memory_pool(NULL),
-  _old_gen_memory_pool(NULL),
+  _monitoring_support(nullptr),
+  _memory_pool(nullptr),
+  _young_gen_memory_pool(nullptr),
+  _old_gen_memory_pool(nullptr),
   _stw_memory_manager("Shenandoah Pauses", "end of GC pause"),
   _cycle_memory_manager("Shenandoah Cycles", "end of GC cycle"),
   _gc_timer(new ConcurrentGCTimer()),
   _soft_ref_policy(),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
-  _marking_context(NULL),
+  _marking_context(nullptr),
   _bitmap_size(0),
   _bitmap_regions_per_slice(0),
   _bitmap_bytes_per_slice(0),
   _bitmap_region_special(false),
   _aux_bitmap_region_special(false),
-  _liveness_cache(NULL),
-  _collection_set(NULL),
-  _card_scan(NULL)
+  _liveness_cache(nullptr),
+  _collection_set(nullptr),
+  _card_scan(nullptr)
 {
 }
 
@@ -637,11 +637,11 @@ void ShenandoahHeap::print_on(outputStream* st) const {
 
   ShenandoahCollectionSet* cset = collection_set();
   st->print_cr("Collection set:");
-  if (cset != NULL) {
+  if (cset != nullptr) {
     st->print_cr(" - map (vanilla): " PTR_FORMAT, p2i(cset->map_address()));
     st->print_cr(" - map (biased):  " PTR_FORMAT, p2i(cset->biased_map_address()));
   } else {
-    st->print_cr(" (NULL)");
+    st->print_cr(" (null)");
   }
 
   st->cr();
@@ -655,7 +655,7 @@ void ShenandoahHeap::print_on(outputStream* st) const {
 class ShenandoahInitWorkerGCLABClosure : public ThreadClosure {
 public:
   void do_thread(Thread* thread) {
-    assert(thread != NULL, "Sanity");
+    assert(thread != nullptr, "Sanity");
     assert(thread->is_Worker_thread(), "Only worker thread expected");
     ShenandoahThreadLocalData::initialize_gclab(thread);
   }
@@ -673,7 +673,7 @@ void ShenandoahHeap::post_initialize() {
   // gclab can not be initialized early during VM startup, as it can not determinate its max_size.
   // Now, we will let WorkerThreads to initialize gclab when new worker is created.
   _workers->set_initialize_gclab();
-  if (_safepoint_workers != NULL) {
+  if (_safepoint_workers != nullptr) {
     _safepoint_workers->threads_do(&init_gclabs);
     _safepoint_workers->set_initialize_gclab();
   }
@@ -697,7 +697,7 @@ bool ShenandoahHeap::is_old_bitmap_stable() const {
 }
 
 bool ShenandoahHeap::is_gc_generation_young() const {
-  return _gc_generation != NULL && _gc_generation->generation_mode() == YOUNG;
+  return _gc_generation != nullptr && _gc_generation->generation_mode() == YOUNG;
 }
 
 size_t ShenandoahHeap::used() const {
@@ -899,8 +899,10 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   // Limit growth of GCLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
   // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
   if (ShenandoahMaxEvacLABRatio > 0) {
+    log_debug(gc, free)("Allocate new gclab: " SIZE_FORMAT ", " SIZE_FORMAT, new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
     new_size = MIN2(new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
   }
+
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
@@ -912,7 +914,8 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   if (new_size < size) {
     // New size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good GCLABs, when we encounter a large object.
-    return NULL;
+    log_debug(gc, free)("New gclab size (" SIZE_FORMAT ") is too small for " SIZE_FORMAT, new_size, size);
+    return nullptr;
   }
 
   // Retire current GCLAB, and allocate a new one.
@@ -921,8 +924,8 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
 
   size_t actual_size = 0;
   HeapWord* gclab_buf = allocate_new_gclab(min_size, new_size, &actual_size);
-  if (gclab_buf == NULL) {
-    return NULL;
+  if (gclab_buf == nullptr) {
+    return nullptr;
   }
 
   assert (size <= actual_size, "allocation should fit");
@@ -1015,7 +1018,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
                        SIZE_FORMAT " at address " PTR_FORMAT,
                        p2i(thread), actual_size, min_size, cur_size, p2i(plab_buf));
 #endif
-    if (plab_buf == NULL) {
+    if (plab_buf == nullptr) {
       if (min_size == PLAB::min_size()) {
         // Disable plab promotions for this thread because we cannot even allocate a plab of minimal size.  This allows us
         // to fail faster on subsequent promotion attempts.
@@ -1090,7 +1093,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab, Thread* thread) {
   size_t waste = plab->waste();
   HeapWord* top = plab->top();
   plab->retire();
-  if (top != NULL && plab->waste() > waste && is_in_old(top)) {
+  if (top != nullptr && plab->waste() > waste && is_in_old(top)) {
     // If retiring the plab created a filler object, then we
     // need to register it with our card scanner so it can
     // safely walk the region backing the plab.
@@ -1107,7 +1110,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
 
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
-  assert(_old_generation != NULL, "Should only have mixed collections in generation mode.");
+  assert(_old_generation != nullptr, "Should only have mixed collections in generation mode.");
   log_info(gc)("Terminating old gc cycle.");
 
   // Stop marking
@@ -1284,7 +1287,7 @@ HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_tlab(min_size, requested_size);
   HeapWord* res = allocate_memory(req, false);
-  if (res != NULL) {
+  if (res != nullptr) {
     *actual_size = req.actual_size();
   } else {
     *actual_size = 0;
@@ -1297,7 +1300,7 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
                                              size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_gclab(min_size, word_size);
   HeapWord* res = allocate_memory(req, false);
-  if (res != NULL) {
+  if (res != nullptr) {
     *actual_size = req.actual_size();
   } else {
     *actual_size = 0;
@@ -1312,7 +1315,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   // Note that allocate_memory() sets a thread-local flag to prohibit further promotions by this thread
   // if we are at risk of infringing on the old-gen evacuation budget.
   HeapWord* res = allocate_memory(req, false);
-  if (res != NULL) {
+  if (res != nullptr) {
     *actual_size = req.actual_size();
   } else {
     *actual_size = 0;
@@ -1332,7 +1335,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
 HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_promotion) {
   intptr_t pacer_epoch = 0;
   bool in_new_region = false;
-  HeapWord* result = NULL;
+  HeapWord* result = nullptr;
 
   if (req.is_mutator_alloc()) {
     if (ShenandoahPacing) {
@@ -1354,12 +1357,12 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     // Then, we need to make sure the allocation was retried after at least one
     // Full GC, which means we want to try more than ShenandoahFullGCThreshold times.
     size_t tries = 0;
-    while (result == NULL && _progress_last_gc.is_set()) {
+    while (result == nullptr && _progress_last_gc.is_set()) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
-    while (result == NULL && tries <= ShenandoahFullGCThreshold) {
+    while (result == nullptr && tries <= ShenandoahFullGCThreshold) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
@@ -1380,7 +1383,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     regulator_thread()->notify_heap_changed();
   }
 
-  if (result != NULL) {
+  if (result != nullptr) {
     ShenandoahGeneration* alloc_generation = generation_for(req.affiliation());
     size_t requested = req.size();
     size_t actual = req.actual_size();
@@ -1497,7 +1500,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
 #ifdef KELVIN_PLAB_ALLOC
     log_info(gc, ergo)(" allow_allocation: %d, allocate returned " PTR_FORMAT, allow_allocation, p2i(result));
 #endif
-    if (result != NULL) {
+    if (result != nullptr) {
       if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
         ShenandoahThreadLocalData::reset_plab_promoted(thread);
         if (req.is_gc_alloc()) {
@@ -1505,9 +1508,9 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
           if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
             if (promotion_eligible) {
               size_t actual_size = req.actual_size() * HeapWordSize;
-	      // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries.
+	      // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
 	      // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
-	      if (get_promoted_expended() <= get_promoted_reserve()) {
+	      if (get_promoted_expended() + actual_size <= get_promoted_reserve()) {
 		// Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
 		// When we retire this plab, we'll unexpend what we don't really use.
 		ShenandoahThreadLocalData::enable_plab_promotions(thread);
@@ -1644,7 +1647,7 @@ MetaWord* ShenandoahHeap::satisfy_failed_metadata_allocation(ClassLoaderData* lo
 
   // Expand and retry allocation
   result = loader_data->metaspace_non_null()->expand_and_allocate(size, mdtype);
-  if (result != NULL) {
+  if (result != nullptr) {
     return result;
   }
 
@@ -1653,18 +1656,18 @@ MetaWord* ShenandoahHeap::satisfy_failed_metadata_allocation(ClassLoaderData* lo
 
   // Retry allocation
   result = loader_data->metaspace_non_null()->allocate(size, mdtype);
-  if (result != NULL) {
+  if (result != nullptr) {
     return result;
   }
 
   // Expand and retry allocation
   result = loader_data->metaspace_non_null()->expand_and_allocate(size, mdtype);
-  if (result != NULL) {
+  if (result != nullptr) {
     return result;
   }
 
   // Out of memory
-  return NULL;
+  return nullptr;
 }
 
 class ShenandoahConcurrentEvacuateRegionObjectClosure : public ObjectClosure {
@@ -1676,7 +1679,7 @@ public:
     _heap(heap), _thread(Thread::current()) {}
 
   void do_object(oop p) {
-    shenandoah_assert_marked(NULL, p);
+    shenandoah_assert_marked(nullptr, p);
     if (!p->is_forwarded()) {
       _heap->evacuate_object(p, _thread);
     }
@@ -1715,7 +1718,7 @@ private:
   void do_work() {
     ShenandoahConcurrentEvacuateRegionObjectClosure cl(_sh);
     ShenandoahHeapRegion* r;
-    while ((r =_cs->claim_next()) != NULL) {
+    while ((r =_cs->claim_next()) != nullptr) {
       assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
 
       _sh->marked_object_iterate(r, &cl);
@@ -1835,7 +1838,7 @@ void ShenandoahHeap::trash_cset_regions() {
   ShenandoahCollectionSet* set = collection_set();
   ShenandoahHeapRegion* r;
   set->clear_current_index();
-  while ((r = set->next()) != NULL) {
+  while ((r = set->next()) != nullptr) {
     r->make_trash();
   }
   collection_set()->clear();
@@ -1881,11 +1884,11 @@ public:
   ShenandoahCheckCleanGCLABClosure() {}
   void do_thread(Thread* thread) {
     PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
-    assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
+    assert(gclab != nullptr, "GCLAB should be initialized for %s", thread->name());
     assert(gclab->words_remaining() == 0, "GCLAB should not need retirement");
 
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-    assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
+    assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
     assert(plab->words_remaining() == 0, "PLAB should not need retirement");
   }
 };
@@ -1897,14 +1900,14 @@ public:
   ShenandoahRetireGCLABClosure(bool resize) : _resize(resize) {}
   void do_thread(Thread* thread) {
     PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
-    assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
+    assert(gclab != nullptr, "GCLAB should be initialized for %s", thread->name());
     gclab->retire();
     if (_resize && ShenandoahThreadLocalData::gclab_size(thread) > 0) {
       ShenandoahThreadLocalData::set_gclab_size(thread, 0);
     }
 
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-    assert(plab != NULL, "PLAB should be initialized for %s", thread->name());
+    assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
 
     // There are two reasons to retire all plabs between old-gen evacuation passes.
     //  1. We need to make the plab memory parseable by remembered-set scanning.
@@ -1965,7 +1968,7 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
   }
   workers()->threads_do(&cl);
 
-  if (safepoint_workers() != NULL) {
+  if (safepoint_workers() != nullptr) {
     safepoint_workers()->threads_do(&cl);
   }
 }
@@ -1974,7 +1977,7 @@ class ShenandoahTagGCLABClosure : public ThreadClosure {
 public:
   void do_thread(Thread* thread) {
     PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
-    assert(gclab != NULL, "GCLAB should be initialized for %s", thread->name());
+    assert(gclab != nullptr, "GCLAB should be initialized for %s", thread->name());
     if (gclab->words_remaining() > 0) {
       ShenandoahHeapRegion* r = ShenandoahHeap::heap()->heap_region_containing(gclab->allocate(0));
       r->set_young_lab_flag();
@@ -1994,7 +1997,7 @@ void ShenandoahHeap::set_young_lab_region_flags() {
   for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
     cl.do_thread(t);
     ThreadLocalAllocBuffer& tlab = t->tlab();
-    if (tlab.end() != NULL) {
+    if (tlab.end() != nullptr) {
       ShenandoahHeapRegion* r = heap_region_containing(tlab.start());
       r->set_young_lab_flag();
     }
@@ -2031,10 +2034,10 @@ void ShenandoahHeap::do_full_collection(bool clear_all_soft_refs) {
 
 HeapWord* ShenandoahHeap::block_start(const void* addr) const {
   ShenandoahHeapRegion* r = heap_region_containing(addr);
-  if (r != NULL) {
+  if (r != nullptr) {
     return r->block_start(addr);
   }
-  return NULL;
+  return nullptr;
 }
 
 bool ShenandoahHeap::block_is_obj(const HeapWord* addr) const {
@@ -2062,7 +2065,7 @@ void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
   tcl->do_thread(_control_thread);
   tcl->do_thread(_regulator_thread);
   workers()->threads_do(tcl);
-  if (_safepoint_workers != NULL) {
+  if (_safepoint_workers != nullptr) {
     _safepoint_workers->threads_do(tcl);
   }
   if (ShenandoahStringDedup::is_enabled()) {
@@ -2223,7 +2226,7 @@ void ShenandoahHeap::scan_roots_for_iteration(ShenandoahScanObjectStack* oop_sta
   // This populates the work stack with initial objects
   // It is important to relinquish the associated locks before diving
   // into heap dumper
-  uint n_workers = safepoint_workers() != NULL ? safepoint_workers()->active_workers() : 1;
+  uint n_workers = safepoint_workers() != nullptr ? safepoint_workers()->active_workers() : 1;
   ShenandoahHeapIterationRootScanner rp(n_workers);
   rp.roots_do(oops);
 }
@@ -2302,16 +2305,16 @@ public:
     // Reclaim bitmap
     _heap->reclaim_aux_bitmap_for_iteration();
     // Reclaim queue for workers
-    if (_task_queues!= NULL) {
+    if (_task_queues!= nullptr) {
       for (uint i = 0; i < _num_workers; ++i) {
         ShenandoahObjToScanQueue* q = _task_queues->queue(i);
-        if (q != NULL) {
+        if (q != nullptr) {
           delete q;
-          _task_queues->register_queue(i, NULL);
+          _task_queues->register_queue(i, nullptr);
         }
       }
       delete _task_queues;
-      _task_queues = NULL;
+      _task_queues = nullptr;
     }
   }
 
@@ -2351,10 +2354,10 @@ private:
                                uint worker_id,
                                ShenandoahObjToScanQueueSet* queue_set) {
     assert(SafepointSynchronize::is_at_safepoint(), "safe iteration is only available during safepoints");
-    assert(queue_set != NULL, "task queue must not be NULL");
+    assert(queue_set != nullptr, "task queue must not be null");
 
     ShenandoahObjToScanQueue* q = queue_set->queue(worker_id);
-    assert(q != NULL, "object iterate queue must not be NULL");
+    assert(q != nullptr, "object iterate queue must not be null");
 
     ShenandoahMarkTask t;
     ShenandoahObjectIterateParScanClosure oops(_aux_bit_map, q);
@@ -2377,7 +2380,7 @@ ParallelObjectIteratorImpl* ShenandoahHeap::parallel_object_iterator(uint worker
 
 // Keep alive an object that was loaded with AS_NO_KEEPALIVE.
 void ShenandoahHeap::keep_alive(oop obj) {
-  if (is_concurrent_mark_in_progress() && (obj != NULL)) {
+  if (is_concurrent_mark_in_progress() && (obj != nullptr)) {
     ShenandoahBarrierSet::barrier_set()->enqueue(obj);
   }
 }
@@ -2711,7 +2714,7 @@ bool ShenandoahHeap::unload_classes() const {
 
 address ShenandoahHeap::in_cset_fast_test_addr() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  assert(heap->collection_set() != NULL, "Sanity");
+  assert(heap->collection_set() != nullptr, "Sanity");
   return (address) heap->collection_set()->biased_map_address();
 }
 
@@ -2759,7 +2762,7 @@ void ShenandoahHeap::pin_object(JavaThread* thr, oop o) {
 
 void ShenandoahHeap::unpin_object(JavaThread* thr, oop o) {
   ShenandoahHeapRegion* r = heap_region_containing(o);
-  assert(r != NULL, "Sanity");
+  assert(r != nullptr, "Sanity");
   assert(r->pin_count() > 0, "Region " SIZE_FORMAT " should have non-zero pins", r->index());
   r->record_unpin();
 }
@@ -2843,7 +2846,7 @@ void ShenandoahHeap::assert_gc_workers(uint nworkers) {
 
 ShenandoahVerifier* ShenandoahHeap::verifier() {
   guarantee(ShenandoahVerify, "Should be enabled");
-  assert (_verifier != NULL, "sanity");
+  assert (_verifier != nullptr, "sanity");
   return _verifier;
 }
 
@@ -2884,7 +2887,7 @@ private:
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();
-    while (r != NULL) {
+    while (r != nullptr) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
 
@@ -2966,7 +2969,7 @@ private:
             if (r->is_humongous()) {
               if (start_of_range < end_of_range) {
                 // Need to examine both dirty and clean cards during mixed evac.
-                r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true, CONCURRENT);
+                r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true);
               }
             } else {
               // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
@@ -3036,7 +3039,7 @@ private:
                 CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
               size_t clusters = assignment._chunk_size / cluster_size;
               assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
-              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, CONCURRENT, worker_id);
+              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, worker_id);
             }
           }
           if (ShenandoahPacing && (start_of_range < end_of_range)) {
@@ -3060,7 +3063,7 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
     ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list);
     workers()->run_task(&task);
   }
-  if (ShenandoahEnableCardStats && card_scan()!=NULL) { // generational check proxy
+  if (ShenandoahEnableCardStats && card_scan()!=nullptr) { // generational check proxy
     card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
   }
 }
@@ -3456,7 +3459,7 @@ char ShenandoahHeap::gc_state() const {
 
 ShenandoahLiveData* ShenandoahHeap::get_liveness_cache(uint worker_id) {
 #ifdef ASSERT
-  assert(_liveness_cache != NULL, "sanity");
+  assert(_liveness_cache != nullptr, "sanity");
   assert(worker_id < _max_workers, "sanity");
   for (uint i = 0; i < num_regions(); i++) {
     assert(_liveness_cache[worker_id][i] == 0, "liveness cache should be empty");
@@ -3467,7 +3470,7 @@ ShenandoahLiveData* ShenandoahHeap::get_liveness_cache(uint worker_id) {
 
 void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   assert(worker_id < _max_workers, "sanity");
-  assert(_liveness_cache != NULL, "sanity");
+  assert(_liveness_cache != nullptr, "sanity");
   ShenandoahLiveData* ld = _liveness_cache[worker_id];
 
   for (uint i = 0; i < num_regions(); i++) {
@@ -3615,7 +3618,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
         }
         // else, this humongous object is not marked so no need to verify its internal pointers
         if (!scanner->verify_registration(obj_addr, ctx)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr,
                                           "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
         }
       } else if (!r->is_humongous()) {
@@ -3631,7 +3634,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
             }
             // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
             if (!scanner->verify_registration(obj_addr, ctx)) {
-              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL,
+              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr,
                                                "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
             }
             obj_addr += obj->size();
@@ -3667,7 +3670,7 @@ void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, Shenand
     // else, this humongous object is not live so no need to verify its internal pointers
 
     if ((obj_addr < registration_watermark) && !scanner->verify_registration(obj_addr, ctx)) {
-      ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL, message,
+      ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr, message,
                                        "object not properly registered", __FILE__, __LINE__);
     }
   } else if (!r->is_humongous()) {
@@ -3684,7 +3687,7 @@ void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, Shenand
         // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
 
         if ((obj_addr < registration_watermark) && !scanner->verify_registration(obj_addr, ctx)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, NULL, message,
+          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr, message,
                                            "object not properly registered", __FILE__, __LINE__);
         }
         obj_addr += obj->size();

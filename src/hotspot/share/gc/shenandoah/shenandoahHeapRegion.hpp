@@ -354,10 +354,10 @@ public:
   inline void restore_top_before_promote();
   inline size_t garbage_before_padded_for_promote() const;
 
-  // Allocation (return NULL if full)
+  // Allocation (return nullptr if full)
   inline HeapWord* allocate_aligned(size_t word_size, ShenandoahAllocRequest &req, size_t alignment_in_words);
 
-  // Allocation (return NULL if full)
+  // Allocation (return nullptr if full)
   inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest req);
 
   inline void clear_live_data();
@@ -413,8 +413,7 @@ public:
   // Invoke closure on every reference contained within the humongous object that spans this humongous
   // region if the reference is contained within a DIRTY card and the reference is no more than words following
   // start within the humongous object.
-  void oop_iterate_humongous_slice(OopIterateClosure* cl, bool dirty_only, HeapWord* start, size_t words,
-                                   bool write_table, bool is_concurrent);
+  void oop_iterate_humongous_slice(OopIterateClosure* cl, bool dirty_only, HeapWord* start, size_t words, bool write_table);
 
   HeapWord* block_start(const void* p) const;
   size_t block_size(const HeapWord* p) const;
@@ -436,6 +435,11 @@ public:
   size_t used() const           { return byte_size(bottom(), top()); }
   size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
   size_t free() const           { return byte_size(top(),    end()); }
+
+  // Does this region contain this address?
+  bool contains(HeapWord* p) const {
+    return (bottom() <= p) && (p < top());
+  }
 
   inline void adjust_alloc_metadata(ShenandoahAllocRequest::Type type, size_t);
   void reset_alloc_metadata();

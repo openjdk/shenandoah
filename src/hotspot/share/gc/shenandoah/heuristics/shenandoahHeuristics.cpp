@@ -60,7 +60,7 @@ int ShenandoahHeuristics::compare_by_live(RegionData a, RegionData b) {
 
 ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
   _generation(generation),
-  _region_data(NULL),
+  _region_data(nullptr),
   _degenerated_cycles_in_a_row(0),
   _successful_cycles_in_a_row(0),
   _guaranteed_gc_interval(0),
@@ -69,8 +69,6 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
   _gc_times_learned(0),
   _gc_time_penalties(0),
   _gc_cycle_time_history(new TruncatedSeq(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor)),
-  _live_memory_last_cycle(0),
-  _live_memory_penultimate_cycle(0),
   _metaspace_oom()
 {
   // No unloading during concurrent mark? Communicate that to heuristics
@@ -327,7 +325,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 #endif
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!in_generation(region)) {
+
+    if (is_generational && !in_generation(region)) {
 #ifdef KELVIN_CSET
       log_info(gc, ergo)("Ignoring %s region " SIZE_FORMAT " because not in generation",
                          affiliation_name(region->affiliation()), region->index());
@@ -481,8 +480,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   log_info(gc, ergo)("Regular regions promoted usage: " SIZE_FORMAT, regular_regions_promoted_usage);
 #endif
 
-  save_last_live_memory(live_memory);
-
   // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
   // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
 
@@ -507,7 +504,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
     log_info(gc, ergo)("Prime the collection set here, old_heuristics: %s",
                        old_heuristics? "NOT NULL": "NULL");
 #endif
-    if (heap->mode()->is_generational() && (old_heuristics != NULL)) {
+    if (old_heuristics != nullptr) {
       old_heuristics->prime_collection_set(collection_set);
     }
     // else, this is non-generational or global collection and doesn't need to prime_collection_set
@@ -529,8 +526,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
 
   log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                     "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                     "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%)",
+                     "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%) R: " SIZE_FORMAT ", "
+                     "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%) R: " SIZE_FORMAT,
 
                      byte_size_in_proper_unit(collectable_garbage),
                      proper_unit_for_byte_size(collectable_garbage),
@@ -539,10 +536,12 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      byte_size_in_proper_unit(immediate_garbage),
                      proper_unit_for_byte_size(immediate_garbage),
                      immediate_percent,
+                     immediate_regions,
 
                      byte_size_in_proper_unit(collection_set->garbage()),
                      proper_unit_for_byte_size(collection_set->garbage()),
-                     cset_percent);
+                     cset_percent,
+                     collection_set->count());
 
   if (!collection_set->is_empty()) {
     size_t young_evac_bytes = collection_set->get_young_bytes_reserved_for_evacuation();
@@ -697,17 +696,4 @@ bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
 size_t ShenandoahHeuristics::min_free_threshold() {
   size_t min_free_threshold = ShenandoahMinFreeThreshold;
   return _generation->soft_max_capacity() / 100 * min_free_threshold;
-}
-
-void ShenandoahHeuristics::save_last_live_memory(size_t live_memory) {
-  _live_memory_penultimate_cycle = _live_memory_last_cycle;
-  _live_memory_last_cycle = live_memory;
-}
-
-size_t ShenandoahHeuristics::get_last_live_memory() {
-  return _live_memory_last_cycle;
-}
-
-size_t ShenandoahHeuristics::get_penultimate_live_memory() {
-  return _live_memory_penultimate_cycle;
 }

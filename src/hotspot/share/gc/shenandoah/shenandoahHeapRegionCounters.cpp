@@ -78,7 +78,7 @@ ShenandoahHeapRegionCounters::ShenandoahHeapRegionCounters() :
 }
 
 ShenandoahHeapRegionCounters::~ShenandoahHeapRegionCounters() {
-  if (_name_space != NULL) FREE_C_HEAP_ARRAY(char, _name_space);
+  if (_name_space != nullptr) FREE_C_HEAP_ARRAY(char, _name_space);
 }
 
 void ShenandoahHeapRegionCounters::write_snapshot(PerfLongVariable** regions,
@@ -86,7 +86,7 @@ void ShenandoahHeapRegionCounters::write_snapshot(PerfLongVariable** regions,
                                              PerfLongVariable* status,
                                              size_t num_regions,
                                              size_t region_size, size_t protocol_version) {
-  LogTarget(Debug, gc, region) lt;
+  LogTarget(Trace, gc, region) lt;
   if (lt.is_enabled()) {
     ResourceMark rm;
     LogStream ls(lt);
@@ -177,7 +177,7 @@ jlong ShenandoahHeapRegionCounters::encode_heap_status(ShenandoahHeap* heap) {
   } else {
     int phase = encode_phase(heap);
     ShenandoahGeneration* generation = heap->active_generation();
-    assert(generation != NULL, "Expected active generation in this mode.");
+    assert(generation != nullptr, "Expected active generation in this mode.");
     int shift = get_generation_shift(generation);
     status |= ((phase & 0x3) << shift);
     if (heap->is_concurrent_old_mark_in_progress()) {

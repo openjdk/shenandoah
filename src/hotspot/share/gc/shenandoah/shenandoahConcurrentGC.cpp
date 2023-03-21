@@ -820,6 +820,16 @@ void ShenandoahConcurrentGC::op_final_mark() {
 #ifdef KELVIN_EVAC_CHOICE
         log_info(gc, ergo)(" starting to evacuate");
 #endif
+        LogTarget(Info, gc, ergo) lt;
+        if (lt.is_enabled()) {
+          ResourceMark rm;
+          LogStream ls(lt);
+          heap->collection_set()->print_on(&ls);
+        }
+
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_before_evacuation();
+        }
 
         // TODO: we do not need to run update-references following evacuation if collection_set->is_empty().
 
@@ -859,6 +869,13 @@ void ShenandoahConcurrentGC::op_final_mark() {
     } else {
       // Not is_generational()
       if (!heap->collection_set()->is_empty()) {
+        LogTarget(Info, gc, ergo) lt;
+        if (lt.is_enabled()) {
+          ResourceMark rm;
+          LogStream ls(lt);
+          heap->collection_set()->print_on(&ls);
+        }
+
         if (ShenandoahVerify) {
           heap->verifier()->verify_before_evacuation();
         }
@@ -1021,7 +1038,7 @@ public:
   }
 };
 
-// This task not only evacuates/updates marked weak roots, but also "NULL"
+// This task not only evacuates/updates marked weak roots, but also "null"
 // dead weak roots.
 class ShenandoahConcurrentWeakRootsEvacUpdateTask : public WorkerTask {
 private:
@@ -1069,7 +1086,7 @@ public:
     // cleanup the weak oops in CLD and determinate nmethod's unloading state, so that we
     // can cleanup immediate garbage sooner.
     if (ShenandoahHeap::heap()->unload_classes()) {
-      // Applies ShenandoahIsCLDAlive closure to CLDs, native barrier will either NULL the
+      // Applies ShenandoahIsCLDAlive closure to CLDs, native barrier will either null the
       // CLD's holder or evacuate it.
       {
         ShenandoahIsCLDAliveClosure is_cld_alive;
@@ -1242,7 +1259,7 @@ void ShenandoahUpdateThreadClosure::do_thread(Thread* thread) {
   if (thread->is_Java_thread()) {
     JavaThread* jt = JavaThread::cast(thread);
     ResourceMark rm;
-    jt->oops_do(&_cl, NULL);
+    jt->oops_do(&_cl, nullptr);
   }
 }
 

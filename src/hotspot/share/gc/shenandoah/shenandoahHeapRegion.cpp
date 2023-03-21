@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013, 2020, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -23,7 +24,7 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shared/cardTableRS.hpp"
+#include "gc/shared/cardTable.hpp"
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
@@ -67,7 +68,7 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _index(index),
   _bottom(start),
   _end(start + RegionSizeWords),
-  _new_top(NULL),
+  _new_top(nullptr),
   _empty_time(os::elapsedTime()),
   _state(committed ? _empty_committed : _empty_uncommitted),
   _top(start),
@@ -453,7 +454,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
   st->print("|T " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_byte_size(get_tlab_allocs()));
   st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_byte_size(get_gclab_allocs()));
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
+    st->print("|P " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
   }
   st->print("|S " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_shared_allocs()),   proper_unit_for_byte_size(get_shared_allocs()));
   st->print("|L " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_live_data_bytes()), proper_unit_for_byte_size(get_live_data_bytes()));
@@ -487,7 +488,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
   while (obj_addr < t) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
       obj_addr += obj->size();
     } else {
       // Object is not marked.  Coalesce and fill dead object with dead neighbors.
@@ -532,7 +533,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   while (obj_addr < t) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
       obj_addr += obj->size();
     } else {
       // Object is not marked.  Coalesce and fill dead object with dead neighbors.
@@ -582,7 +583,7 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
   while (obj_addr < t) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
       // when promoting an entire region, we have to register the marked objects as well
       obj_addr += obj->oop_iterate_size(blk);
     } else {
@@ -609,7 +610,7 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
 // DO NOT CANCEL.  If this worker thread has accepted responsibility for scanning a particular range of addresses, it
 // must finish the work before it can be cancelled.
 void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, bool dirty_only,
-                                                       HeapWord* start, size_t words, bool write_table, bool is_concurrent) {
+                                                       HeapWord* start, size_t words, bool write_table) {
   assert(words % CardTable::card_size_in_words() == 0, "Humongous iteration must span whole number of cards");
   assert(is_humongous(), "only humongous region here");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -748,7 +749,7 @@ HeapWord* ShenandoahHeapRegion::block_start(const void* p) const {
       last = cur;
       cur += cast_to_oop(cur)->size();
     }
-    shenandoah_assert_correct(NULL, cast_to_oop(last));
+    shenandoah_assert_correct(nullptr, cast_to_oop(last));
     return last;
   }
 }
@@ -775,7 +776,7 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
 
   // Generational Shenandoah needs this alignment for card tables.
   if (strcmp(ShenandoahGCMode, "generational") == 0) {
-    max_heap_size = align_up(max_heap_size , CardTableRS::ct_max_alignment_constraint());
+    max_heap_size = align_up(max_heap_size , CardTable::ct_max_alignment_constraint());
   }
 
   size_t region_size;
@@ -851,12 +852,12 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
   // region size to regular page size.
 
   // Figure out page size to use, and aligns up heap to page size
-  int page_size = os::vm_page_size();
+  size_t page_size = os::vm_page_size();
   if (UseLargePages) {
     size_t large_page_size = os::large_page_size();
     max_heap_size = align_up(max_heap_size, large_page_size);
     if ((max_heap_size / align_up(region_size, large_page_size)) >= MIN_NUM_REGIONS) {
-      page_size = (int)large_page_size;
+      page_size = large_page_size;
     } else {
       // Should have been checked during argument initialization
       assert(!ShenandoahUncommit, "Uncommit requires region size aligns to large page size");
