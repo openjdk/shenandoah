@@ -535,6 +535,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of remembered set card size");
     if (size <= usable_free) {
+      bool was_mutator_free = is_mutator_free(r->index());
       result = r->allocate_aligned(size, req, CardTable::card_size());
       size = req.actual_size();
       assert(result != nullptr, "Allocation cannot fail");
@@ -547,7 +548,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
 #ifdef REMOVE_WHEN_FREESET_DOES_OLD_COLLECTED_FREE
         // PLAB allocations are collector_is_free.  We only increase_Used for mutator allocations.
-        increase_used(padding);
+	if (was_mutator_free) {
+	  increase_used(padding);
+	}
 #endif
         assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
         _heap->old_generation()->increase_used(padding);
@@ -573,7 +576,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       assert(req.is_young(), "Mutator allocations always come from young generation.");
-      generation->increase_used(size * HeapWordSize);
+      if (_heap->mode()->is_generational()) {
+	generation->increase_used(size * HeapWordSize);
+      }
       increase_used(size * HeapWordSize);
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
@@ -586,10 +591,12 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // PLABs parsable while still allowing the PLAB to serve future allocation requests that arise during the
       // next evacuation pass.
       r->set_update_watermark(r->top());
-      generation->increase_used(size * HeapWordSize);
-      if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-        assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
-        // for plabs, we'll sort the difference between evac and promotion usage when we retire the plab
+      if (_heap->mode()->is_generational()) {
+	generation->increase_used(size * HeapWordSize);
+	if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+	  assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
+	  // for plabs, we'll sort the difference between evac and promotion usage when we retire the plab
+	}
       }
     }
   }
@@ -749,17 +756,21 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     _mutator_free_bitmap.clear_bit(r->index());
   }
 
-  // While individual regions report their true use, all humongous regions are
-  // marked used in the free set.
-  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
-  size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
-  increase_used(total_humongous_size);
-  if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-    _heap->young_generation()->increase_used(words_size * HeapWordSize);
-    _heap->young_generation()->increase_humongous_waste(humongous_waste);
-  } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-    _heap->old_generation()->increase_used(words_size * HeapWordSize);
-    _heap->old_generation()->increase_humongous_waste(humongous_waste);
+  if (_heap->mode()->is_generational()) {
+    // While individual regions report their true use, all humongous regions are
+    // marked used in the free set.
+    size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+    size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
+    increase_used(total_humongous_size);
+    if (_heap->mode()->is_generational()) {
+      if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+	_heap->young_generation()->increase_used(words_size * HeapWordSize);
+	_heap->young_generation()->increase_humongous_waste(humongous_waste);
+      } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+	_heap->old_generation()->increase_used(words_size * HeapWordSize);
+	_heap->old_generation()->increase_humongous_waste(humongous_waste);
+      }
+    }
   }
 
   if (remainder != 0) {

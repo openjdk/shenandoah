@@ -466,6 +466,7 @@ public:
   void promote_in_place();
 
 private:
+  void decrement_humongous_waste() const;
   void do_commit();
   void do_uncommit();
 

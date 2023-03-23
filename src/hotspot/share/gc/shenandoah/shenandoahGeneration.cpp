@@ -716,6 +716,7 @@ void ShenandoahGeneration::clear_used() {
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   Atomic::add(&_used, bytes);
 #undef KELVIN_TRACE_GENERATIONS
 #ifdef KELVIN_TRACE_GENERATIONS
@@ -723,18 +724,17 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 		     name(), bytes, _used, _max_capacity);
 #endif
   // This detects arithmetic wraparound on _used.  Non-generational mode does not keep track of _affiliated_region_count
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used cannot exceed regions");
 }
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
-  shenandoah_assert_heaplocked_or_fullgc_safepoint();
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   if (bytes > 0) {
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
     _humongous_waste += bytes;
-    assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-           ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+    assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
            (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
            "waste cannot exceed regions");
 #ifdef KELVIN_TRACE_GENERATIONS
@@ -745,6 +745,7 @@ void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   if (bytes > 0) {
     shenandoah_assert_heaplocked_or_fullgc_safepoint();
     assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
@@ -758,12 +759,12 @@ void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
 
   // Non-generational mode does not maintain affiliated region counts
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
 
