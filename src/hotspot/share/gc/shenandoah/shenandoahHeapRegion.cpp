@@ -675,38 +675,12 @@ void ShenandoahHeapRegion::recycle() {
   shenandoah_assert_heaplocked();
 
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-#undef KELVIN_USAGE
-#ifdef KELVIN_USAGE
-    log_info(gc, ergo)("Recycle %s %s (%d) region " SIZE_FORMAT " with " SIZE_FORMAT " used", affiliation_name(affiliation()),
-		       is_trash()? "trash": (is_cset()? "cset": (is_regular()? "regular":
-								 is_humongous_start()? "humongous start":
-								 (is_humongous_continuation()? "humongous continuation":
-								  "unexpected"))), state_ordinal(), index(), used());
-    if (is_humongous_start()) {
-      HeapWord* obj_addr = bottom();
-      oop obj = cast_to_oop(obj_addr);
-      log_info(gc, ergo)(" humongous object length (bytes): " SIZE_FORMAT, obj->size() * HeapWordSize);
-    }
-#endif
-    size_t humongous_waste = 0;
+    // It may be that humongous regions are never recycled directly because they may be converted into trash before they
+    // are recycled.  If this is universally true, we can replace the following with an assert(!is_humongous()).
     if (is_humongous()) {
-      ShenandoahHeapRegion* start = humongous_start_region();
-      HeapWord* obj_addr = start->bottom();
-      oop obj = cast_to_oop(obj_addr);
-      size_t word_size = obj->size();
-      HeapWord* end_addr = obj_addr + word_size;
-      if (end_addr < end()) {
-	humongous_waste = (end() - end_addr) * HeapWordSize;
-      }
-      // else, this region is entirely spanned by humongous object so contributes no humongous waste
+      decrement_humongous_waste();
     }
-    if (affiliation() == YOUNG_GENERATION) {
-      heap->young_generation()->decrease_used(used());
-      heap->young_generation()->decrease_humongous_waste(humongous_waste);
-    } else if (affiliation() == OLD_GENERATION) {
-      heap->old_generation()->decrease_used(used());
-      heap->old_generation()->decrease_humongous_waste(humongous_waste);
-    }
+    heap->generation_for(affiliation())->decrease_used(used());
   }
 
   set_top(bottom());
