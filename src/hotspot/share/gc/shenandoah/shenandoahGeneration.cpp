@@ -934,20 +934,22 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
 }
 
 size_t ShenandoahGeneration::increment_affiliated_region_count() {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   _affiliated_region_count++;
   return _affiliated_region_count;
 }
 
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(_affiliated_region_count > 0, "affiliated_region_count cannot be negative");
   _affiliated_region_count--;
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
          "used + humongous cannot exceed regions");
   return _affiliated_region_count;
 }
 
 void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   _affiliated_region_count = num_regions;
   _used = num_bytes;
@@ -955,32 +957,35 @@ void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes,
 }
 
 void ShenandoahGeneration::clear_used() {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
   Atomic::store(&_used, (size_t)0);
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   Atomic::add(&_used, bytes);
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
          "used cannot exceed regions");
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
 }
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   shenandoah_assert_heaplocked_or_safepoint();
   _humongous_waste += bytes;
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
+  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
          "waste cannot exceed regions");
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   shenandoah_assert_heaplocked_or_safepoint();
   assert(_humongous_waste >= bytes, "Waste cannot be negative");
   _humongous_waste -= bytes;
@@ -991,6 +996,7 @@ size_t ShenandoahGeneration::used_regions() const {
 }
 
 size_t ShenandoahGeneration::free_unaffiliated_regions() const {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   size_t result = soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes();
   if (_affiliated_region_count > result) {
     result = 0;                 // If old-gen is loaning regions to young-gen, affiliated regions may exceed capacity temporarily.
@@ -1001,23 +1007,21 @@ size_t ShenandoahGeneration::free_unaffiliated_regions() const {
 }
 
 size_t ShenandoahGeneration::used_regions_size() const {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   return _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes();
 }
 
 size_t ShenandoahGeneration::available() const {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   size_t in_use = used() + get_humongous_waste();
   size_t soft_capacity = soft_max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
-  // TODO: ysr: remove this check & warning
-  if (adjustment % ShenandoahHeapRegion::region_size_bytes() != 0) {
-    log_warning(gc)("Adjustment (" INTPTR_FORMAT ") should be a multiple of region size (" SIZE_FORMAT ")",
-                    adjustment, ShenandoahHeapRegion::region_size_bytes());
-  }
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0,
-         "Adjustment to generation size must be multiple of region size");
+	 "Adjustment to generation size must be multiple of region size");
   _adjusted_capacity = soft_max_capacity() + adjustment;
   return _adjusted_capacity;
 }

@@ -672,7 +672,14 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_heaplocked();
 
-  heap->generation_for(affiliation())->decrease_used(used());
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    // It may be that humongous regions are never recycled directly because they may be converted into trash before they
+    // are recycled.  If this is universally true, we can replace the following with an assert(!is_humongous()).
+    if (is_humongous()) {
+      decrement_humongous_waste();
+    }
+    heap->generation_for(affiliation())->decrease_used(used());
+  }
 
   set_top(bottom());
   clear_live_data();
