@@ -351,6 +351,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of remembered set card size");
     if (size <= usable_free) {
+      bool was_mutator_free = is_mutator_free(r->index());
       result = r->allocate_aligned(size, req, CardTable::card_size());
       size = req.actual_size();
       assert(result != nullptr, "Allocation cannot fail");
@@ -361,6 +362,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         // Account for the alignment padding
         size_t padding = (free - usable_free) * HeapWordSize;
         increase_used(padding);
+        // PLAB allocations are collector_is_free.  We only increase_Used for mutator allocations.
+	if (was_mutator_free) {
+	  increase_used(padding);
+	}
         assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
         _heap->old_generation()->increase_used(padding);
         // For verification consistency, we need to report this padding to _heap
@@ -379,8 +384,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   if (result != nullptr) {
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
-      // Mutator allocations always pull from young gen.
       if (_heap->mode()->is_generational()) {
+        assert(req.is_young(), "Mutator allocations always come from young generation.");
 	generation->increase_used(size * HeapWordSize);
       }
       increase_used(size * HeapWordSize);
@@ -551,13 +556,11 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
     _mutator_free_bitmap.clear_bit(r->index());
   }
- 
+  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+  increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {
-    // While individual regions report their true use, all humongous regions are
-    // marked used in the free set.
-    size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
-    increase_used(total_humongous_size);
+    // While individual regions report their true use, all humongous regions are marked used in the free set.
     if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
       _heap->young_generation()->increase_used(words_size * HeapWordSize);
       _heap->young_generation()->increase_humongous_waste(humongous_waste);

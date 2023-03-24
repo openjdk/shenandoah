@@ -978,17 +978,23 @@ void ShenandoahGeneration::decrease_used(size_t bytes) {
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
-  shenandoah_assert_heaplocked_or_safepoint();
-  _humongous_waste += bytes;
-  assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
-         "waste cannot exceed regions");
+  if (bytes > 0) {
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+    _humongous_waste += bytes;
+    assert(_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes(),
+           "waste cannot exceed regions");
+  }
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
-  shenandoah_assert_heaplocked_or_safepoint();
-  assert(_humongous_waste >= bytes, "Waste cannot be negative");
-  _humongous_waste -= bytes;
+  if (bytes > 0) {
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+    assert(_humongous_waste >= bytes, "Waste cannot be negative");
+    assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
+           "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")", _humongous_waste, bytes);
+    _humongous_waste -= bytes;
+  }
 }
 
 size_t ShenandoahGeneration::used_regions() const {

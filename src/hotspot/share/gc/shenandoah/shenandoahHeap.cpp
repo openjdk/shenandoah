@@ -709,17 +709,82 @@ void ShenandoahHeap::decrease_committed(size_t bytes) {
   _committed -= bytes;
 }
 
+#undef KELVIN_HEAP_USED
+#ifdef KELVIN_HEAP_USED
+static void kelvin_breakpoint(const char* msg, size_t heap_used, size_t young_used, size_t old_used) {
+  size_t generation_total = young_used + old_used;
+  size_t delta;
+  const char* disposition;
+  if (generation_total > heap_used) {
+    delta = generation_total - heap_used;
+    disposition = "deficit";
+  } else {
+    delta = heap_used - generation_total;
+    disposition = "surplus";
+  }
+  // Note: we expect client code to adjust generation usage before adjusting heap usage
+  log_info(gc, ergo)("Warning: %s heap_used (" SIZE_FORMAT ") does not equal young_gen_used (" SIZE_FORMAT ") plus old_gen_used ("
+                     SIZE_FORMAT ") delta: " SIZE_FORMAT " %s",
+                     msg, heap_used, young_used, old_used, delta, disposition);
+}
+#endif
+
 void ShenandoahHeap::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes, memory_order_relaxed);
+#ifdef KELVIN_HEAP_USED
+  {
+    // Should have a lock here, but seems to deadlock
+    ShenandoahOldGeneration* old_gen = old_generation();
+    ShenandoahYoungGeneration* young_gen = young_generation();
+    size_t young_gen_used = young_gen->used() + young_gen->get_humongous_waste();
+    size_t old_gen_used = old_gen->used() + old_gen->get_humongous_waste();
+    size_t generations_used = young_gen_used + old_gen_used;
+    assert(_used <= generations_used, "heap->used (" SIZE_FORMAT ") cannot be larger than generation used (" SIZE_FORMAT ")",
+           _used, generations_used);
+    if (_used != generations_used) {
+      kelvin_breakpoint("increased", _used, young_gen_used, old_gen_used);
+    }
+  }
+#endif
 }
 
 void ShenandoahHeap::set_used(size_t bytes) {
   Atomic::store(&_used, bytes);
+#ifdef KELVIN_HEAP_USED
+  {
+    // Should have a lock here, but seems to deadlock
+    ShenandoahOldGeneration* old_gen = old_generation();
+    ShenandoahYoungGeneration* young_gen = young_generation();
+    size_t young_gen_used = young_gen->used() + young_gen->get_humongous_waste();
+    size_t old_gen_used = old_gen->used() + old_gen->get_humongous_waste();
+    size_t generations_used = young_gen_used + old_gen_used;
+    assert(_used <= generations_used, "heap->used (" SIZE_FORMAT ") cannot be larger than generation used (" SIZE_FORMAT ")",
+           _used, generations_used);
+    if (_used != generations_used) {
+      kelvin_breakpoint("newly set", _used, young_gen_used, old_gen_used);
+    }
+  }
+#endif
 }
 
 void ShenandoahHeap::decrease_used(size_t bytes) {
   assert(used() >= bytes, "never decrease heap size by more than we've left");
   Atomic::sub(&_used, bytes, memory_order_relaxed);
+#ifdef KELVIN_HEAP_USED
+  {
+    // Should have a lock here, but seems to deadlock
+    ShenandoahOldGeneration* old_gen = old_generation();
+    ShenandoahYoungGeneration* young_gen = young_generation();
+    size_t young_gen_used = young_gen->used() + young_gen->get_humongous_waste();
+    size_t old_gen_used = old_gen->used() + old_gen->get_humongous_waste();
+    size_t generations_used = young_gen_used + old_gen_used;
+    assert(_used <= generations_used, "heap->used (" SIZE_FORMAT ") cannot be larger than generation used (" SIZE_FORMAT ")",
+           _used, generations_used);
+    if (_used != generations_used) {
+      kelvin_breakpoint("decreased", _used, young_gen_used, old_gen_used);
+    }
+  }
+#endif
 }
 
 void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {

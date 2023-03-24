@@ -201,8 +201,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // Defer unadjust_available() invocations until after Full GC finishes its efforts because Full GC makes use
     // of young-gen memory that may have been loaned from old-gen.
 
-    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
-
+    // No need for old_gen->increase_used() as this was done when plabs were allocated.
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
