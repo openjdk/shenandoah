@@ -128,7 +128,7 @@ public class TestClassLoaderLeak {
              {{"satb"},         {"adaptive", "compact", "static", "aggressive"}},
              {{"iu"},           {"adaptive", "aggressive"}},
              {{"passive"},      {"passive"}},
-             {{"generational"}, {"adaptive"})
+             {{"generational"}, {"adaptive"}}
         };
 
         for (String[][] mh : modeHeuristics) {

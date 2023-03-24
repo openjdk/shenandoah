@@ -27,7 +27,7 @@
  * @summary Test allocation of small object to result OOM, but not to crash JVM
  * @requires vm.gc.Shenandoah
  * @library /test/lib
- * @run driver TestAllocLargeObj large
+ * @run driver TestAllocOutOfMemory large
  */
 
 /**
@@ -35,7 +35,7 @@
  * @summary Test allocation of small object to result OOM, but not to crash JVM
  * @requires vm.gc.Shenandoah
  * @library /test/lib
- * @run driver TestAllocLargeObj heap
+ * @run driver TestAllocOutOfMemory heap
  */
 
 /**
@@ -43,12 +43,12 @@
  * @summary Test allocation of small object to result OOM, but not to crash JVM
  * @requires vm.gc.Shenandoah
  * @library /test/lib
- * @run driver TestAllocLargeObj small
+ * @run driver TestAllocOutOfMemory small
  */
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.process.ProcessTools;
 
-public class TestAllocLargeObj {
+public class TestAllocOutOfMemory {
 
     static volatile Object sink;
 
