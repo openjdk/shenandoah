@@ -767,20 +767,17 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     _mutator_free_bitmap.clear_bit(r->index());
   }
 
+  // While individual regions report their true use, all humongous regions are marked used in the free set.
+  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+  increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {
-    // While individual regions report their true use, all humongous regions are
-    // marked used in the free set.
-    size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
-    increase_used(total_humongous_size);
-    if (_heap->mode()->is_generational()) {
-      if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-	_heap->young_generation()->increase_used(words_size * HeapWordSize);
-	_heap->young_generation()->increase_humongous_waste(humongous_waste);
-      } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
-	_heap->old_generation()->increase_used(words_size * HeapWordSize);
-	_heap->old_generation()->increase_humongous_waste(humongous_waste);
-      }
+    if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+      _heap->young_generation()->increase_used(words_size * HeapWordSize);
+      _heap->young_generation()->increase_humongous_waste(humongous_waste);
+    } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      _heap->old_generation()->increase_used(words_size * HeapWordSize);
+      _heap->old_generation()->increase_humongous_waste(humongous_waste);
     }
   }
 
