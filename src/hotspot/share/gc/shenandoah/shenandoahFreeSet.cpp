@@ -503,16 +503,18 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size_t waste = r->free();
       if (waste > 0) {
         increase_used(waste);
-        generation->increase_allocated(waste);
-        _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, true);
+	generation->increase_allocated(waste);
+        _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, false);
       }
     } else if (r->free() < PLAB::min_size() * HeapWordSize) {
-      // Permanently retire this region if there's room for a fill word
+      // Permanently retire this region if there's room for a fill object
       if (r->free() >= ShenandoahHeap::min_fill_size()) {
         size_t waste = r->free();
         size_t fill_size = waste / HeapWordSize;
         ShenandoahHeap::fill_with_object(r->top(), fill_size);
         r->set_top(r->end());
+	// Since we have filled the waste with an empty object, account for increased usage
+	_heap->increase_used(waste);
         _heap->generation_for(req.affiliation())->increase_used(waste);
       }
     }
