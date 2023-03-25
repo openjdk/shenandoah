@@ -616,7 +616,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       if (waste > 0) {
         increase_used(waste);
         generation->increase_allocated(waste);
-        _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, false);
+        _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, true);
       }
     } else if (r->free() < PLAB::min_size() * HeapWordSize) {
       // Permanently retire this region if there's room for a fill object
