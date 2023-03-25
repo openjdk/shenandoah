@@ -515,7 +515,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         r->set_top(r->end());
 	// Since we have filled the waste with an empty object, account for increased usage
 	_heap->increase_used(waste);
-        _heap->generation_for(req.affiliation())->increase_used(waste);
+	if (_heap->mode()->is_generational()) {
+	  _heap->generation_for(req.affiliation())->increase_used(waste);
+	}
       }
     }
 
