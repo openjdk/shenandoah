@@ -24,7 +24,7 @@
 
 /**
  * @test id=large
- * @summary Test allocation of small object to result OOM, but not to crash JVM
+ * @summary Test allocation of large objects results in OOM, but will not crash the JVM
  * @requires vm.gc.Shenandoah
  * @library /test/lib
  * @run driver TestAllocOutOfMemory large
@@ -32,7 +32,7 @@
 
 /**
  * @test id=heap
- * @summary Test allocation of small object to result OOM, but not to crash JVM
+ * @summary Test allocation of a heap-sized object results in OOM, but will not crash the JVM
  * @requires vm.gc.Shenandoah
  * @library /test/lib
  * @run driver TestAllocOutOfMemory heap
@@ -40,7 +40,7 @@
 
 /**
  * @test id=small
- * @summary Test allocation of small object to result OOM, but not to crash JVM
+ * @summary Test allocation of small objects results in OOM, but will not crash the JVM
  * @requires vm.gc.Shenandoah
  * @library /test/lib
  * @run driver TestAllocOutOfMemory small
@@ -86,13 +86,13 @@ public class TestAllocOutOfMemory {
             expectFailure("-Xmx16m",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC",
-                          TestAllocLargeObj.class.getName(),
+                          TestAllocOutOfMemory.class.getName(),
                           "test", args[0]);
 
             expectFailure("-Xmx16m",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC", "-XX:ShenandoahGCMode=generational",
-                          TestAllocLargeObj.class.getName(),
+                          TestAllocOutOfMemory.class.getName(),
                           "test", args[0]);
         }
 
@@ -100,13 +100,13 @@ public class TestAllocOutOfMemory {
             expectSuccess("-Xmx1g",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC",
-                          TestAllocLargeObj.class.getName(),
+                          TestAllocOutOfMemory.class.getName(),
                           "test", args[0]);
 
             expectSuccess("-Xmx1g",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC", "-XX:ShenandoahGCMode=generational",
-                          TestAllocLargeObj.class.getName(),
+                          TestAllocOutOfMemory.class.getName(),
                           "test", args[0]);
         }
     }
