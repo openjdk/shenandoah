@@ -893,8 +893,10 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   // Limit growth of GCLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
   // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
   if (ShenandoahMaxEvacLABRatio > 0) {
+    log_debug(gc, free)("Allocate new gclab: " SIZE_FORMAT ", " SIZE_FORMAT, new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
     new_size = MIN2(new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
   }
+
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
@@ -906,6 +908,7 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   if (new_size < size) {
     // New size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good GCLABs, when we encounter a large object.
+    log_debug(gc, free)("New gclab size (" SIZE_FORMAT ") is too small for " SIZE_FORMAT, new_size, size);
     return nullptr;
   }
 
@@ -1812,6 +1815,10 @@ void ShenandoahHeap::prepare_for_verify() {
 }
 
 void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
+  if (_shenandoah_policy->is_at_shutdown()) {
+    return;
+  }
+
   tcl->do_thread(_control_thread);
   tcl->do_thread(_regulator_thread);
   workers()->threads_do(tcl);
@@ -2364,21 +2371,21 @@ uint ShenandoahHeap::max_workers() {
 void ShenandoahHeap::stop() {
   // The shutdown sequence should be able to terminate when GC is running.
 
-  // Step 0a. Stop requesting collections.
-  regulator_thread()->stop();
-
-  // Step 0. Notify policy to disable event recording.
+  // Step 1. Notify policy to disable event recording and prevent visiting gc threads during shutdown
   _shenandoah_policy->record_shutdown();
 
-  // Step 1. Notify control thread that we are in shutdown.
+  // Step 2. Stop requesting collections.
+  regulator_thread()->stop();
+
+  // Step 3. Notify control thread that we are in shutdown.
   // Note that we cannot do that with stop(), because stop() is blocking and waits for the actual shutdown.
   // Doing stop() here would wait for the normal GC cycle to complete, never falling through to cancel below.
   control_thread()->prepare_for_graceful_shutdown();
 
-  // Step 2. Notify GC workers that we are cancelling GC.
+  // Step 4. Notify GC workers that we are cancelling GC.
   cancel_gc(GCCause::_shenandoah_stop_vm);
 
-  // Step 3. Wait until GC worker exits normally.
+  // Step 5. Wait until GC worker exits normally.
   control_thread()->stop();
 }
 

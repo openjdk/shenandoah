@@ -24,7 +24,7 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shared/cardTableRS.hpp"
+#include "gc/shared/cardTable.hpp"
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
@@ -435,7 +435,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
   st->print("|T " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_byte_size(get_tlab_allocs()));
   st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_byte_size(get_gclab_allocs()));
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
+    st->print("|P " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
   }
   st->print("|S " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_shared_allocs()),   proper_unit_for_byte_size(get_shared_allocs()));
   st->print("|L " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_live_data_bytes()), proper_unit_for_byte_size(get_live_data_bytes()));
@@ -666,11 +666,7 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_heaplocked();
 
-  if (affiliation() == YOUNG_GENERATION) {
-    heap->young_generation()->decrease_used(used());
-  } else if (affiliation() == OLD_GENERATION) {
-    heap->old_generation()->decrease_used(used());
-  }
+  heap->generation_for(affiliation())->decrease_used(used());
 
   set_top(bottom());
   clear_live_data();
@@ -728,7 +724,7 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
 
   // Generational Shenandoah needs this alignment for card tables.
   if (strcmp(ShenandoahGCMode, "generational") == 0) {
-    max_heap_size = align_up(max_heap_size , CardTableRS::ct_max_alignment_constraint());
+    max_heap_size = align_up(max_heap_size , CardTable::ct_max_alignment_constraint());
   }
 
   size_t region_size;
