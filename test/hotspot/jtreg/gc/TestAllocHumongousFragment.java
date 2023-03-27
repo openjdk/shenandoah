@@ -59,22 +59,22 @@
  * @library /test/lib
  *
  * @run main/othervm -Xmx1g -Xms1g -Xlog:gc -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:ShenandoahTargetNumRegions=2048
- *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive -XX:ShenandoahGCMode=satb
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
  *      -XX:+ShenandoahOOMDuringEvacALot -XX:+ShenandoahVerify
  *      TestAllocHumongousFragment
  *
  * @run main/othervm -Xmx1g -Xms1g -Xlog:gc -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:ShenandoahTargetNumRegions=2048
- *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive -XX:ShenandoahGCMode=satb
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
  *      -XX:+ShenandoahAllocFailureALot -XX:+ShenandoahVerify
  *      TestAllocHumongousFragment
  *
  * @run main/othervm -Xmx1g -Xms1g -Xlog:gc -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:ShenandoahTargetNumRegions=2048
- *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive -XX:ShenandoahGCMode=satb
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
  *      -XX:+ShenandoahOOMDuringEvacALot
  *      TestAllocHumongousFragment
  *
  * @run main/othervm -Xmx1g -Xms1g -Xlog:gc -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:ShenandoahTargetNumRegions=2048
- *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive -XX:ShenandoahGCMode=satb
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
  *      -XX:+ShenandoahAllocFailureALot
  *      TestAllocHumongousFragment
  */
