@@ -112,7 +112,20 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
 
   if (unprocessed_old_collection_candidates() == 0) {
+    // We have added the last of our collection candidates to a mixed collection.
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
+  } else if (included_old_regions == 0) {
+    // We have candidates, but none were included for evacuation - they must all be pinned.
+    // We don't want a region with a stuck pin to prevent subsequent old collections, so
+    // we transition to a state that will allow us to make these uncollected (pinned) regions
+    // parseable.
+#ifdef ASSERT
+    for (uint i = _next_old_collection_candidate; i < _last_old_collection_candidate; ++i) {
+      auto region = _region_data[i]._region;
+      assert(region->is_pinned(), "Expected region " SIZE_FORMAT " to be pinned.", region->index());
+    }
+#endif
+    _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_FILL);
   }
 
   return (included_old_regions > 0);
@@ -273,7 +286,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   if (unprocessed_old_collection_candidates() == 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   } else {
-    _old_generation->transition_to(ShenandoahOldGeneration::WAITING);
+    _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_EVAC);
   }
 }
 
@@ -349,7 +362,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   //
   // Future refinement: under certain circumstances, we might be more sophisticated about this choice.
   // For example, we could choose to abandon the previous old collection before it has completed evacuations.
-  if (unprocessed_old_collection_candidates() > 0) {
+  if (!_old_generation->can_start_gc()) {
     return false;
   }
 

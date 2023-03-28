@@ -323,7 +323,8 @@ const char* ShenandoahOldGeneration::state_name(State state) {
     case FILLING:       return "Coalescing";
     case BOOTSTRAPPING: return "Bootstrapping";
     case MARKING:       return "Marking";
-    case WAITING:       return "Waiting";
+    case WAITING_FOR_EVAC:  return "Waiting for evacuation";
+    case WAITING_FOR_FILL:  return "Waiting for fill";
     default:
       ShouldNotReachHere();
       return "Unknown";
@@ -392,12 +393,11 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
       assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become idle when setup for bootstrapping.");
       return true;
     case FILLING:
-      assert(_state == IDLE, "Cannot begin filling without first being idle.");
+      assert(_state == IDLE || _state == WAITING_FOR_FILL, "Cannot begin filling without first completing evacuations.");
       assert(heap->is_prepare_for_old_mark_in_progress(), "Should be preparing for old mark now.");
       return true;
     case BOOTSTRAPPING:
       assert(_state == FILLING, "Cannot reset bitmap without making old regions parseable.");
-      // assert(heap->young_generation()->old_gen_task_queues() != nullptr, "Cannot bootstrap without old mark queues.");
       assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot still be making old regions parseable.");
       return true;
     case MARKING:
@@ -405,9 +405,13 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
       assert(heap->young_generation()->old_gen_task_queues() != nullptr, "Young generation needs old mark queues.");
       assert(heap->is_concurrent_old_mark_in_progress(), "Should be marking old now.");
       return true;
-    case WAITING:
+    case WAITING_FOR_EVAC:
       assert(_state == MARKING, "Cannot have old collection candidates without first marking.");
       assert(_old_heuristics->unprocessed_old_collection_candidates() > 0, "Must have collection candidates here.");
+      return true;
+    case WAITING_FOR_FILL:
+      assert(_state == MARKING || _state == WAITING_FOR_EVAC, "Cannot begin filling without first marking or evacuating.");
+      assert(_old_heuristics->unprocessed_old_collection_candidates() > 0, "Cannot wait for fill without something to fill.");
       return true;
     default:
       ShouldNotReachHere();
