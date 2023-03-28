@@ -117,12 +117,14 @@
  *
  * @run main/othervm -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -Xmx1g -Xms1g
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=adaptive -XX:ShenandoahGCMode=generational
- *      -XX:+ShenandoahOOMDuringEvacALot -XX:+ShenandoahVerify
+ *      -XX:+ShenandoahOOMDuringEvacALot
+ *      -XX:+ShenandoahVerify
  *      TestAllocObjectArrays
  *
  * @run main/othervm -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -Xmx1g -Xms1g
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=adaptive -XX:ShenandoahGCMode=generational
- *      -XX:+ShenandoahAllocFailureALot -XX:+ShenandoahVerify
+ *      -XX:+ShenandoahAllocFailureALot
+ *      -XX:+ShenandoahVerify
  *      TestAllocObjectArrays
  */
 
