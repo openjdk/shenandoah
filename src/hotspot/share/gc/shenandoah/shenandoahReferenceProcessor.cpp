@@ -62,9 +62,8 @@ template <typename T>
 static void card_mark_barrier(T* field, oop value) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->is_in_or_null(value), "Should be in heap");
-  assert(heap->is_in(*field), "Should be in heap");
-  if (heap->mode()->is_generational() && heap->is_in_young(value) && heap->is_in_old(*field)) {
-    heap->card_scan()->mark_card_as_dirty((HeapWord*)field);
+  if (heap->mode()->is_generational() && heap->is_in_old(field) && heap->is_in_young(value)) {
+    heap->card_scan()->mark_card_as_dirty(reinterpret_cast<HeapWord*>(field));
   }
 }
 
