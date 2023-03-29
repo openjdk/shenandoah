@@ -59,16 +59,28 @@ static const char* reference_type_name(ReferenceType type) {
 }
 
 template <typename T>
+static void card_mark_barrier(T* field, oop value) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  assert(heap->is_in_or_null(value), "Should be in heap");
+  assert(heap->is_in(*field), "Should be in heap");
+  if (heap->mode()->is_generational() && heap->is_in_young(value) && heap->is_in_old(*field)) {
+    heap->card_scan()->mark_card_as_dirty((HeapWord*)field);
+  }
+}
+
+template <typename T>
 static void set_oop_field(T* field, oop value);
 
 template <>
 void set_oop_field<oop>(oop* field, oop value) {
   *field = value;
+  card_mark_barrier(field, value);
 }
 
 template <>
 void set_oop_field<narrowOop>(narrowOop* field, oop value) {
   *field = CompressedOops::encode(value);
+  card_mark_barrier(field, value);
 }
 
 static oop lrb(oop obj) {
