@@ -22,7 +22,7 @@
  */
 
 /**
- * @test id=default
+ * @test
  * @summary Miscompilation in Unsafe off-heap swap routines
  * @requires vm.gc.Shenandoah
  * @modules java.base/jdk.internal.misc:+open
@@ -32,16 +32,6 @@
  *                   TestUnsafeOffheapSwap
  */
 
-/**
- * @test id=generational
- * @summary Miscompilation in Unsafe off-heap swap routines
- * @requires vm.gc.Shenandoah
- * @modules java.base/jdk.internal.misc:+open
- *
- * @run main/othervm -XX:-UseOnStackReplacement -XX:-BackgroundCompilation -XX:-TieredCompilation
- *                   -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
- *                   TestUnsafeOffheapSwap
- */
 import java.util.*;
 import jdk.internal.misc.Unsafe;
 

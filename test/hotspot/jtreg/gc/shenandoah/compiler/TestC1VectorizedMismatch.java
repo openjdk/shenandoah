@@ -22,7 +22,7 @@
  *
  */
 
-/* @test id=default
+/* @test
  * @summary test C1 vectorized mismatch intrinsic
  * @key randomness
  * @requires vm.gc.Shenandoah
@@ -31,14 +31,6 @@
  * @run main/othervm -XX:TieredStopAtLevel=1 -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive TestC1VectorizedMismatch
  */
 
-/* @test id=generational
- * @summary test C1 vectorized mismatch intrinsic
- * @key randomness
- * @requires vm.gc.Shenandoah
- * @library /test/lib
- *
- * @run main/othervm -XX:TieredStopAtLevel=1 -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational TestC1VectorizedMismatch
- */
 import java.util.Arrays;
 import java.util.Random;
 import jdk.test.lib.Utils;

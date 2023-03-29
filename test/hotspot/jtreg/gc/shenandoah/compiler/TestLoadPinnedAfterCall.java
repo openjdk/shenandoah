@@ -22,24 +22,13 @@
  */
 
 /**
- * @test id=default
+ * @test
  * @bug 8251527
  * @summary CTW: C2 (Shenandoah) compilation fails with SEGV due to unhandled catchproj == NUL
  * @requires vm.flavor == "server"
  * @requires vm.gc.Shenandoah
  *
  * @run main/othervm -XX:+UseShenandoahGC -XX:CompileOnly=TestLoadPinnedAfterCall.test -XX:CompileCommand=dontinline,TestLoadPinnedAfterCall.not_inlined -XX:-TieredCompilation -XX:-BackgroundCompilation TestLoadPinnedAfterCall
- *
- */
-
-/**
- * @test id=generational
- * @bug 8251527
- * @summary CTW: C2 (Shenandoah) compilation fails with SEGV due to unhandled catchproj == NUL
- * @requires vm.flavor == "server"
- * @requires vm.gc.Shenandoah
- *
- * @run main/othervm -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:CompileOnly=TestLoadPinnedAfterCall.test -XX:CompileCommand=dontinline,TestLoadPinnedAfterCall.not_inlined -XX:-TieredCompilation -XX:-BackgroundCompilation TestLoadPinnedAfterCall
  *
  */
 

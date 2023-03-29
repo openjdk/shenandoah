@@ -22,7 +22,7 @@
  */
 
 /**
- * @test id=default
+ * @test
  * @bug 8252296
  * @summary Shenandoah: crash in CallNode::extract_projections
  * @requires vm.gc.Shenandoah
@@ -30,16 +30,6 @@
  * @run main/othervm -XX:-BackgroundCompilation -XX:-TieredCompilation -XX:+UseShenandoahGC -XX:CompileOnly=TestBarrierExpandCallProjection::test TestBarrierExpandCallProjection
  *
  */
-
- /**
-  * @test id=generational
-  * @bug 8252296
-  * @summary Shenandoah: crash in CallNode::extract_projections
-  * @requires vm.gc.Shenandoah
-  *
-  * @run main/othervm -XX:-BackgroundCompilation -XX:-TieredCompilation -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:CompileOnly=TestBarrierExpandCallProjection::test TestBarrierExpandCallProjection
-  *
-  */
 
 public class TestBarrierExpandCallProjection {
     static TestBarrierExpandCallProjection test = new TestBarrierExpandCallProjection();

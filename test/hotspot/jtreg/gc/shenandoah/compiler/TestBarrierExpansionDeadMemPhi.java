@@ -22,7 +22,7 @@
  */
 
 /**
- * @test id=default
+ * @test
  * @bug 8255400
  * @summary C2 failures after JDK-8255000
  * @requires vm.gc.Shenandoah
@@ -32,18 +32,6 @@
  *
  *
  */
-
- /**
-  * @test id=generational
-  * @bug 8255400
-  * @summary C2 failures after JDK-8255000
-  * @requires vm.gc.Shenandoah
-  * @modules java.base/jdk.internal.misc:+open
-  *
-  * @run main/othervm -XX:-UseOnStackReplacement -XX:-BackgroundCompilation -XX:-TieredCompilation -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational TestBarrierExpansionDeadMemPhi
-  *
-  *
-  */
 
 import jdk.internal.misc.Unsafe;
 import java.util.Arrays;

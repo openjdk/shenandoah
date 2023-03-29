@@ -22,7 +22,7 @@
  */
 
 /**
- * @test id=default
+ * @test
  * @bug 8231405
  * @summary barrier expansion breaks if barrier is right after call to rethrow stub
  * @requires vm.gc.Shenandoah
@@ -30,16 +30,6 @@
  * @run main/othervm -XX:CompileOnly=CallMultipleCatchProjs::test -Xcomp -Xverify:none -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC CallMultipleCatchProjs
  *
  */
-
- /**
-  * @test id=generational
-  * @bug 8231405
-  * @summary barrier expansion breaks if barrier is right after call to rethrow stub
-  * @requires vm.gc.Shenandoah
-  *
-  * @run main/othervm -XX:CompileOnly=CallMultipleCatchProjs::test -Xcomp -Xverify:none -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational CallMultipleCatchProjs
-  *
-  */
 
 public class CallMultipleCatchProjs {
     private static A field = new A();

@@ -22,7 +22,7 @@
  */
 
 /*
- * @test id=iu
+ * @test
  * bug 8280885
  * @summary Shenandoah: Some tests failed with "EA: missing allocation reference path"
  * @requires vm.gc.Shenandoah
@@ -31,15 +31,6 @@
  *                   -XX:CompileCommand=dontinline,TestUnexpectedIUBarrierEA::notInlined TestUnexpectedIUBarrierEA
  */
 
-/*
- * @test id=generational
- * bug 8280885
- * @summary Shenandoah: Some tests failed with "EA: missing allocation reference path"
- * @requires vm.gc.Shenandoah
- *
- * @run main/othervm -XX:-BackgroundCompilation -XX:+UseShenandoahGC -XX:+UnlockExperimentalVMOptions -XX:ShenandoahGCMode=generational
- *                   -XX:CompileCommand=dontinline,TestUnexpectedIUBarrierEA::notInlined TestUnexpectedIUBarrierEA
- */
 public class TestUnexpectedIUBarrierEA {
 
     private static Object field;

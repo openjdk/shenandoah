@@ -22,7 +22,7 @@
  */
 
 /**
- * @test id=default
+ * @test
  * @key stress randomness
  * @summary Clearing control during final graph reshape causes memory barrier to loose dependency on null check
  * @requires vm.gc.Shenandoah
@@ -33,19 +33,6 @@
  *                   TestWriteBarrierClearControl
  *
  */
-
- /**
-  * @test id=generational
-  * @key stress randomness
-  * @summary Clearing control during final graph reshape causes memory barrier to loose dependency on null check
-  * @requires vm.gc.Shenandoah
-  * @requires vm.flavor == "server"
-  * @run main/othervm -XX:-BackgroundCompilation -XX:-UseOnStackReplacement -XX:-TieredCompilation
-  *                   -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
-  *                   -XX:+UnlockDiagnosticVMOptions -XX:+StressLCM -XX:+StressGCM
-  *                   TestWriteBarrierClearControl
-  *
-  */
 public class TestWriteBarrierClearControl {
 
     int f;

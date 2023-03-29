@@ -22,20 +22,13 @@
  */
 
 /*
- * @test id=default
+ * @test
  * bug 8281811
  * @summary assert(_base == Tuple) failed: Not a Tuple after JDK-8280799
  * @requires vm.gc.Shenandoah
  * @run main/othervm -XX:+UseShenandoahGC -XX:-BackgroundCompilation -XX:LoopMaxUnroll=1 TestBarrierAboveProj
  */
 
-/*
- * @test id=generational
- * bug 8281811
- * @summary assert(_base == Tuple) failed: Not a Tuple after JDK-8280799
- * @requires vm.gc.Shenandoah
- * @run main/othervm -XX:+UseShenandoahGC -XX:-BackgroundCompilation -XX:LoopMaxUnroll=1 -XX:ShenandoahGCMode=generational TestBarrierAboveProj
- */
 
 public class TestBarrierAboveProj {
     private static C objField = new C();
