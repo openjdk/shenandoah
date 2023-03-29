@@ -78,22 +78,26 @@ public class TestAllocOutOfMemory {
 
     public static void main(String[] args) throws Exception {
         if (args.length > 1) {
-            allocate(args[1]);
+            // Called from test, size is second argument
+            String size = args[1];
+            allocate(size);
             return;
         }
 
+        // Called from jtreg, size is first argument
+        String size = args[0];
         {
             expectFailure("-Xmx16m",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC",
                           TestAllocOutOfMemory.class.getName(),
-                          "test", args[0]);
+                          "test", size);
 
             expectFailure("-Xmx16m",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC", "-XX:ShenandoahGCMode=generational",
                           TestAllocOutOfMemory.class.getName(),
-                          "test", args[0]);
+                          "test", size);
         }
 
         {
@@ -101,13 +105,13 @@ public class TestAllocOutOfMemory {
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC",
                           TestAllocOutOfMemory.class.getName(),
-                          "test", args[0]);
+                          "test", size);
 
             expectSuccess("-Xmx1g",
                           "-XX:+UnlockExperimentalVMOptions",
                           "-XX:+UseShenandoahGC", "-XX:ShenandoahGCMode=generational",
                           TestAllocOutOfMemory.class.getName(),
-                          "test", args[0]);
+                          "test", size);
         }
     }
 
