@@ -428,7 +428,7 @@ void ShenandoahBarrierSet::arraycopy_barrier(T* src, T* dst, size_t count) {
 }
 
 template <class T>
-void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool is_old) {
+void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool is_old_marking) {
   assert(_heap->is_concurrent_mark_in_progress(), "only during marking");
   /*
    * Note that an old-gen object is considered live if it is live at the start of OLD marking or if it is promoted
@@ -453,21 +453,23 @@ void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool 
    */
   if (ShenandoahSATBBarrier) {
     T* array = dst;
-    if (is_old) {
-      ShenandoahHeapRegion* r = _heap->heap_region_containing(array);
-      assert(_heap->mode()->is_generational(), "Only perform old-marking if in generational mode");
-      if (r->is_old() && (((HeapWord*) array)) < _heap->marking_context()->top_at_mark_start(r)) {
+    HeapWord* array_addr = reinterpret_cast<HeapWord*>(array);
+    if (is_old_marking) {
+      // Generational, old marking
+      assert(_heap->mode()->is_generational(), "Invariant");
+      ShenandoahHeapRegion* r = _heap->heap_region_containing(array_addr);
+      if (r->is_old() && (array_addr < _heap->marking_context()->top_at_mark_start(r))) {
         arraycopy_work<T, false, false, true>(array, count);
       }
     } else if (_heap->mode()->is_generational()) {
+      // Generational, young marking
       ShenandoahHeapRegion* r = _heap->heap_region_containing(array);
-      if (r->is_old() || !_heap->marking_context()->allocated_after_mark_start(reinterpret_cast<HeapWord*>(array))) {
+      if (r->is_old() || !_heap->marking_context()->allocated_after_mark_start(array_addr)) {
         arraycopy_work<T, false, false, true>(array, count);
       }
-    } else {
-      if (!_heap->marking_context()->allocated_after_mark_start(reinterpret_cast<HeapWord*>(array))) {
-        arraycopy_work<T, false, false, true>(array, count);
-      }
+    } else if (!_heap->marking_context()->allocated_after_mark_start(array_addr)) {
+      // Non-generational, marking
+      arraycopy_work<T, false, false, true>(array, count);
     }
   } else {
     T* array = src;
