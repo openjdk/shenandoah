@@ -456,7 +456,7 @@ void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool 
     if (is_old) {
       ShenandoahHeapRegion* r = _heap->heap_region_containing(array);
       assert(_heap->mode()->is_generational(), "Only perform old-marking if in generational mode");
-      if (r->is_old() && (_heap->marking_context()->top_at_mark_start(r) <= (HeapWord*) array)) {
+      if (r->is_old() && (((HeapWord*) array)) < _heap->marking_context()->top_at_mark_start(r)) {
         arraycopy_work<T, false, false, true>(array, count);
       }
     } else if (_heap->mode()->is_generational()) {
