@@ -443,7 +443,7 @@ void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool 
    * During old-gen marking (which is interleaved with young-gen collections), call arraycopy_work() if:
    *
    * 1. The overwritten array resides in old-gen and it is below TAMS within its old-gen region
-   * 2. Do not call arraycopy_work for any array residing young-gen because young-gen collection is idle at this time
+   * 2. Do not call arraycopy_work for any array residing in young-gen because young-gen collection is idle at this time
    *
    * During young-gen marking, call arraycopy_work() if:
    *
