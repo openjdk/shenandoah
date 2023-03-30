@@ -255,6 +255,9 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   uint nworkers = workers->active_workers();
 
   log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
+  // This code will see the same set of regions to filled on each resumption as it did
+  // on the initial run. That's okay because each region keeps track of its own coalesce
+  // and fill state. Region that were filled on a prior attempt will not try to fill again.
   uint coalesce_and_fill_regions_count = old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
@@ -263,6 +266,7 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   if (task.is_completed()) {
     // Remember that we're done with coalesce-and-fill.
     heap->set_prepare_for_old_mark_in_progress(false);
+    old_heuristics->abandon_collection_candidates();
     transition_to(BOOTSTRAPPING);
     return true;
   } else {
@@ -387,6 +391,7 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   switch (new_state) {
     case IDLE:
+      assert(_state == MARKING || _state == WAITING_FOR_EVAC, "Must come from marking or evacuating.");
       assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become idle during old mark.");
       assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot become idle with collection candidates");
       assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot become idle while making old generation parseable.");
@@ -398,6 +403,7 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
       return true;
     case BOOTSTRAPPING:
       assert(_state == FILLING, "Cannot reset bitmap without making old regions parseable.");
+      assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot bootstrap with mixed collection candidates");
       assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot still be making old regions parseable.");
       return true;
     case MARKING:
