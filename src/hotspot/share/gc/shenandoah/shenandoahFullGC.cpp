@@ -324,7 +324,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     phase4_compact_objects(worker_slices);
 
     if (heap->mode()->is_generational()) {
-      phase5_restore_generation_accounts();
+      phase5_restore_generation_usage();
     }
   }
 
@@ -1483,7 +1483,7 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }
 
-void ShenandoahFullGC::phase5_restore_generation_accounts() {
+void ShenandoahFullGC::phase5_restore_generation_usage() {
   GCTraceTime(Info, gc, phases) time("Phase 5: Restore generation accounts", _gc_timer);
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   size_t num_regions = heap->num_regions();
