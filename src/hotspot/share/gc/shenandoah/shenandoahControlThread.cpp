@@ -557,6 +557,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
   switch (original_state) {
+    case ShenandoahOldGeneration::WAITING_FOR_FILL:
     case ShenandoahOldGeneration::IDLE: {
       assert(!heap->is_concurrent_old_mark_in_progress(), "Old already in progress.");
       assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty.");

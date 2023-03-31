@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,28 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
-package jdk.internal.util.regex;
+package jdk.jfr.event.gc.detailed;
 
 /**
- * Holds data contained in the Unicode Technical Standard #51: Unicode
- * Emoji. 
- * 
- * Currently it is only used for the rule "GB11" in UAX #29 Unicode Text
- * Segmentation.
+ * @test id=default
+ * @key randomness
+ * @requires vm.hasJFR
+ * @requires vm.gc == "Shenandoah"
+ * @library /test/lib /test/jdk
+ * @run main/othervm -XX:+UseShenandoahGC -Xmx256m jdk.jfr.event.gc.detailed.TestStressBigAllocationGCEventsWithShenandoah 1048576
  */
-final class EmojiData {
-    /**
-     * Returns whether the code point is an extended pictographic or not.
-     *
-     * @param cp code point to examine
-     * @return true if {@code cp} is an extended pictographic
-     */
-    static boolean isExtendedPictographic(int cp) {
-        if (cp < 0x2000) {
-            return
-%%%EXTPICT_LOW%%%
-        } else {
-            return isHigh(cp);
-        }
-    }
 
-    private static boolean isHigh(int cp) {
-        return
-%%%EXTPICT_HIGH%%%
+ /**
+  * @test id=generational
+  * @key randomness
+  * @requires vm.hasJFR
+  * @requires vm.gc == "Shenandoah"
+  * @library /test/lib /test/jdk
+  * @run main/othervm -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -Xmx256m jdk.jfr.event.gc.detailed.TestStressBigAllocationGCEventsWithShenandoah 1048576
+  */
+public class TestStressBigAllocationGCEventsWithShenandoah {
+
+    public static void main(String[] args) throws Exception {
+        new StressAllocationGCEvents().run(args);
     }
 }

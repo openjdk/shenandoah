@@ -250,7 +250,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // accumulate there until they can be promoted.  This increases the young-gen marking and evacuation work.
 
   // Do not fill up old-gen memory with promotions.  Reserve some amount of memory for compaction purposes.
-  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
   size_t young_evac_reserve_max = 0;
 
   // First priority is to reclaim the easy garbage out of young-gen.
@@ -276,6 +275,8 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // excess_young is available to be transferred to OLD.  Assume that OLD will not request any more than had
   // already been set aside for its promotion and evacuation needs at the end of previous GC.  No need to
   // hold back memory for allocation runway.
+
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
 
   // maximum_old_evacuation_reserve is an upper bound on memory evacuated from old and evacuated to old (promoted).
   size_t maximum_old_evacuation_reserve =

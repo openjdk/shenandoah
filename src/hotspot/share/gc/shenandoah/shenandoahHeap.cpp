@@ -687,7 +687,7 @@ ShenandoahOldHeuristics* ShenandoahHeap::old_heuristics() {
 }
 
 bool ShenandoahHeap::doing_mixed_evacuations() {
-  return (old_heuristics()->unprocessed_old_collection_candidates() > 0);
+  return _old_generation->state() == ShenandoahOldGeneration::WAITING_FOR_EVAC;
 }
 
 bool ShenandoahHeap::is_old_bitmap_stable() const {
@@ -1126,10 +1126,7 @@ void ShenandoahHeap::cancel_old_gc() {
 }
 
 bool ShenandoahHeap::is_old_gc_active() {
-  return is_concurrent_old_mark_in_progress()
-         || is_prepare_for_old_mark_in_progress()
-         || old_heuristics()->unprocessed_old_collection_candidates() > 0
-         || young_generation()->old_gen_task_queues() != nullptr;
+  return _old_generation->state() != ShenandoahOldGeneration::IDLE;
 }
 
 void ShenandoahHeap::coalesce_and_fill_old_regions() {
@@ -2062,6 +2059,10 @@ void ShenandoahHeap::mutator_threads_do(ThreadClosure* tcl) const {
 }
 
 void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
+  if (_shenandoah_policy->is_at_shutdown()) {
+    return;
+  }
+
   tcl->do_thread(_control_thread);
   tcl->do_thread(_regulator_thread);
   workers()->threads_do(tcl);
@@ -2610,21 +2611,21 @@ uint ShenandoahHeap::max_workers() {
 void ShenandoahHeap::stop() {
   // The shutdown sequence should be able to terminate when GC is running.
 
-  // Step 0a. Stop requesting collections.
-  regulator_thread()->stop();
-
-  // Step 0. Notify policy to disable event recording.
+  // Step 1. Notify policy to disable event recording and prevent visiting gc threads during shutdown
   _shenandoah_policy->record_shutdown();
 
-  // Step 1. Notify control thread that we are in shutdown.
+  // Step 2. Stop requesting collections.
+  regulator_thread()->stop();
+
+  // Step 3. Notify control thread that we are in shutdown.
   // Note that we cannot do that with stop(), because stop() is blocking and waits for the actual shutdown.
   // Doing stop() here would wait for the normal GC cycle to complete, never falling through to cancel below.
   control_thread()->prepare_for_graceful_shutdown();
 
-  // Step 2. Notify GC workers that we are cancelling GC.
+  // Step 4. Notify GC workers that we are cancelling GC.
   cancel_gc(GCCause::_shenandoah_stop_vm);
 
-  // Step 3. Wait until GC worker exits normally.
+  // Step 5. Wait until GC worker exits normally.
   control_thread()->stop();
 }
 

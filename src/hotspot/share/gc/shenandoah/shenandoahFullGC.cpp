@@ -329,9 +329,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
 
     phase4_compact_objects(worker_slices);
 
-    if (heap->mode()->is_generational()) {
-      phase5_restore_generation_accounts();
-    }
+    phase5_epilog();
   }
 
   {
@@ -1472,6 +1470,64 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_humong);
     compact_humongous_objects();
   }
+}
+
+static void account_for_region(ShenandoahHeapRegion* r, size_t &region_count, size_t &region_usage, size_t &humongous_waste) {
+  region_count++;
+  region_usage += r->used();
+  if (r->is_humongous_start()) {
+    // For each humongous object, we take this path once regardless of how many regions it spans.
+    HeapWord* obj_addr = r->bottom();
+    oop obj = cast_to_oop(obj_addr);
+    size_t word_size = obj->size();
+    size_t region_size_words = ShenandoahHeapRegion::region_size_words();
+    size_t overreach = word_size % region_size_words;
+    if (overreach != 0) {
+      humongous_waste += (region_size_words - overreach) * HeapWordSize;
+    }
+    // else, this humongous object aligns exactly on region size, so no waste.
+  }
+}
+
+void ShenandoahFullGC::phase5_epilog() {
+  GCTraceTime(Info, gc, phases) time("Phase 5: Full GC epilog", _gc_timer);
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  size_t num_regions = heap->num_regions();
+  size_t young_usage = 0;
+  size_t young_regions = 0;
+  size_t young_humongous_waste = 0;
+  size_t old_usage = 0;
+  size_t old_regions = 0;
+  size_t old_humongous_waste = 0;
+  ShenandoahHeapRegion* r;
+
+  if (heap->mode()->is_generational()) {
+    // TODO: We may be able remove code that recomputes generation usage after we fix the incremental updates to generation
+    // usage that are scattered throughout the existing Full GC implementation.  There's an error in there somewhere that
+    // has not yet been figured out.  Or maybe it is easier to just not try to do the generation accounting on the fly, keep
+    // this code, and remove all of the other attempts to increase/decrease affiliated regions, used, and humongous_waste.
+    {
+      ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_recompute_generation_usage);
+      for (size_t i = 0; i < num_regions; i++) {
+        switch (heap->region_affiliation(i)) {
+          case ShenandoahRegionAffiliation::FREE:
+            break;
+          case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+            r = heap->get_region(i);
+            account_for_region(r, young_regions, young_usage, young_humongous_waste);
+            break;
+          case ShenandoahRegionAffiliation::OLD_GENERATION:
+            r = heap->get_region(i);
+            account_for_region(r, old_regions, old_usage, old_humongous_waste);
+            break;
+          default:
+            assert(false, "Should not reach");
+        }
+      }
+      heap->old_generation()->establish_usage(old_regions, old_usage, old_humongous_waste);
+      heap->young_generation()->establish_usage(young_regions, young_usage, young_humongous_waste);
+    }
+  }
 
   // Reset complete bitmap. We're about to reset the complete-top-at-mark-start pointer
   // and must ensure the bitmap is in sync.
@@ -1538,62 +1594,4 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
   }
 
   heap->clear_cancelled_gc(true /* clear oom handler */);
-}
-
-void ShenandoahFullGC::phase5_restore_generation_accounts() {
-  GCTraceTime(Info, gc, phases) time("Phase 5: Restore generation accounts", _gc_timer);
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  size_t num_regions = heap->num_regions();
-  size_t young_usage = 0;
-  size_t young_regions = 0;
-  size_t young_humongous_waste = 0;
-  size_t old_usage = 0;
-  size_t old_regions = 0;
-  size_t old_humongous_waste = 0;
-  ShenandoahHeapRegion* r;
-
-  for (size_t i = 0; i < num_regions; i++) {
-    switch (heap->region_affiliation(i)) {
-      case ShenandoahRegionAffiliation::FREE:
-        break;
-      case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-        r = heap->get_region(i);
-        young_regions++;
-        young_usage += r->used();
-        if (r->is_humongous()) {
-          ShenandoahHeapRegion* start = r->humongous_start_region();
-          HeapWord* obj_addr = start->bottom();
-          oop obj = cast_to_oop(obj_addr);
-          size_t word_size = obj->size();
-          HeapWord* end_addr = obj_addr + word_size;
-          if (end_addr < r->end()) {
-            size_t humongous_waste = (r->end() - end_addr) * HeapWordSize;
-            young_humongous_waste += humongous_waste;
-          }
-          // else, this region is entirely spanned by humongous object so contributes no humongous waste
-        }
-        break;
-      case ShenandoahRegionAffiliation::OLD_GENERATION:
-        r = heap->get_region(i);
-        old_regions++;
-        old_usage += r->used();
-        if (r->is_humongous()) {
-          ShenandoahHeapRegion* start = r->humongous_start_region();
-          HeapWord* obj_addr = start->bottom();
-          oop obj = cast_to_oop(obj_addr);
-          size_t word_size = obj->size();
-          HeapWord* end_addr = obj_addr + word_size;
-          if (end_addr < r->end()) {
-            size_t humongous_waste = (r->end() - end_addr) * HeapWordSize;
-            old_humongous_waste += humongous_waste;
-          }
-          // else, this region is entirely spanned by humongous object so contributes no humongous waste
-        }
-        break;
-      default:
-        assert(false, "Should not reach");
-    }
-  }
-  heap->old_generation()->establish_usage(old_regions, old_usage, old_humongous_waste);
-  heap->young_generation()->establish_usage(young_regions, young_usage, young_humongous_waste);
 }

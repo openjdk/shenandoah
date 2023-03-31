@@ -817,10 +817,8 @@ void ShenandoahConcurrentGC::op_final_mark() {
       if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
-#ifdef KELVIN_EVAC_CHOICE
-        log_info(gc, ergo)(" starting to evacuate");
-#endif
-        LogTarget(Info, gc, ergo) lt;
+
+        LogTarget(Debug, gc, cset) lt;
         if (lt.is_enabled()) {
           ResourceMark rm;
           LogStream ls(lt);
