@@ -83,7 +83,9 @@ size_t ShenandoahCardTable::last_valid_index() {
 }
 
 void ShenandoahCardTable::clear() {
-  CardTable::clear(_whole_heap);
+  for (size_t i = 0; i < _byte_map_size; i++) {
+    _read_byte_map[i] = clean_card;
+  }
 }
 
 // TODO: This service is not currently used because we are not able to swap _read_byte_map_base and
