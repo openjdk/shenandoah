@@ -115,7 +115,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // We have added the last of our collection candidates to a mixed collection.
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   } else if (included_old_regions == 0) {
-    // We have candidates, but none were included for evacuation - are they all be pinned?
+    // We have candidates, but none were included for evacuation - are they all pinned?
     // or did we just not have enough room for any of them in this collection set?
     // We don't want a region with a stuck pin to prevent subsequent old collections, so
     // if they are all pinned we transition to a state that will allow us to make these uncollected

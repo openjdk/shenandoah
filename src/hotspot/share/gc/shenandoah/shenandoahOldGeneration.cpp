@@ -255,9 +255,9 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   uint nworkers = workers->active_workers();
 
   log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
-  // This code will see the same set of regions to filled on each resumption as it did
+  // This code will see the same set of regions to fill on each resumption as it did
   // on the initial run. That's okay because each region keeps track of its own coalesce
-  // and fill state. Region that were filled on a prior attempt will not try to fill again.
+  // and fill state. Regions that were filled on a prior attempt will not try to fill again.
   uint coalesce_and_fill_regions_count = old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
@@ -363,28 +363,35 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 //               |   |            v
 //               |   |          +-----------------+     +--------------------+
 //               |   |          |     FILLING     | <-> |      YOUNG GC      |
-//               |   |          |                 |     | (RSet Uses Bitmap) |
-//               |   |          +-----------------+     +--------------------+
-//               |   |            |
-//               |   |            | Reset Bitmap
-//               |   |            v
-//               |   |          +-----------------+
-//               |   |          |    BOOTSTRAP    |
-//               |   |          |                 |
-//               |   |          +-----------------+
-//               |   |            |
-//               |   |            | Continue Marking
-//               |   |            v
-//               |   |          +-----------------+     +----------------------+
-//               |   |          |    MARKING      | <-> |       YOUNG GC       |
-//               |   +----------|                 |     | (RSet Parses Region) |
-//               |              +-----------------+     +----------------------+
-//               |                |
-//               |                | Has Candidates
-//               |                v
-//               |              +-----------------+
-//               |              |     WAITING     |
-//               +------------- |                 |
+//               |   |    +---> |                 |     | (RSet Uses Bitmap) |
+//               |   |    |     +-----------------+     +--------------------+
+//               |   |    |       |
+//               |   |    |       | Reset Bitmap
+//               |   |    |       v
+//               |   |    |     +-----------------+
+//               |   |    |     |    BOOTSTRAP    |
+//               |   |    |     |                 |
+//               |   |    |     +-----------------+
+//               |   |    |       |
+//               |   |    |       | Continue Marking
+//               |   |    |       v
+//               |   |    |     +-----------------+     +----------------------+
+//               |   |    |     |    MARKING      | <-> |       YOUNG GC       |
+//               |   +----|-----|                 |     | (RSet Parses Region) |
+//               |        |     +-----------------+     +----------------------+
+//               |        |       |
+//               |        |       | Has Candidates
+//               |        |       v
+//               |        |     +-----------------+
+//               |        |     |    WAITING FOR  |
+//               +--------|---- |    EVACUATIONS  |
+//                        |     +-----------------+
+//                        |       |
+//                        |       | All Candidates are Pinned
+//                        |       v
+//                        |     +-----------------+
+//                        |     |    WAITING FOR  |
+//                        +-----|    FILLING      |
 //                              +-----------------+
 //
 bool ShenandoahOldGeneration::validate_transition(State new_state) {
