@@ -454,26 +454,28 @@ void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool 
   if (ShenandoahSATBBarrier) {
     T* array = dst;
     HeapWord* array_addr = reinterpret_cast<HeapWord*>(array);
+    ShenandoahHeapRegion* r = _heap->heap_region_containing(array_addr);
     if (is_old_marking) {
       // Generational, old marking
       assert(_heap->mode()->is_generational(), "Invariant");
-      ShenandoahHeapRegion* r = _heap->heap_region_containing(array_addr);
       if (r->is_old() && (array_addr < _heap->marking_context()->top_at_mark_start(r))) {
         arraycopy_work<T, false, false, true>(array, count);
       }
     } else if (_heap->mode()->is_generational()) {
       // Generational, young marking
-      ShenandoahHeapRegion* r = _heap->heap_region_containing(array);
-      if (r->is_old() || !_heap->marking_context()->allocated_after_mark_start(array_addr)) {
+      if (r->is_old() || (array_addr < _heap->marking_context()->top_at_mark_start(r))) {
         arraycopy_work<T, false, false, true>(array, count);
       }
-    } else if (!_heap->marking_context()->allocated_after_mark_start(array_addr)) {
+    } else if (array_addr < _heap->marking_context()->top_at_mark_start(r)) {
       // Non-generational, marking
       arraycopy_work<T, false, false, true>(array, count);
     }
   } else {
+    // Incremental Update mode, marking
     T* array = src;
-    if (!_heap->marking_context()->allocated_after_mark_start(reinterpret_cast<HeapWord*>(array))) {
+    HeapWord* array_addr = reinterpret_cast<HeapWord*>(array);
+    ShenandoahHeapRegion* r = _heap->heap_region_containing(array_addr);
+    if (array_addr < _heap->marking_context()->top_at_mark_start(r)) {
       arraycopy_work<T, false, false, true>(array, count);
     }
   }
