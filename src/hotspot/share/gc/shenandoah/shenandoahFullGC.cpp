@@ -1319,6 +1319,8 @@ public:
       r->recycle();
     }
 
+#ifdef KELVIN_DEPRECATE
+    // We do this in a phase that precedes this final accounting
     // Update final usage for generations
     if (is_generational && live != 0) {
       size_t humongous_waste = 0;
@@ -1341,7 +1343,7 @@ public:
         _heap->old_generation()->increase_humongous_waste(humongous_waste);
       }
     }
-
+#endif
     r->set_live_data(live);
     r->reset_alloc_metadata();
     _live += live;
@@ -1540,12 +1542,6 @@ void ShenandoahFullGC::phase5_epilog() {
   // Bring regions in proper states after the collection, and set heap properties.
   {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_rebuild);
-
-    if (heap->mode()->is_generational()) {
-      heap->young_generation()->clear_used();
-      heap->old_generation()->clear_used();
-    }
-
     ShenandoahPostCompactClosure post_compact;
     heap->heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
@@ -1592,6 +1588,5 @@ void ShenandoahFullGC::phase5_epilog() {
     }
     heap->free_set()->rebuild(0);
   }
-
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }
