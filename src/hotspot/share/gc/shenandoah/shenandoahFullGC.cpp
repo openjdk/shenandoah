@@ -1311,15 +1311,6 @@ public:
       r->recycle();
     }
 
-    // Update final usage for generations
-    if (is_generational && live != 0) {
-      if (r->is_young()) {
-        _heap->young_generation()->increase_used(live);
-      } else if (r->is_old()) {
-        _heap->old_generation()->increase_used(live);
-      }
-    }
-
     r->set_live_data(live);
     r->reset_alloc_metadata();
     _live += live;
@@ -1518,12 +1509,6 @@ void ShenandoahFullGC::phase5_epilog() {
   // Bring regions in proper states after the collection, and set heap properties.
   {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_rebuild);
-
-    if (heap->mode()->is_generational()) {
-      heap->young_generation()->clear_used();
-      heap->old_generation()->clear_used();
-    }
-
     ShenandoahPostCompactClosure post_compact;
     heap->heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
