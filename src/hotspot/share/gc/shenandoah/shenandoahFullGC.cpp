@@ -1310,29 +1310,6 @@ public:
       r->recycle();
     }
 
-    // Update final usage for generations
-    if (is_generational && live != 0) {
-      size_t humongous_waste = 0;
-      if (r->is_humongous()) {
-        ShenandoahHeapRegion* start = r->humongous_start_region();
-        HeapWord* obj_addr = start->bottom();
-        oop obj = cast_to_oop(obj_addr);
-        size_t word_size = obj->size();
-        HeapWord* end_addr = obj_addr + word_size;
-        if (end_addr < r->end()) {
-          humongous_waste = (r->end() - end_addr) * HeapWordSize;
-        }
-        // else, this region is entirely spanned by humongous object so contributes no humongous waste
-      } 
-      if (r->is_young()) {
-        _heap->young_generation()->increase_used(live);
-        _heap->young_generation()->increase_humongous_waste(humongous_waste);
-      } else if (r->is_old()) {
-        _heap->old_generation()->increase_used(live);
-        _heap->old_generation()->increase_humongous_waste(humongous_waste);
-      }
-    }
-
     r->set_live_data(live);
     r->reset_alloc_metadata();
     _live += live;
@@ -1531,12 +1508,6 @@ void ShenandoahFullGC::phase5_epilog() {
   // Bring regions in proper states after the collection, and set heap properties.
   {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_rebuild);
-
-    if (heap->mode()->is_generational()) {
-      heap->young_generation()->clear_used();
-      heap->old_generation()->clear_used();
-    }
-
     ShenandoahPostCompactClosure post_compact;
     heap->heap_region_iterate(&post_compact);
     heap->set_used(post_compact.get_live());
@@ -1544,11 +1515,9 @@ void ShenandoahFullGC::phase5_epilog() {
       log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
                     post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
     }
-
     heap->collection_set()->clear();
     heap->free_set()->rebuild();
   }
-
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }
 
