@@ -69,7 +69,8 @@ static void card_mark_barrier(T* field, oop value) {
     // of old and young _references_. These references are linked together through the
     // discovered field in java.lang.Reference. In some cases, creating or editing this
     // list may result in the creation of _new_ old-to-young pointers which must dirty
-    // the corresponding card. Failing to do this may cause heap verification errors.
+    // the corresponding card. Failing to do this may cause heap verification errors and
+    // lead to incorrect GC behavior.
     heap->card_scan()->mark_card_as_dirty(reinterpret_cast<HeapWord*>(field));
   }
 }
