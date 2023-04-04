@@ -62,6 +62,7 @@ private:
   size_t _min_size;
   size_t _requested_size;
   size_t _actual_size;
+  size_t _padding;
   Type _alloc_type;
   ShenandoahRegionAffiliation const _affiliation;
 #ifdef ASSERT
@@ -125,6 +126,14 @@ public:
     _actual_size_set = true;
 #endif
     _actual_size = v;
+  }
+
+  inline size_t padding() {
+    return _padding;
+  }
+
+  inline void set_padding(size_t v) {
+    _padding = v;
   }
 
   inline bool is_mutator_alloc() {

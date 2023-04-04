@@ -243,7 +243,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   return nullptr;
 }
 
-size_t get_usable_free(size_t free) {
+size_t get_usable_free_words(size_t free) {
   // e.g. card_size is 512, card_shift is 9, min_fill_size() is 8
   //      free is 514
   //      usable_free is 512, which is decreased to 0
@@ -257,15 +257,28 @@ size_t get_usable_free(size_t free) {
     }
   }
 
-  return usable_free;
+  return usable_free / HeapWordSize;;
 }
 
-size_t align_up_to_card(size_t size) {
-  size_t remnant = size % CardTable::card_size_in_words();
-  if (remnant > 0) {
-    size = size - remnant + CardTable::card_size_in_words();
+HeapWord* ShenandoahFreeSet::allocated_aligned_plab(size_t size, ShenandoahAllocRequest& req, ShenandoahHeapRegion* r) {
+  assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
+  assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
+  assert(!req.is_mutator_alloc(), "PLABs should not be allocated by mutators.");
+  assert(size % CardTable::card_size_in_words() == 0, "size must be multiple of card table size, was " SIZE_FORMAT, size);
+
+  HeapWord* result = r->allocate_aligned(size, req, CardTable::card_size());
+  assert(result != nullptr, "Allocation cannot fail");
+  assert(r->top() <= r->end(), "Allocation cannot span end of region");
+  assert(req.actual_size() % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of card size");
+  assert(((uintptr_t) result) % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
+
+  if (req.padding() > 0) {
+    // Account for the alignment padding
+    // For verification consistency, we need to report this padding to _heap
+    _heap->increase_used(req.padding());
+    _heap->old_generation()->increase_used(req.padding());
   }
-  return size;
+  return result;
 }
 
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
@@ -300,7 +313,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 
   in_new_region = r->is_empty();
   HeapWord* result = nullptr;
-  size_t size = req.size();
 
   if (in_new_region) {
     log_debug(gc, free)("Using new region (" SIZE_FORMAT ") for %s (" PTR_FORMAT ").",
@@ -310,87 +322,46 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   // req.size() is in words, r->free() is in bytes.
   if (ShenandoahElasticTLAB && req.is_lab_alloc()) {
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
-      assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
-      assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
       // Need to assure that plabs are aligned on multiple of card region.
-      size_t free = r->free();
-      size_t usable_free = get_usable_free(free);
-      free /= HeapWordSize;
-      usable_free /= HeapWordSize;
-
       // Since we have Elastic TLABs, align size up.  This is consistent with aligning min_size up.
-      size = align_up_to_card(size);
+      size_t usable_free = get_usable_free_words(r->free());
+      size_t size = align_up(req.size(), CardTable::card_size_in_words());
+      size_t adjusted_min_size = align_up(req.min_size(), CardTable::card_size_in_words());
+
       if (size > usable_free) {
         size = usable_free;
-        assert(size % CardTable::card_size_in_words() == 0, "usable_free is a multiple of card table size");
       }
 
-      size_t adjusted_min_size = align_up_to_card(req.min_size());
-
       if (size >= adjusted_min_size) {
-        result = r->allocate_aligned(size, req, CardTable::card_size());
-        assert(result != nullptr, "Allocation cannot fail");
-        size = req.actual_size();
-        assert(r->top() <= r->end(), "Allocation cannot span end of region");
-        assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of card size");
-        assert(((uintptr_t) result) % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
-        if (free > usable_free) {
-          // Account for the alignment padding
-          size_t padding = (free - usable_free) * HeapWordSize;
-          increase_used(padding);
-
-          _heap->old_generation()->increase_used(padding);
-          // For verification consistency, we need to report this padding to _heap
-          _heap->increase_used(padding);
-        }
+        result = allocated_aligned_plab(size, req, r);
       }
       // Otherwise, leave result == nullptr because the adjusted size is smaller than min size.
     } else {
       // This is a GCLAB or a TLAB allocation
+      size_t size = req.size();
       size_t free = align_down(r->free() >> LogHeapWordSize, MinObjAlignment);
       if (size > free) {
         size = free;
       }
       if (size >= req.min_size()) {
         result = r->allocate(size, req);
-        if (result != nullptr) {
-          // Record actual allocation size
-          req.set_actual_size(size);
-        }
         assert (result != nullptr, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, size);
+        req.set_actual_size(size);
       } else {
         log_trace(gc, free)("Failed to shrink TLAB or GCLAB request (" SIZE_FORMAT ") in region " SIZE_FORMAT " to " SIZE_FORMAT
                            " because min_size() is " SIZE_FORMAT, req.size(), r->index(), size, req.min_size());
       }
     }
   } else if (req.is_lab_alloc() && req.type() == ShenandoahAllocRequest::_alloc_plab) {
-    assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
-    assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
-    // inelastic PLAB
-    size_t free = r->free();
-    size_t usable_free = get_usable_free(free);
-    free /= HeapWordSize;
-    usable_free /= HeapWordSize;
 
-    assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of remembered set card size");
+    // inelastic PLAB
+    size_t size = req.size();
+    size_t usable_free = get_usable_free_words(r->free());
     if (size <= usable_free) {
-      result = r->allocate_aligned(size, req, CardTable::card_size());
-      size = req.actual_size();
-      assert(result != nullptr, "Allocation cannot fail");
-      assert(r->top() <= r->end(), "Allocation cannot span end of region");
-      assert(req.actual_size() % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
-      assert(((uintptr_t) result) % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
-      if (free > usable_free) {
-        // Account for the alignment padding
-        size_t padding = (free - usable_free) * HeapWordSize;
-        increase_used(padding);
-        assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
-        _heap->old_generation()->increase_used(padding);
-        // For verification consistency, we need to report this padding to _heap
-        _heap->increase_used(padding);
-      }
+      result = allocated_aligned_plab(size, req, r);
     }
   } else {
+    size_t size = req.size();
     result = r->allocate(size, req);
     if (result != nullptr) {
       // Record actual allocation size
@@ -403,8 +374,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       assert(req.is_young(), "Mutator allocations always come from young generation.");
-      generation->increase_used(size * HeapWordSize);
-      increase_used(size * HeapWordSize);
+      generation->increase_used(req.actual_size() * HeapWordSize);
+      increase_used(req.actual_size() * HeapWordSize);
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
 
@@ -416,7 +387,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // PLABs parsable while still allowing the PLAB to serve future allocation requests that arise during the
       // next evacuation pass.
       r->set_update_watermark(r->top());
-      generation->increase_used(size * HeapWordSize);
+      generation->increase_used(req.actual_size() * HeapWordSize);
       if (_heap->mode()->is_generational()) {
         if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
           assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
