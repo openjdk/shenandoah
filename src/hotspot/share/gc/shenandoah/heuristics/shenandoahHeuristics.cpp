@@ -77,7 +77,10 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
 
 size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool* preselected_regions) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (!heap->mode()->is_generational()) return 0; // TODO: Do we need this check, or assert is enough?
+  if (!heap->mode()->is_generational()) {
+    // TODO: Do we need this check, or assert is enough?
+    return 0;
+  }
 
   size_t old_consumed = 0;
   for (size_t i = 0; i < num_regions; i++) {
@@ -100,7 +103,8 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   bool is_generational = heap->mode()->is_generational();
 
   assert(collection_set->count() == 0, "Must be empty");
-  assert(_generation->generation_mode() != OLD, "Old GC invokes ShenandoahOldHeuristics::choose_collection_set()");
+  assert(!is_generational || _generation->generation_mode() != OLD,
+         "Old GC invokes ShenandoahOldHeuristics::choose_collection_set()");
 
   // Check all pinned regions have updated status before choosing the collection set.
   heap->assert_pinned_region_status();
