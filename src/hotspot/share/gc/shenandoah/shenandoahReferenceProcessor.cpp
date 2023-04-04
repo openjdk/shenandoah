@@ -64,12 +64,6 @@ static void card_mark_barrier(T* field, oop value) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->is_in_or_null(value), "Should be in heap");
   if (heap->mode()->is_generational() && heap->is_in_old(field) && heap->is_in_young(value)) {
-
-    // TODO:
-    // This comment has proven to be incorrect, because the now-disabled asserts that follow were failing.
-    //
-    // Revisit what we believe to be truth and update this comment:
-    //
     // We expect this to really be needed only during global collections. Young collections
     // discover j.l.r.Refs in the old generation during scanning of dirty cards
     // and these point to (as yet unmarked) referents in the young generation (see
@@ -83,10 +77,9 @@ static void card_mark_barrier(T* field, oop value) {
     // where the card needs to be dirtied here. We, however, skip the extra global'ness check
     // and always mark the card (redundantly during young collections).
     // The asserts below check the expected invariants based on the description above.
-    //
-    //    assert(!heap->active_generation()->is_old(), "Expecting only young or global");
-    //    assert(heap->card_scan()->is_card_dirty(reinterpret_cast<HeapWord*>(field))
-    //           || heap->active_generation()->is_global(), "Expecting already dirty if young");
+    assert(!heap->active_generation()->is_old(), "Expecting only young or global");
+    assert(heap->card_scan()->is_card_dirty(reinterpret_cast<HeapWord*>(field))
+           || heap->active_generation()->is_global(), "Expecting already dirty if young");
     heap->card_scan()->mark_card_as_dirty(reinterpret_cast<HeapWord*>(field));
   }
 }
