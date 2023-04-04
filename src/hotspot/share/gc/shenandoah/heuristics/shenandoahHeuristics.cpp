@@ -75,21 +75,21 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
-size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
+size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool* preselected_regions) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if (!heap->mode()->is_generational()) return 0; // TODO: Do we need this check, or assert is enough?
+
   size_t old_consumed = 0;
-  if (heap->mode()->is_generational()) {
-    for (size_t i = 0; i < num_regions; i++) {
-      ShenandoahHeapRegion* region = heap->get_region(i);
-      if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
-        size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahEvacWaste);
-        if (old_consumed + promotion_need < old_available) {
-          old_consumed += promotion_need;
-          preselected_regions[i] = true;
-        }
-        // Note that we keep going even if one region is excluded from selection.  Subsequent regions may be selected
-        // if they have smaller live data.
+  for (size_t i = 0; i < num_regions; i++) {
+    ShenandoahHeapRegion* region = heap->get_region(i);
+    if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
+      size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahEvacWaste);
+      if (old_consumed + promotion_need < old_available) {
+        old_consumed += promotion_need;
+        preselected_regions[i] = true;
       }
+      // Note that we keep going even if one region is excluded from selection.
+      // Subsequent regions may be selected if they have smaller live data.
     }
   }
   return old_consumed;
