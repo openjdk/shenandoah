@@ -185,7 +185,7 @@ inline void ShenandoahBarrierSet::keep_alive_if_weak(DecoratorSet decorators, oo
 }
 
 template <DecoratorSet decorators, typename T>
-inline void ShenandoahBarrierSet::write_ref_field_post(T* field, oop newVal) {
+inline void ShenandoahBarrierSet::write_ref_field_post(T* field, oop new_value) {
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
     volatile CardTable::CardValue* byte = card_table()->byte_for(field);
     *byte = CardTable::dirty_card_val();

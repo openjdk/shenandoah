@@ -48,7 +48,9 @@ public:
     return barrier_set_cast<ShenandoahBarrierSet>(BarrierSet::barrier_set());
   }
 
-  inline ShenandoahCardTable* card_table()  { return _card_table; }
+  inline ShenandoahCardTable* card_table() {
+    return _card_table;
+  }
 
   static ShenandoahSATBMarkQueueSet& satb_mark_queue_set() {
     return barrier_set()->_satb_mark_queue_set;
@@ -116,7 +118,7 @@ public:
   inline oop oop_xchg(DecoratorSet decorators, T* addr, oop new_value);
 
   template <DecoratorSet decorators, typename T>
-  void write_ref_field_post(T* field, oop newVal);
+  void write_ref_field_post(T* field, oop new_value);
 
   void write_ref_array(HeapWord* start, size_t count);
 
