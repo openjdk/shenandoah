@@ -3619,7 +3619,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
         }
         // else, this humongous object is not marked so no need to verify its internal pointers
         if (!scanner->verify_registration(obj_addr, ctx)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr,
+          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, nullptr, nullptr,
                                           "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
         }
       } else if (!r->is_humongous()) {
@@ -3635,7 +3635,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
             }
             // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
             if (!scanner->verify_registration(obj_addr, ctx)) {
-              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr,
+              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, nullptr, nullptr,
                                                "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
             }
             obj_addr += obj->size();

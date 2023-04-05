@@ -622,13 +622,17 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // Permanently retire this region if there's room for a fill object
       if (r->free() >= ShenandoahHeap::min_fill_size()) {
         size_t waste = r->free();
+        HeapWord* fill_addr = r->top();
         size_t fill_size = waste / HeapWordSize;
-        ShenandoahHeap::fill_with_object(r->top(), fill_size);
+        ShenandoahHeap::fill_with_object(fill_addr, fill_size);
         r->set_top(r->end());
         // Since we have filled the waste with an empty object, account for increased usage
 	_heap->increase_used(waste);
 	if (_heap->mode()->is_generational()) {
 	  _heap->generation_for(req.affiliation())->increase_used(waste);
+          if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+            _heap->card_scan()->register_object(fill_addr);
+          }
 	}
       }
     }
@@ -887,11 +891,12 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   shenandoah_assert_heaplocked();
   clear();
+  young_cset_regions = 0;
+  old_cset_regions = 0;
+
 #undef KELVIN_REBUILD
 #ifdef KELVIN_REBUILD
   log_info(gc, ergo)("prepare for freeset->rebuild");
-  young_cset_regions = 0;
-  old_cset_regions = 0;
 #endif
 
   log_debug(gc, free)("Rebuilding FreeSet");
