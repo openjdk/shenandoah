@@ -88,6 +88,9 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahRegionAffil
     for (size_t c = leftmost; c <= rightmost; c++) {
       if (is_old_collector_free(c)) {
         ShenandoahHeapRegion* r = _heap->get_region(c);
+        assert(r->is_trash() || (r->affiliation() == ShenandoahRegionAffiliation::FREE)
+               || (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION),
+               "is_old_collector_free region has bad affiliation");
         if (r->affiliation() == affiliation) {
           HeapWord* result = try_allocate_in(r, req, in_new_region);
 #ifdef KELVIN_MONITOR
@@ -106,10 +109,6 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahRegionAffil
 #endif
             return result;
           }
-        } else {
-          // else, this is a FREE region that is "reserved" for old-collector-free set.  we'll use this free region only
-          // if we fail to find the requested memory within a region already affiliated OLD.
-          assert(r->affiliation() == ShenandoahRegionAffiliation::FREE, "is_old_collector_free requires affiliation OLD or FREE");
         }
       }
     }
@@ -120,6 +119,9 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahRegionAffil
       size_t idx = c - 1;
       if (is_old_collector_free(idx)) {
         ShenandoahHeapRegion* r = _heap->get_region(idx);
+        assert(r->is_trash() || (r->affiliation() == ShenandoahRegionAffiliation::FREE)
+               || (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION),
+               "is_old_collector_free region has bad affiliation");
         if (r->affiliation() == affiliation) {
           HeapWord* result = try_allocate_in(r, req, in_new_region);
 #ifdef KELVIN_MONITOR
@@ -138,10 +140,6 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahRegionAffil
 #endif
             return result;
           }
-        } else {
-          // else, this is a FREE region that is "reserved" for old-collector-free set.  we'll use this free region only
-          // if we fail to find the requested memory within a region already affiliated OLD.
-          assert(r->affiliation() == ShenandoahRegionAffiliation::FREE, "is_old_collector_free requires affiliation OLD or FREE");
         }
       }
     }
@@ -1052,7 +1050,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 #endif
     ShenandoahHeapRegion* r = _heap->get_region(idx);
     if (_mutator_free_bitmap.at(idx) && (alloc_capacity(r) > 0)) {
-      assert(!r->is_old(), "mutator is free regions should not be affiliated OLD");
+      assert(!r->is_old(), "mutator_is_free regions should not be affiliated OLD");
       // OLD regions that have available memory are already in the old_collector free set
       if ((_old_capacity < to_reserve_old) && (r->is_trash() || (r->affiliation() == ShenandoahRegionAffiliation::FREE))) {
         _mutator_free_bitmap.clear_bit(idx);
