@@ -81,6 +81,7 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
   if (size >= req.min_size()) {
     // Even if req.min_size() is not a multiple of card size, we know that size is.
     if (pad_words > 0) {
+      assert(pad_words >= ShenandoahHeap::min_fill_size(), "pad_words expanded above to meet size constraint");
       ShenandoahHeap::fill_with_object(orig_top, pad_words);
       ShenandoahHeap::heap()->card_scan()->register_object(orig_top);
     }

@@ -484,6 +484,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
@@ -529,6 +530,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated object known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
@@ -580,8 +582,8 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-
       // coalesce_objects() unregisters all but first object subsumed within coalesced range.
       rem_set_scanner->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
@@ -1113,6 +1115,7 @@ void ShenandoahHeapRegion::promote_in_place() {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
       assert(next_marked_obj <= tams, "next marked object cannot exceed tams");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
       heap->card_scan()->register_object_wo_lock(obj_addr);
       obj_addr = next_marked_obj;

@@ -527,6 +527,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
       // For non-LAB allocations, we have no way to retract the allocation, and
       // have to explicitly overwrite the copy with the filler object. With that overwrite,
       // we have to keep the fwdptr initialized and pointing to our (stale) copy.
+      assert(size >= ShenandoahHeap::min_fill_size(), "previously allocated object known to be larger than min_size");
       fill_with_object(copy, size);
       shenandoah_assert_correct(nullptr, copy_val);
       // For non-LAB allocations, the object has already been registered
