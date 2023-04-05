@@ -124,7 +124,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   size_t free = 0;
   size_t free_regions = 0;
-  size_t live_memory = 0;
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
@@ -145,7 +144,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         region->make_trash_immediate();
       } else {
         assert (_generation->generation_mode() != OLD, "OLD is handled elsewhere");
-        live_memory += region->get_live_data_bytes();
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
         if (is_generational && collection_set->is_preselected(i)) {
@@ -171,16 +169,11 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // Count only the start. Continuations would be counted on "trash" path
         immediate_regions++;
         immediate_garbage += garbage;
-      } else {
-        live_memory += region->get_live_data_bytes();
       }
     } else if (region->is_trash()) {
       // Count in just trashed collection set, during coalesced CM-with-UR
       immediate_regions++;
       immediate_garbage += garbage;
-    } else {
-      assert(region->is_humongous_continuation() && !region->is_trash(), "Sanity");
-      live_memory += region->get_live_data_bytes();
     }
   }
 
