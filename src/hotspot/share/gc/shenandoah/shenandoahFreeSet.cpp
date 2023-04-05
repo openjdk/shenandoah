@@ -143,6 +143,8 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
         break;
 
       case ShenandoahRegionAffiliation::FREE:
+        fatal("Should request affiliation");
+
       default:
         ShouldNotReachHere();
         break;

@@ -90,10 +90,9 @@ public:
           // First, clear the remembered set
           oop obj = cast_to_oop(obj_addr);
           size_t size = obj->size();
-          HeapWord* end_object = r->bottom() + size;
 
           // First, clear the remembered set for all spanned humongous regions
-          size_t num_regions = (size + ShenandoahHeapRegion::region_size_words() - 1) / ShenandoahHeapRegion::region_size_words();
+          size_t num_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
           size_t region_span = num_regions * ShenandoahHeapRegion::region_size_words();
           scanner->reset_remset(r->bottom(), region_span);
           size_t region_index = r->index();
@@ -123,6 +122,7 @@ public:
         } // else, ignore humongous continuation region
       }
       // else, this region is FREE or YOUNG or inactive and we can ignore it.
+      // TODO: Assert this.
       r = _regions.next();
     }
   }
@@ -328,6 +328,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
 
   {
     // Epilogue
+    // TODO: Merge with phase5_epilog?
     _preserved_marks->restore(heap->workers());
     _preserved_marks->reclaim();
 
@@ -419,7 +420,8 @@ private:
   size_t                    const _num_workers;
 
 public:
-  ShenandoahPrepareForCompactionTask(PreservedMarksSet *preserved_marks, ShenandoahHeapRegionSet **worker_slices,
+  ShenandoahPrepareForCompactionTask(PreservedMarksSet *preserved_marks,
+                                     ShenandoahHeapRegionSet **worker_slices,
                                      size_t num_workers);
 
   static bool is_candidate_region(ShenandoahHeapRegion* r) {
