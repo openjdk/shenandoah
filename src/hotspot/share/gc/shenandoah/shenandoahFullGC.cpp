@@ -854,7 +854,7 @@ public:
       r->recycle();
     }
     if (r->is_cset()) {
-      // Leave afffiliation unchanged.
+      // Leave affiliation unchanged
       r->make_regular_bypass();
     }
     if (r->is_empty_uncommitted()) {
@@ -879,32 +879,34 @@ public:
     _ctx(ShenandoahHeap::heap()->complete_marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) {
-    if (r->affiliation() != FREE) {
-      if (r->is_humongous_start()) {
-        oop humongous_obj = cast_to_oop(r->bottom());
-        if (!_ctx->is_marked(humongous_obj)) {
-          assert(!r->has_live(),
-                 "Humongous Start %s Region " SIZE_FORMAT " is not marked, should not have live",
-                 affiliation_name(r->affiliation()),  r->index());
-          log_debug(gc)("Trashing immediate humongous region " SIZE_FORMAT " because not marked", r->index());
-          _heap->trash_humongous_region_at(r);
-        } else {
-          assert(r->has_live(),
-                 "Humongous Start %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
-        }
-      } else if (r->is_humongous_continuation()) {
-        // If we hit continuation, the non-live humongous starts should have been trashed already
-        assert(r->humongous_start_region()->has_live(),
-               "Humongous Continuation %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
-      } else if (r->is_regular()) {
-        if (!r->has_live()) {
-          log_debug(gc)("Trashing immediate regular region " SIZE_FORMAT " because has no live", r->index());
-          r->make_trash_immediate();
-        }
+    if (r->affiliation() == FREE) {
+      // Ignore free regions
+      // TODO: change iterators so they do not process FREE regions.
+      return;
+    }
+
+    if (r->is_humongous_start()) {
+      oop humongous_obj = cast_to_oop(r->bottom());
+      if (!_ctx->is_marked(humongous_obj)) {
+        assert(!r->has_live(),
+               "Humongous Start %s Region " SIZE_FORMAT " is not marked, should not have live",
+               affiliation_name(r->affiliation()),  r->index());
+        log_debug(gc)("Trashing immediate humongous region " SIZE_FORMAT " because not marked", r->index());
+        _heap->trash_humongous_region_at(r);
+      } else {
+        assert(r->has_live(),
+               "Humongous Start %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
+      }
+    } else if (r->is_humongous_continuation()) {
+      // If we hit continuation, the non-live humongous starts should have been trashed already
+      assert(r->humongous_start_region()->has_live(),
+             "Humongous Continuation %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
+    } else if (r->is_regular()) {
+      if (!r->has_live()) {
+        log_debug(gc)("Trashing immediate regular region " SIZE_FORMAT " because has no live", r->index());
+        r->make_trash_immediate();
       }
     }
-    // else, ignore this FREE region.
-    // TODO: change iterators so they do not process FREE regions.
   }
 };
 
@@ -1159,7 +1161,7 @@ public:
         // reference to reclaimed memory. Remembered set scanning will crash if it attempts
         // to iterate the oops in these objects.
         r->begin_preemptible_coalesce_and_fill();
-        r->oop_fill_and_coalesce_wo_cancel();
+        r->oop_fill_and_coalesce_without_cancel();
       }
       r = _regions.next();
     }
@@ -1287,9 +1289,15 @@ private:
   size_t _old_regions, _old_usage, _old_humongous_waste;
 
 public:
-  ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()), _live(0), _is_generational(_heap->mode()->is_generational()),
-                                   _young_regions(0), _young_usage(0), _young_humongous_waste(0),
-                                   _old_regions(0), _old_usage(0), _old_humongous_waste(0)
+  ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()),
+                                   _live(0),
+                                   _is_generational(_heap->mode()->is_generational()),
+                                   _young_regions(0),
+                                   _young_usage(0),
+                                   _young_humongous_waste(0),
+                                   _old_regions(0),
+                                   _old_usage(0),
+                                   _old_humongous_waste(0)
   {
     _heap->free_set()->clear();
   }
@@ -1307,7 +1315,6 @@ public:
     }
 
     size_t live = r->used();
-
 
     // Make empty regions that have been allocated into regular
     if (r->is_empty() && live > 0) {
@@ -1332,6 +1339,8 @@ public:
         account_for_region(r, _old_regions, _old_usage, _old_humongous_waste);
       } else if (r->is_young()) {
         account_for_region(r, _young_regions, _young_usage, _young_humongous_waste);
+      } else {
+        // TODO: Assert here?
       }
     }
 
@@ -1491,8 +1500,10 @@ void ShenandoahFullGC::phase5_epilog() {
     heap->set_used(post_compact.get_live());
     if (heap->mode()->is_generational()) {
       post_compact.update_generation_usage();
-      log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
-                    post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
+      log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT "%s, young usage: " SIZE_FORMAT "%s, old usage: " SIZE_FORMAT "%s",
+                   byte_size_in_proper_unit(post_compact.get_live()),          proper_unit_for_byte_size(post_compact.get_live()),
+                   byte_size_in_proper_unit(heap->young_generation()->used()), proper_unit_for_byte_size(heap->young_generation()->used()),
+                   byte_size_in_proper_unit(heap->old_generation()->used()),   proper_unit_for_byte_size(heap->old_generation()->used()));
     }
 
     heap->collection_set()->clear();

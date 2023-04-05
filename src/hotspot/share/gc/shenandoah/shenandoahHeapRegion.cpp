@@ -446,7 +446,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 }
 
 // oop_iterate without closure and without cancellation.  always return true.
-bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
+bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
 
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
