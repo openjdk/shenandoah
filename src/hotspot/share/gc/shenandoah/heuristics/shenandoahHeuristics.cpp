@@ -148,8 +148,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         live_memory += region->get_live_data_bytes();
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
-        if (collection_set->is_preselected(i)) {
-          assert(is_generational, "Sanity");
+        if (is_generational && collection_set->is_preselected(i)) {
           // If region is preselected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
           garbage = ShenandoahHeapRegion::region_size_bytes();
         }
