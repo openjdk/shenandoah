@@ -513,13 +513,17 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // Permanently retire this region if there's room for a fill object
       if (r->free() >= ShenandoahHeap::min_fill_size()) {
         size_t waste = r->free();
+        HeapWord* fill_addr = r->top();
         size_t fill_size = waste / HeapWordSize;
-        ShenandoahHeap::fill_with_object(r->top(), fill_size);
+        ShenandoahHeap::fill_with_object(fill_addr, fill_size);
         r->set_top(r->end());
 	// Since we have filled the waste with an empty object, account for increased usage
 	_heap->increase_used(waste);
 	if (_heap->mode()->is_generational()) {
 	  _heap->generation_for(req.affiliation())->increase_used(waste);
+          if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+            _heap->card_scan()->register_object(fill_addr);
+          }
 	}
       }
     }
@@ -1107,10 +1111,9 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
-    log_info(gc, ergo)("FreeSet map legend:\n"
-                       "      m - mutator_free, c - collector_free, C - old_collector_free\n"
-                       "      h - humongous young, H - humongous old, ~ - unavailable old, _ - unavailable young\n"
-                       "      Read The Source for unexpected codes: *, $, !, #");
+    log_info(gc, ergo)("FreeSet map legend (see source for unexpected codes: *, $, !, #):\n"
+                       " m - mutator_free, c - collector_free, C - old_collector_free,"
+                       " h - humongous young, H - humongous old, ~ - retired old, _ - retired young");
     log_info(gc, ergo)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "]",
@@ -1223,7 +1226,7 @@ void ShenandoahFreeSet::log_status() {
         frag_int = 0;
       }
       ls.print(SIZE_FORMAT "%% internal; ", frag_int);
-      ls.print("Used: " SIZE_FORMAT "%s, Mutator Free: " SIZE_FORMAT " ",
+      ls.print("Used: " SIZE_FORMAT "%s, Mutator Free: " SIZE_FORMAT,
                byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used), mutator_count());
     }
 
@@ -1241,13 +1244,13 @@ void ShenandoahFreeSet::log_status() {
           total_used += r->used();
         }
       }
-      ls.print("Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; Used: " SIZE_FORMAT "%s",
+      ls.print(" Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; Used: " SIZE_FORMAT "%s",
                byte_size_in_proper_unit(total_free), proper_unit_for_byte_size(total_free),
                byte_size_in_proper_unit(max),        proper_unit_for_byte_size(max),
                byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used));
     }
 
-    {
+    if (_heap->mode()->is_generational()) {
       size_t max = 0;
       size_t total_free = 0;
       size_t total_used = 0;
@@ -1261,7 +1264,7 @@ void ShenandoahFreeSet::log_status() {
           total_used += r->used();
         }
       }
-      ls.print_cr("Old Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; Used: " SIZE_FORMAT "%s",
+      ls.print_cr(" Old Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; Used: " SIZE_FORMAT "%s",
                   byte_size_in_proper_unit(total_free), proper_unit_for_byte_size(total_free),
                   byte_size_in_proper_unit(max),        proper_unit_for_byte_size(max),
                   byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used));
