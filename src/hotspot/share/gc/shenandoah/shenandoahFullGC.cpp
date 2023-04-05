@@ -441,7 +441,6 @@ public:
 
 class ShenandoahPrepareForGenerationalCompactionObjectClosure : public ObjectClosure {
 private:
-  ShenandoahPrepareForCompactionTask* _compactor;
   PreservedMarks*          const _preserved_marks;
   ShenandoahHeap*          const _heap;
 
@@ -459,12 +458,10 @@ private:
   uint                           _worker_id;
 
 public:
-  ShenandoahPrepareForGenerationalCompactionObjectClosure(ShenandoahPrepareForCompactionTask* compactor,
-                                                          PreservedMarks* preserved_marks,
+  ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,
                                                           GrowableArray<ShenandoahHeapRegion*>& empty_regions,
                                                           ShenandoahHeapRegion* old_to_region,
                                                           ShenandoahHeapRegion* young_to_region, uint worker_id) :
-      _compactor(compactor),
       _preserved_marks(preserved_marks),
       _heap(ShenandoahHeap::heap()),
       _empty_regions(empty_regions),
@@ -746,8 +743,10 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
   if (_heap->mode()->is_generational()) {
     ShenandoahHeapRegion* old_to_region = (from_region->is_old())? from_region: nullptr;
     ShenandoahHeapRegion* young_to_region = (from_region->is_young())? from_region: nullptr;
-    ShenandoahPrepareForGenerationalCompactionObjectClosure cl(this, _preserved_marks->get(worker_id), empty_regions,
-                                                               old_to_region, young_to_region, worker_id);
+    ShenandoahPrepareForGenerationalCompactionObjectClosure cl(_preserved_marks->get(worker_id),
+                                                               empty_regions,
+                                                               old_to_region, young_to_region,
+                                                               worker_id);
     while (from_region != nullptr) {
       assert(is_candidate_region(from_region), "Sanity");
       log_debug(gc)("Worker %u compacting %s Region " SIZE_FORMAT " which had used " SIZE_FORMAT " and %s live",
