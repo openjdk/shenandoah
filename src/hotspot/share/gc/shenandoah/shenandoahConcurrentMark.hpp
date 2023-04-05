@@ -29,7 +29,7 @@
 
 template <GenerationMode GENERATION>
 class ShenandoahConcurrentMarkingTask;
-template<GenerationMode GENERATION>
+template <GenerationMode GENERATION>
 class ShenandoahFinalMarkingTask;
 class ShenandoahGeneration;
 
