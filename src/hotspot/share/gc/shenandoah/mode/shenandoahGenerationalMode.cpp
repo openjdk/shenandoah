@@ -65,6 +65,8 @@ ShenandoahHeuristics* ShenandoahGenerationalMode::initialize_heuristics(Shenando
   return new ShenandoahAdaptiveHeuristics(generation);
 }
 
+// TODO: These have no place in this compilation unit. Should probably be in shenandoahHeap.cpp
+
 const char* affiliation_name(oop ptr) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->is_in(ptr), "Oop must be in the heap.");
