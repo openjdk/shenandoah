@@ -369,8 +369,8 @@ double ShenandoahHeuristics::elapsed_cycle_time() const {
 
 bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
   return ((_generation->generation_mode() == GLOBAL)
-          || (_generation->generation_mode() == YOUNG && region->affiliation() == YOUNG_GENERATION)
-          || (_generation->generation_mode() == OLD && region->affiliation() == OLD_GENERATION));
+          || (_generation->generation_mode() == YOUNG && region->is_young())
+          || (_generation->generation_mode() == OLD && region->is_old()));
 }
 
 size_t ShenandoahHeuristics::min_free_threshold() {

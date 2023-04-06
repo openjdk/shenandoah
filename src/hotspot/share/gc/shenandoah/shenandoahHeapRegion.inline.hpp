@@ -206,7 +206,7 @@ inline void ShenandoahHeapRegion::set_update_watermark_at_safepoint(HeapWord* w)
   _update_watermark = w;
 }
 
-inline ShenandoahRegionAffiliation ShenandoahHeapRegion::affiliation() const {
+inline ShenandoahAffiliation ShenandoahHeapRegion::affiliation() const {
   return ShenandoahHeap::heap()->region_affiliation(this);
 }
 
@@ -227,11 +227,15 @@ inline bool ShenandoahHeapRegion::has_young_lab_flag() {
 }
 
 inline bool ShenandoahHeapRegion::is_young() const {
-  return ShenandoahHeap::heap()->region_affiliation(this) == YOUNG_GENERATION;
+  return affiliation() == YOUNG_GENERATION;
 }
 
 inline bool ShenandoahHeapRegion::is_old() const {
-  return ShenandoahHeap::heap()->region_affiliation(this) == OLD_GENERATION;
+  return affiliation() == OLD_GENERATION;
+}
+
+inline bool ShenandoahHeapRegion::is_affiliated() const {
+  return affiliation() != FREE;
 }
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP

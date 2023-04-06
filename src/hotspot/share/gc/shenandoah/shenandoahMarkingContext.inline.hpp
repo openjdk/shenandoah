@@ -74,7 +74,7 @@ inline bool ShenandoahMarkingContext::allocated_after_mark_start(const HeapWord*
 }
 
 inline void ShenandoahMarkingContext::capture_top_at_mark_start(ShenandoahHeapRegion *r) {
-  if (r->affiliation() != FREE) {
+  if (r->is_affiliated()) {
     size_t idx = r->index();
     HeapWord* old_tams = _top_at_mark_starts_base[idx];
     HeapWord* new_tams = r->top();

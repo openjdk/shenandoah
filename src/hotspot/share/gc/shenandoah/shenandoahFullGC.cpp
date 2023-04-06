@@ -451,7 +451,7 @@ private:
   ShenandoahHeapRegion*          _old_to_region;
   ShenandoahHeapRegion*          _young_to_region;
   ShenandoahHeapRegion*          _from_region;
-  ShenandoahRegionAffiliation    _from_affiliation;
+  ShenandoahAffiliation          _from_affiliation;
   HeapWord*                      _old_compact_point;
   HeapWord*                      _young_compact_point;
   uint                           _worker_id;
@@ -478,13 +478,13 @@ public:
     _from_region = from_region;
     _from_affiliation = from_region->affiliation();
     if (_from_region->has_live()) {
-      if (_from_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      if (_from_affiliation == ShenandoahAffiliation::OLD_GENERATION) {
         if (_old_to_region == nullptr) {
           _old_to_region = from_region;
           _old_compact_point = from_region->bottom();
         }
       } else {
-        assert(_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION, "from_region must be OLD or YOUNG");
+        assert(_from_affiliation == ShenandoahAffiliation::YOUNG_GENERATION, "from_region must be OLD or YOUNG");
         if (_young_to_region == nullptr) {
           _young_to_region = from_region;
           _young_compact_point = from_region->bottom();
@@ -536,7 +536,7 @@ public:
     uint object_age = p->age();
 
     bool promote_object = false;
-    if ((_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) &&
+    if ((_from_affiliation == ShenandoahAffiliation::YOUNG_GENERATION) &&
         (from_region_age + object_age >= InitialTenuringThreshold)) {
       if ((_old_to_region != nullptr) && (_old_compact_point + obj_size > _old_to_region->end())) {
         finish_old_region();
@@ -558,7 +558,7 @@ public:
       }
     }
 
-    if (promote_object || (_from_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION)) {
+    if (promote_object || (_from_affiliation == ShenandoahAffiliation::OLD_GENERATION)) {
       assert(_old_to_region != nullptr, "_old_to_region should not be nullptr when evacuating to OLD region");
       if (_old_compact_point + obj_size > _old_to_region->end()) {
         ShenandoahHeapRegion* new_to_region;
@@ -593,7 +593,7 @@ public:
       p->forward_to(cast_to_oop(_old_compact_point));
       _old_compact_point += obj_size;
     } else {
-      assert(_from_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION,
+      assert(_from_affiliation == ShenandoahAffiliation::YOUNG_GENERATION,
              "_from_region must be OLD_GENERATION or YOUNG_GENERATION");
       assert(_young_to_region != nullptr, "_young_to_region should not be nullptr when compacting YOUNG _from_region");
 
@@ -1389,7 +1389,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
       new_obj->init_mark();
 
       {
-        ShenandoahRegionAffiliation original_affiliation = r->affiliation();
+        ShenandoahAffiliation original_affiliation = r->affiliation();
         for (size_t c = old_start; c <= old_end; c++) {
           ShenandoahHeapRegion* r = heap->get_region(c);
           // Leave humongous region affiliation unchanged.

@@ -25,13 +25,13 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHAFFILIATION_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHAFFILIATION_HPP
 
-enum ShenandoahRegionAffiliation {
+enum ShenandoahAffiliation {
   FREE,
   YOUNG_GENERATION,
   OLD_GENERATION,
 };
 
-inline const char* shenandoah_affiliation_code(ShenandoahRegionAffiliation type) {
+inline const char* shenandoah_affiliation_code(ShenandoahAffiliation type) {
   switch(type) {
     case FREE:
       return "F";
@@ -45,7 +45,7 @@ inline const char* shenandoah_affiliation_code(ShenandoahRegionAffiliation type)
   }
 }
 
-inline const char* shenandoah_affiliation_name(ShenandoahRegionAffiliation type) {
+inline const char* shenandoah_affiliation_name(ShenandoahAffiliation type) {
   switch (type) {
     case FREE:
       return "FREE";

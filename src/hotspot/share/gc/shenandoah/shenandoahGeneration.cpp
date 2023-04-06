@@ -842,7 +842,7 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   size_t num_regions = heap->num_regions();
   for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* r = heap->get_region(idx);
-    if (contains(r) && (r->affiliation() != FREE)) {
+    if (contains(r) && r->is_affiliated()) {
       if (heap->is_bitmap_slice_committed(r) && (context->top_at_mark_start(r) > r->bottom()) &&
           !context->is_bitmap_clear_range(r->bottom(), r->end())) {
         return false;

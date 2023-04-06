@@ -62,12 +62,12 @@ private:
   size_t _requested_size;
   size_t _actual_size;
   Type _alloc_type;
-  ShenandoahRegionAffiliation const _affiliation;
+  ShenandoahAffiliation const _affiliation;
 #ifdef ASSERT
   bool _actual_size_set;
 #endif
 
-  ShenandoahAllocRequest(size_t _min_size, size_t _requested_size, Type _alloc_type, ShenandoahRegionAffiliation affiliation) :
+  ShenandoahAllocRequest(size_t _min_size, size_t _requested_size, Type _alloc_type, ShenandoahAffiliation affiliation) :
           _min_size(_min_size), _requested_size(_requested_size),
           _actual_size(0), _alloc_type(_alloc_type), _affiliation(affiliation)
 #ifdef ASSERT
@@ -77,23 +77,23 @@ private:
 
 public:
   static inline ShenandoahAllocRequest for_tlab(size_t min_size, size_t requested_size) {
-    return ShenandoahAllocRequest(min_size, requested_size, _alloc_tlab, ShenandoahRegionAffiliation::YOUNG_GENERATION);
+    return ShenandoahAllocRequest(min_size, requested_size, _alloc_tlab, ShenandoahAffiliation::YOUNG_GENERATION);
   }
 
   static inline ShenandoahAllocRequest for_gclab(size_t min_size, size_t requested_size) {
-    return ShenandoahAllocRequest(min_size, requested_size, _alloc_gclab, ShenandoahRegionAffiliation::YOUNG_GENERATION);
+    return ShenandoahAllocRequest(min_size, requested_size, _alloc_gclab, ShenandoahAffiliation::YOUNG_GENERATION);
   }
 
   static inline ShenandoahAllocRequest for_plab(size_t min_size, size_t requested_size) {
-    return ShenandoahAllocRequest(min_size, requested_size, _alloc_plab, ShenandoahRegionAffiliation::OLD_GENERATION);
+    return ShenandoahAllocRequest(min_size, requested_size, _alloc_plab, ShenandoahAffiliation::OLD_GENERATION);
   }
 
-  static inline ShenandoahAllocRequest for_shared_gc(size_t requested_size, ShenandoahRegionAffiliation affiliation) {
+  static inline ShenandoahAllocRequest for_shared_gc(size_t requested_size, ShenandoahAffiliation affiliation) {
     return ShenandoahAllocRequest(0, requested_size, _alloc_shared_gc, affiliation);
   }
 
   static inline ShenandoahAllocRequest for_shared(size_t requested_size) {
-    return ShenandoahAllocRequest(0, requested_size, _alloc_shared, ShenandoahRegionAffiliation::YOUNG_GENERATION);
+    return ShenandoahAllocRequest(0, requested_size, _alloc_shared, ShenandoahAffiliation::YOUNG_GENERATION);
   }
 
   inline size_t size() {
@@ -179,7 +179,7 @@ public:
     return _affiliation == YOUNG_GENERATION;
   }
 
-  ShenandoahRegionAffiliation affiliation() const {
+  ShenandoahAffiliation affiliation() const {
     return _affiliation;
   }
 
