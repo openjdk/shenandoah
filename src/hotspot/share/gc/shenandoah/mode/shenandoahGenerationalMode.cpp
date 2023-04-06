@@ -64,17 +64,3 @@ ShenandoahHeuristics* ShenandoahGenerationalMode::initialize_heuristics(Shenando
 
   return new ShenandoahAdaptiveHeuristics(generation);
 }
-
-const char* generation_name(GenerationMode mode) {
-  switch (mode) {
-    case GenerationMode::GLOBAL:
-      return "Global";
-    case GenerationMode::OLD:
-      return "Old";
-    case GenerationMode::YOUNG:
-      return "Young";
-    default:
-      ShouldNotReachHere();
-      return nullptr;
-  }
-}

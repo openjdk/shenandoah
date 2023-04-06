@@ -236,7 +236,7 @@ inline void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl,
   array->oop_iterate_range(cl, from, to);
 }
 
-template <GenerationMode GENERATION>
+template <ShenandoahGenerationType GENERATION>
 class ShenandoahSATBBufferClosure : public SATBBufferClosure {
 private:
   ShenandoahObjToScanQueue* _queue;
@@ -261,7 +261,7 @@ public:
   }
 };
 
-template<GenerationMode GENERATION>
+template<ShenandoahGenerationType GENERATION>
 bool ShenandoahMark::in_generation(oop obj) {
   // Each in-line expansion of in_generation() resolves GENERATION at compile time.
   if (GENERATION == YOUNG)
@@ -274,7 +274,7 @@ bool ShenandoahMark::in_generation(oop obj) {
     return false;
 }
 
-template<class T, GenerationMode GENERATION>
+template<class T, ShenandoahGenerationType GENERATION>
 inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak) {
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {

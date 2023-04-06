@@ -35,6 +35,7 @@
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
+#include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
@@ -117,7 +118,7 @@ public:
   virtual bool is_thread_safe() { return false; }
 };
 
-template<GenerationMode GENERATION>
+template<ShenandoahGenerationType GENERATION>
 class ShenandoahGenerationRegionClosure : public ShenandoahHeapRegionClosure {
  public:
   explicit ShenandoahGenerationRegionClosure(ShenandoahHeapRegionClosure* cl) : _cl(cl) {}

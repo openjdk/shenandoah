@@ -449,7 +449,7 @@ jint ShenandoahHeap::initialize() {
 }
 
 size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
-  switch (generation->generation_mode()) {
+  switch (generation->type()) {
     case YOUNG:  return _generation_sizer.max_young_size();
     case OLD:    return max_capacity() - _generation_sizer.min_young_size();
     case GLOBAL: return max_capacity();
@@ -460,7 +460,7 @@ size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
 }
 
 size_t ShenandoahHeap::min_size_for(ShenandoahGeneration* generation) const {
-  switch (generation->generation_mode()) {
+  switch (generation->type()) {
     case YOUNG:  return _generation_sizer.min_young_size();
     case OLD:    return max_capacity() - _generation_sizer.max_young_size();
     case GLOBAL: return min_capacity();
@@ -688,7 +688,7 @@ bool ShenandoahHeap::is_old_bitmap_stable() const {
 }
 
 bool ShenandoahHeap::is_gc_generation_young() const {
-  return _gc_generation != nullptr && _gc_generation->generation_mode() == YOUNG;
+  return _gc_generation != nullptr && _gc_generation->is_young();
 }
 
 size_t ShenandoahHeap::used() const {
@@ -1850,8 +1850,7 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
   generation->heuristics()->record_cycle_end();
 
-  if (mode()->is_generational() &&
-      ((generation->generation_mode() == GLOBAL) || upgraded_to_full())) {
+  if (mode()->is_generational() && (generation->is_global() || upgraded_to_full())) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
     young_generation()->heuristics()->record_cycle_end();
     old_generation()->heuristics()->record_cycle_end();
@@ -2642,7 +2641,7 @@ private:
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
           region_progress = true;
         } else if (r->is_old()) {
-          if (_heap->active_generation()->generation_mode() == GLOBAL) {
+          if (_heap->active_generation()->is_global()) {
             // Note that GLOBAL collection is not as effectively balanced as young and mixed cycles.  This is because
             // concurrent GC threads are parceled out entire heap regions of work at a time and there
             // is no "catchup phase" consisting of remembered set scanning, during which parcels of work are smaller
@@ -2679,7 +2678,7 @@ private:
       r = _regions->next();
     }
 
-    if (_heap->mode()->is_generational() && (_heap->active_generation()->generation_mode() != GLOBAL)) {
+    if (_heap->mode()->is_generational() && !_heap->active_generation()->is_global()) {
       // Since this is generational and not GLOBAL, we have to process the remembered set.  There's no remembered
       // set processing if not in generational mode or if GLOBAL mode.
 
@@ -3147,7 +3146,7 @@ void ShenandoahHeap::verify_rem_set_at_mark() {
 
   log_debug(gc)("Verifying remembered set at %s mark", doing_mixed_evacuations()? "mixed": "young");
 
-  if (is_old_bitmap_stable() || active_generation()->generation_mode() == GLOBAL) {
+  if (is_old_bitmap_stable() || active_generation()->is_global()) {
     ctx = complete_marking_context();
   } else {
     ctx = nullptr;
@@ -3282,7 +3281,7 @@ void ShenandoahHeap::verify_rem_set_at_update_ref() {
   ShenandoahRegionIterator iterator;
   ShenandoahMarkingContext* ctx;
 
-  if (is_old_bitmap_stable() || active_generation()->generation_mode() == GLOBAL) {
+  if (is_old_bitmap_stable() || active_generation()->is_global()) {
     ctx = complete_marking_context();
   } else {
     ctx = nullptr;
