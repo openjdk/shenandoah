@@ -90,7 +90,7 @@ private:
   ShenandoahSharedFlag _do_counters_update;
   ShenandoahSharedFlag _force_counters_update;
   GCCause::Cause       _requested_gc_cause;
-  ShenandoahGenerationType       _requested_generation;
+  ShenandoahGenerationType _requested_generation;
   ShenandoahGC::ShenandoahDegenPoint _degen_point;
   ShenandoahGeneration* _degen_generation;
 
