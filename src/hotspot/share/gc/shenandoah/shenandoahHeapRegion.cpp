@@ -29,6 +29,7 @@
 #include "gc/shared/space.inline.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
+#include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
@@ -102,7 +103,7 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation a
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      set_affiliation(affiliation);
+      set_affiliation(affiliation, false);
       set_state(_regular);
     case _regular:
     case _pinned:
@@ -122,7 +123,7 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _cset:
    case _humongous_start:
    case _humongous_cont:
-     set_affiliation(YOUNG_GENERATION);
+     set_affiliation(YOUNG_GENERATION, false);
      return;
    case _pinned_cset:
    case _regular:
@@ -175,7 +176,7 @@ void ShenandoahHeapRegion::make_humongous_start() {
 void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
-  set_affiliation(affiliation);
+  set_affiliation(affiliation, false);
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -206,7 +207,7 @@ void ShenandoahHeapRegion::make_humongous_cont() {
 void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
-  set_affiliation(affiliation);
+  set_affiliation(affiliation, false);
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -282,12 +283,19 @@ void ShenandoahHeapRegion::make_trash() {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
-    case _cset:
-      // Reclaiming cset regions
     case _humongous_start:
     case _humongous_cont:
-      // Reclaiming humongous regions
-    case _regular:
+    {
+      // Reclaiming humongous regions and reclaim humongous waste.  When this region is eventually recycled, we'll reclaim
+      // its used memory.  At recycle time, we no longer recognize this as a humongous region.
+      if (ShenandoahHeap::heap()->mode()->is_generational()) {
+        decrement_humongous_waste();
+      }
+    }
+
+  case _cset:
+      // Reclaiming cset regions
+  case _regular:
       // Immediate region reclaim
       set_state(_trash);
       return;
@@ -477,6 +485,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
@@ -522,6 +531,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated object known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
@@ -573,8 +583,8 @@ void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateCl
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
       assert(next_marked_obj <= t, "next marked object cannot exceed top");
       size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-
       // coalesce_objects() unregisters all but first object subsumed within coalesced range.
       rem_set_scanner->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
@@ -667,7 +677,14 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_heaplocked();
 
-  heap->generation_for(affiliation())->decrease_used(used());
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    // It may be that humongous regions are never recycled directly because they may be converted into trash before they
+    // are recycled.  If this is universally true, we can replace the following with an assert(!is_humongous()).
+    if (is_humongous()) {
+      decrement_humongous_waste();
+    }
+    heap->generation_for(affiliation())->decrease_used(used());
+  }
 
   set_top(bottom());
   clear_live_data();
@@ -678,7 +695,7 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
-  set_affiliation(FREE);
+  set_affiliation(FREE, false);
 
   if (ZapUnusedHeapArea) {
     SpaceMangler::mangle_region(MemRegion(bottom(), end()));
@@ -935,9 +952,9 @@ size_t ShenandoahHeapRegion::pin_count() const {
   return Atomic::load(&_critical_pins);
 }
 
-void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation) {
+void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation,
+                                           bool defer_affiliated_region_count_updates) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-
   ShenandoahRegionAffiliation region_affiliation = heap->region_affiliation(this);
   {
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
@@ -947,6 +964,13 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(_update_watermark), p2i(ctx->top_bitmap(this)));
   }
 
+#undef KELVIN_REBUILD
+#ifdef KELVIN_REBUILD
+  if (new_affiliation == FREE) {
+    log_info(gc, ergo)("setting affiliation of " SIZE_FORMAT " to FREE, was %s %s", index(), affiliation_name(region_affiliation),
+                       is_cset()? "cset": "not-cset");
+  }
+#endif
 #ifdef ASSERT
   {
     // During full gc, heap->complete_marking_context() is not valid, may equal nullptr.
@@ -972,43 +996,142 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   log_trace(gc)("Changing affiliation of region %zu from %s to %s",
     index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation));
 
-  if (region_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
-    heap->young_generation()->decrement_affiliated_region_count();
-  } else if (region_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
-    heap->old_generation()->decrement_affiliated_region_count();
-  }
+  if (!defer_affiliated_region_count_updates) {
+    if (region_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+      heap->young_generation()->decrement_affiliated_region_count();
+    } else if (region_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+      heap->old_generation()->decrement_affiliated_region_count();
+    }
 
-  size_t regions;
-  switch (new_affiliation) {
-    case FREE:
-      assert(!has_live(), "Free region should not have live data");
-      break;
-    case YOUNG_GENERATION:
-      reset_age();
-      regions = heap->young_generation()->increment_affiliated_region_count();
-      // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
-      // restored upon completion of Full GC.
-      assert(heap->is_full_gc_in_progress() ||
-             (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->adjusted_capacity()),
-             "Number of young regions cannot exceed adjusted capacity");
-      break;
-    case OLD_GENERATION:
-      regions = heap->old_generation()->increment_affiliated_region_count();
-      // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
-      // restored upon completion of Full GC.
-      assert(heap->is_full_gc_in_progress() ||
-             (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->adjusted_capacity()),
-             "Number of old regions cannot exceed adjusted capacity");
-      break;
-    default:
-      ShouldNotReachHere();
-      return;
+    size_t regions;
+    switch (new_affiliation) {
+      case FREE:
+        assert(!has_live(), "Free region should not have live data");
+        break;
+      case YOUNG_GENERATION:
+        reset_age();
+        regions = heap->young_generation()->increment_affiliated_region_count();
+        // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
+        // restored upon completion of Full GC.
+        assert(heap->is_full_gc_in_progress() ||
+               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->adjusted_capacity()),
+               "Number of young regions cannot exceed adjusted capacity");
+        break;
+      case OLD_GENERATION:
+        regions = heap->old_generation()->increment_affiliated_region_count();
+        // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
+        // restored upon completion of Full GC.
+        assert(heap->is_full_gc_in_progress() ||
+               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->adjusted_capacity()),
+               "Number of old regions cannot exceed adjusted capacity");
+        break;
+      default:
+        ShouldNotReachHere();
+        return;
+    }
+  } else if (new_affiliation == YOUNG_GENERATION) {
+    reset_age();
   }
   heap->set_affiliation(this, new_affiliation);
 }
 
-// Returns number of regions promoted, or zero if we choose not to promote.
-size_t ShenandoahHeapRegion::promote_humongous() {
+// When we promote a region in place, we can continue to use the established marking context to guide subsequent remembered
+// set scans of this region's content.  The region will be coalesced and filled prior to the next old-gen marking effort.
+// We identify the entirety of the region as DIRTY to force the next remembered set scan to identify the "interesting poitners"
+// contained herein.
+void ShenandoahHeapRegion::promote_in_place() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahMarkingContext* marking_context = heap->marking_context();
+  HeapWord* tams = marking_context->top_at_mark_start(this);
+  assert(heap->active_generation()->is_mark_complete(), "sanity");
+  assert(is_young(), "Only young regions can be promoted");
+  assert(is_regular(), "Use different service to promote humongous regions");
+  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
+
+  ShenandoahOldGeneration* old_gen = heap->old_generation();
+  ShenandoahYoungGeneration* young_gen = heap->young_generation();
+
+  {
+    ShenandoahHeapLocker locker(heap->lock());
+
+    set_affiliation(OLD_GENERATION, true);
+    // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
+    // is_collector_free range.
+    restore_top_before_promote();
+
+    size_t promoted_used = this->used();
+    size_t promoted_free = this->free();
+    size_t promo_reserve = heap->get_promoted_reserve() + promoted_free;
+    young_gen->decrease_used(promoted_used);
+    young_gen->decrement_affiliated_region_count();
+
+    // Unconditionally transfer one region from young to old to represent the newly promoted region.
+    // This expands old and shrinks new by the size of one region.  Strictly, we do not "need" to expand old
+    // if there are already enough unaffiliated regions in old to account for this newly promoted region.
+    // However, if we do not transfer the capacities, we end up reducing the amount of memory that would have
+    // otherwise been available to hold old evacuations, because old available is max_capacity - used and now
+    // we would be trading a fully empty region for a partially used region.
+    //
+    // Note that we will rebalance the generation sizes at the end of this GC cycle.
+    heap->generation_sizer()->force_transfer_to_old(1);
+
+    heap->free_set()->add_old_collector_free_region(this);
+
+    old_gen->increment_affiliated_region_count();
+    old_gen->increase_used(promoted_used);
+
+    // Might as well make the free memory within newly promoted region available to hold promotions that we were not able
+    // to budget for previously.
+    heap->set_promoted_reserve(promo_reserve);
+
+    // TODO: adjust bounds in the free set
+  }
+
+  assert(top() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
+
+  // Since this region may have served previously as OLD, it may hold obsolete object range info.
+  heap->card_scan()->reset_object_range(bottom(), end());
+  heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
+
+  HeapWord* obj_addr = bottom();
+
+#undef KELVIN_PIP
+#ifdef KELVIN_PIP
+  log_info(gc, ergo)("Promoting region " SIZE_FORMAT " in place, BTE: " PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT
+                     ", TAMS: " PTR_FORMAT,
+                     index(), p2i(bottom()), p2i(top()), p2i(end()), p2i(tams));
+  if (top() != tams) {
+    log_info(gc, ergo)("KELVIN IS SCREWED ROYAL!");
+  }
+#endif
+
+  while (obj_addr < tams) {
+    oop obj = cast_to_oop(obj_addr);
+    if (marking_context->is_marked(obj)) {
+      assert(obj->klass() != NULL, "klass should not be NULL");
+      // This thread is responsible for registering all objects in this region.  No need for lock.
+      heap->card_scan()->register_object_wo_lock(obj_addr);
+      obj_addr += obj->size();
+    } else {
+      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
+      assert(next_marked_obj <= tams, "next marked object cannot exceed tams");
+      size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
+      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+      heap->card_scan()->register_object_wo_lock(obj_addr);
+      obj_addr = next_marked_obj;
+    }
+  }
+
+  // We do not need to scan above TAMS because top equals tams
+  assert(obj_addr == tams, "Expect loop to terminate when obj_addr equals tams");
+
+#ifdef KELVIN_PIP
+  log_info(gc, ergo)("Done promoting region " SIZE_FORMAT " in place", index());
+#endif
+}
+
+void ShenandoahHeapRegion::promote_humongous() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
   assert(heap->active_generation()->is_mark_complete(), "sanity");
@@ -1021,6 +1144,21 @@ size_t ShenandoahHeapRegion::promote_humongous() {
 
   oop obj = cast_to_oop(bottom());
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
+
+#undef KELVIN_REPROMOTE
+#ifdef KELVIN_REPROMOTE
+  size_t required_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+  HeapWord* end_addr = bottom() + obj->size();
+  size_t waste = (bottom() + required_regions * ShenandoahHeapRegion::region_size_bytes()) - end_addr;
+  waste *= HeapWordSize;
+  log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (" SIZE_FORMAT
+                     " total regions with cohorts) in place for object of size " SIZE_FORMAT ", waste: " SIZE_FORMAT,
+                     index(), required_regions, obj->size() * HeapWordSize, waste);
+#endif
+
+#ifdef KELVIN_PIP
+  log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (and cohorts) in place", index());
+#endif
 
   // TODO: Consider not promoting humongous objects that represent primitive arrays.  Leaving a primitive array
   // (obj->is_typeArray()) in young-gen is harmless because these objects are never relocated and they are not
@@ -1036,35 +1174,20 @@ size_t ShenandoahHeapRegion::promote_humongous() {
     // We need to grab the heap lock in order to avoid a race when changing the affiliations of spanned_regions from
     // young to old.
     ShenandoahHeapLocker locker(heap->lock());
-    size_t available_old_regions = old_generation->adjusted_unaffiliated_regions();
-    if (spanned_regions <= available_old_regions) {
-      log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
 
-      // For this region and each humongous continuation region spanned by this humongous object, change
-      // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
-      // in the last humongous region that is not spanned by obj is currently not used.
-      for (size_t i = index(); i < index_limit; i++) {
-        ShenandoahHeapRegion* r = heap->get_region(i);
-        log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
-                      r->index(), p2i(r->bottom()), p2i(r->top()));
-        // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
-        r->set_affiliation(OLD_GENERATION);
-        old_generation->increase_used(r->used());
-        young_generation->decrease_used(r->used());
-      }
-      // Then fall through to finish the promotion after releasing the heap lock.
-    } else {
-      // There are not enough available old regions to promote this humongous region at this time, so defer promotion.
-      // TODO: Consider allowing the promotion now, with the expectation that we can resize and/or collect OLD
-      // momentarily to address the transient violation of budgets.  Some problems that need to be addressed in order
-      // to allow transient violation of capacity budgets are:
-      //  1. Various size_t subtractions assume usage is less than capacity, and thus assume there will be no
-      //     arithmetic underflow when we subtract usage from capacity.  The results of such size_t subtractions
-      //     would need to be guarded and special handling provided.
-      //  2. ShenandoahVerifier enforces that usage is less than capacity.  If we are going to relax this constraint,
-      //     we need to think about what conditions allow the constraint to be violated and document and implement the
-      //     changes.
-      return 0;
+    // We promote humongous objects unconditionally, without checking for availability.  We adjust
+    // usage totals after evacuation is done.
+    log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
+
+    // For this region and each humongous continuation region spanned by this humongous object, change
+    // affiliation to OLD_GENERATION and adjust the generation-use tallies.  The remnant of memory
+    // in the last humongous region that is not spanned by obj is currently not used.
+    for (size_t i = index(); i < index_limit; i++) {
+      ShenandoahHeapRegion* r = heap->get_region(i);
+      log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
+		    r->index(), p2i(r->bottom()), p2i(r->top()));
+      // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
+      r->set_affiliation(OLD_GENERATION, true);
     }
   }
 
@@ -1083,5 +1206,21 @@ size_t ShenandoahHeapRegion::promote_humongous() {
                   index(), p2i(bottom()), p2i(bottom() + obj->size()));
     heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
   }
-  return index_limit - index();
+}
+
+void ShenandoahHeapRegion::decrement_humongous_waste() const {
+  ShenandoahHeapRegion* start = humongous_start_region();
+  HeapWord* obj_addr = start->bottom();
+  oop obj = cast_to_oop(obj_addr);
+  size_t word_size = obj->size();
+  HeapWord* end_addr = obj_addr + word_size;
+  if (end_addr < end()) {
+    size_t humongous_waste = (end() - end_addr) * HeapWordSize;
+    if (is_old()) {
+      ShenandoahHeap::heap()->old_generation()->decrease_humongous_waste(humongous_waste);
+    } else {
+      ShenandoahHeap::heap()->young_generation()->decrease_humongous_waste(humongous_waste);
+    }
+  }
+  // else, this region is entirely spanned by humongous object so contributes no humongous waste
 }

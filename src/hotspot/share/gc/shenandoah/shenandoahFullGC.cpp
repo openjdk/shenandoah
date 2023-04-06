@@ -175,6 +175,7 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
   metrics.snap_after();
   if (heap->mode()->is_generational()) {
+    heap->mmu_tracker()->record_full(heap->global_generation(), GCId::current());
     heap->log_heap_status("At end of Full GC");
 
     // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
@@ -183,6 +184,12 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
            "Old generation affiliated regions must be less than capacity");
     assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->adjusted_capacity(),
            "Young generation affiliated regions must be less than capacity");
+
+    assert((heap->young_generation()->used() + heap->young_generation()->get_humongous_waste())
+           <= heap->young_generation()->used_regions_size(), "Young consumed can be no larger than span of affiliated regions");
+    assert((heap->old_generation()->used() + heap->old_generation()->get_humongous_waste())
+           <= heap->old_generation()->used_regions_size(), "Old consumed can be no larger than span of affiliated regions");
+
   }
   if (metrics.is_good_progress()) {
     ShenandoahHeap::heap()->notify_gc_progress();
@@ -202,8 +209,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // Defer unadjust_available() invocations until after Full GC finishes its efforts because Full GC makes use
     // of young-gen memory that may have been loaned from old-gen.
 
-    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
-
+    // No need for old_gen->increase_used() as this was done when plabs were allocated.
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
@@ -342,8 +348,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   // Resize metaspace
   MetaspaceGC::compute_new_size();
 
-  heap->adjust_generation_sizes();
-
   // Free worker slices
   for (uint i = 0; i < heap->max_workers(); i++) {
     delete worker_slices[i];
@@ -361,9 +365,13 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     }
   }
 
+#ifdef KELVIN_DEPRECATE
   // Having reclaimed all dead memory, it is now safe to restore capacities to original values.
   heap->young_generation()->unadjust_available();
   heap->old_generation()->unadjust_available();
+#else
+  // Humongous regions are promoted on demand and are accounted for by normal Full GC mechanisms.
+#endif
 
   if (VerifyAfterGC) {
     Universe::verify();
@@ -547,7 +555,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           ShenandoahHeapRegion* new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(OLD_GENERATION);
+          new_to_region->set_affiliation(OLD_GENERATION, false);
           _old_to_region = new_to_region;
           _old_compact_point = _old_to_region->bottom();
           promote_object = true;
@@ -573,7 +581,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(OLD_GENERATION);
+          new_to_region->set_affiliation(OLD_GENERATION, false);
         } else {
           // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
@@ -618,7 +626,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(YOUNG_GENERATION);
+          new_to_region->set_affiliation(YOUNG_GENERATION, false);
         } else {
           // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
@@ -1332,7 +1340,6 @@ public:
         account_for_region(r, _old_regions, _old_usage, _old_humongous_waste);
       } else if (r->is_young()) {
         account_for_region(r, _young_regions, _young_usage, _young_humongous_waste);
-      }
     }
 
     r->set_live_data(live);
@@ -1491,13 +1498,48 @@ void ShenandoahFullGC::phase5_epilog() {
     heap->set_used(post_compact.get_live());
     if (heap->mode()->is_generational()) {
       post_compact.update_generation_usage();
+
+      size_t old_usage = heap->old_generation()->used_regions_size();
+      size_t old_capacity = heap->old_generation()->max_capacity();
+
+      assert(old_usage % ShenandoahHeapRegion::region_size_bytes() == 0, "Old usage must aligh with region size");
+      assert(old_capacity % ShenandoahHeapRegion::region_size_bytes() == 0, "Old capacity must aligh with region size");
+
+      if (old_capacity > old_usage) {
+        size_t excess_old_regions = (old_capacity - old_usage) / ShenandoahHeapRegion::region_size_bytes();
+        heap->generation_sizer()->transfer_to_young(excess_old_regions);
+      } else if (old_capacity < old_usage) {
+        size_t old_regions_deficit = (old_usage - old_capacity) / ShenandoahHeapRegion::region_size_bytes();
+        heap->generation_sizer()->transfer_to_old(old_regions_deficit);
+      }
+      
       log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
                     post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
     }
 
     heap->collection_set()->clear();
-    heap->free_set()->rebuild();
-  }
+    size_t young_cset_regions, old_cset_regions;
+    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
 
+    // We do not separately promote humongous after Full GC.  These have been handled by separate mechanism.
+
+    // We also do not expand old generation size following Full GC because we have scrambled age populations and
+    // no longer have object separted by age into distinct regions.
+
+    // TODO: Do we need to fix FullGC so that it maintains aged segregation of objects into distinct regions?
+    //       A partial solution would be to remember how many objects are of tenure age following Full GC, but
+    //       this is probably suboptimal, because most of these objects will not reside in a region that will be
+    //       selected for the next evacuation phase.
+
+    // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
+    heap->clear_promotion_potential();
+    heap->clear_promotion_in_place_potential();
+
+    if (heap->mode()->is_generational()) {
+      // Invoke this in case we are able to transfer memory from OLD to YOUNG.  
+      heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
+    }
+    heap->free_set()->rebuild(0);
+  }
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }

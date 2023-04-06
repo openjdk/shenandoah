@@ -142,6 +142,20 @@ public:
   } VerifyRegions;
 
   typedef enum {
+    // Disable size verification
+    _verify_size_disable,
+
+    // Enforce exact consistency
+    _verify_size_exact,
+
+    // Expect promote-in-place adjustments: padding inserted to temporarily prevent further allocation in regular regions
+    _verify_size_adjusted_for_padding,
+
+    // Expect promote-in-place adjustments: usage within regions promoted in place is transferred at end of update refs
+    _verify_size_adjusted_for_deferred_accounting
+  } VerifySize;
+
+  typedef enum {
     // Disable gc-state verification
     _verify_gcstate_disable,
 
@@ -189,6 +203,7 @@ private:
                            VerifyCollectionSet cset,
                            VerifyLiveness liveness,
                            VerifyRegions regions,
+			   VerifySize sizeness,
                            VerifyGCState gcstate);
 
 public:

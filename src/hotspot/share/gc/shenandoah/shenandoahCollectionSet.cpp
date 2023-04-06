@@ -89,11 +89,13 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!is_in(r), "Already in collection set");
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
+#undef KELVIN_CSET
   _cset_map[r->index()] = 1;
 
   if (r->affiliation() == YOUNG_GENERATION) {
     _young_region_count++;
     _young_bytes_to_evacuate += r->get_live_data_bytes();
+    _young_available_bytes_collected += (r->end() - r->top()) * HeapWordSize;
     if (r->age() >= InitialTenuringThreshold) {
       _young_bytes_to_promote += r->get_live_data_bytes();
     }
@@ -101,7 +103,18 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
     _old_region_count++;
     _old_bytes_to_evacuate += r->get_live_data_bytes();
     _old_garbage += r->garbage();
+    _old_available_bytes_collected += (r->end() - r->top()) * HeapWordSize;
   }
+
+#ifdef KELVIN_CSET
+  log_info(gc, ergo)("add_region " SIZE_FORMAT ": affiliation: %s, available words: " SIZE_FORMAT,
+                     r->index(), affiliation_name(r->affiliation()), r->end() - r->top());
+  log_info(gc, ergo)("  young_region_count: " SIZE_FORMAT ", young bytes evacuated: " SIZE_FORMAT ", young available collected: "
+                     SIZE_FORMAT ", young bytes to promote: " SIZE_FORMAT,
+                     _young_region_count, _young_bytes_to_evacuate, _young_available_bytes_collected, _young_bytes_to_promote);
+  log_info(gc, ergo)("  old_region_count: " SIZE_FORMAT ", old_bytes_to_evacuate: " SIZE_FORMAT ", old_available collected: "
+                     SIZE_FORMAT, _old_region_count, _old_bytes_to_evacuate, _old_available_bytes_collected);
+#endif
 
   _region_count++;
   _has_old_regions |= r->is_old();
@@ -114,6 +127,11 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
 
 void ShenandoahCollectionSet::clear() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
+
+#ifdef KELVIN_CSET
+  log_info(gc, ergo)("clearing cset");
+#endif
+
   Copy::zero_to_bytes(_cset_map, _map_size);
 
 #ifdef ASSERT
@@ -136,6 +154,9 @@ void ShenandoahCollectionSet::clear() {
 
   _old_region_count = 0;
   _old_bytes_to_evacuate = 0;
+
+  _young_available_bytes_collected = 0;
+  _old_available_bytes_collected = 0;
 
   _has_old_regions = false;
 }
@@ -187,6 +208,8 @@ void ShenandoahCollectionSet::print_on(outputStream* out) const {
                 byte_size_in_proper_unit(live()), proper_unit_for_byte_size(live()),
                 byte_size_in_proper_unit(used()), proper_unit_for_byte_size(used()));
 
+#ifdef ASSERT
+  // If Assertions are on, we'll dump each region selected for the collection set.  Otherwise, too much detail.
   debug_only(size_t regions = 0;)
   for (size_t index = 0; index < _heap->num_regions(); index ++) {
     if (is_in(index)) {
@@ -195,4 +218,5 @@ void ShenandoahCollectionSet::print_on(outputStream* out) const {
     }
   }
   assert(regions == count(), "Must match");
+#endif
 }

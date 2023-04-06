@@ -209,6 +209,9 @@ public:
   void verify_rem_set_at_update_ref();
   void verify_rem_set_after_full_gc();
 
+  bool verify_generation_usage(bool verify_old, size_t old_regions, size_t old_bytes, size_t old_waste,
+                               bool verify_young, size_t young_regions, size_t young_bytes, size_t young_waste);
+
 // WhiteBox testing support.
   bool supports_concurrent_gc_breakpoints() const override {
     return true;
@@ -219,6 +222,14 @@ public:
 private:
            size_t _initial_size;
            size_t _minimum_size;
+           size_t _promotion_potential;
+           size_t _promotion_in_place_potential;
+           size_t _pad_for_promote_in_place;    // bytes of filler
+           size_t _promotable_humongous_regions;
+           size_t _promotable_humongous_usage;
+           size_t _regular_regions_promoted_in_place;
+           size_t _regular_usage_promoted_in_place;
+
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
   volatile size_t _used;
@@ -263,6 +274,7 @@ public:
   WorkerThreads* safepoint_workers() override;
 
   void gc_threads_do(ThreadClosure* tcl) const override;
+  void mutator_threads_do(ThreadClosure* tcl) const;
 
 // ---------- Heap regions handling machinery
 //
@@ -288,6 +300,8 @@ public:
 
   void heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
+
+  inline ShenandoahMmuTracker* mmu_tracker() { return &_mmu_tracker; };
 
 // ---------- GC state machinery
 //
@@ -316,7 +330,10 @@ public:
     WEAK_ROOTS_BITPOS  = 4,
 
     // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5
+    OLD_MARKING_BITPOS = 5,
+
+    // Old (mixed) evacations are enabled.
+    MIXED_EVACUATIONS_ENABLED_BITPOS = 6
   };
 
   enum GCState {
@@ -326,7 +343,8 @@ public:
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
-    OLD_MARKING   = 1 << OLD_MARKING_BITPOS
+    OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
+    MIXED_EVACUATIONS_ENABLED = 1 << MIXED_EVACUATIONS_ENABLED_BITPOS
   };
 
 private:
@@ -387,8 +405,6 @@ private:
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
 
-
-
 public:
   char gc_state() const;
   static address gc_state_addr();
@@ -405,6 +421,7 @@ public:
   void set_concurrent_weak_root_in_progress(bool cond);
   void set_prepare_for_old_mark_in_progress(bool cond);
   void set_aging_cycle(bool cond);
+
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -430,6 +447,27 @@ public:
   inline size_t capture_old_usage(size_t usage);
   inline void set_previous_promotion(size_t promoted_bytes);
   inline size_t get_previous_promotion() const;
+
+  inline void clear_promotion_potential() { _promotion_potential = 0; };
+  inline void set_promotion_potential(size_t val) { _promotion_potential = val; };
+  inline size_t get_promotion_potential() { return _promotion_potential; };
+
+  inline void clear_promotion_in_place_potential() { _promotion_in_place_potential = 0; };
+  inline void set_promotion_in_place_potential(size_t val) { _promotion_in_place_potential = val; };
+  inline size_t get_promotion_in_place_potential() { return _promotion_in_place_potential; };
+
+  inline void set_pad_for_promote_in_place(size_t pad) { _pad_for_promote_in_place = pad; }
+  inline size_t get_pad_for_promote_in_place() { return _pad_for_promote_in_place; }
+
+  inline void reserve_promotable_humongous_regions(size_t region_count) { _promotable_humongous_regions = region_count; }
+  inline void reserve_promotable_humongous_usage(size_t bytes) { _promotable_humongous_usage = bytes; }
+  inline void reserve_promotable_regular_regions(size_t region_count) { _regular_regions_promoted_in_place = region_count; }
+  inline void reserve_promotable_regular_usage(size_t used_bytes) { _regular_usage_promoted_in_place = used_bytes; }
+
+  inline size_t get_promotable_humongous_regions() { return _promotable_humongous_regions; }
+  inline size_t get_promotable_humongous_usage() { return _promotable_humongous_usage; }
+  inline size_t get_regular_regions_promoted_in_place() { return _regular_regions_promoted_in_place; }
+  inline size_t get_regular_usage_promoted_in_place() { return _regular_usage_promoted_in_place; }
 
   // Returns previous value
   inline size_t set_promoted_reserve(size_t new_val);
@@ -512,11 +550,11 @@ private:
   void update_heap_references(bool concurrent);
   // Final update region states
   void update_heap_region_states(bool concurrent);
-  void rebuild_free_set(bool concurrent);
 
   void rendezvous_threads();
   void recycle_trash();
 public:
+  void rebuild_free_set(bool concurrent);
   void notify_gc_progress()    { _progress_last_gc.set();   }
   void notify_gc_no_progress() { _progress_last_gc.unset(); }
 
@@ -693,6 +731,10 @@ public:
 // ---------- Allocation support
 //
 private:
+  // How many bytes to transfer between old and young after we have finished recycling collection set regions?
+  size_t _old_regions_surplus;
+  size_t _old_regions_deficit;
+
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region, bool is_promotion);
 
   inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);
@@ -725,6 +767,12 @@ public:
   void gclabs_retire(bool resize);
 
   void set_young_lab_region_flags();
+
+  inline void set_old_region_surplus(size_t surplus) { _old_regions_surplus = surplus; };
+  inline void set_old_region_deficit(size_t deficit) { _old_regions_deficit = deficit; };
+
+  inline size_t get_old_region_surplus() { return _old_regions_surplus; };
+  inline size_t get_old_region_deficit() { return _old_regions_deficit; };
 
 // ---------- Marking support
 //
@@ -825,7 +873,7 @@ public:
   void cancel_old_gc();
   bool is_old_gc_active();
   void coalesce_and_fill_old_regions();
-  bool adjust_generation_sizes();
+  void adjust_generation_sizes_for_next_cycle(size_t old_xfer_limit, size_t young_cset_regions, size_t old_cset_regions);
 
 // ---------- Helper functions
 //

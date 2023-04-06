@@ -30,6 +30,8 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
@@ -55,8 +57,6 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 // as bounds on the adjustments applied at the outcome of a GC cycle.
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
-
-const uint ShenandoahAdaptiveHeuristics::MINIMUM_RESIZE_INTERVAL = 10;
 
 ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation) :
   ShenandoahHeuristics(generation),
@@ -106,12 +106,38 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
+  
 
   if (is_generational) {
+#undef KELVIN_CSET
+#ifdef KELVIN_CSET
+    log_info(gc, ergo)("Looking for preselected from 0 .. " SIZE_FORMAT, size);
+#endif
+    for (size_t idx = 0; idx < size; idx++) {
+      ShenandoahHeapRegion* r = data[idx]._region;
+      if (cset->is_preselected(r->index())) {
+        assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
+#ifdef KELVIN_CSET
+        log_info(gc, ergo)("Found preselected region " SIZE_FORMAT " (age: %d, used: " SIZE_FORMAT ", live: " SIZE_FORMAT ")",
+                           r->index(), r->age(), r->used(), r->get_live_data_bytes());
+#endif
+        // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
+        // This region has been pre-selected and its impact on promotion reserve is already accounted for.
+
+        // r->used() is r->garbage() + r->get_live_data_bytes()
+        // Since all live data in this region is being evacuated from young-gen, it is as if this memory
+        // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
+        // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
+        // within youn-gen memory.
+
+        cur_young_garbage += r->garbage();
+        cset->add_region(r);
+      }
+    }
     if (is_global) {
       size_t max_young_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
       size_t young_cur_cset = 0;
-      size_t max_old_cset    = (size_t) (heap->get_old_evac_reserve() / ShenandoahEvacWaste);
+      size_t max_old_cset    = (size_t) (heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
       size_t old_cur_cset = 0;
       size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_young_cset;
       size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
@@ -124,24 +150,31 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
+        if (cset->is_preselected(r->index())) {
+#undef KELVIN_GLOBAL
+#ifdef KELVIN_GLOBAL
+          log_info(gc, ergo)("Ignoring preselected %s region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT ")",
+                             affiliation_name(r->affiliation()), r->index(), r->used(), r->get_live_data_bytes());
+#endif
+          continue;
+        }
         bool add_region = false;
         if (r->is_old()) {
           size_t new_cset = old_cur_cset + r->get_live_data_bytes();
           if ((new_cset <= max_old_cset) && (r->garbage() > garbage_threshold)) {
             add_region = true;
             old_cur_cset = new_cset;
+#ifdef KELVIN_GLOBAL
+            log_info(gc, ergo)("Adding old region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), old_cur_cset: " SIZE_FORMAT,
+                               r->index(), r->used(), r->get_live_data_bytes(), old_cur_cset);
+#endif
           }
-        } else if (cset->is_preselected(r->index())) {
-          assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
-          // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
-          // This region has been pre-selected and its impact on promotion reserve is already accounted for.
-          add_region = true;
-          // r->used() is r->garbage() + r->get_live_data_bytes()
-          // Since all live data in this region is being evacuated from young-gen, it is as if this memory
-          // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
-          // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
-          // within youn-gen memory.
-          cur_young_garbage += r->used();
+#ifdef KELVIN_GLOBAL
+          else {
+            log_info(gc, ergo)("Not adding old region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), old_cur_cset: "
+                               SIZE_FORMAT, r->index(), r->used(), r->get_live_data_bytes(), old_cur_cset);
+          }
+#endif
         } else if (r->age() < InitialTenuringThreshold) {
           size_t new_cset = young_cur_cset + r->get_live_data_bytes();
           size_t region_garbage = r->garbage();
@@ -151,8 +184,24 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
             add_region = true;
             young_cur_cset = new_cset;
             cur_young_garbage = new_garbage;
+#ifdef KELVIN_GLOBAL
+            log_info(gc, ergo)("Adding young region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), young_cur_cset: " SIZE_FORMAT,
+                               r->index(), r->used(), r->get_live_data_bytes(), young_cur_cset);
+#endif
           }
+#ifdef KELVIN_GLOBAL
+          else {
+            log_info(gc, ergo)("Not adding young region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), young_cur_cset: "
+                               SIZE_FORMAT, r->index(), r->used(), r->get_live_data_bytes(), young_cur_cset);
+          }
+#endif
         }
+#ifdef KELVIN_GLOBAL
+        else {
+          log_info(gc, ergo)("Not adding aged young region " SIZE_FORMAT " (age: %d, used: " SIZE_FORMAT ", live: " SIZE_FORMAT
+                             ") because not preselected", r->index(), r->age(), r->used(), r->get_live_data_bytes());
+        }
+#endif
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
         // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
 
@@ -172,39 +221,46 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                          byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                          byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
+#ifdef KELVIN_CSET
+      log_info(gc, ergo)(" cur_young_garbage: " SIZE_FORMAT " vs. min_garbage: " SIZE_FORMAT
+                         ", free_target: " SIZE_FORMAT
+                         ", garbage_threshold: " SIZE_FORMAT
+                         ", ignore_threshold: " SIZE_FORMAT ", young_evac_reserve: " SIZE_FORMAT,
+                         cur_young_garbage, min_garbage, free_target, garbage_threshold, ignore_threshold,
+                         heap->get_young_evac_reserve());
+#endif
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
-        bool add_region = false;
-
-        if (!r->is_old()) {
-          if (cset->is_preselected(r->index())) {
-            assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
-            // Entire region will be promoted, This region does not impact young-gen evacuation reserve.  Memory has already
-            // been set aside to hold evacuation results as advance_promotion_reserve.
-            add_region = true;
-            // Since all live data in this region is being evacuated from young-gen, it is as if this memory
-            // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
-            // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
-            // within youn-gen memory
-            cur_young_garbage += r->get_live_data_bytes();
-          } else if  (r->age() < InitialTenuringThreshold) {
-            size_t new_cset = cur_cset + r->get_live_data_bytes();
-            size_t region_garbage = r->garbage();
-            size_t new_garbage = cur_young_garbage + region_garbage;
-            bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
-            if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
-              add_region = true;
-              cur_cset = new_cset;
-              cur_young_garbage = new_garbage;
-            }
-          }
-          // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
-          // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
-
-          if (add_region) {
+        if (cset->is_preselected(r->index())) {
+          continue;
+        }
+        if  (r->age() < InitialTenuringThreshold) {
+          size_t new_cset = cur_cset + r->get_live_data_bytes();
+          size_t region_garbage = r->garbage();
+          size_t new_garbage = cur_young_garbage + region_garbage;
+          bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
+          assert(r->is_young(), "Only young candidates expected in the data array");
+          if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
+#ifdef KELVIN_CSET
+            log_info(gc, ergo)("Adding region " SIZE_FORMAT ": new_cset: " SIZE_FORMAT ", max_cset: " SIZE_FORMAT
+                               ", region_garbage: " SIZE_FORMAT ", region live: " SIZE_FORMAT ", new_garbage: " SIZE_FORMAT,
+                               r->index(), new_cset, max_cset, region_garbage, r->get_live_data_bytes(), new_garbage);
+#endif
+            cur_cset = new_cset;
+            cur_young_garbage = new_garbage;
             cset->add_region(r);
           }
+#ifdef KELVIN_CSET
+          else {
+            log_info(gc, ergo)("Not adding region " SIZE_FORMAT ": new_cset: " SIZE_FORMAT ", max_cset: " SIZE_FORMAT
+                               ", region_garbage: " SIZE_FORMAT ", region live: " SIZE_FORMAT ", new_garbage: " SIZE_FORMAT,
+                               r->index(), new_cset, max_cset, region_garbage, r->get_live_data_bytes(), new_garbage);
+          }
+#endif
         }
+        // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
+        // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects or because
+        // they are to be promted in place.
       }
     }
   } else {
@@ -241,12 +297,20 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       }
     }
   }
+
+  size_t collected_old = cset->get_old_bytes_reserved_for_evacuation();
+  size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
+  size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
+
+  log_info(gc, ergo)("Chosen CSet evacuates old: " SIZE_FORMAT "%s, promoted: " SIZE_FORMAT "%s, young: " SIZE_FORMAT "%s",
+                     byte_size_in_proper_unit(collected_old),      proper_unit_for_byte_size(collected_old),
+                     byte_size_in_proper_unit(collected_promoted), proper_unit_for_byte_size(collected_promoted),
+                     byte_size_in_proper_unit(collected_young),    proper_unit_for_byte_size(collected_young));
 }
 
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {
   ShenandoahHeuristics::record_cycle_start();
   _allocation_rate.allocation_counter_reset();
-  ++_cycles_since_last_resize;
 }
 
 void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
@@ -321,6 +385,108 @@ static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }
 
+// Return conservative estimate of how much memory can be allocated before we need to start GC
+size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_reclaimed) {
+  assert(_generation->is_young(), "evac_slack is only meaningful for young-gen heuristic");
+
+  size_t max_capacity = _generation->max_capacity();
+  size_t capacity = _generation->soft_max_capacity();
+  size_t available = _generation->available();
+  size_t allocated = _generation->bytes_allocated_since_gc_start();
+
+  size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_bytes_collected();
+  size_t anticipated_available =
+    available + young_regions_to_be_reclaimed * ShenandoahHeapRegion::region_size_bytes() - available_young_collected;
+  size_t allocation_headroom = anticipated_available;
+  size_t spike_headroom = capacity * ShenandoahAllocSpikeFactor / 100;
+  size_t penalties      = capacity * _gc_time_penalties / 100;
+
+  double rate = _allocation_rate.sample(allocated);
+
+  // At what value of available, would avg and spike triggers occur?
+  //  if allocation_headroom < avg_cycle_time * avg_alloc_rate, then we experience avg trigger
+  //  if allocation_headroom < avg_cycle_time * rate, then we experience spike trigger if is_spiking
+  //
+  // allocation_headroom =
+  //     0, if penalties > available or if penalties + spike_headroom > available
+  //     available - penalties - spike_headroom, otherwise
+  //
+  // so we trigger if available - penalties - spike_headroom < avg_cycle_time * avg_alloc_rate, which is to say
+  //                  available < avg_cycle_time * avg_alloc_rate + penalties + spike_headroom
+  //            or if available < penalties + spike_headroom 
+  //
+  // since avg_cycle_time * avg_alloc_rate > 0, the first test is sufficient to test both conditions
+  //
+  // thus, avg_evac_slack is MIN2(0,  available - avg_cycle_time * avg_alloc_rate + penalties + spike_headroom)
+  //
+  // similarly, spike_evac_slack is MIN2(0, available - avg_cycle_time * rate + penalties + spike_headroom)
+  // but spike_evac_slack is only relevant if is_spiking, as defined below.
+
+  double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+
+  // TODO: There are other adjustments made in should_start_gc() to avg_cycle_time depending on degenerated cycles
+  // and expansion of the live-memory set.  To be totally in sync with behavior of GC trigger, the estimate of
+  // evacuation slack may want to incorporate the same adjustments.
+
+
+  // TODO: Consider making conservative adjustments to avg_cycle_time, as in:
+  //   avg_cycle_time *= 2;
+  // The observation is that GC time is approximately doubled when we perform promotions and/or mixed evacuations.
+  // If the caller takes action based on the value returned from evac_slack, the action will be to trigger promotion
+  // and/or mixed evacuation so double our understanding of cycle time.  Kelvin has experimented with this option.
+  // While it reduces the likelihood of TLAB allocation failures, it also causes excessively conservative transfer
+  // of memory to OLD, which ultimately prevents timely promotion of memory.
+
+  double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
+
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+  log_info(gc, ergo)("evac_slack avg_cycle_time: %.3f, avg_alloc_rate: %.3f, rate: %.3f, available: " SIZE_FORMAT
+                     ", anticipated available: " SIZE_FORMAT ", collected young regions: " SIZE_FORMAT
+                     ", collected available bytes: " SIZE_FORMAT
+                     ", penalties: " SIZE_FORMAT ", alloc_headroom: " SIZE_FORMAT ", spike_headroom: " SIZE_FORMAT
+                     ", allocated since start of gc: " SIZE_FORMAT,
+                     avg_cycle_time, avg_alloc_rate, rate, available, anticipated_available,
+                     young_regions_to_be_reclaimed, available_young_collected,
+                     penalties, allocation_headroom, spike_headroom, allocated);
+#endif
+  size_t evac_slack_avg;
+  if (anticipated_available > avg_cycle_time * avg_alloc_rate + penalties + spike_headroom) {
+    evac_slack_avg = anticipated_available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
+  } else {
+    // we have no slack because it's already time to trigger
+    evac_slack_avg = 0;
+  }
+#ifdef KELVIN_TRACE
+  double sd = _allocation_rate._rate.sd();
+  log_info(gc, ergo)("is_spiking(rate: %.3f, avg_rate: %.3f, sd: %.3f, threshold: %.3f, zscore: %.3f)",
+                     rate, _allocation_rate._rate.avg(), sd, _spike_threshold_sd,
+                     (rate - _allocation_rate._rate.avg())/sd);
+#endif
+
+  bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
+  size_t evac_slack_spiking;
+  if (is_spiking) {
+    if (anticipated_available > avg_cycle_time * rate + penalties + spike_headroom) {
+      evac_slack_spiking = anticipated_available - (avg_cycle_time * rate + penalties + spike_headroom);
+    } else {
+      // we have no slack because it's already time to trigger
+      evac_slack_spiking = 0;
+    }
+  } else {
+    evac_slack_spiking = evac_slack_avg;
+  }
+
+  size_t threshold = min_free_threshold();
+  size_t evac_min_threshold = (anticipated_available > threshold)? anticipated_available - threshold: 0;
+
+#ifdef KELVIN_TRACE
+  log_info(gc, ergo)("evac_slack returning min of threshold: " SIZE_FORMAT ", avg: " SIZE_FORMAT ", spike: " SIZE_FORMAT,
+                     evac_min_threshold, evac_slack_avg, evac_slack_spiking);
+#endif
+  return MIN3(evac_slack_spiking, evac_slack_avg, evac_min_threshold);
+}
+
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
@@ -347,136 +513,156 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   size_t min_threshold = min_free_threshold();
 
-  if (available < min_threshold) {
-    log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
-                 _generation->name(),
-                 byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
-                 byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
-    return resize_and_evaluate();
-  }
+  // OLD generation is maintained to be as small as possible.  Depletion-of-free-pool triggers do not apply to old generation.
+  if (!_generation->is_old()) {
 
-  // Check if we need to learn a bit about the application
-  const size_t max_learn = ShenandoahLearningSteps;
-  if (_gc_times_learned < max_learn) {
-    size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
-    if (available < init_threshold) {
-      log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
-                   _generation->name(), _gc_times_learned + 1, max_learn,
-                   byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
-                   byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
+    //  Rationale:
+    //    The idea is that there is an average allocation rate and there are occasional abnormal bursts (or spikes) of
+    //    allocations that exceed the average allocation rate.  What do these spikes look like?
+    //
+    //    1. At certain phase changes, we may discard large amounts of data and replace it with large numbers of newly
+    //       allocated objects.  This "spike" looks more like a phase change.  We were in steady state at M bytes/sec
+    //       allocation rate and now we're in a "reinitialization phase" that looks like N bytes/sec.  We need the "spike"
+    //       accomodation to give us enough runway to recalibrate our "average allocation rate".
+    //
+    //   2. The typical workload changes.  "Suddenly", our typical workload of N TPS increases to N+delta TPS.  This means
+    //       our average allocation rate needs to be adjusted.  Once again, we need the "spike" accomodation to give us
+    //       enough runway to recalibrate our "average allocation rate".
+    //
+    //    3. Though there is an "average" allocation rate, a given workload's demand for allocation may be very bursty.  We
+    //       allocate a bunch of LABs during the 5 ms that follow completion of a GC, then we perform no more allocations for
+    //       the next 150 ms.  It seems we want the "spike" to represent the maximum divergence from average within the
+    //       period of time between consecutive evaluation of the should_start_gc() service.  Here's the thinking:
+    //
+    //       a) Between now and the next time I ask whether should_start_gc(), we might experience a spike representing
+    //          the anticipated burst of allocations.  If that would put us over budget, then we should start GC immediately.
+    //       b) Between now and the anticipated depletion of allocation pool, there may be two or more bursts of allocations.
+    //          If there are more than one of these bursts, we can "approximate" that these will be separated by spans of
+    //          time with very little or no allocations so the "average" allocation rate should be a suitable approximation
+    //          of how this will behave.
+    //
+    //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
+    //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
+    //    computations an independent effort.
+
+
+    // Check if allocation headroom is still okay. This also factors in:
+    //   1. Some space to absorb allocation spikes (ShenandoahAllocSpikeFactor)
+    //   2. Accumulated penalties from Degenerated and Full GC
+
+    size_t allocation_headroom = available;
+    size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
+    size_t penalties      = capacity / 100 * _gc_time_penalties;
+
+    allocation_headroom -= MIN2(allocation_headroom, penalties);
+    allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
+
+    double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+    double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
+    log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
+                  _generation->name(),
+                  avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
+
+    if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
+
+      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s)"
+                   " to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
+                   _generation->name(), avg_cycle_time * 1000,
+                   byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   _margin_of_error_sd);
+
+      log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - "
+                         SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
+                         byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
+                         byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
+                         byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
+                         byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
+
+      _last_trigger = RATE;
       return true;
     }
+
+    bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
+    if (is_spiking && avg_cycle_time > allocation_headroom / rate) {
+      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s)"
+                   " to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
+                   _generation->name(), avg_cycle_time * 1000,
+                   byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   _spike_threshold_sd);
+      _last_trigger = SPIKE;
+      return true;
+    }
+
+    if (available < min_threshold) {
+      log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
+                   _generation->name(),
+                   byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
+                   byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
+      return true;
+    }
+
+    // Check if we need to learn a bit about the application
+    const size_t max_learn = ShenandoahLearningSteps;
+    if (_gc_times_learned < max_learn) {
+      size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
+      if (available < init_threshold) {
+        log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free ("
+                     SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
+                     _generation->name(), _gc_times_learned + 1, max_learn,
+                     byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
+                     byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
+        return true;
+      }
+    }
+
+    // TODO: Account for inherent delays in responding to GC triggers
+    //  1. It has been observed that delays of 200 ms or greater are common between the moment we return true from
+    //     should_start_gc() and the moment at which we begin execution of the concurrent reset phase.  Add this time into
+    //     the calculation of avg_cycle_time below.  (What is "this time"?  Perhaps we should remember recent history of
+    //     this delay for the running workload and use the maximum delay recently seen for "this time".)  These obervations
+    //     of long delays for this transition were from early in the development of generational mode.  They may have
+    //     resuilted from errors in the implementation which were subsequently fixed.  More recently, these long delays
+    //     have not been observed.
+    //  2. The frequency of inquiries to should_start_gc() is adaptive, ranging between ShenandoahControlIntervalMin and
+    //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
+    //     the calculation of avg_cycle_time below.
+
+    // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
+    // more time than traditional young-generation cycles so start them up as soon as possible.  This is a "mitigation"
+    // for the reality that old-gen and young-gen activities are not truly "concurrent".  If there is old-gen work to
+    // be done, we start up the young-gen GC threads so they can do some of this old-gen work.  As implemented, promotion
+    // gets priority over old-gen marking.
+
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    if (heap->mode()->is_generational()) {
+      size_t promo_potential = heap->get_promotion_potential();
+      size_t promo_in_place_potential = heap->get_promotion_in_place_potential();
+      ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) heap->old_generation()->heuristics();
+      size_t mixed_candidates = old_heuristics->unprocessed_old_collection_candidates();
+      if (promo_potential > 0) {
+        // Detect unsigned arithmetic underflow
+        assert(promo_potential < heap->capacity(), "Sanity");
+        log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
+                     _generation->name(), byte_size_in_proper_unit(promo_potential), proper_unit_for_byte_size(promo_potential));
+        return true;
+      } else if (promo_in_place_potential > 0) {
+        // Detect unsigned arithmetic underflow
+        assert(promo_in_place_potential < heap->capacity(), "Sanity");
+        log_info(gc)("Trigger (%s): expedite promotion in place of " SIZE_FORMAT "%s", _generation->name(),
+                     byte_size_in_proper_unit(promo_in_place_potential),
+                     proper_unit_for_byte_size(promo_in_place_potential));
+        return true;
+      } else if (mixed_candidates > 0) {
+        // We need to run young GC in order to open up some free heap regions so we can finish mixed evacuations.
+        log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
+                     _generation->name(), mixed_candidates);
+        return true;
+      }
+    }
   }
-
-  //  Rationale:
-  //    The idea is that there is an average allocation rate and there are occasional abnormal bursts (or spikes) of
-  //    allocations that exceed the average allocation rate.  What do these spikes look like?
-  //
-  //    1. At certain phase changes, we may discard large amounts of data and replace it with large numbers of newly
-  //       allocated objects.  This "spike" looks more like a phase change.  We were in steady state at M bytes/sec
-  //       allocation rate and now we're in a "reinitialization phase" that looks like N bytes/sec.  We need the "spike"
-  //       accomodation to give us enough runway to recalibrate our "average allocation rate".
-  //
-  //   2. The typical workload changes.  "Suddenly", our typical workload of N TPS increases to N+delta TPS.  This means
-  //       our average allocation rate needs to be adjusted.  Once again, we need the "spike" accomodation to give us
-  //       enough runway to recalibrate our "average allocation rate".
-  //
-  //    3. Though there is an "average" allocation rate, a given workload's demand for allocation may be very bursty.  We
-  //       allocate a bunch of LABs during the 5 ms that follow completion of a GC, then we perform no more allocations for
-  //       the next 150 ms.  It seems we want the "spike" to represent the maximum divergence from average within the
-  //       period of time between consecutive evaluation of the should_start_gc() service.  Here's the thinking:
-  //
-  //       a) Between now and the next time I ask whether should_start_gc(), we might experience a spike representing
-  //          the anticipated burst of allocations.  If that would put us over budget, then we should start GC immediately.
-  //       b) Between now and the anticipated depletion of allocation pool, there may be two or more bursts of allocations.
-  //          If there are more than one of these bursts, we can "approximate" that these will be separated by spans of
-  //          time with very little or no allocations so the "average" allocation rate should be a suitable approximation
-  //          of how this will behave.
-  //
-  //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
-  //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
-  //    computations an independent effort.
-
-
-  // TODO: Account for inherent delays in responding to GC triggers
-  //  1. It has been observed that delays of 200 ms or greater are common between the moment we return true from should_start_gc()
-  //     and the moment at which we begin execution of the concurrent reset phase.  Add this time into the calculation of
-  //     avg_cycle_time below.  (What is "this time"?  Perhaps we should remember recent history of this delay for the
-  //     running workload and use the maximum delay recently seen for "this time".)
-  //  2. The frequency of inquiries to should_start_gc() is adaptive, ranging between ShenandoahControlIntervalMin and
-  //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
-  //     the calculation of avg_cycle_time below.
-
-  // Check if allocation headroom is still okay. This also factors in:
-  //   1. Some space to absorb allocation spikes (ShenandoahAllocSpikeFactor)
-  //   2. Accumulated penalties from Degenerated and Full GC
-  size_t allocation_headroom = available;
-  size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
-  size_t penalties      = capacity / 100 * _gc_time_penalties;
-
-  allocation_headroom -= MIN2(allocation_headroom, penalties);
-  allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
-
-  double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
-
-  double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
-  log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
-    _generation->name(), avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
-
-  if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
-
-    log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
-                 _generation->name(), avg_cycle_time * 1000,
-                 byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
-                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                 _margin_of_error_sd);
-
-    log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - " SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
-                       byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
-                       byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
-                       byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
-                       byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
-
-    _last_trigger = RATE;
-    return resize_and_evaluate();
-  }
-
-  bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
-  if (is_spiking && avg_cycle_time > allocation_headroom / rate) {
-    log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
-                 _generation->name(), avg_cycle_time * 1000,
-                 byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
-                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-
-                 _spike_threshold_sd);
-    _last_trigger = SPIKE;
-    return resize_and_evaluate();
-  }
-
   return ShenandoahHeuristics::should_start_gc();
-}
-
-bool ShenandoahAdaptiveHeuristics::resize_and_evaluate() {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (!heap->mode()->is_generational()) {
-    // We only attempt to resize the generations in generational mode.
-    return true;
-  }
-
-  if (_cycles_since_last_resize <= MINIMUM_RESIZE_INTERVAL) {
-    log_info(gc, ergo)("Not resizing %s for another " UINT32_FORMAT " cycles.",
-        _generation->name(),  _cycles_since_last_resize);
-    return true;
-  }
-
-  if (!heap->generation_sizer()->transfer_capacity(_generation)) {
-    // We could not enlarge our generation, so we must start a gc cycle.
-    log_info(gc, ergo)("Could not increase size of %s, begin gc cycle.", _generation->name());
-    return true;
-  }
-
-  log_info(gc)("Increased size of %s generation, re-evaluate trigger criteria", _generation->name());
-  return should_start_gc();
 }
 
 void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount) {
@@ -546,8 +732,8 @@ bool ShenandoahAllocationRate::is_spiking(double rate, double threshold) const {
   if (rate <= 0.0) {
     return false;
   }
-
   double sd = _rate.sd();
+
   if (sd > 0) {
     // There is a small chance that that rate has already been sampled, but it
     // seems not to matter in practice.

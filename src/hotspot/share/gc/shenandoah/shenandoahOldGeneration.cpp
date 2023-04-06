@@ -170,11 +170,41 @@ class ShenandoahConcurrentCoalesceAndFillTask : public WorkerTask {
 ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
   : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity),
     _coalesce_and_fill_region_array(NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC)),
-    _state(IDLE)
+    _state(IDLE),
+    _growth_before_compaction(INITIAL_GROWTH_BEFORE_COMPACTION)
 {
+  _live_bytes_after_last_mark = ShenandoahHeap::heap()->capacity() * INITIAL_LIVE_FRACTION / FRACTIONAL_DENOMINATOR;
   // Always clear references for old generation
   ref_processor()->set_soft_reference_policy(true);
 }
+
+size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
+  return _live_bytes_after_last_mark;
+}
+
+void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
+  _live_bytes_after_last_mark = bytes;
+  if (_growth_before_compaction > MINIMUM_GROWTH_BEFORE_COMPACTION) {
+    _growth_before_compaction /= 2;
+  }
+#undef KELVIN_OLD_TRIGGER
+#ifdef KELVIN_OLD_TRIGGER
+  log_info(gc, ergo)("set_live_bytes_after_last_mark(" SIZE_FORMAT "), _growth_before_compaction adjusted to: " SIZE_FORMAT
+                     ", MIN_GROWTH_B4_COMPACTION: " SIZE_FORMAT,
+                     bytes, _growth_before_compaction, MINIMUM_GROWTH_BEFORE_COMPACTION);
+#endif
+}
+
+size_t ShenandoahOldGeneration::usage_trigger_threshold() const {
+  size_t result = _live_bytes_after_last_mark + (_live_bytes_after_last_mark * _growth_before_compaction) / FRACTIONAL_DENOMINATOR;
+#ifdef KELVIN_OLD_TRIGGER
+  double growth_ratio = ((double) _growth_before_compaction) / FRACTIONAL_DENOMINATOR;
+  log_info(gc, ergo)("usage_trigger_threshold(_live_bytes_at_last_mark: " SIZE_FORMAT ", growth_ratio: %.3f, result: " SIZE_FORMAT,
+                     _live_bytes_after_last_mark, growth_ratio, result);
+#endif
+  return result;
+}
+
 
 const char* ShenandoahOldGeneration::name() const {
   return "OLD";
@@ -255,6 +285,7 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   uint nworkers = workers->active_workers();
 
   log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
+
   // This code will see the same set of regions to fill on each resumption as it did
   // on the initial run. That's okay because each region keeps track of its own coalesce
   // and fill state. Regions that were filled on a prior attempt will not try to fill again.
@@ -317,7 +348,11 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     // freed up immediate garbage regions so proceed with rebuilding the free set.
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset : ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
     ShenandoahHeapLocker locker(heap->lock());
-    heap->free_set()->rebuild();
+    size_t cset_young_regions, cset_old_regions;
+    heap->free_set()->prepare_to_rebuild(cset_young_regions, cset_old_regions);
+    // This is just old-gen completion.  No future budgeting required here.  The only reason to rebuild the freeset here
+    // is in case there was any immediate old garbage identified.
+    heap->free_set()->rebuild(0);
   }
 }
 
@@ -400,7 +435,8 @@ bool ShenandoahOldGeneration::validate_transition(State new_state) {
     case IDLE:
       // GC cancellation can send us back to IDLE from any state.
       assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become idle during old mark.");
-      assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot become idle with collection candidates");
+      assert(!heap->mode()->is_generational() ||
+             (_old_heuristics->unprocessed_old_collection_candidates() == 0), "Cannot become idle with collection candidates");
       assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot become idle while making old generation parseable.");
       assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become idle when setup for bootstrapping.");
       return true;

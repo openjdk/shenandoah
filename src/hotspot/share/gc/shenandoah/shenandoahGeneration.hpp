@@ -48,9 +48,11 @@ private:
 
   double _collection_thread_time_s;
 
+  size_t _affiliated_region_count;
+  size_t _humongous_waste;      // how much waste for padding in humongous objects
+
 protected:
   // Usage
-  size_t _affiliated_region_count;
   volatile size_t _used;
   volatile size_t _bytes_allocated_since_gc_start;
   size_t _max_capacity;
@@ -183,11 +185,21 @@ private:
   // Return the updated value of affiliated_region_count
   size_t decrement_affiliated_region_count();
 
+  // Return the updated value of affiliated_region_count
+  size_t increase_affiliated_region_count(size_t delta);
+
+  // Return the updated value of affiliated_region_count
+  size_t decrease_affiliated_region_count(size_t delta);
+
   void establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste);
 
   void clear_used();
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);
+
+  void increase_humongous_waste(size_t bytes);
+  void decrease_humongous_waste(size_t bytes);
+  size_t get_humongous_waste() const { return _humongous_waste; }
 
   virtual bool is_concurrent_mark_in_progress() = 0;
   void confirm_heuristics_mode();

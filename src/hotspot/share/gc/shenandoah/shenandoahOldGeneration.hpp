@@ -95,17 +95,31 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
     return _state;
   }
 
+  size_t get_live_bytes_after_last_mark() const;
+  void set_live_bytes_after_last_mark(size_t new_live);
+
+  size_t usage_trigger_threshold() const;
+
   bool can_start_gc() {
     return _state == IDLE || _state == WAITING_FOR_FILL;
   }
 
  private:
+  static const size_t FRACTIONAL_DENOMINATOR = 64536;
+  static const size_t INITIAL_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 2;          //  50.0%
+  static const size_t MINIMUM_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 8;          //  12.5%
+
+  // First old-collection trigger is at 4.6875% of heap size: i.e. 50% grown beyond 3.125%
+  static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                    //   3.125%
+
   bool entry_coalesce_and_fill();
   bool coalesce_and_fill();
 
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   ShenandoahOldHeuristics* _old_heuristics;
   State _state;
+  size_t _live_bytes_after_last_mark;
+  size_t _growth_before_compaction; // How much growth in usage before we trigger old collection, per 65_536
 };
 
 

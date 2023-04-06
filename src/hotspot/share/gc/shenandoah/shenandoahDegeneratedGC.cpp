@@ -57,7 +57,11 @@ bool ShenandoahDegenGC::collect(GCCause::Cause cause) {
   vmop_degenerated();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->mode()->is_generational()) {
-    heap->log_heap_status("At end of Degenerated GC");
+    bool is_bootstrap_gc = heap->is_concurrent_old_mark_in_progress() && _generation->is_young();
+    heap->mmu_tracker()->record_degenerated(_generation, GCId::current(), is_bootstrap_gc,
+                                            !heap->collection_set()->has_old_regions());
+    const char* msg = is_bootstrap_gc? "At end of Degenerated Boostrap Old GC": "At end of Degenerated GC";
+    heap->log_heap_status(msg);
   }
   return true;
 }
@@ -270,6 +274,48 @@ void ShenandoahDegenGC::op_degenerated() {
       }
 
       op_cleanup_complete();
+      // We defer generation resizing actions until after cset regions have been recycled.
+      if (heap->mode()->is_generational()) {
+        size_t old_region_surplus = heap->get_old_region_surplus();
+        size_t old_region_deficit = heap->get_old_region_deficit();
+        if (old_region_surplus) {
+          bool success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
+#ifdef KELVIN_TRACE
+          size_t old_available = heap->old_generation()->available();
+          size_t young_available = heap->young_generation()->available();
+          log_info(gc, ergo)("After %s " SIZE_FORMAT " to young in preparation for start of next gc, old available: "
+                             SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                             success? "successfully transferring": "failing to transfer", old_region_surplus,
+                             byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                             byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+#endif
+        } else if (old_region_deficit) {
+          bool success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
+#ifdef KELVIN_TRACE
+          size_t old_available = heap->old_generation()->available();
+          size_t young_available = heap->young_generation()->available();
+          log_info(gc, ergo)("After %s " SIZE_FORMAT " regions to old in preparation for start of next gc, old available: "
+                             SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                             success? "successfully transferring": "failing to trannsfer", old_region_deficit,
+                             byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                             byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+#endif
+          if (!success) {
+            ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_cannot_expand();
+          }
+        }
+        heap->set_old_region_surplus(0);
+        heap->set_old_region_deficit(0);
+
+#ifdef KELVIN_TRACE
+        size_t old_available = heap->old_generation()->available();
+        size_t young_available = heap->young_generation()->available();
+        log_info(gc, ergo)("After degenerated cleanup and resizing transfers, old available: " SIZE_FORMAT
+                           "%s, young_available: " SIZE_FORMAT "%s",
+                           byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                           byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+#endif
+      }
       break;
     default:
       ShouldNotReachHere();
@@ -278,18 +324,22 @@ void ShenandoahDegenGC::op_degenerated() {
   if (heap->mode()->is_generational()) {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
-
+#ifdef KELVIN_DEPRECATE
     heap->young_generation()->unadjust_available();
     heap->old_generation()->unadjust_available();
     // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
+#else
+#undef KELVIN_VERBOSE
+#ifdef KELVIN_VERBOSE
+    log_info(gc,ergo)("KELVIN: end of DegenGC: need to age survivor regions, look for log evidence, if none, do it here");
+#endif 
+#endif
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
     heap->reset_old_evac_expended();
     heap->set_promoted_reserve(0);
-
-    heap->adjust_generation_sizes();
   }
 
   if (ShenandoahVerify) {

@@ -151,33 +151,52 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     return false;
   }
 
+#undef KELVIN_CONCGC
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about do do concurrent stack processing");
+#endif
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
     entry_thread_roots();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about do do concurrent weak roots");
+#endif
   // Process weak roots that might still point to regions that would be broken by cleanup
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do entry_cleanup early");
+#endif
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.  Note that
   // we will not age young-gen objects in the case that we skip evacuation.
   entry_cleanup_early();
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do freeset->log_status");
+#endif
   {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do class unloading");
+#endif
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
       heap->is_concurrent_weak_root_in_progress()) {
     entry_class_unloading();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do strong roots");
+#endif
   // Processing strong roots
   // This may be skipped if there is nothing to update/evacuate.
   // If so, strong_root_in_progress would be unset.
@@ -191,6 +210,9 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_global_coalesce_and_fill();
   }
 
+#ifdef KELVIN_CONCGC
+  log_info(gc, ergo)("about to do concurrent evacuation");
+#endif
   // Continue the cycle with evacuation and optional update-refs.
   // This may be skipped if there is nothing to evacuate.
   // If so, evac_in_progress would be unset by collection set preparation code.
@@ -218,25 +240,42 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     _abbreviated = true;
   }
 
+  // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
+  // abbreviated cycle.
   if (heap->mode()->is_generational()) {
-    size_t old_available, young_available;
+    bool success;
+    size_t region_xfer;
+    const char* region_destination;
+    ShenandoahYoungGeneration* young_gen = heap->young_generation();
+    ShenandoahGeneration* old_gen = heap->old_generation();
     {
-      ShenandoahYoungGeneration* young_gen = heap->young_generation();
-      ShenandoahGeneration* old_gen = heap->old_generation();
       ShenandoahHeapLocker locker(heap->lock());
 
+      size_t old_region_surplus = heap->get_old_region_surplus();
+      size_t old_region_deficit = heap->get_old_region_deficit();
+      if (old_region_surplus) {
+        success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
+        region_destination = "young";
+        region_xfer = old_region_surplus;
+      } else if (old_region_deficit) {
+        success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
+        region_destination = "old";
+        region_xfer = old_region_deficit;
+        if (!success) {
+          ((ShenandoahOldHeuristics *) old_gen->heuristics())->trigger_cannot_expand();
+        }
+      } else {
+        region_destination = "none";
+        region_xfer = 0;
+        success = true;
+      }
+      heap->set_old_region_surplus(0);
+      heap->set_old_region_deficit(0);
+  
       size_t old_usage_before_evac = heap->capture_old_usage(0);
       size_t old_usage_now = old_gen->used();
       size_t promoted_bytes = old_usage_now - old_usage_before_evac;
       heap->set_previous_promotion(promoted_bytes);
-
-      young_gen->unadjust_available();
-      old_gen->unadjust_available();
-      // No need to old_gen->increase_used().
-      // That was done when plabs were allocated, accounting for both old evacs and promotions.
-
-      young_available = young_gen->adjusted_available();
-      old_available = old_gen->adjusted_available();
 
       heap->set_alloc_supplement_reserve(0);
       heap->set_young_evac_reserve(0);
@@ -244,6 +283,15 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       heap->reset_old_evac_expended();
       heap->set_promoted_reserve(0);
     }
+
+    // Report outside the heap lock
+    size_t young_available = young_gen->available();
+    size_t old_available = old_gen->available();
+    log_info(gc, ergo)("After cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
+                       SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                       success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
+                       byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
   }
   return true;
 }
@@ -508,6 +556,11 @@ void ShenandoahConcurrentGC::entry_evacuate() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
+#undef KELVIN_EVAC
+#ifdef KELVIN_EVAC
+  log_info(gc, ergo)("entry_evacuate()");
+#endif
+
   static const char* msg = "Concurrent evacuation";
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_evac);
   EventMark em("%s", msg);
@@ -555,6 +608,10 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete, true /* log_heap_usage */);
   EventMark em("%s", msg);
 
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+  log_info(gc, ergo)("Beginning entry_cleanup_complete");
+#endif
   // This phase does not use workers, no need for setup
   heap->try_inject_alloc_failure();
   op_cleanup_complete();
@@ -747,59 +804,113 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();
 
-    if (!heap->collection_set()->is_empty()) {
-      LogTarget(Debug, gc, cset) lt;
-      if (lt.is_enabled()) {
-        ResourceMark rm;
-        LogStream ls(lt);
-        heap->collection_set()->print_on(&ls);
-      }
+    if (heap->mode()->is_generational()) {
+      ShenandoahGeneration* young_gen = heap->young_generation();
+      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
+      size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
+#undef KELVIN_EVAC_CHOICE
+#ifdef KELVIN_EVAC_CHOICE
+      log_info(gc, ergo)("Back from choose_collection set, is_empty: %d, humongous_2_promote: " SIZE_FORMAT
+                         ", regular 2 promote: " SIZE_FORMAT, heap->collection_set()->is_empty(),
+                         humongous_regions_promoted, regular_regions_promoted_in_place);
+                         
+#endif
+      if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
+        // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
+        // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_before_evacuation();
-      }
+        LogTarget(Debug, gc, cset) lt;
+        if (lt.is_enabled()) {
+          ResourceMark rm;
+          LogStream ls(lt);
+          heap->collection_set()->print_on(&ls);
+        }
 
-      heap->set_evacuation_in_progress(true);
-      // From here on, we need to update references.
-      heap->set_has_forwarded_objects(true);
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_before_evacuation();
+        }
 
-      // Verify before arming for concurrent processing.
-      // Otherwise, verification can trigger stack processing.
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_during_evacuation();
-      }
+        // TODO: we do not need to run update-references following evacuation if collection_set->is_empty().
 
-      // Arm nmethods/stack for concurrent processing
-      ShenandoahCodeRoots::arm_nmethods();
-      ShenandoahStackWatermark::change_epoch_id();
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_before_evacuation();
+        }
 
-      if (heap->mode()->is_generational()) {
-        // Calculate the temporary evacuation allowance supplement to young-gen memory capacity (for allocations
-        // and young-gen evacuations).
-        size_t young_available = heap->young_generation()->adjust_available(heap->get_alloc_supplement_reserve());
-        // old_available is memory that can hold promotions and evacuations.  Subtract out the memory that is being
-        // loaned for young-gen allocations or evacuations.
-        size_t old_available = heap->old_generation()->adjust_available(-heap->get_alloc_supplement_reserve());
+        heap->set_evacuation_in_progress(true);
+        // From here on, we need to update references.
+        heap->set_has_forwarded_objects(true);
 
-        log_info(gc, ergo)("After generational memory budget adjustments, old available: " SIZE_FORMAT
-                           "%s, young_available: " SIZE_FORMAT "%s",
-                           byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                           byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
-      }
+        // Verify before arming for concurrent processing.
+        // Otherwise, verification can trigger stack processing.
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_during_evacuation();
+        }
 
-      if (ShenandoahPacing) {
-        heap->pacer()->setup_for_evac();
+        // Arm nmethods/stack for concurrent processing
+        ShenandoahCodeRoots::arm_nmethods();
+        ShenandoahStackWatermark::change_epoch_id();
+
+        if (ShenandoahPacing) {
+          heap->pacer()->setup_for_evac();
+        }
+      } else {
+#ifdef KELVIN_EVAC_CHOICE
+        log_info(gc, ergo)(" skipping over evacuate");
+#endif
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_after_concmark();
+        }
+
+        if (VerifyAfterGC) {
+          Universe::verify();
+        }
       }
     } else {
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_after_concmark();
-      }
+      // Not is_generational()
+      if (!heap->collection_set()->is_empty()) {
+        LogTarget(Info, gc, ergo) lt;
+        if (lt.is_enabled()) {
+          ResourceMark rm;
+          LogStream ls(lt);
+          heap->collection_set()->print_on(&ls);
+        }
 
-      if (VerifyAfterGC) {
-        Universe::verify();
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_before_evacuation();
+        }
+
+        heap->set_evacuation_in_progress(true);
+        // From here on, we need to update references.
+        heap->set_has_forwarded_objects(true);
+
+        // Verify before arming for concurrent processing.
+        // Otherwise, verification can trigger stack processing.
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_during_evacuation();
+        }
+
+        // Arm nmethods/stack for concurrent processing
+        ShenandoahCodeRoots::arm_nmethods();
+        ShenandoahStackWatermark::change_epoch_id();
+
+        if (ShenandoahPacing) {
+          heap->pacer()->setup_for_evac();
+        }
+      } else {
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_after_concmark();
+        }
+
+        if (VerifyAfterGC) {
+          Universe::verify();
+        }
       }
     }
   }
+#undef KELVIN_FINAL_MARK
+#ifdef KELVIN_FINAL_MARK
+  log_info(gc, ergo)("finished with op_final_mark");
+#endif
 }
 
 class ShenandoahConcurrentEvacThreadClosure : public ThreadClosure {
@@ -818,6 +929,7 @@ ShenandoahConcurrentEvacThreadClosure::ShenandoahConcurrentEvacThreadClosure(Oop
 void ShenandoahConcurrentEvacThreadClosure::do_thread(Thread* thread) {
   JavaThread* const jt = JavaThread::cast(thread);
   StackWatermarkSet::finish_processing(jt, _oops, StackWatermarkKind::gc);
+  ShenandoahThreadLocalData::enable_plab_promotions(thread);
 }
 
 class ShenandoahConcurrentEvacUpdateThreadTask : public WorkerTask {
@@ -831,6 +943,9 @@ public:
   }
 
   void work(uint worker_id) {
+    Thread* worker_thread = Thread::current();
+    ShenandoahThreadLocalData::enable_plab_promotions(worker_thread);
+
     // ShenandoahEvacOOMScope has to be setup by ShenandoahContextEvacuateUpdateRootsClosure.
     // Otherwise, may deadlock with watermark lock
     ShenandoahContextEvacuateUpdateRootsClosure oops_cl;
@@ -1206,7 +1321,6 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
   }
 
   heap->rebuild_free_set(true /*concurrent*/);
-  heap->adjust_generation_sizes();
 }
 
 void ShenandoahConcurrentGC::op_final_roots() {

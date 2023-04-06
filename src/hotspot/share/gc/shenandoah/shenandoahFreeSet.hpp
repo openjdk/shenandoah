@@ -64,17 +64,20 @@ private:
 
   void flip_to_gc(ShenandoahHeapRegion* r);
 
+  void adjust_bounds_for_additional_old_collector_free_region(size_t idx);
+
   void recompute_bounds();
   void adjust_bounds();
   bool touches_bounds(size_t num) const;
 
+  // Used of free set represents the amount of is_mutator_free set that has been consumed since most recent rebuild.
   void increase_used(size_t amount);
   void clear_internal();
 
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   bool can_allocate_from(ShenandoahHeapRegion *r);
-  size_t alloc_capacity(ShenandoahHeapRegion *r);
+  size_t alloc_capacity(ShenandoahHeapRegion *r) const;
   bool has_no_alloc_capacity(ShenandoahHeapRegion *r);
 
 public:
@@ -87,7 +90,10 @@ public:
   size_t mutator_count()   const { return _mutator_free_bitmap.count_one_bits();   }
 
   void clear();
-  void rebuild();
+  void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions);
+  void rebuild(size_t young_reserve);
+
+  void add_old_collector_free_region(ShenandoahHeapRegion* region);
 
   void recycle_trash();
 
