@@ -281,7 +281,7 @@ void ShenandoahControlThread::run_service() {
           // In all three cases, we want to age old objects if this is an aging cycle
           if (age_period-- == 0) {
              heap->set_aging_cycle(true);
-            age_period = ShenandoahAgingCyclePeriod - 1;
+             age_period = ShenandoahAgingCyclePeriod - 1;
           }
           service_concurrent_normal_cycle(heap, generation, cause);
           break;
