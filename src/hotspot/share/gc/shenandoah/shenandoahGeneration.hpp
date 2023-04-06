@@ -35,6 +35,7 @@ class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
 class ShenandoahReferenceProcessor;
 class ShenandoahHeap;
+class ShenandoahMode;
 
 class ShenandoahGeneration : public CHeapObj<mtGC> {
 private:
