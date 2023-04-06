@@ -275,8 +275,9 @@ HeapWord* ShenandoahFreeSet::allocated_aligned_plab(size_t size, ShenandoahAlloc
   if (req.padding() > 0) {
     // Account for the alignment padding
     // For verification consistency, we need to report this padding to _heap
-    _heap->increase_used(req.padding());
-    _heap->old_generation()->increase_used(req.padding());
+    size_t padding_bytes = req.padding() * HeapWordSize;
+    _heap->increase_used(padding_bytes);
+    _heap->old_generation()->increase_used(padding_bytes);
   }
   return result;
 }
