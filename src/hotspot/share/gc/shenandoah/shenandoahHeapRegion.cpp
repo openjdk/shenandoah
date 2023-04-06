@@ -1060,9 +1060,17 @@ size_t ShenandoahHeapRegion::promote_humongous() {
         log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
                       r->index(), p2i(r->bottom()), p2i(r->top()));
         // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
-        r->set_affiliation(OLD_GENERATION);
         old_generation->increase_used(r->used());
         young_generation->decrease_used(r->used());
+        r->set_affiliation(OLD_GENERATION);
+      }
+
+      ShenandoahHeapRegion* tail = heap->get_region(index_limit - 1);
+      size_t waste = tail->end() - tail->top();
+      if (waste != 0) {
+        size_t waste_bytes = waste * HeapWordSize;
+        old_generation->increase_humongous_waste(waste_bytes);
+        young_generation->decrease_humongous_waste(waste_bytes);
       }
       // Then fall through to finish the promotion after releasing the heap lock.
     } else {
