@@ -159,7 +159,7 @@ inline void ShenandoahHeapRegion::internal_increase_live_data(size_t s) {
   size_t used_bytes = used();
   assert(live_bytes <= used_bytes,
          "%s Region " SIZE_FORMAT " can't have more live data than used: " SIZE_FORMAT ", " SIZE_FORMAT " after adding " SIZE_FORMAT,
-         affiliation_name(affiliation()), index(), live_bytes, used_bytes, s * HeapWordSize);
+         affiliation_name(), index(), live_bytes, used_bytes, s * HeapWordSize);
 #endif
 }
 
@@ -208,6 +208,10 @@ inline void ShenandoahHeapRegion::set_update_watermark_at_safepoint(HeapWord* w)
 
 inline ShenandoahRegionAffiliation ShenandoahHeapRegion::affiliation() const {
   return ShenandoahHeap::heap()->region_affiliation(this);
+}
+
+inline const char* ShenandoahHeapRegion::affiliation_name() const {
+  return shenandoah_affiliation_name(affiliation());
 }
 
 inline void ShenandoahHeapRegion::clear_young_lab_flags() {

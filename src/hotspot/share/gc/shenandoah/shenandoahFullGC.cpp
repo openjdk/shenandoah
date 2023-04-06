@@ -749,7 +749,7 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
     while (from_region != nullptr) {
       assert(is_candidate_region(from_region), "Sanity");
       log_debug(gc)("Worker %u compacting %s Region " SIZE_FORMAT " which had used " SIZE_FORMAT " and %s live",
-                    worker_id, affiliation_name(from_region->affiliation()),
+                    worker_id, from_region->affiliation_name(),
                     from_region->index(), from_region->used(), from_region->has_live()? "has": "does not have");
       cl.set_from_region(from_region);
       if (from_region->has_live()) {
@@ -884,17 +884,17 @@ public:
         if (!_ctx->is_marked(humongous_obj)) {
           assert(!r->has_live(),
                  "Humongous Start %s Region " SIZE_FORMAT " is not marked, should not have live",
-                 affiliation_name(r->affiliation()),  r->index());
+                 r->affiliation_name(),  r->index());
           log_debug(gc)("Trashing immediate humongous region " SIZE_FORMAT " because not marked", r->index());
           _heap->trash_humongous_region_at(r);
         } else {
           assert(r->has_live(),
-                 "Humongous Start %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
+                 "Humongous Start %s Region " SIZE_FORMAT " should have live", r->affiliation_name(),  r->index());
         }
       } else if (r->is_humongous_continuation()) {
         // If we hit continuation, the non-live humongous starts should have been trashed already
         assert(r->humongous_start_region()->has_live(),
-               "Humongous Continuation %s Region " SIZE_FORMAT " should have live", affiliation_name(r->affiliation()),  r->index());
+               "Humongous Continuation %s Region " SIZE_FORMAT " should have live", r->affiliation_name(),  r->index());
       } else if (r->is_regular()) {
         if (!r->has_live()) {
           log_debug(gc)("Trashing immediate regular region " SIZE_FORMAT " because has no live", r->index());

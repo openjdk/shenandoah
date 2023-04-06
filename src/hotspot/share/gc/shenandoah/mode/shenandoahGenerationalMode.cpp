@@ -65,14 +65,6 @@ ShenandoahHeuristics* ShenandoahGenerationalMode::initialize_heuristics(Shenando
   return new ShenandoahAdaptiveHeuristics(generation);
 }
 
-const char* affiliation_name(oop ptr) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  assert(heap->is_in(ptr), "Oop must be in the heap.");
-  ShenandoahHeapRegion* region = heap->heap_region_containing(ptr);
-  return affiliation_name(region->affiliation());
-}
-
-
 const char* generation_name(GenerationMode mode) {
   switch (mode) {
     case GenerationMode::GLOBAL:

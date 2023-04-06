@@ -2667,7 +2667,7 @@ private:
 
           assert(r->get_update_watermark() == r->bottom(),
                  "%s Region " SIZE_FORMAT " is_active but not recognized as YOUNG or OLD so must be newly transitioned from FREE",
-                 affiliation_name(r->affiliation()), r->index());
+                 r->affiliation_name(), r->index());
         }
       }
       if (region_progress && ShenandoahPacing) {

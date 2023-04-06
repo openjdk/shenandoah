@@ -409,7 +409,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
       ShouldNotReachHere();
   }
 
-  st->print("|%s", affiliation_code(affiliation()));
+  st->print("|%s", shenandoah_affiliation_code(affiliation()));
 
 #define SHR_PTR_FORMAT "%12" PRIxPTR
 
@@ -930,7 +930,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
     log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT
                   ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT,
-                  index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation),
+                  index(), shenandoah_affiliation_name(region_affiliation), shenandoah_affiliation_name(new_affiliation),
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(_update_watermark), p2i(ctx->top_bitmap(this)));
   }
 
@@ -957,7 +957,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   }
 
   log_trace(gc)("Changing affiliation of region %zu from %s to %s",
-    index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation));
+    index(), shenandoah_affiliation_name(region_affiliation), shenandoah_affiliation_name(new_affiliation));
 
   if (region_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
     heap->young_generation()->decrement_affiliated_region_count();

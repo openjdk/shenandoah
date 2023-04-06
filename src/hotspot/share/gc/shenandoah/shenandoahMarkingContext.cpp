@@ -82,7 +82,7 @@ void ShenandoahMarkingContext::clear_bitmap(ShenandoahHeapRegion* r) {
   HeapWord* top_bitmap = _top_bitmaps[r->index()];
 
   log_debug(gc)("SMC:clear_bitmap for %s Region " SIZE_FORMAT ", top_bitmap: " PTR_FORMAT,
-                affiliation_name(r->affiliation()), r->index(), p2i(top_bitmap));
+                r->affiliation_name(), r->index(), p2i(top_bitmap));
 
   if (r->affiliation() != FREE) {
     if (top_bitmap > bottom) {

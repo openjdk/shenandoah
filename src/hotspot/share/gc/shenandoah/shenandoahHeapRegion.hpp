@@ -446,6 +446,7 @@ public:
   inline void set_update_watermark_at_safepoint(HeapWord* w);
 
   inline ShenandoahRegionAffiliation affiliation() const;
+  inline const char* affiliation_name() const;
 
   void set_affiliation(ShenandoahRegionAffiliation new_affiliation);
 

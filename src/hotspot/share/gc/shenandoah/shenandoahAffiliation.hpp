@@ -31,7 +31,7 @@ enum ShenandoahRegionAffiliation {
   OLD_GENERATION,
 };
 
-inline const char* affiliation_code(ShenandoahRegionAffiliation type) {
+inline const char* shenandoah_affiliation_code(ShenandoahRegionAffiliation type) {
   switch(type) {
     case FREE:
       return "F";
@@ -45,7 +45,7 @@ inline const char* affiliation_code(ShenandoahRegionAffiliation type) {
   }
 }
 
-inline const char* affiliation_name(ShenandoahRegionAffiliation type) {
+inline const char* shenandoah_affiliation_name(ShenandoahRegionAffiliation type) {
   switch (type) {
     case FREE:
       return "FREE";

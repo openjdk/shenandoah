@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/tlab_globals.hpp"
+#include "gc/shenandoah/shenandoahAffiliation.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -106,7 +107,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliati
       }
     }
   }
-  log_debug(gc, free)("Could not allocate collector region with affiliation: %s for request " PTR_FORMAT, affiliation_name(affiliation), p2i(&req));
+  log_debug(gc, free)("Could not allocate collector region with affiliation: %s for request " PTR_FORMAT, shenandoah_affiliation_name(affiliation), p2i(&req));
   return nullptr;
 }
 
@@ -268,7 +269,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
   } else if (r->affiliation() != req.affiliation()) {
     assert(_heap->mode()->is_generational(), "Request for %s from %s region should only happen in generational mode.",
-           affiliation_name(req.affiliation()), affiliation_name(r->affiliation()));
+           req.affiliation_name(), r->affiliation_name());
     return nullptr;
   }
 
@@ -573,7 +574,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     // ctx->clear_bitmap(r);
     log_debug(gc, free)("NOT clearing bitmap for Humongous region [" PTR_FORMAT ", " PTR_FORMAT "], top_bitmap: "
                         PTR_FORMAT " at transition from FREE to %s",
-                        p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), affiliation_name(req.affiliation()));
+                        p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), req.affiliation_name());
 
     _mutator_free_bitmap.clear_bit(r->index());
   }

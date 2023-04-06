@@ -25,8 +25,8 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHALLOCREQUEST_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHALLOCREQUEST_HPP
 
-#include "memory/allocation.hpp"
 #include "gc/shenandoah/shenandoahAffiliation.hpp"
+#include "memory/allocation.hpp"
 
 class ShenandoahAllocRequest : StackObj {
 public:
@@ -181,6 +181,10 @@ public:
 
   ShenandoahRegionAffiliation affiliation() const {
     return _affiliation;
+  }
+
+  const char* affiliation_name() const {
+    return shenandoah_affiliation_name(_affiliation);
   }
 };
 
