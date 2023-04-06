@@ -27,7 +27,6 @@
 
 #include "memory/allocation.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
-#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
@@ -71,7 +70,7 @@ private:
                                  size_t consumed_by_advance_promotion);
 
  public:
-  ShenandoahGeneration(ShenandoahGenerationType generation_mode, uint max_workers, size_t max_capacity, size_t soft_max_capacity);
+  ShenandoahGeneration(ShenandoahGenerationType type, uint max_workers, size_t max_capacity, size_t soft_max_capacity);
   ~ShenandoahGeneration();
 
   bool is_young() const  { return _type == YOUNG; }

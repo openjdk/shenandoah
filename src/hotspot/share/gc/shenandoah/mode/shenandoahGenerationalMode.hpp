@@ -26,7 +26,6 @@
 #define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
 
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
-#include "oops/oopsHierarchy.hpp"
 
 class ShenandoahGenerationalMode : public ShenandoahMode {
 public:

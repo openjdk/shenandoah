@@ -26,7 +26,6 @@
 #include "precompiled.hpp"
 #include "classfile/javaClasses.hpp"
 #include "gc/shared/workerThread.hpp"
-#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
