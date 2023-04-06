@@ -26,6 +26,7 @@
 #include "precompiled.hpp"
 #include "classfile/javaClasses.hpp"
 #include "gc/shared/workerThread.hpp"
+#include "gc/shenandoah/shenandoahAffiliation.hpp"
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
@@ -387,7 +388,7 @@ bool ShenandoahReferenceProcessor::discover_reference(oop reference, ReferenceTy
   }
 
   log_trace(gc, ref)("Encountered Reference: " PTR_FORMAT " (%s, %s)",
-          p2i(reference), reference_type_name(type), affiliation_name(reference));
+          p2i(reference), reference_type_name(type), affiliation_name(ShenandoahHeap::heap()->heap_region_containing(reference)->affiliation()));
   uint worker_id = WorkerThread::worker_id();
   _ref_proc_thread_locals->inc_encountered(type);
 

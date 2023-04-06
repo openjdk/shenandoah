@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,41 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
-#define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHAFFILIATION_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHAFFILIATION_HPP
 
-#include "gc/shenandoah/mode/shenandoahMode.hpp"
-#include "oops/oopsHierarchy.hpp"
-
-enum GenerationMode {
-  YOUNG,
-  OLD,
-  GLOBAL
+enum ShenandoahRegionAffiliation {
+  FREE,
+  YOUNG_GENERATION,
+  OLD_GENERATION,
 };
 
-const char* generation_name(GenerationMode mode);
+inline const char* affiliation_code(ShenandoahRegionAffiliation type) {
+  switch(type) {
+    case FREE:
+      return "F";
+    case YOUNG_GENERATION:
+      return "Y";
+    case OLD_GENERATION:
+      return "O";
+    default:
+      ShouldNotReachHere();
+      return "?";
+  }
+}
 
-class ShenandoahGenerationalMode : public ShenandoahMode {
-public:
-  virtual void initialize_flags() const;
-  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahGeneration* generation) const;
-  virtual const char* name()     { return "Generational"; }
-  virtual bool is_diagnostic()   { return false; }
-  virtual bool is_experimental() { return false; }
-  virtual bool is_generational() { return true; }
-};
+inline const char* affiliation_name(ShenandoahRegionAffiliation type) {
+  switch (type) {
+    case FREE:
+      return "FREE";
+    case YOUNG_GENERATION:
+      return "YOUNG";
+    case OLD_GENERATION:
+      return "OLD";
+    default:
+      ShouldNotReachHere();
+      return "?";
+  }
+}
 
-#endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
+#endif // SHARE_GC_SHENANDOAH_SHENANDOAHAFFILIATION_HPP

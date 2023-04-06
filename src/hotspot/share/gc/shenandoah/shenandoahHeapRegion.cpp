@@ -409,19 +409,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
       ShouldNotReachHere();
   }
 
-  switch (ShenandoahHeap::heap()->region_affiliation(this)) {
-    case ShenandoahRegionAffiliation::FREE:
-      st->print("|F");
-      break;
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      st->print("|Y");
-      break;
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      st->print("|O");
-      break;
-    default:
-      ShouldNotReachHere();
-  }
+  st->print("|%s", affiliation_code(affiliation()));
 
 #define SHR_PTR_FORMAT "%12" PRIxPTR
 

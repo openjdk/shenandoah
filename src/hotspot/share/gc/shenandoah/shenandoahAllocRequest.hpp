@@ -26,7 +26,7 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHALLOCREQUEST_HPP
 
 #include "memory/allocation.hpp"
-#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
+#include "gc/shenandoah/shenandoahAffiliation.hpp"
 
 class ShenandoahAllocRequest : StackObj {
 public:

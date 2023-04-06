@@ -72,33 +72,6 @@ const char* affiliation_name(oop ptr) {
   return affiliation_name(region->affiliation());
 }
 
-const char affiliation_code(ShenandoahRegionAffiliation type) {
-  switch(type) {
-    case ShenandoahRegionAffiliation::FREE:
-      return 'F';
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return 'Y';
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return 'O';
-    default:
-      ShouldNotReachHere();
-      return 'X';
-  }
-}
-
-const char* affiliation_name(ShenandoahRegionAffiliation type) {
-  switch (type) {
-    case ShenandoahRegionAffiliation::FREE:
-      return "FREE";
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return "YOUNG";
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return "OLD";
-    default:
-      ShouldNotReachHere();
-      return nullptr;
-  }
-}
 
 const char* generation_name(GenerationMode mode) {
   switch (mode) {
