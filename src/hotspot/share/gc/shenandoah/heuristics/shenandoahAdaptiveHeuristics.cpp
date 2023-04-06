@@ -55,7 +55,7 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-// TODO: Provide comment here
+// TODO: Provide comment here or remove if not used
 const uint ShenandoahAdaptiveHeuristics::MINIMUM_RESIZE_INTERVAL = 10;
 
 ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation) :
