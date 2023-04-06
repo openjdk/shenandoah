@@ -1340,8 +1340,8 @@ public:
         account_for_region(r, _old_regions, _old_usage, _old_humongous_waste);
       } else if (r->is_young()) {
         account_for_region(r, _young_regions, _young_usage, _young_humongous_waste);
+      }
     }
-
     r->set_live_data(live);
     r->reset_alloc_metadata();
     _live += live;
