@@ -305,11 +305,6 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
   HeapWord* obj;
 
-#undef KELVIN_WAY_TOO_MUCH
-#ifdef KELVIN_WAY_TOO_MUCH
-  log_info(gc, ergo)("allocate_from_plab(size: " SIZE_FORMAT ", is_promotion: %d, plab_promotions_enabled: %d",
-                     size, is_promotion, ShenandoahThreadLocalData::allow_plab_promotions(thread));
-#endif
   if (plab == nullptr) {
     assert(!thread->is_Java_thread() && !thread->is_Worker_thread(), "Performance: thread should have PLAB: %s", thread->name());
     // No PLABs in this thread, fallback to shared allocation

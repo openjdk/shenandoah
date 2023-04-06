@@ -736,11 +736,6 @@ void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {
   size_t bytes = words * HeapWordSize;
   if (!waste) {
     increase_used(bytes);
-#undef KELVIN_HEAP_USAGE
-#ifdef KELVIN_HEAP_USAGE
-    log_info(gc, ergo)("increasing heap usage by " SIZE_FORMAT " for notify_mutator_alloc_words, result: " SIZE_FORMAT,
-                       bytes, used());
-#endif
   }
 
   if (ShenandoahPacing) {
@@ -955,14 +950,6 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
   size_t cur_size = ShenandoahThreadLocalData::plab_size(thread);
-#undef KELVIN_PLAB
-#ifdef KELVIN_PLAB
-  {
-    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-    log_info(gc, ergo)(PTR_FORMAT ": allocate_from_plab_slow(size: " SIZE_FORMAT "), words_remaining: " SIZE_FORMAT ", cur_size: " SIZE_FORMAT,
-                       p2i(thread), size, plab->words_remaining(), cur_size);
-  }
-#endif
   if (cur_size == 0) {
     cur_size = PLAB::min_size();
   }
@@ -985,12 +972,6 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // heuristics should catch up with them.  Note that the requested cur_size may
   // not be honored, but we remember that this is the preferred size.
   ShenandoahThreadLocalData::set_plab_size(thread, future_size);
-#ifdef KELVIN_PLAB
-  log_info(gc, ergo)(PTR_FORMAT ": allocate_from_plab_slow() setting cur_size to future_size: " SIZE_FORMAT,
-                     p2i(thread), future_size);
-  log_info(gc, ergo)(PTR_FORMAT ": if cur_size (" SIZE_FORMAT ") < size (" SIZE_FORMAT "), return nullptr",
-                     p2i(thread), cur_size, size);
-#endif
   if (cur_size < size) {
     // The PLAB to be allocated is still not large enough to hold the object. Fall back to shared allocation.
     // This avoids retiring perfectly good PLABs in order to represent a single large object allocation.
@@ -1004,29 +985,16 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.  This
     // is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each PLAB is
     // aligned with the start of a card's memory range.
-#ifdef KELVIN_PLAB
-    log_info(gc, ergo)(PTR_FORMAT ": retiring plab because words_remaining (" SIZE_FORMAT ") < min_size (" SIZE_FORMAT ")",
-                       p2i(thread), plab->words_remaining(), PLAB::min_size());
-#endif
     retire_plab(plab, thread);
 
     size_t actual_size = 0;
     // allocate_new_plab resets plab_evacuated and plab_promoted and disables promotions if old-gen available is
     // less than the remaining evacuation need.  It also adjusts plab_preallocated and expend_promoted if appropriate.
     HeapWord* plab_buf = allocate_new_plab(min_size, cur_size, &actual_size);
-#ifdef KELVIN_PLAB
-    log_info(gc, ergo)(PTR_FORMAT ": allocated new PLAB of actual_size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ", target_size: " 
-                       SIZE_FORMAT " at address " PTR_FORMAT,
-                       p2i(thread), actual_size, min_size, cur_size, p2i(plab_buf));
-#endif
     if (plab_buf == nullptr) {
       if (min_size == PLAB::min_size()) {
         // Disable plab promotions for this thread because we cannot even allocate a plab of minimal size.  This allows us
         // to fail faster on subsequent promotion attempts.
-#ifdef KELVIN_PLAB
-        log_info(gc, ergo)(PTR_FORMAT ": disabling plab promotions for this thread because cannot even allocate minimal size",
-                           p2i(thread));
-#endif
         ShenandoahThreadLocalData::disable_plab_promotions(thread);
       }
       return NULL;
@@ -1048,19 +1016,11 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 #endif // ASSERT
     }
     plab->set_buf(plab_buf, actual_size);
-#ifdef KELVIN_PLAB
-    log_info(gc, ergo)(PTR_FORMAT ": setting plab buffer, is_promotion: %d, allow_plab_promotions: %d",
-                       p2i(thread), is_promotion, ShenandoahThreadLocalData::allow_plab_promotions(thread));
-#endif
     if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
       return nullptr;
     }
     return plab->allocate(size);
   } else {
-#ifdef KELVIN_PLAB
-    log_info(gc, ergo)(PTR_FORMAT ": alloc_plab_slow returning NULL because existing plab has min_size words and request is larger",
-                       p2i(thread));
-#endif
     // If there's still at least min_size() words available within the current plab, don't retire it.  Let's gnaw
     // away on this plab as long as we can.  Meanwhile, return nullptr to force this particular allocation request
     // to be satisfied with a shared allocation.  By packing more promotions into the previously allocated PLAB, we
@@ -1168,12 +1128,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   bool doing_mixed = (mixed_candidates > 0);
   bool doing_promotions = promo_load > 0;
 
-#undef KELVIN_PROMO_BUDGET
-#ifdef KELVIN_PROMO_BUDGET
-  log_info(gc, ergo)("adjust_generation_sizes_for_next_cycle, doing_mixed: %d (" SIZE_FORMAT "), promo_load: " SIZE_FORMAT
-                     ", xfer_limit: " SIZE_FORMAT ", young cset: " SIZE_FORMAT ", old cset: " SIZE_FORMAT,
-                     doing_mixed, mixed_candidates, promo_load, xfer_limit, young_cset_regions, old_cset_regions);
-#endif
   // round down
   size_t max_old_region_xfer = xfer_limit / region_size_bytes;
 
@@ -1196,11 +1150,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
     size_t old_fragmented_available =
       old_generation()->available() - old_generation()->free_unaffiliated_regions() * region_size_bytes;
     reserve_for_mixed = max_evac_need + old_fragmented_available;
-#ifdef KELVIN_PROMO_BUDGET
-    log_info(gc, ergo)("max_evac_need: " SIZE_FORMAT ", old_fragmented_available: " SIZE_FORMAT
-                       ", reserve_for_mixed: " SIZE_FORMAT ", max_old_reserve: " SIZE_FORMAT,
-                       max_evac_need, old_fragmented_available, reserve_for_mixed, max_old_reserve);
-#endif
     if (reserve_for_mixed > max_old_reserve) {
       reserve_for_mixed = max_old_reserve;
     }
@@ -1212,10 +1161,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   if (doing_promotions) {
     // We're only promoting and we have a maximum bound on the amount to be promoted
     reserve_for_promo = (size_t) (promo_load * ShenandoahPromoEvacWaste);
-#ifdef KELVIN_PROMO_BUDGET
-    log_info(gc, ergo)("reserve_for_promo: " SIZE_FORMAT ", available_for_promotion: " SIZE_FORMAT,
-                       reserve_for_promo, available_for_promotions);
-#endif
     if (reserve_for_promo > available_for_promotions) {
       reserve_for_promo = available_for_promotions;
     }
@@ -1229,14 +1174,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t young_available = young_generation()->available() + young_cset_regions * region_size_bytes;
   size_t old_region_deficit = 0;
   size_t old_region_surplus = 0;
-#ifdef KELVIN_PROMO_BUDGET
-  log_info(gc, ergo)("Reserving for future GC (%s, %s), promo_potential: " SIZE_FORMAT ", xfer_limit: " SIZE_FORMAT,
-                     doing_mixed? "mixed": "unmixed", doing_promotions? "promoting": "unpromoting", promo_load, xfer_limit);
-  log_info(gc, ergo)(" young_reserve: " SIZE_FORMAT ", max_old_reserve: " SIZE_FORMAT ", old_reserve: " SIZE_FORMAT
-                     ", old available: " SIZE_FORMAT, young_reserve, max_old_reserve, old_reserve,
-                     old_available);
-#endif
-
   if (old_available >= old_reserve) {
     size_t old_excess = old_available - old_reserve;
     size_t excess_regions = old_excess / region_size_bytes;
@@ -1259,24 +1196,11 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
 
   if (old_region_deficit > max_old_region_xfer) {
     // If we're running short on young-gen memory, limit the xfer
-#ifdef KELVIN_PROMO_BUDGET
-    log_info(gc, ergo)(" curtailing old-gen activities by shrinking original ask: " SIZE_FORMAT " to " SIZE_FORMAT
-                       ", xfer_limit: " SIZE_FORMAT,
-                       old_region_deficit, max_old_region_xfer, xfer_limit);
-#endif  
     old_region_deficit = max_old_region_xfer;
     // old-gen collection activities will be curtailed if the budget is smaller than desired.
   }
-
-#ifdef KELVIN_TRACE
-  log_info(gc, ergo)(" old_region_surplus: " SIZE_FORMAT ", old_region_deficit: " SIZE_FORMAT,
-                     old_region_surplus, old_region_deficit);
-#endif  
-  if (old_region_surplus) {
-    set_old_region_surplus(old_region_surplus);
-  } else if (old_region_deficit) {
-    set_old_region_deficit(old_region_deficit);
-  }
+  set_old_region_surplus(old_region_surplus);
+  set_old_region_deficit(old_region_deficit);
 }
 
 // Called from stubs in JIT code or interpreter
@@ -1318,13 +1242,6 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   } else {
     *actual_size = 0;
   }
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
-  if (res == nullptr) {
-    log_info(gc, ergo)("allocate_new_plab(min_size: " SIZE_FORMAT ", preferred size: " SIZE_FORMAT ") failed",
-                       min_size, word_size);
-  }
-#endif
   return res;
 }
 
@@ -1367,10 +1284,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     }
   } else {
     assert(req.is_gc_alloc(), "Can only accept GC allocs here");
-#undef KELVIN_PLAB_ALLOC
-#ifdef KELVIN_PLAB_ALLOC
-    log_info(gc, ergo)("alloc_mem has gc alloc for req size " SIZE_FORMAT " is_promotion: %d", req.size(), is_promotion);
-#endif
     result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     // Do not call handle_alloc_failure() here, because we cannot block.
     // The allocation failure would be handled by the LRB slowpath with handle_alloc_failure_evac().
@@ -1403,10 +1316,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
       }
     } else {
       increase_used(actual_bytes);
-#ifdef KELVIN_HEAP_USAGE
-      log_info(gc, ergo)("increase heap usage by " SIZE_FORMAT " for gc allocation, result: " SIZE_FORMAT,
-                         actual_bytes, used());
-#endif
     }
   }
 
@@ -1449,27 +1358,16 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
           plab_alloc = true;
           size_t promotion_avail = get_promoted_reserve();
           size_t promotion_expended = get_promoted_expended();
-#ifdef KELVIN_PLAB_ALLOC
-          log_info(gc, ergo)("alloc_mem_under_lock promo_avail: " SIZE_FORMAT ", expended: " SIZE_FORMAT
-                             ", requested_bytes: " SIZE_FORMAT, promotion_avail, promotion_expended, requested_bytes);
-#endif
-
           if (promotion_expended + requested_bytes > promotion_avail) {
             promotion_avail = 0;
             if (get_old_evac_reserve() == 0) {
               // There are no old-gen evacuations in this pass.  There's no value in creating a plab that cannot
               // be used for promotions.
-#ifdef KELVIN_PLAB_ALLOC
-              log_info(gc, ergo)(" setting allow_alloc to false because old_evac_reserve is zero and promo is exhausted");
-#endif
               allow_allocation = false;
             }
           } else {
             promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
             promotion_eligible = true;
-#ifdef KELVIN_PLAB_ALLOC
-            log_info(gc, ergo)(" set promo_eligible to true, promo avail to " SIZE_FORMAT, promotion_avail);
-#endif
           }
         } else if (is_promotion) {
           // This is a shared alloc for promotion
@@ -1495,36 +1393,33 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     // First try the original request.  If TLAB request size is greater than available, allocate() will attempt to downsize
     // request to fit within available memory.
     result = (allow_allocation)? _free_set->allocate(req, in_new_region): nullptr;
-#ifdef KELVIN_PLAB_ALLOC
-    log_info(gc, ergo)(" allow_allocation: %d, allocate returned " PTR_FORMAT, allow_allocation, p2i(result));
-#endif
     if (result != nullptr) {
       if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
         ShenandoahThreadLocalData::reset_plab_promoted(thread);
         if (req.is_gc_alloc()) {
-	  bool disable_plab_promotions = false;
+          bool disable_plab_promotions = false;
           if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
             if (promotion_eligible) {
               size_t actual_size = req.actual_size() * HeapWordSize;
-	      // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
-	      // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
-	      if (get_promoted_expended() + actual_size <= get_promoted_reserve()) {
-		// Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
-		// When we retire this plab, we'll unexpend what we don't really use.
-		ShenandoahThreadLocalData::enable_plab_promotions(thread);
-		expend_promoted(actual_size);
-		ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
-	      } else {
-		disable_plab_promotions = true;
-	      }
+              // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
+              // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
+              if (get_promoted_expended() + actual_size <= get_promoted_reserve()) {
+                // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
+                // When we retire this plab, we'll unexpend what we don't really use.
+                ShenandoahThreadLocalData::enable_plab_promotions(thread);
+                expend_promoted(actual_size);
+                ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
+              } else {
+                disable_plab_promotions = true;
+              }
             } else {
-	      disable_plab_promotions = true;
+              disable_plab_promotions = true;
             }
 	    if (disable_plab_promotions) {
               // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
               ShenandoahThreadLocalData::disable_plab_promotions(thread);
               ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
-	    }
+            }
           } else if (is_promotion) {
             // Shared promotion.  Assume size is requested_bytes.
             expend_promoted(requested_bytes);
@@ -1568,21 +1463,11 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   } // This closes the block that holds the heap lock, releasing the lock.
 
   // We failed to allocate the originally requested lab size.  Let's see if we can allocate a smaller lab size.
-#ifdef KELVIN_SEV2
-  log_info(gc, ergo)("Attempting a smaller lab size of " SIZE_FORMAT ", down from: " SIZE_FORMAT,
-                     smaller_lab_size, req.size());
-#endif
-
   if (req.size() == smaller_lab_size) {
     // If we were already trying to allocate min size, no value in attempting to repeat the same.  End the recursion.
     return nullptr;
   }
 
-#undef KELVIN_TLAB
-#ifdef KELVIN_TLAB
-  log_info(gc, ergo)("Recursing after shrinking TLAB request to " SIZE_FORMAT " from " SIZE_FORMAT,
-                     smaller_lab_size, req.size());
-#endif
   // We arrive here if the tlab allocation request can be resized to fit within young_available
   assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
          (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations");
@@ -1618,11 +1503,6 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   if (result != nullptr) {
     req.set_actual_size(smaller_req.actual_size());
   }
-#ifdef KELVIN_TLAB
-  log_info(gc, ergo)("Recursive call produced: " PTR_FORMAT " of size " SIZE_FORMAT
-                     " with young available: " SIZE_FORMAT,
-                     p2i(result), result? smaller_req.actual_size(): (size_t) 0, young_generation()->available());
-#endif
   return result;
 }
 
@@ -1769,14 +1649,6 @@ private:
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
     size_t old_garbage_threshold = (region_size_bytes * ShenandoahOldGarbageThreshold) / 100;
     while ((r = _regions->next()) != nullptr) {
-#undef KELVIN_EVAC
-#ifdef KELVIN_EVAC
-      log_info(gc, ergo)("do_evacuation_work() for %s region " SIZE_FORMAT ", (age: %d) [%s, %s, %s]",
-                         r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
-                         r->is_active()? "active": "inactive",
-                         r->is_humongous()? (r->is_humongous_start()? "humongous_start": "humongous_continuation"): "regular",
-                         r->is_cset()? "cset": "not-cset");
-#endif
       log_debug(gc)("GenerationalEvacuationTask do_work(), looking at %s region " SIZE_FORMAT ", (age: %d) [%s, %s, %s]",
                     r->is_old()? "old": r->is_young()? "young": "free", r->index(), r->age(),
                     r->is_active()? "active": "inactive",
@@ -2520,10 +2392,6 @@ void ShenandoahHeap::set_prepare_for_old_mark_in_progress(bool in_progress) {
 }
 
 void ShenandoahHeap::set_aging_cycle(bool in_progress) {
-#undef KELVIN_NOISE
-#ifdef KELVIN_NOISE
-  log_info(gc, ergo)("KELVIN: set_aging_cycle(%d)", in_progress);
-#endif
   _is_aging_cycle.set_cond(in_progress);
 }
 
@@ -3098,20 +2966,9 @@ public:
         // There have been allocations in this region since the start of the cycle.
         // Any objects new to this region must not assimilate elevated age.
         r->reset_age();
-#ifdef KELVIN_NOISE
-        log_info(gc, ergo)("top > tams for region " SIZE_FORMAT ", resetting age to zero", r->index());
-#endif
       } else if (ShenandoahHeap::heap()->is_aging_cycle()) {
         r->increment_age();
-#ifdef KELVIN_NOISE
-        log_info(gc, ergo)("top <= tams for region " SIZE_FORMAT ", incrementing age to %u", r->index(), r->age());
-#endif
       }
-#ifdef KELVIN_NOISE
-      else {
-        log_info(gc, ergo)("Region " SIZE_FORMAT " ignored because not is_aging cycle", r->index());
-      }
-#endif
     }
 
     // Drop unnecessary "pinned" state from regions that does not have CP marks
@@ -3139,11 +2996,6 @@ void ShenandoahHeap::update_heap_region_states(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
 
   {
-#undef KELVIN_VERBOSE
-#ifdef KELVIN_VERBOSE
-    log_info(gc, ergo)("Updating heap region states, should increment region ages, aginc cycle is: %d",
-                       ShenandoahHeap::heap()->is_aging_cycle());
-#endif
     ShenandoahGCPhase phase(concurrent ?
                             ShenandoahPhaseTimings::final_update_refs_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_refs_update_region_states);
@@ -3177,57 +3029,26 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t humongous_waste_promoted =
       humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes() - humongous_bytes_promoted;
     size_t regular_regions_promoted_in_place = get_regular_regions_promoted_in_place();
-#ifdef KELVIN_DEPRECATE
-    size_t total_regions_promoted = humongous_regions_promoted + regular_regions_promoted_in_place;
-#else
     size_t total_regions_promoted = humongous_regions_promoted;
-#endif
     size_t bytes_promoted_in_place = 0;
-#undef KELVIN_REBUILD
-#ifdef KELVIN_REBUILD
-    log_info(gc, ergo)("rebuild_free_set(%d), humongous_regions_promoted: " SIZE_FORMAT ", regular regions promoted: " SIZE_FORMAT,
-                       concurrent, humongous_regions_promoted, regular_regions_promoted_in_place);
-#endif
     if (total_regions_promoted > 0) {
-#ifdef KELVIN_DEPRECATE
-      size_t regular_bytes_promoted_in_place = get_regular_usage_promoted_in_place();
-      bytes_promoted_in_place = humongous_bytes_promoted + regular_bytes_promoted_in_place;
-#else
       bytes_promoted_in_place = humongous_bytes_promoted;
-#endif
-
       log_info(gc, ergo)("Promoted " SIZE_FORMAT " humongous and " SIZE_FORMAT " regular regions in place"
                          ", representing total usage of " SIZE_FORMAT,
                          humongous_regions_promoted, regular_regions_promoted_in_place, bytes_promoted_in_place);
-                         
       size_t free_old_regions = old_generation()->free_unaffiliated_regions();
-#ifdef KELVIN_REBUILD
-      young_generation()->log_status("Before forced transfer");
-      log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
-      old_generation()->log_status("Before forced transfer");
-      log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, old_generation()->free_unaffiliated_regions());
-#endif
       // Decrease usage within young before we transfer capacity to old in order to avoid certain assertion failures.
-#ifdef KELVIN_USAGE
-      log_info(gc, ergo)("KELVIN adjusting usage to prepare for next cycle");
-#endif
       young_generation()->decrease_humongous_waste(humongous_waste_promoted);
       young_generation()->decrease_used(bytes_promoted_in_place);
       young_generation()->decrease_affiliated_region_count(total_regions_promoted);
       if (free_old_regions < total_regions_promoted) {
         size_t needed_regions = total_regions_promoted - free_old_regions;
-	generation_sizer()->force_transfer_to_old(needed_regions);
+        generation_sizer()->force_transfer_to_old(needed_regions);
       }
       old_generation()->increase_affiliated_region_count(total_regions_promoted);
       old_generation()->increase_used(bytes_promoted_in_place);
       old_generation()->increase_humongous_waste(humongous_waste_promoted);
     }
-#ifdef KELVIN_REBUILD
-    young_generation()->log_status("After forced transfer");
-    log_info(gc, ergo)(" unaffiliated young regions: " SIZE_FORMAT, young_generation()->free_unaffiliated_regions());
-    old_generation()->log_status("After forced transfer");
-    log_info(gc, ergo)("   unaffiliated old regions: " SIZE_FORMAT, old_generation()->free_unaffiliated_regions());
-#endif
     assert(verify_generation_usage(true, old_generation()->used_regions(),
                                    old_generation()->used(), old_generation()->get_humongous_waste(),
                                    true, young_generation()->used_regions(),
@@ -3265,15 +3086,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t old_capacity = old_generation()->max_capacity();
     size_t heap_capacity = capacity();
     if ((old_capacity > heap_capacity / 8) && (old_fragmented_available > old_capacity / 8)) {
-#undef KELVIN_FRAG_TRIGGER
-#ifdef KELVIN_FRAG_TRIGGER
-      log_info(gc, ergo)("Triggering old is fragmented, old_capacity: " SIZE_FORMAT ", heap_capacity: " SIZE_FORMAT
-                         ", old_fragmented_available: " SIZE_FORMAT ", old_unaffiliated_available: " SIZE_FORMAT
-                         ", old_used: " SIZE_FORMAT ", old_humongous_waste: " SIZE_FORMAT,
-                         old_capacity, heap_capacity, old_fragmented_available, old_unaffiliated_available,
-                         old_generation()->used(), old_generation()->get_humongous_waste());
-#endif
-      
       ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_is_fragmented();
     }
 
@@ -3283,11 +3095,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     assert(old_used < ShenandoahHeap::heap()->capacity(), "Old used must be less than heap capacity");
 
     if (old_used > trigger_threshold) {
-#undef KELVIN_OLD_TRIGGER
-#ifdef KELVIN_OLD_TRIGGER
-      log_info(gc, ergo)("Triggering old-has-grown, usage: " SIZE_FORMAT ", trigger threshold: " SIZE_FORMAT,
-                         old_used, trigger_threshold);
-#endif
       ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_has_grown();
     }
   }

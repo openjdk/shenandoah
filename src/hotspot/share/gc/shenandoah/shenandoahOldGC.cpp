@@ -149,16 +149,8 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
 
   // We do not rebuild_free following increments of old marking because memory has not been reclaimed..  However, we may
   // need to transfer memory to OLD in order to efficiently support the mixed evacuations that might immediately follow.
-#undef KELVIN_PREP_4_MIXED
-#ifdef KELVIN_PREP_4_MIXED
-  log_info(gc, ergo)("KELVIN SEES ADJUST FOR MIXED RIGHT HERE");
-#endif
   size_t evac_slack = heap->young_generation()->heuristics()->evac_slack(0);
   heap->adjust_generation_sizes_for_next_cycle(evac_slack, 0, 0);
-#ifdef KELVIN_PREP_4_MIXED
-  log_info(gc, ergo)("After adjusting generation sizes, old_deficit: " SIZE_FORMAT ", old surplus: " SIZE_FORMAT,
-                     heap->get_old_region_deficit(), heap->get_old_region_surplus());
-#endif
 
   bool success;
   size_t region_xfer;

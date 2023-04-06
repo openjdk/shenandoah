@@ -109,18 +109,10 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   
 
   if (is_generational) {
-#undef KELVIN_CSET
-#ifdef KELVIN_CSET
-    log_info(gc, ergo)("Looking for preselected from 0 .. " SIZE_FORMAT, size);
-#endif
     for (size_t idx = 0; idx < size; idx++) {
       ShenandoahHeapRegion* r = data[idx]._region;
       if (cset->is_preselected(r->index())) {
         assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
-#ifdef KELVIN_CSET
-        log_info(gc, ergo)("Found preselected region " SIZE_FORMAT " (age: %d, used: " SIZE_FORMAT ", live: " SIZE_FORMAT ")",
-                           r->index(), r->age(), r->used(), r->get_live_data_bytes());
-#endif
         // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
         // This region has been pre-selected and its impact on promotion reserve is already accounted for.
 
@@ -151,11 +143,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
         if (cset->is_preselected(r->index())) {
-#undef KELVIN_GLOBAL
-#ifdef KELVIN_GLOBAL
-          log_info(gc, ergo)("Ignoring preselected %s region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT ")",
-                             affiliation_name(r->affiliation()), r->index(), r->used(), r->get_live_data_bytes());
-#endif
           continue;
         }
         bool add_region = false;
@@ -164,17 +151,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
           if ((new_cset <= max_old_cset) && (r->garbage() > garbage_threshold)) {
             add_region = true;
             old_cur_cset = new_cset;
-#ifdef KELVIN_GLOBAL
-            log_info(gc, ergo)("Adding old region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), old_cur_cset: " SIZE_FORMAT,
-                               r->index(), r->used(), r->get_live_data_bytes(), old_cur_cset);
-#endif
           }
-#ifdef KELVIN_GLOBAL
-          else {
-            log_info(gc, ergo)("Not adding old region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), old_cur_cset: "
-                               SIZE_FORMAT, r->index(), r->used(), r->get_live_data_bytes(), old_cur_cset);
-          }
-#endif
         } else if (r->age() < InitialTenuringThreshold) {
           size_t new_cset = young_cur_cset + r->get_live_data_bytes();
           size_t region_garbage = r->garbage();
@@ -184,24 +161,8 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
             add_region = true;
             young_cur_cset = new_cset;
             cur_young_garbage = new_garbage;
-#ifdef KELVIN_GLOBAL
-            log_info(gc, ergo)("Adding young region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), young_cur_cset: " SIZE_FORMAT,
-                               r->index(), r->used(), r->get_live_data_bytes(), young_cur_cset);
-#endif
           }
-#ifdef KELVIN_GLOBAL
-          else {
-            log_info(gc, ergo)("Not adding young region " SIZE_FORMAT " (used: " SIZE_FORMAT ", live: " SIZE_FORMAT "), young_cur_cset: "
-                               SIZE_FORMAT, r->index(), r->used(), r->get_live_data_bytes(), young_cur_cset);
-          }
-#endif
         }
-#ifdef KELVIN_GLOBAL
-        else {
-          log_info(gc, ergo)("Not adding aged young region " SIZE_FORMAT " (age: %d, used: " SIZE_FORMAT ", live: " SIZE_FORMAT
-                             ") because not preselected", r->index(), r->age(), r->used(), r->get_live_data_bytes());
-        }
-#endif
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
         // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
 
@@ -221,14 +182,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
                          byte_size_in_proper_unit(max_cset),    proper_unit_for_byte_size(max_cset),
                          byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
-#ifdef KELVIN_CSET
-      log_info(gc, ergo)(" cur_young_garbage: " SIZE_FORMAT " vs. min_garbage: " SIZE_FORMAT
-                         ", free_target: " SIZE_FORMAT
-                         ", garbage_threshold: " SIZE_FORMAT
-                         ", ignore_threshold: " SIZE_FORMAT ", young_evac_reserve: " SIZE_FORMAT,
-                         cur_young_garbage, min_garbage, free_target, garbage_threshold, ignore_threshold,
-                         heap->get_young_evac_reserve());
-#endif
       for (size_t idx = 0; idx < size; idx++) {
         ShenandoahHeapRegion* r = data[idx]._region;
         if (cset->is_preselected(r->index())) {
@@ -241,22 +194,10 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
           bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
           assert(r->is_young(), "Only young candidates expected in the data array");
           if ((new_cset <= max_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
-#ifdef KELVIN_CSET
-            log_info(gc, ergo)("Adding region " SIZE_FORMAT ": new_cset: " SIZE_FORMAT ", max_cset: " SIZE_FORMAT
-                               ", region_garbage: " SIZE_FORMAT ", region live: " SIZE_FORMAT ", new_garbage: " SIZE_FORMAT,
-                               r->index(), new_cset, max_cset, region_garbage, r->get_live_data_bytes(), new_garbage);
-#endif
             cur_cset = new_cset;
             cur_young_garbage = new_garbage;
             cset->add_region(r);
           }
-#ifdef KELVIN_CSET
-          else {
-            log_info(gc, ergo)("Not adding region " SIZE_FORMAT ": new_cset: " SIZE_FORMAT ", max_cset: " SIZE_FORMAT
-                               ", region_garbage: " SIZE_FORMAT ", region live: " SIZE_FORMAT ", new_garbage: " SIZE_FORMAT,
-                               r->index(), new_cset, max_cset, region_garbage, r->get_live_data_bytes(), new_garbage);
-          }
-#endif
         }
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
         // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects or because
@@ -438,18 +379,6 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
   // of memory to OLD, which ultimately prevents timely promotion of memory.
 
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
-
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
-  log_info(gc, ergo)("evac_slack avg_cycle_time: %.3f, avg_alloc_rate: %.3f, rate: %.3f, available: " SIZE_FORMAT
-                     ", anticipated available: " SIZE_FORMAT ", collected young regions: " SIZE_FORMAT
-                     ", collected available bytes: " SIZE_FORMAT
-                     ", penalties: " SIZE_FORMAT ", alloc_headroom: " SIZE_FORMAT ", spike_headroom: " SIZE_FORMAT
-                     ", allocated since start of gc: " SIZE_FORMAT,
-                     avg_cycle_time, avg_alloc_rate, rate, available, anticipated_available,
-                     young_regions_to_be_reclaimed, available_young_collected,
-                     penalties, allocation_headroom, spike_headroom, allocated);
-#endif
   size_t evac_slack_avg;
   if (anticipated_available > avg_cycle_time * avg_alloc_rate + penalties + spike_headroom) {
     evac_slack_avg = anticipated_available - (avg_cycle_time * avg_alloc_rate + penalties + spike_headroom);
@@ -457,12 +386,6 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
     // we have no slack because it's already time to trigger
     evac_slack_avg = 0;
   }
-#ifdef KELVIN_TRACE
-  double sd = _allocation_rate._rate.sd();
-  log_info(gc, ergo)("is_spiking(rate: %.3f, avg_rate: %.3f, sd: %.3f, threshold: %.3f, zscore: %.3f)",
-                     rate, _allocation_rate._rate.avg(), sd, _spike_threshold_sd,
-                     (rate - _allocation_rate._rate.avg())/sd);
-#endif
 
   bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
   size_t evac_slack_spiking;
@@ -479,11 +402,6 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
 
   size_t threshold = min_free_threshold();
   size_t evac_min_threshold = (anticipated_available > threshold)? anticipated_available - threshold: 0;
-
-#ifdef KELVIN_TRACE
-  log_info(gc, ergo)("evac_slack returning min of threshold: " SIZE_FORMAT ", avg: " SIZE_FORMAT ", spike: " SIZE_FORMAT,
-                     evac_min_threshold, evac_slack_avg, evac_slack_spiking);
-#endif
   return MIN3(evac_slack_spiking, evac_slack_avg, evac_min_threshold);
 }
 

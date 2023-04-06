@@ -288,14 +288,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   //  OldEvacuation = YoungEvacuation * ShenandoahOldEvacRatioPercent/(100 - ShenandoahOldEvacRatioPercent)
 
   if (maximum_old_evacuation_reserve > old_generation->available()) {
-#undef KELVIN_DURESS
-#ifdef KELVIN_DURESS
-    log_info(gc, ergo)("YOUNG GC IN DURESS! maximum_old_evacuation_reserve: " SIZE_FORMAT ", old available: " SIZE_FORMAT
-                       ", mixed-evac candidates: %u",
-                       maximum_old_evacuation_reserve, old_generation->available(),
-                       old_heuristics->unprocessed_old_collection_candidates());
-#endif
-
     maximum_old_evacuation_reserve = old_generation->available();
   }
 
@@ -325,25 +317,12 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   size_t old_free_regions = old_generation->free_unaffiliated_regions();
   size_t old_free_unfragmented = old_free_regions * region_size_bytes;
   if (old_evacuation_reserve > old_free_unfragmented) {
-#undef KELVIN_MIXED_PREP
-#ifdef KELVIN_MIXED_PREP
-    log_info(gc, ergo)("KELVIN IS LIMITING OLD_EVACUATION RESERVE TO " SIZE_FORMAT " FROM " SIZE_FORMAT,
-                       old_free_unfragmented, old_evacuation_reserve);
-#endif
     size_t delta = old_evacuation_reserve - old_free_unfragmented;
     old_evacuation_reserve -= delta;
 
     // Let promo consume fragments of old-gen memory.
     old_promo_reserve += delta;
   }
-
-#undef KELVIN_PRESELECT
-#ifdef KELVIN_PRESELECT
-  log_info(gc, ergo)("Preselecting region with promo evac budget: " SIZE_FORMAT ", computed from old available: " SIZE_FORMAT
-                     ",  max_old_evac_reserve: " SIZE_FORMAT " with %u old-gen mixed evacuation candidates",
-                     old_promo_reserve, old_generation->available(), maximum_old_evacuation_reserve,
-                     old_heuristics->unprocessed_old_collection_candidates());
-#endif
   collection_set->establish_preselected(preselected_regions);
   consumed_by_advance_promotion = _heuristics->select_aged_regions(old_promo_reserve, num_regions, preselected_regions);
   assert(consumed_by_advance_promotion <= maximum_old_evacuation_reserve, "Cannot promote more than available old-gen memory");
@@ -380,7 +359,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 
   assert(heap->mode()->is_generational(), "Only generational mode uses evacuation budgets.");
 
-#undef KELVIN_SEE_THIS
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
@@ -412,26 +390,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   size_t young_evacuated = collection_set->get_young_bytes_reserved_for_evacuation();
   size_t young_evacuated_reserve_used = (size_t) (ShenandoahEvacWaste * young_evacuated);
 
-#ifdef KELVIN_SEE_THIS
-  log_info(gc, ergo)("adjust_budgets(young_advance_promoted: " SIZE_FORMAT ", used: " SIZE_FORMAT
-                     ", young_evacuated: " SIZE_FORMAT ", used: " SIZE_FORMAT ")",
-                     young_advance_promoted, young_advance_promoted_reserve_used,
-                     young_evacuated, young_evacuated_reserve_used);
-#endif
-
   assert(young_evacuated_reserve_used <= young_generation->available(), "Cannot evacuate more than is available in young");
   heap->set_young_evac_reserve(young_evacuated_reserve_used);
 
-#ifdef KELVIN_SEE_THIS
-  log_info(gc, ergo)("after setting young_evac_reserve");
-#endif
-
   size_t old_available = old_generation->available();
-
-#ifdef KELVIN_SEE_THIS
-  log_info(gc, ergo)("after resetting promoted_reserve");
-#endif
-
   // Now that we've established the collection set, we know how much memory is really required by old-gen for evacuation
   // and promotion reserves.  Try shrinking OLD now in case that gives us a bit more runway for mutator allocations during
   // evac and update phases.
@@ -441,10 +403,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   size_t unaffiliated_old_regions = old_generation->free_unaffiliated_regions();
   size_t unaffiliated_old = unaffiliated_old_regions * region_size_bytes;
   assert(old_available >= unaffiliated_old, "Unaffiliated old is a subset of old available");
-
-#ifdef KELVIN_SEE_THIS
-  log_info(gc, ergo)("computed excess_old: " SIZE_FORMAT ", unaffiliated_old: " SIZE_FORMAT, excess_old, unaffiliated_old);
-#endif
 
   // Make sure old_evac_committed is unaffiliated
   if (old_evacuated_committed > 0) {
@@ -544,10 +502,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
     }
   }
-#ifdef KELVIN_SEE_THIS
-  log_info(gc, ergo)("returning from adjust_evacuation_budgets");
-#endif
-
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
                             ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
@@ -662,10 +616,6 @@ size_t ShenandoahGeneration::increment_affiliated_region_count() {
   // on read and write of _affiliated_region_count.  At the end of full gc, a single thread overwrites the count with
   // a coherent value.
   _affiliated_region_count++;
-#undef KELVIN_AFFILIATIONS
-#ifdef KELVIN_AFFILIATIONS
-  log_info(gc, ergo)("%s ++affiliated_region_count yields " SIZE_FORMAT, name(), _affiliated_region_count);
-#endif
   return _affiliated_region_count;
 }
 
@@ -678,19 +628,12 @@ size_t ShenandoahGeneration::decrement_affiliated_region_count() {
   assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used + humongous cannot exceed regions");
-#ifdef KELVIN_AFFILIATIONS
-  log_info(gc, ergo)("%s --affiliated_region_count yields " SIZE_FORMAT, name(), _affiliated_region_count);
-#endif
   return _affiliated_region_count;
 }
 
 size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
   shenandoah_assert_heaplocked_or_fullgc_safepoint();
   _affiliated_region_count += delta;
-#ifdef KELVIN_AFFILIATIONS
-  log_info(gc, ergo)("%s (affiliated_region_count += " SIZE_FORMAT " yields " SIZE_FORMAT, name(), delta,
-                     _affiliated_region_count);
-#endif
   return _affiliated_region_count;
 }
 
@@ -702,10 +645,6 @@ size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
   assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
          "used + humongous cannot exceed regions");
-#ifdef KELVIN_AFFILIATIONS
-  log_info(gc, ergo)("%s (affiliated_region_count -= " SIZE_FORMAT " yields " SIZE_FORMAT, name(), delta,
-                     _affiliated_region_count);
-#endif
   return _affiliated_region_count;
 }
 
@@ -725,11 +664,6 @@ void ShenandoahGeneration::clear_used() {
 void ShenandoahGeneration::increase_used(size_t bytes) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   Atomic::add(&_used, bytes);
-#undef KELVIN_TRACE_GENERATIONS
-#ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("increasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
-		     name(), bytes, _used, _max_capacity);
-#endif
   // This detects arithmetic wraparound on _used.  Non-generational mode does not keep track of _affiliated_region_count
   assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
@@ -744,10 +678,6 @@ void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
     assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
            (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
            "waste cannot exceed regions");
-#ifdef KELVIN_TRACE_GENERATIONS
-    log_info(gc, ergo)("increasing %s humongous waste by " SIZE_FORMAT ", yielding " SIZE_FORMAT,
-                       name(), bytes, _humongous_waste);
-#endif
   }
 }
 
@@ -758,10 +688,6 @@ void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
     assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
            "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")", _humongous_waste, bytes);
     _humongous_waste -= bytes;
-#ifdef KELVIN_TRACE_GENERATIONS
-    log_info(gc, ergo)("decreasing %s humongous waste by " SIZE_FORMAT ", yielding " SIZE_FORMAT,
-                       name(), bytes, _humongous_waste);
-#endif
   }
 }
 
@@ -774,11 +700,6 @@ void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
-
-#ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("decreasing %s used by " SIZE_FORMAT ", yielding " SIZE_FORMAT " vs capacity: " SIZE_FORMAT,
-		     name(), bytes, _used, _max_capacity);
-#endif
 }
 
 size_t ShenandoahGeneration::used_regions() const {
@@ -856,10 +777,6 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
-
-#ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("increasing %s capacity by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), increment, _max_capacity);
-#endif
 }
 
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
@@ -884,10 +801,6 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() <= _max_capacity),
          "Cannot use more than capacity");
-
-#ifdef KELVIN_TRACE_GENERATIONS
-  log_info(gc, ergo)("decreasing %s capacity by " SIZE_FORMAT ", yielding " SIZE_FORMAT, name(), decrement, _max_capacity);
-#endif
 }
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {

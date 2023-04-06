@@ -52,11 +52,6 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-#undef KELVIN_PRIME
-#ifdef KELVIN_PRIME
-  log_info(gc, ergo)("prime_collection_set(), old_candidates: %u, old_collection:enabled: yes",
-                     unprocessed_old_collection_candidates());
-#endif
   if (unprocessed_old_collection_candidates() == 0) {
     return false;
   }
@@ -370,10 +365,6 @@ unsigned int ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(Shenandoa
   uint end = _last_old_region;
   uint index = _next_old_collection_candidate;
   while (index < end) {
-#undef KELVIN_PIP
-#ifdef KELVIN_PIP
-    log_info(gc, ergo)("get_coalesce_and_fill_candidates includes uncollected region " SIZE_FORMAT, _region_data[index]._region->index());
-#endif
     *buffer++ = _region_data[index++]._region;
   }
   return (_last_old_region - _next_old_collection_candidate);
@@ -418,15 +409,6 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   if (!_old_generation->can_start_gc()) {
     return false;
   }
-
-#ifdef KELVIN_DEPRECATE
-  // If there's been a promotion failure (and we don't have regions already scheduled for evacuation),
-  // start a new old generation collection.
-  if (_promotion_failed) {
-    log_info(gc)("Trigger (OLD): Promotion Failure");
-    return true;
-  }
-#endif
 
   if (_cannot_expand_trigger) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();

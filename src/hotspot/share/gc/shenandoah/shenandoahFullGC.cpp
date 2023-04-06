@@ -365,14 +365,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     }
   }
 
-#ifdef KELVIN_DEPRECATE
-  // Having reclaimed all dead memory, it is now safe to restore capacities to original values.
-  heap->young_generation()->unadjust_available();
-  heap->old_generation()->unadjust_available();
-#else
   // Humongous regions are promoted on demand and are accounted for by normal Full GC mechanisms.
-#endif
-
   if (VerifyAfterGC) {
     Universe::verify();
   }

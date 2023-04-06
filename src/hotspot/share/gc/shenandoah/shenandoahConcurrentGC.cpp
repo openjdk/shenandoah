@@ -151,52 +151,33 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     return false;
   }
 
-#undef KELVIN_CONCGC
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about do do concurrent stack processing");
-#endif
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
     entry_thread_roots();
   }
 
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about do do concurrent weak roots");
-#endif
   // Process weak roots that might still point to regions that would be broken by cleanup
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
   }
 
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about to do entry_cleanup early");
-#endif
   // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
   // the space. This would be the last action if there is nothing to evacuate.  Note that
   // we will not age young-gen objects in the case that we skip evacuation.
   entry_cleanup_early();
 
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about to do freeset->log_status");
-#endif
   {
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
 
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about to do class unloading");
-#endif
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
       heap->is_concurrent_weak_root_in_progress()) {
     entry_class_unloading();
   }
 
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about to do strong roots");
-#endif
   // Processing strong roots
   // This may be skipped if there is nothing to update/evacuate.
   // If so, strong_root_in_progress would be unset.
@@ -210,9 +191,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_global_coalesce_and_fill();
   }
 
-#ifdef KELVIN_CONCGC
-  log_info(gc, ergo)("about to do concurrent evacuation");
-#endif
   // Continue the cycle with evacuation and optional update-refs.
   // This may be skipped if there is nothing to evacuate.
   // If so, evac_in_progress would be unset by collection set preparation code.
@@ -556,11 +534,6 @@ void ShenandoahConcurrentGC::entry_evacuate() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
-#undef KELVIN_EVAC
-#ifdef KELVIN_EVAC
-  log_info(gc, ergo)("entry_evacuate()");
-#endif
-
   static const char* msg = "Concurrent evacuation";
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_evac);
   EventMark em("%s", msg);
@@ -608,10 +581,6 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete, true /* log_heap_usage */);
   EventMark em("%s", msg);
 
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
-  log_info(gc, ergo)("Beginning entry_cleanup_complete");
-#endif
   // This phase does not use workers, no need for setup
   heap->try_inject_alloc_failure();
   op_cleanup_complete();
@@ -808,13 +777,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
       ShenandoahGeneration* young_gen = heap->young_generation();
       size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
       size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
-#undef KELVIN_EVAC_CHOICE
-#ifdef KELVIN_EVAC_CHOICE
-      log_info(gc, ergo)("Back from choose_collection set, is_empty: %d, humongous_2_promote: " SIZE_FORMAT
-                         ", regular 2 promote: " SIZE_FORMAT, heap->collection_set()->is_empty(),
-                         humongous_regions_promoted, regular_regions_promoted_in_place);
-                         
-#endif
       if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
@@ -854,9 +816,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
           heap->pacer()->setup_for_evac();
         }
       } else {
-#ifdef KELVIN_EVAC_CHOICE
-        log_info(gc, ergo)(" skipping over evacuate");
-#endif
         if (ShenandoahVerify) {
           heap->verifier()->verify_after_concmark();
         }
@@ -907,10 +866,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
       }
     }
   }
-#undef KELVIN_FINAL_MARK
-#ifdef KELVIN_FINAL_MARK
-  log_info(gc, ergo)("finished with op_final_mark");
-#endif
 }
 
 class ShenandoahConcurrentEvacThreadClosure : public ThreadClosure {

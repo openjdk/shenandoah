@@ -210,20 +210,11 @@ void ShenandoahControlThread::run_service() {
           // Arrange to perform a young GC immediately followed by a bootstrap OLD GC.  OLD GC typically requires more
           // than twice the time required for YOUNG GC, so we run a YOUNG GC to replenish the YOUNG allocation pool before
           // we start the longer OLD GC effort.
-#undef KELVIN_CONTROL
-#ifdef KELVIN_CONTROL
-          log_info(gc, ergo)("KELVIN detected bootstrap OLD GC request, converting to YOUNG followed by OLD");
-#endif
           old_bootstrap_requested = true;
           generation = YOUNG;
         } else {
           assert(!old_bootstrap_requested || (_requested_generation == OLD),
                  "if old_bootstrap_requested, _requested_generation must be OLD");
-#ifdef KELVIN_CONTROL
-          if (old_bootstrap_requested) {
-            log_info(gc, ergo)("KELVIN starting bootstrap OLD GC immediately following YOUNG");
-          }
-#endif
           generation = _requested_generation;
           old_bootstrap_requested = false;
         }
@@ -411,15 +402,9 @@ void ShenandoahControlThread::run_service() {
     // Don't wait around if there was an allocation failure - start the next cycle immediately.
     if (!is_alloc_failure_gc()) {
       if (old_bootstrap_requested) {
-#ifdef KELVIN_CONTROL
-        log_info(gc, ergo)("KELVIN NOT waiting for control lock because OLD follows YOUNG");
-#endif
         _requested_generation = OLD;
         _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
       } else {
-#ifdef KELVIN_CONTROL
-        log_info(gc, ergo)("KELVIN Waiting for control lock maybe");
-#endif
         // The timed wait is necessary because this thread has a responsibility to send
         // 'alloc_words' to the pacer when it does not perform a GC.
         MonitorLocker lock(&_control_lock, Mutex::_no_safepoint_check_flag);

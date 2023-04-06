@@ -964,13 +964,6 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(_update_watermark), p2i(ctx->top_bitmap(this)));
   }
 
-#undef KELVIN_REBUILD
-#ifdef KELVIN_REBUILD
-  if (new_affiliation == FREE) {
-    log_info(gc, ergo)("setting affiliation of " SIZE_FORMAT " to FREE, was %s %s", index(), affiliation_name(region_affiliation),
-                       is_cset()? "cset": "not-cset");
-  }
-#endif
 #ifdef ASSERT
   {
     // During full gc, heap->complete_marking_context() is not valid, may equal nullptr.
@@ -1094,17 +1087,6 @@ void ShenandoahHeapRegion::promote_in_place() {
   heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
 
   HeapWord* obj_addr = bottom();
-
-#undef KELVIN_PIP
-#ifdef KELVIN_PIP
-  log_info(gc, ergo)("Promoting region " SIZE_FORMAT " in place, BTE: " PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT
-                     ", TAMS: " PTR_FORMAT,
-                     index(), p2i(bottom()), p2i(top()), p2i(end()), p2i(tams));
-  if (top() != tams) {
-    log_info(gc, ergo)("KELVIN IS SCREWED ROYAL!");
-  }
-#endif
-
   while (obj_addr < tams) {
     oop obj = cast_to_oop(obj_addr);
     if (marking_context->is_marked(obj)) {
@@ -1125,10 +1107,6 @@ void ShenandoahHeapRegion::promote_in_place() {
 
   // We do not need to scan above TAMS because top equals tams
   assert(obj_addr == tams, "Expect loop to terminate when obj_addr equals tams");
-
-#ifdef KELVIN_PIP
-  log_info(gc, ergo)("Done promoting region " SIZE_FORMAT " in place", index());
-#endif
 }
 
 void ShenandoahHeapRegion::promote_humongous() {
@@ -1145,31 +1123,14 @@ void ShenandoahHeapRegion::promote_humongous() {
   oop obj = cast_to_oop(bottom());
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
-#undef KELVIN_REPROMOTE
-#ifdef KELVIN_REPROMOTE
-  size_t required_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
-  HeapWord* end_addr = bottom() + obj->size();
-  size_t waste = (bottom() + required_regions * ShenandoahHeapRegion::region_size_bytes()) - end_addr;
-  waste *= HeapWordSize;
-  log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (" SIZE_FORMAT
-                     " total regions with cohorts) in place for object of size " SIZE_FORMAT ", waste: " SIZE_FORMAT,
-                     index(), required_regions, obj->size() * HeapWordSize, waste);
-#endif
-
-#ifdef KELVIN_PIP
-  log_info(gc, ergo)("Promoting humongous start region " SIZE_FORMAT " (and cohorts) in place", index());
-#endif
-
   // TODO: Consider not promoting humongous objects that represent primitive arrays.  Leaving a primitive array
   // (obj->is_typeArray()) in young-gen is harmless because these objects are never relocated and they are not
   // scanned.  Leaving primitive arrays in young-gen memory allows their memory to be reclaimed more quickly when
   // it becomes garbage.  Better to not make this change until sizes of young-gen and old-gen are completely
   // adaptive, as leaving primitive arrays in young-gen might be perceived as an "astonishing result" by someone
   // has carefully analyzed the required sizes of an application's young-gen and old-gen.
-
   size_t spanned_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
   size_t index_limit = index() + spanned_regions;
-
   {
     // We need to grab the heap lock in order to avoid a race when changing the affiliations of spanned_regions from
     // young to old.
@@ -1185,7 +1146,7 @@ void ShenandoahHeapRegion::promote_humongous() {
     for (size_t i = index(); i < index_limit; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
-		    r->index(), p2i(r->bottom()), p2i(r->top()));
+                    r->index(), p2i(r->bottom()), p2i(r->top()));
       // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
       r->set_affiliation(OLD_GENERATION, true);
     }
