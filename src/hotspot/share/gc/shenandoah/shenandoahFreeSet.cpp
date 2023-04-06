@@ -353,37 +353,37 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           log_info(gc, ergo)("%sGoing to try the mutator view", allow_new_region? "": "NOT ");
         }
 #endif
-        // No dice. Can we borrow space from mutator view?
-        if (!ShenandoahEvacReserveOverflow) {
-          return nullptr;
-        }
+      }
+      // No dice. Can we borrow space from mutator view?
+      if (!ShenandoahEvacReserveOverflow) {
+        return nullptr;
+      }
 
-        if (allow_new_region) {
-          // Try to steal an empty region from the mutator view.
-          for (size_t c = _mutator_rightmost + 1; c > _mutator_leftmost; c--) {
-            size_t idx = c - 1;
-            if (is_mutator_free(idx)) {
-              ShenandoahHeapRegion* r = _heap->get_region(idx);
-              if (can_allocate_from(r)) {
-                flip_to_gc(r);
-                HeapWord *result = try_allocate_in(r, req, in_new_region);
-                if (result != nullptr) {
-                  log_debug(gc, free)("Flipped region " SIZE_FORMAT " to gc for request: " PTR_FORMAT, idx, p2i(&req));
-                  return result;
-                }
+      if (allow_new_region) {
+        // Try to steal an empty region from the mutator view.
+        for (size_t c = _mutator_rightmost + 1; c > _mutator_leftmost; c--) {
+          size_t idx = c - 1;
+          if (is_mutator_free(idx)) {
+            ShenandoahHeapRegion* r = _heap->get_region(idx);
+            if (can_allocate_from(r)) {
+              flip_to_gc(r);
+              HeapWord *result = try_allocate_in(r, req, in_new_region);
+              if (result != nullptr) {
+                log_debug(gc, free)("Flipped region " SIZE_FORMAT " to gc for request: " PTR_FORMAT, idx, p2i(&req));
+                return result;
               }
             }
           }
         }
-
-        // No dice. Do not try to mix mutator and GC allocations, because
-        // URWM moves due to GC allocations would expose unparsable mutator
-        // allocations.
-        break;
       }
-      default:
-        assert(false, "The request type %d is unrecognized", req.type());
+
+      // No dice. Do not try to mix mutator and GC allocations, because
+      // URWM moves due to GC allocations would expose unparsable mutator
+      // allocations.
+      break;
     }
+    default:
+      assert(false, "The request type %d is unrecognized", req.type());
   }
   return nullptr;
 }
