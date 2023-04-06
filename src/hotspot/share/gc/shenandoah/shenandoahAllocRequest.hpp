@@ -71,7 +71,7 @@ private:
 
   ShenandoahAllocRequest(size_t _min_size, size_t _requested_size, Type _alloc_type, ShenandoahRegionAffiliation affiliation) :
           _min_size(_min_size), _requested_size(_requested_size),
-          _actual_size(0), _alloc_type(_alloc_type), _affiliation(affiliation)
+          _actual_size(0), _padding(0), _alloc_type(_alloc_type), _affiliation(affiliation)
 #ifdef ASSERT
           , _actual_size_set(false)
 #endif
