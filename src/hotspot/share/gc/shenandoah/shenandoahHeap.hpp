@@ -229,6 +229,7 @@ private:
                                   HeapWord* from, HeapWord* top, HeapWord* update_watermark, const char* message);
 
 public:
+  void increase_used(const ShenandoahAllocRequest& req);
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);
   void set_used(size_t bytes);
@@ -710,7 +711,7 @@ public:
                                                size_t size,
                                                Metaspace::MetadataType mdtype) override;
 
-  void notify_mutator_alloc_words(size_t words, bool waste);
+  void notify_mutator_alloc_words(size_t words, size_t waste);
 
   HeapWord* allocate_new_tlab(size_t min_size, size_t requested_size, size_t* actual_size) override;
   size_t tlab_capacity(Thread *thr) const override;

@@ -272,13 +272,6 @@ HeapWord* ShenandoahFreeSet::allocated_aligned_plab(size_t size, ShenandoahAlloc
   assert(req.actual_size() % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of card size");
   assert(((uintptr_t) result) % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
 
-  if (req.padding() > 0) {
-    // Account for the alignment padding
-    // For verification consistency, we need to report this padding to _heap
-    size_t padding_bytes = req.padding() * HeapWordSize;
-    _heap->increase_used(padding_bytes);
-    _heap->old_generation()->increase_used(padding_bytes);
-  }
   return result;
 }
 
@@ -374,8 +367,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   if (result != nullptr) {
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
-      assert(req.is_young(), "Mutator allocations always come from young generation.");
-      generation->increase_used(req.actual_size() * HeapWordSize);
       increase_used(req.actual_size() * HeapWordSize);
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
@@ -388,7 +379,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // PLABs parsable while still allowing the PLAB to serve future allocation requests that arise during the
       // next evacuation pass.
       r->set_update_watermark(r->top());
-      generation->increase_used(req.actual_size() * HeapWordSize);
       if (_heap->mode()->is_generational()) {
         if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
           assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
@@ -412,8 +402,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size_t waste = r->free();
       if (waste > 0) {
         increase_used(waste);
-        generation->increase_allocated(waste);
-        _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, true);
+        // This one request could cause several regions to be "retired", so we must accumulate the waste
+        req.set_waste((waste >> LogHeapWordSize) + req.waste());
       }
     }
 
@@ -550,20 +540,11 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
                         PTR_FORMAT " at transition from FREE to %s",
                         p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), affiliation_name(req.affiliation()));
 
+    // While individual regions report their true use, all humongous regions are marked used in the free set.
     _mutator_free_bitmap.clear_bit(r->index());
   }
-
-  // While individual regions report their true use, all humongous regions are
-  // marked used in the free set.
-  increase_used(ShenandoahHeapRegion::region_size_bytes() * num);
-  generation->increase_used(words_size * HeapWordSize);
-
-  if (remainder != 0) {
-    // Record this remainder as allocation waste
-    size_t waste = ShenandoahHeapRegion::region_size_words() - remainder;
-    _heap->notify_mutator_alloc_words(waste, true);
-    generation->increase_allocated(waste * HeapWordSize);
-  }
+  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+  increase_used(total_humongous_size);
 
   // Allocated at left/rightmost? Move the bounds appropriately.
   if (beg == _mutator_leftmost || end == _mutator_rightmost) {
@@ -572,6 +553,9 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   assert_bounds();
 
   req.set_actual_size(words_size);
+  if (remainder != 0) {
+    req.set_waste(ShenandoahHeapRegion::region_size_words() - remainder);
+  }
   return _heap->get_region(beg)->bottom();
 }
 

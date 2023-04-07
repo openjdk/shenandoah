@@ -62,7 +62,7 @@ private:
   size_t _min_size;
   size_t _requested_size;
   size_t _actual_size;
-  size_t _padding;
+  size_t _waste;
   Type _alloc_type;
   ShenandoahRegionAffiliation const _affiliation;
 #ifdef ASSERT
@@ -71,7 +71,7 @@ private:
 
   ShenandoahAllocRequest(size_t _min_size, size_t _requested_size, Type _alloc_type, ShenandoahRegionAffiliation affiliation) :
           _min_size(_min_size), _requested_size(_requested_size),
-          _actual_size(0), _padding(0), _alloc_type(_alloc_type), _affiliation(affiliation)
+          _actual_size(0), _waste(0), _alloc_type(_alloc_type), _affiliation(affiliation)
 #ifdef ASSERT
           , _actual_size_set(false)
 #endif
@@ -98,24 +98,24 @@ public:
     return ShenandoahAllocRequest(0, requested_size, _alloc_shared, ShenandoahRegionAffiliation::YOUNG_GENERATION);
   }
 
-  inline size_t size() {
+  inline size_t size() const {
     return _requested_size;
   }
 
-  inline Type type() {
+  inline Type type() const {
     return _alloc_type;
   }
 
-  inline const char* type_string() {
+  inline const char* type_string() const {
     return alloc_type_to_string(_alloc_type);
   }
 
-  inline size_t min_size() {
+  inline size_t min_size() const {
     assert (is_lab_alloc(), "Only access for LAB allocs");
     return _min_size;
   }
 
-  inline size_t actual_size() {
+  inline size_t actual_size() const {
     assert (_actual_size_set, "Should be set");
     return _actual_size;
   }
@@ -128,15 +128,15 @@ public:
     _actual_size = v;
   }
 
-  inline size_t padding() {
-    return _padding;
+  inline size_t waste() const {
+    return _waste;
   }
 
-  inline void set_padding(size_t v) {
-    _padding = v;
+  inline void set_waste(size_t v) {
+    _waste = v;
   }
 
-  inline bool is_mutator_alloc() {
+  inline bool is_mutator_alloc() const {
     switch (_alloc_type) {
       case _alloc_tlab:
       case _alloc_shared:
@@ -151,7 +151,7 @@ public:
     }
   }
 
-  inline bool is_gc_alloc() {
+  inline bool is_gc_alloc() const {
     switch (_alloc_type) {
       case _alloc_tlab:
       case _alloc_shared:
@@ -166,7 +166,7 @@ public:
     }
   }
 
-  inline bool is_lab_alloc() {
+  inline bool is_lab_alloc() const {
     switch (_alloc_type) {
       case _alloc_tlab:
       case _alloc_gclab:
@@ -181,11 +181,11 @@ public:
     }
   }
 
-  bool is_old() {
+  bool is_old() const {
     return _affiliation == OLD_GENERATION;
   }
 
-  bool is_young() {
+  bool is_young() const {
     return _affiliation == YOUNG_GENERATION;
   }
 
