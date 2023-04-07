@@ -1061,11 +1061,10 @@ size_t ShenandoahHeapRegion::promote_humongous() {
       }
 
       ShenandoahHeapRegion* tail = heap->get_region(index_limit - 1);
-      size_t waste = tail->end() - tail->top();
+      size_t waste = tail->free();
       if (waste != 0) {
-        size_t waste_bytes = waste * HeapWordSize;
-        old_generation->increase_humongous_waste(waste_bytes);
-        young_generation->decrease_humongous_waste(waste_bytes);
+        old_generation->increase_humongous_waste(waste);
+        young_generation->decrease_humongous_waste(waste);
       }
       // Then fall through to finish the promotion after releasing the heap lock.
     } else {

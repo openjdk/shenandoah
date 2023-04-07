@@ -355,7 +355,7 @@ public:
     _garbage += r->garbage();
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
     if (r->is_humongous()) {
-      _humongous_waste += r->end() - r->top();
+      _humongous_waste += r->free();
     }
     _regions++;
   }
@@ -417,13 +417,15 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               label, generation->name(), stats.regions(),
               byte_size_in_proper_unit(capacity), proper_unit_for_byte_size(capacity));
 
-    size_t humongous_waste = generation->get_humongous_waste();
-    guarantee(stats.waste() == humongous_waste,
-              "%s: generation (%s) humongous waste must be consistent: generation: " SIZE_FORMAT "%s, regions: " SIZE_FORMAT "%s",
-              label, generation->name(),
-              byte_size_in_proper_unit(humongous_waste), proper_unit_for_byte_size(humongous_waste),
-              byte_size_in_proper_unit(stats.waste()),   proper_unit_for_byte_size(stats.waste()));
-
+    if (!generation->is_global()) {
+      // Humongous waste is currently only tracked for young and old generations
+      size_t humongous_waste = generation->get_humongous_waste();
+      guarantee(stats.waste() == humongous_waste,
+                "%s: generation (%s) humongous waste must be consistent: generation: " SIZE_FORMAT "%s, regions: " SIZE_FORMAT "%s",
+          label, generation->name(),
+          byte_size_in_proper_unit(humongous_waste), proper_unit_for_byte_size(humongous_waste),
+          byte_size_in_proper_unit(stats.waste()),   proper_unit_for_byte_size(stats.waste()));
+    }
   }
 };
 
