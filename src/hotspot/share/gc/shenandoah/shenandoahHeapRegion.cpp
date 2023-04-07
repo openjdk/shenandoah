@@ -673,11 +673,6 @@ void ShenandoahHeapRegion::recycle() {
   shenandoah_assert_heaplocked();
 
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    // It may be that humongous regions are never recycled directly because they may be converted into trash before they
-    // are recycled.  If this is universally true, we can replace the following with an assert(!is_humongous()).
-    if (is_humongous()) {
-      decrement_humongous_waste();
-    }
     heap->generation_for(affiliation())->decrease_used(used());
   }
 
@@ -1107,18 +1102,9 @@ size_t ShenandoahHeapRegion::promote_humongous() {
 }
 
 void ShenandoahHeapRegion::decrement_humongous_waste() const {
-  ShenandoahHeapRegion* start = humongous_start_region();
-  HeapWord* obj_addr = start->bottom();
-  oop obj = cast_to_oop(obj_addr);
-  size_t word_size = obj->size();
-  HeapWord* end_addr = obj_addr + word_size;
-  if (end_addr < end()) {
-    size_t humongous_waste = (end() - end_addr) * HeapWordSize;
-    if (is_old()) {
-      ShenandoahHeap::heap()->old_generation()->decrease_humongous_waste(humongous_waste);
-    } else {
-      ShenandoahHeap::heap()->young_generation()->decrease_humongous_waste(humongous_waste);
-    }
+  assert(is_humongous(), "Should only use this for humongous regions");
+  size_t waste_bytes = free();
+  if (waste_bytes > 0) {
+    ShenandoahHeap::heap()->generation_for(affiliation())->decrease_humongous_waste(waste_bytes);
   }
-  // else, this region is entirely spanned by humongous object so contributes no humongous waste
 }
