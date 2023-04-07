@@ -203,7 +203,7 @@ private:
                            VerifyCollectionSet cset,
                            VerifyLiveness liveness,
                            VerifyRegions regions,
-			   VerifySize sizeness,
+                           VerifySize sizeness,
                            VerifyGCState gcstate);
 
 public:

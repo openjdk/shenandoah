@@ -1084,7 +1084,7 @@ void ShenandoahVerifier::verify_after_evacuation() {
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash,     // trash regions have been recycled already
           _verify_size_adjusted_for_deferred_accounting,
-	                               // expect generation and heap sizes to match after adjustments for promote in place
+                                       // expect generation and heap sizes to match after adjustments for promote in place
           _verify_gcstate_forwarded    // evacuation produced some forwarded objects
   );
 }
@@ -1098,9 +1098,9 @@ void ShenandoahVerifier::verify_before_updaterefs() {
           _verify_cset_forwarded,                      // all cset refs are fully forwarded
           _verify_liveness_disable,                    // no reliable liveness data anymore
           _verify_regions_notrash,                     // trash regions have been recycled already
-	  _verify_size_adjusted_for_deferred_accounting,
-	                                               // expect generation and heap sizes to match after adjustments
-	                                               //  for promote in place
+          _verify_size_adjusted_for_deferred_accounting,
+                                                       // expect generation and heap sizes to match after adjustments
+                                                       //  for promote in place
           _verify_gcstate_updating                     // evacuation should have produced some forwarded objects
   );
 }
@@ -1115,7 +1115,7 @@ void ShenandoahVerifier::verify_after_updaterefs() {
           _verify_cset_none,           // no cset references, all updated
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_nocset,      // no cset regions, trash regions have appeared
-	  _verify_size_adjusted_for_deferred_accounting,
+          _verify_size_adjusted_for_deferred_accounting,
                                        // expect generation and heap sizes to match after adjustments for promote in place
           _verify_gcstate_stable       // update refs had cleaned up forwarded objects
   );
@@ -1130,7 +1130,7 @@ void ShenandoahVerifier::verify_after_degenerated() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
-	  _verify_size_exact,           // expect generation and heap sizes to match exactly
+          _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // degenerated refs had cleaned up forwarded objects
   );
 }
@@ -1144,7 +1144,7 @@ void ShenandoahVerifier::verify_before_fullgc() {
           _verify_cset_disable,        // cset might be foobared
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_disable,     // no reliable region data here
-	  _verify_size_exact,           // expect generation and heap sizes to match exactly
+          _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_disable      // no reliable gcstate data
   );
 }
@@ -1158,7 +1158,7 @@ void ShenandoahVerifier::verify_after_generational_fullgc() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
-	  _verify_size_exact,           // expect generation and heap sizes to match exactly
+          _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // full gc cleaned up everything
   );
 }
@@ -1172,7 +1172,7 @@ void ShenandoahVerifier::verify_after_fullgc() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
-	  _verify_size_exact,           // expect generation and heap sizes to match exactly
+          _verify_size_exact,           // expect generation and heap sizes to match exactly
           _verify_gcstate_stable        // full gc cleaned up everything
   );
 }
