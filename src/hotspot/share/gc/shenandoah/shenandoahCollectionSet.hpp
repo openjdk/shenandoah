@@ -66,8 +66,8 @@ private:
 
   // When a region having memory available to be allocated is added to the collection set, the region's available memory
   // should be subtracted from what's available.
-  size_t		_young_available_bytes_collected;
-  size_t		_old_available_bytes_collected;
+  size_t                _young_available_bytes_collected;
+  size_t                _old_available_bytes_collected;
 
   shenandoah_padding(0);
   volatile size_t       _current_index;

@@ -106,7 +106,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
-  
+
 
   if (is_generational) {
     for (size_t idx = 0; idx < size; idx++) {
@@ -354,7 +354,7 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
   //
   // so we trigger if available - penalties - spike_headroom < avg_cycle_time * avg_alloc_rate, which is to say
   //                  available < avg_cycle_time * avg_alloc_rate + penalties + spike_headroom
-  //            or if available < penalties + spike_headroom 
+  //            or if available < penalties + spike_headroom
   //
   // since avg_cycle_time * avg_alloc_rate > 0, the first test is sufficient to test both conditions
   //

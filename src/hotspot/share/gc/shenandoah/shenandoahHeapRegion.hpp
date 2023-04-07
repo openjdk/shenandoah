@@ -239,7 +239,7 @@ private:
   // Rarely updated fields
   HeapWord* _new_top;
   double _empty_time;
-  
+
   HeapWord* _top_before_promoted;
 
   // Seldom updated fields

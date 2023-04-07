@@ -398,7 +398,7 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
   }
 
   static void validate_usage(const bool adjust_for_padding, const bool adjust_for_deferred_accounting,
-			     const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
+                             const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
     size_t generation_used = generation->used();
     size_t generation_used_regions = generation->used_regions();
     if (adjust_for_deferred_accounting) {
@@ -409,14 +409,14 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       size_t total_regions_promoted = humongous_regions_promoted;
       size_t bytes_promoted_in_place = 0;
       if (total_regions_promoted > 0) {
-	bytes_promoted_in_place = humongous_bytes_promoted;
+        bytes_promoted_in_place = humongous_bytes_promoted;
       }
       if (generation->is_young()) {
-	generation_used -= bytes_promoted_in_place;
-	generation_used_regions -= total_regions_promoted;
+        generation_used -= bytes_promoted_in_place;
+        generation_used_regions -= total_regions_promoted;
       } else if (generation->is_old()) {
-	generation_used += bytes_promoted_in_place;
-	generation_used_regions += total_regions_promoted;
+        generation_used += bytes_promoted_in_place;
+        generation_used_regions += total_regions_promoted;
       }
       // else, global validation doesn't care where the promoted-in-place data is tallied.
     }
@@ -754,7 +754,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
                                              VerifyForwarded forwarded, VerifyMarked marked,
                                              VerifyCollectionSet cset,
                                              VerifyLiveness liveness, VerifyRegions regions,
-					     VerifySize sizeness,
+                                             VerifySize sizeness,
                                              VerifyGCState gcstate) {
   guarantee(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "only when nothing else happens");
   guarantee(ShenandoahVerify, "only when enabled, and bitmap is initialized in ShenandoahHeap::initialize");
@@ -1012,7 +1012,7 @@ void ShenandoahVerifier::verify_generic(VerifyOption vo) {
           _verify_cset_disable,        // cset may be inconsistent
           _verify_liveness_disable,    // no reliable liveness data
           _verify_regions_disable,     // no reliable region data
-	  _verify_size_exact,          // expect generation and heap sizes to match exactly
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_disable      // no data about gcstate
   );
 }
@@ -1026,7 +1026,7 @@ void ShenandoahVerifier::verify_before_concmark() {
           _verify_cset_none,           // UR should have fixed this
           _verify_liveness_disable,    // no reliable liveness data
           _verify_regions_notrash,     // no trash regions
-	  _verify_size_exact,          // expect generation and heap sizes to match exactly
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // there are no forwarded objects
   );
 }
@@ -1040,7 +1040,7 @@ void ShenandoahVerifier::verify_after_concmark() {
           _verify_cset_none,           // no references to cset anymore
           _verify_liveness_complete,   // liveness data must be complete here
           _verify_regions_disable,     // trash regions not yet recycled
-	  _verify_size_exact,          // expect generation and heap sizes to match exactly
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable_weakroots  // heap is still stable, weakroots are in progress
   );
 }
@@ -1054,8 +1054,8 @@ void ShenandoahVerifier::verify_before_evacuation() {
           _verify_cset_disable,                      // non-forwarded references to cset expected
           _verify_liveness_complete,                 // liveness data must be complete here
           _verify_regions_disable,                   // trash regions not yet recycled
-	  _verify_size_adjusted_for_padding,         // expect generation and heap sizes to match after adjustments
-	                                             //  for promote in place padding
+          _verify_size_adjusted_for_padding,         // expect generation and heap sizes to match after adjustments
+                                                     //  for promote in place padding
           _verify_gcstate_stable_weakroots           // heap is still stable, weakroots are in progress
   );
 }
@@ -1069,7 +1069,7 @@ void ShenandoahVerifier::verify_during_evacuation() {
           _verify_cset_disable,       // some cset references are not forwarded yet
           _verify_liveness_disable,   // liveness data might be already stale after pre-evacs
           _verify_regions_disable,    // trash regions not yet recycled
-	  _verify_size_disable,       // we don't know how much of promote-in-place work has been completed
+          _verify_size_disable,       // we don't know how much of promote-in-place work has been completed
           _verify_gcstate_evacuation  // evacuation is in progress
   );
 }
@@ -1083,7 +1083,7 @@ void ShenandoahVerifier::verify_after_evacuation() {
           _verify_cset_forwarded,      // all cset refs are fully forwarded
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash,     // trash regions have been recycled already
-	  _verify_size_adjusted_for_deferred_accounting,
+          _verify_size_adjusted_for_deferred_accounting,
 	                               // expect generation and heap sizes to match after adjustments for promote in place
           _verify_gcstate_forwarded    // evacuation produced some forwarded objects
   );

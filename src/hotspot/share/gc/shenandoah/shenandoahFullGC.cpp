@@ -1505,7 +1505,7 @@ void ShenandoahFullGC::phase5_epilog() {
         size_t old_regions_deficit = (old_usage - old_capacity) / ShenandoahHeapRegion::region_size_bytes();
         heap->generation_sizer()->transfer_to_old(old_regions_deficit);
       }
-      
+
       log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT ", young usage: " SIZE_FORMAT ", old usage: " SIZE_FORMAT,
                     post_compact.get_live(), heap->young_generation()->used(), heap->old_generation()->used());
     }
@@ -1529,7 +1529,7 @@ void ShenandoahFullGC::phase5_epilog() {
     heap->clear_promotion_in_place_potential();
 
     if (heap->mode()->is_generational()) {
-      // Invoke this in case we are able to transfer memory from OLD to YOUNG.  
+      // Invoke this in case we are able to transfer memory from OLD to YOUNG.
       heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
     }
     heap->free_set()->rebuild(0);

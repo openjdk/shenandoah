@@ -1415,7 +1415,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
             } else {
               disable_plab_promotions = true;
             }
-	    if (disable_plab_promotions) {
+            if (disable_plab_promotions) {
               // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
               ShenandoahThreadLocalData::disable_plab_promotions(thread);
               ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
