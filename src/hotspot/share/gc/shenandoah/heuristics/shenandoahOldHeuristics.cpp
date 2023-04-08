@@ -386,15 +386,11 @@ void ShenandoahOldHeuristics::record_cycle_start() {
 
 void ShenandoahOldHeuristics::record_cycle_end() {
   _trigger_heuristic->record_cycle_end();
-  // Clear triggers that might have been set during OLD marking.  Conditions are different now that this phase has finished.
-  _promotion_failed = false;
-  _cannot_expand_trigger = false;
-  _fragmentation_trigger = false;
-  _growth_trigger = false;
+  clear_triggers();
 }
 
 void ShenandoahOldHeuristics::clear_triggers() {
-  // Clear any triggers that were set during mixed evacuations.  Conditions are different now that this phase has finished.
+  // Clear any triggers that were set during mixed evacuations.  Conditions may be different now that this phase has finished.
   _promotion_failed = false;
   _cannot_expand_trigger = false;
   _fragmentation_trigger = false;

@@ -119,9 +119,9 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
     size_t anticipated_candidates = 0;
     size_t anticipated_promote_in_place_regions = 0;
 
-    // sort the promotion-eligible regions according to live-data-bytes so that we can first reclaim the larger numbers
-    // of regions that require less evacuation effort.  This prioritizes garbage first, expanding the allocation pool before
-    // we begin the work of reclaiming regions that require more effort.
+    // Sort the promotion-eligible regions according to live-data-bytes so that we can first reclaim regions that require
+    // less evacuation effort.  This prioritizes garbage first, expanding the allocation pool before we begin the work of
+    // reclaiming regions that require more effort.
     AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
     for (size_t i = 0; i < num_regions; i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
@@ -142,8 +142,10 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
               ShenandoahHeap::fill_with_object(original_top, remnant_size);
               r->set_top(r->end());
               promote_in_place_pad += remnant_size * HeapWordSize;
+            } else {
+              // Since the remnant is so small that it cannot be filled, we don't have to worry about any accidental
+              // allocations occuring within this region before the region is promoted in place.
             }
-            // else, the remnant is too small to be allocated by any thread, so we don't have a problem.
             promote_in_place_regions++;
             promote_in_place_live += r->get_live_data_bytes();
           }
@@ -161,22 +163,26 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
           sorted_regions[candidates++]._live_data = live_data;
         }
       } else {
-
-        // Only anticipate to promote regular regions if garbage() is above threshold.  Note that certain regions that are
+        // We only anticipate to promote regular regions if garbage() is above threshold.  Tenure-aged regions with less
+        // garbage are promoted in place.  These take a different path to old-gen.  Note that certain regions that are
         // excluded from anticipated promotion because their garbage content is too low (causing us to anticipate that
-        // the region would be promoted in place) may be eligible for promotion by the time promotion takes place because
-        // more garbage is found within the region between now and then.  This should not happen if we are properly adapting
-        // the tenure age.  We won't tenure objects until they exhibit at least one full GC pass without further decline
-        // in population.
+        // the region would be promoted in place) may be eligible for evacuation promotion by the time promotion takes
+        // place during a subsequent GC pass because more garbage is found within the region between now and then.  This
+        // should not happen if we are properly adapting the tenure age.  The theory behind adaptive tenuring threshold
+        // is to choose the youngest age that demonstrates no "significant" futher loss of population since the previous
+        // age.  If not this, we expect the tenure age to demonstrate linear population decay for at least two population
+        // samples, whereas we expect to observe exponetial population decay for ages younger than the tenure age.
         //
-        // If this does occur by accident, the most likely impact is that there will not be sufficient available space in
-        // old-gen to hold the live data to be copied out of this region, so the region will not be selected for the
-        // current collection set.  The region will be tallied into the anticipated promotion for the next cycle and
-        // will be collected at that time.
+        // In the case that certain regions which were anticipated to be promoted in place need to be promoted by
+        // evacuation, it may be the case that there is not sufficient reserve within old-gen to hold evacuation of
+        // these regions.  The likely outcome is that these regions will not be selected for evacuation or promotion
+        // in the current cycle and we will anticipate that they will be promoted in the next cycle.  This will cause
+        // us to reserve more old-gen memory so that these objects can be promoted in the subsequent cycle.
         //
         // TODO:
-        //   If we are auto-tuning the tenure age and this occurs, use this as guidance that tenure age should be increased.
-
+        //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
+        //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
+        //   the tenure age can be increased.
         if (r->age() + 1 == InitialTenuringThreshold) {
           if (r->garbage() >= old_garbage_threshold) {
             anticipated_candidates++;
@@ -205,8 +211,8 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
           // Add this region to promo potential for next GC.
           promo_potential += region_live_data;
         }
-        // Note that we keep going even if one region is excluded from selection because we need to accumulate all
-        // eligible regions into promo_potential if not preselected.
+        // We keep going even if one region is excluded from selection because we need to accumulate all eligible
+        // regions that are not preselected into promo_potential
       }
     }
     heap->set_pad_for_promote_in_place(promote_in_place_pad);
@@ -219,6 +225,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
 void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   bool is_generational = heap->mode()->is_generational();
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
   assert(collection_set->count() == 0, "Must be empty");
   assert(_generation->generation_mode() != OLD, "Old GC invokes ShenandoahOldHeuristics::choose_collection_set()");
@@ -244,7 +251,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   size_t free_regions = 0;
   size_t live_memory = 0;
 
-  size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
+  size_t old_garbage_threshold = (region_size_bytes * ShenandoahOldGarbageThreshold) / 100;
   // This counts number of humongous regions that we intend to promote in this cycle.
   size_t humongous_regions_promoted = 0;
   // This counts bytes of memory used by hunongous regions to be promoted in place.
@@ -256,11 +263,9 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-
     if (is_generational && !in_generation(region)) {
       continue;
     }
-
     size_t garbage = region->garbage();
     total_garbage += garbage;
     if (region->is_empty()) {
@@ -280,9 +285,10 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         if (is_generational && collection_set->is_preselected(i)) {
           // If !is_generational, we cannot ask if is_preselected.  If is_preselected, we know
           //   region->age() >= InitialTenuringThreshold).
-          // Set garbage value to maximum value to force this into the sorted collection set.
           is_candidate = true;
           preselected_candidates++;
+          // Set garbage value to maximum value to force this into the sorted collection set.
+          garbage = region_size_bytes;
         } else if (is_generational && region->is_young() && (region->age() >= InitialTenuringThreshold)) {
           // Note that for GLOBAL GC, region may be OLD, and OLD regions do not qualify for pre-selection
 
