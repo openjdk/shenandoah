@@ -201,7 +201,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
         }
         // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
         // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects or because
-        // they are to be promted in place.
+        // they are to be promoted in place.
       }
     }
   } else {
@@ -243,10 +243,11 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
   size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
 
-  log_info(gc, ergo)("Chosen CSet evacuates old: " SIZE_FORMAT "%s, promoted: " SIZE_FORMAT "%s, young: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(collected_old),      proper_unit_for_byte_size(collected_old),
+  log_info(gc, ergo)("Chosen CSet evacuates young: " SIZE_FORMAT "%s (of which at least: " SIZE_FORMAT "%s are to be promoted), "
+                     "old: " SIZE_FORMAT "%s",
+                     byte_size_in_proper_unit(collected_young),    proper_unit_for_byte_size(collected_young),
                      byte_size_in_proper_unit(collected_promoted), proper_unit_for_byte_size(collected_promoted),
-                     byte_size_in_proper_unit(collected_young),    proper_unit_for_byte_size(collected_young));
+                     byte_size_in_proper_unit(collected_old),      proper_unit_for_byte_size(collected_old));
 }
 
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {
@@ -365,18 +366,13 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
 
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
 
-  // TODO: There are other adjustments made in should_start_gc() to avg_cycle_time depending on degenerated cycles
-  // and expansion of the live-memory set.  To be totally in sync with behavior of GC trigger, the estimate of
-  // evacuation slack may want to incorporate the same adjustments.
-
-
-  // TODO: Consider making conservative adjustments to avg_cycle_time, as in:
-  //   avg_cycle_time *= 2;
-  // The observation is that GC time is approximately doubled when we perform promotions and/or mixed evacuations.
-  // If the caller takes action based on the value returned from evac_slack, the action will be to trigger promotion
-  // and/or mixed evacuation so double our understanding of cycle time.  Kelvin has experimented with this option.
-  // While it reduces the likelihood of TLAB allocation failures, it also causes excessively conservative transfer
-  // of memory to OLD, which ultimately prevents timely promotion of memory.
+  // TODO: Consider making conservative adjustments to avg_cycle_time, such as: (avg_cycle_time *= 2) in cases where
+  // we expect a longer-than-normal GC duration.  This includes mixed evacuations, evacuation that perform promotion
+  // including promotion in place, and OLD GC bootstrap cycles.  It has been observed that these cycles sometimes
+  // require twice or more the duration of "normal" GC cycles.  We have experimented with this approach.  While it
+  // does appear to reduce the frequency of degenerated cycles due to late triggers, it also has the effect of reducing
+  // evacuation slack so that there is less memory available to be transferred to OLD.  The result is that we
+  // throttle promotion and it takes too long to move old objects out of the young generation.
 
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
   size_t evac_slack_avg;
@@ -434,6 +430,28 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   // OLD generation is maintained to be as small as possible.  Depletion-of-free-pool triggers do not apply to old generation.
   if (!_generation->is_old()) {
 
+    if (available < min_threshold) {
+      log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
+                   _generation->name(),
+                   byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
+                   byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
+      return true;
+    }
+
+    // Check if we need to learn a bit about the application
+    const size_t max_learn = ShenandoahLearningSteps;
+    if (_gc_times_learned < max_learn) {
+      size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
+      if (available < init_threshold) {
+        log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free ("
+                     SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
+                     _generation->name(), _gc_times_learned + 1, max_learn,
+                     byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
+                     byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
+        return true;
+      }
+    }
+
     //  Rationale:
     //    The idea is that there is an average allocation rate and there are occasional abnormal bursts (or spikes) of
     //    allocations that exceed the average allocation rate.  What do these spikes look like?
@@ -462,6 +480,9 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
     //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
     //    computations an independent effort.
+
+
+
 
 
     // Check if allocation headroom is still okay. This also factors in:
@@ -513,48 +534,14 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       return true;
     }
 
-    if (available < min_threshold) {
-      log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
-                   _generation->name(),
-                   byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
-                   byte_size_in_proper_unit(min_threshold),       proper_unit_for_byte_size(min_threshold));
-      return true;
-    }
-
-    // Check if we need to learn a bit about the application
-    const size_t max_learn = ShenandoahLearningSteps;
-    if (_gc_times_learned < max_learn) {
-      size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
-      if (available < init_threshold) {
-        log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free ("
-                     SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
-                     _generation->name(), _gc_times_learned + 1, max_learn,
-                     byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
-                     byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
-        return true;
-      }
-    }
-
-    // TODO: Account for inherent delays in responding to GC triggers
-    //  1. It has been observed that delays of 200 ms or greater are common between the moment we return true from
-    //     should_start_gc() and the moment at which we begin execution of the concurrent reset phase.  Add this time into
-    //     the calculation of avg_cycle_time below.  (What is "this time"?  Perhaps we should remember recent history of
-    //     this delay for the running workload and use the maximum delay recently seen for "this time".)  These obervations
-    //     of long delays for this transition were from early in the development of generational mode.  They may have
-    //     resuilted from errors in the implementation which were subsequently fixed.  More recently, these long delays
-    //     have not been observed.
-    //  2. The frequency of inquiries to should_start_gc() is adaptive, ranging between ShenandoahControlIntervalMin and
-    //     ShenandoahControlIntervalMax.  The current control interval (or the max control interval) should also be added into
-    //     the calculation of avg_cycle_time below.
-
-    // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
-    // more time than traditional young-generation cycles so start them up as soon as possible.  This is a "mitigation"
-    // for the reality that old-gen and young-gen activities are not truly "concurrent".  If there is old-gen work to
-    // be done, we start up the young-gen GC threads so they can do some of this old-gen work.  As implemented, promotion
-    // gets priority over old-gen marking.
-
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     if (heap->mode()->is_generational()) {
+      // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
+      // more time than traditional young-generation cycles so start them up as soon as possible.  This is a "mitigation"
+      // for the reality that old-gen and young-gen activities are not truly "concurrent".  If there is old-gen work to
+      // be done, we start up the young-gen GC threads so they can do some of this old-gen work.  As implemented, promotion
+      // gets priority over old-gen marking.
+
       size_t promo_potential = heap->get_promotion_potential();
       size_t promo_in_place_potential = heap->get_promotion_in_place_potential();
       ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) heap->old_generation()->heuristics();
@@ -650,8 +637,8 @@ bool ShenandoahAllocationRate::is_spiking(double rate, double threshold) const {
   if (rate <= 0.0) {
     return false;
   }
-  double sd = _rate.sd();
 
+  double sd = _rate.sd();
   if (sd > 0) {
     // There is a small chance that that rate has already been sampled, but it
     // seems not to matter in practice.

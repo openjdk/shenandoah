@@ -93,7 +93,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   if (r->affiliation() == YOUNG_GENERATION) {
     _young_region_count++;
     _young_bytes_to_evacuate += r->get_live_data_bytes();
-    _young_available_bytes_collected += (r->end() - r->top()) * HeapWordSize;
+    _young_available_bytes_collected += r->free();
     if (r->age() >= InitialTenuringThreshold) {
       _young_bytes_to_promote += r->get_live_data_bytes();
     }
@@ -101,7 +101,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
     _old_region_count++;
     _old_bytes_to_evacuate += r->get_live_data_bytes();
     _old_garbage += r->garbage();
-    _old_available_bytes_collected += (r->end() - r->top()) * HeapWordSize;
+    _old_available_bytes_collected += r->free();
   }
 
   _region_count++;
