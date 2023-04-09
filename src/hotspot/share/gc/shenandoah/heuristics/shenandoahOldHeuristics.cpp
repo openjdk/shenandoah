@@ -272,7 +272,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // This would be similar to young and global collections shortcutting evacuation, though we'd probably want a separate
   // threshold for the old generation.
 
-  // Unlike young, we are more interested in efficiently packing OLD-gen than in reclaiming garbage first.  We set by live-data.
+  // Unlike young, we are more interested in efficiently packing OLD-gen than in reclaiming garbage first.  We sort by live-data.
   // Note that regular regions may be promoted in place with no garbage but also with very little live data.  When we "compact"
   // old-gen, we want to pack these underutilized regions together so we can have more unaffiliated (unfragmented) free regions
   // in old-gen.
