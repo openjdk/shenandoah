@@ -505,7 +505,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size_t waste = r->free();
       if (waste > 0) {
         increase_used(waste);
-	generation->increase_allocated(waste);
+        generation->increase_allocated(waste);
         _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, true);
       }
     } else if (r->free() < PLAB::min_size() * HeapWordSize) {
@@ -516,14 +516,14 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         size_t fill_size = waste / HeapWordSize;
         ShenandoahHeap::fill_with_object(fill_addr, fill_size);
         r->set_top(r->end());
-	// Since we have filled the waste with an empty object, account for increased usage
-	_heap->increase_used(waste);
-	if (_heap->mode()->is_generational()) {
-	  _heap->generation_for(req.affiliation())->increase_used(waste);
+        // Since we have filled the waste with an empty object, account for increased usage
+        _heap->increase_used(waste);
+        if (_heap->mode()->is_generational()) {
+          _heap->generation_for(req.affiliation())->increase_used(waste);
           if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
             _heap->card_scan()->register_object(fill_addr);
           }
-	}
+        }
       }
     }
 
@@ -585,7 +585,7 @@ void ShenandoahFreeSet::recompute_bounds() {
     size_t old_collector_middle = (_old_collector_leftmost + _old_collector_rightmost) / 2;
     size_t old_collector_available_in_first_half = 0;
     size_t old_collector_available_in_second_half = 0;
-    
+
     for (size_t index = _old_collector_leftmost; index < old_collector_middle; index++) {
       if (is_old_collector_free(index)) {
         ShenandoahHeapRegion* r = _heap->get_region(index);
@@ -792,22 +792,8 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
 // Returns true iff this region is entirely available, either because it is empty() or because it has been found to represent
 // immediate trash and we'll be able to immediately recycle it.  Note that we cannot recycle immediate trash if
-// concurrent weak root processing is in progress
+// concurrent weak root processing is in progress.
 bool ShenandoahFreeSet::can_allocate_from(ShenandoahHeapRegion *r) {
-#ifdef KELVIN_MONITOR
-  // It seems can_allocate_from means this region is entirely empty, either FREE already, or ready to be recycled (as trash)
-  // Kelvin thinks we should say can_allocate_from() is true if alloc_capacity > 0
-
-  // Kelvin thinks this should return false if r->affiliation() is OLD.  
-
-
-  if (!(r->is_empty() || (r->is_trash() && !_heap->is_concurrent_weak_root_in_progress()))) {
-    log_info(gc, ergo)("can_allocate_from(%s region: " SIZE_FORMAT
-                       ") fails because is_empty: %d, is_trash: %d, is_conc_weak_root_in_progress: %d, alloc capacity: "
-                       SIZE_FORMAT, r->is_old()? "old": "young",
-                       r->index(), r->is_empty(), r->is_trash(), _heap->is_concurrent_weak_root_in_progress(), alloc_capacity(r));
-  }
-#endif
   return r->is_empty() || (r->is_trash() && !_heap->is_concurrent_weak_root_in_progress());
 }
 
