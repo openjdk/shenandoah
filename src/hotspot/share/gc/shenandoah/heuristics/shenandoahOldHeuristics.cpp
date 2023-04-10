@@ -84,14 +84,14 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 
     // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by
     // the size of r's free memory.
-    size_t lost_evacuation_capacity += r->free();
+    size_t lost_evacuation_capacity = r->free();
     size_t live_data_for_evacuation = r->get_live_data_bytes();
     if (live_data_for_evacuation + lost_evacuation_capacity <= remaining_old_evacuation_budget) {
       // Decrement remaining evacuation budget by bytes that will be copied.
       remaining_old_evacuation_budget -= (live_data_for_evacuation + lost_evacuation_capacity);
       collection_set->add_region(r);
       included_old_regions++;
-      evacuated_old_bytes += live_data_for_evacuation;y
+      evacuated_old_bytes += live_data_for_evacuation;
       collected_old_bytes += r->garbage();
       consume_old_collection_candidate();
     } else {
