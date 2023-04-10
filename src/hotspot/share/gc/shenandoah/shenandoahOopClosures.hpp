@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, 2022, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,7 +48,7 @@ private:
   bool _weak;
 
 protected:
-  template <class T, GenerationMode GENERATION>
+  template <class T, ShenandoahGenerationType GENERATION>
   void work(T *p);
 
 public:
@@ -71,7 +72,7 @@ class ShenandoahMarkUpdateRefsSuperClosure : public ShenandoahMarkRefsSuperClosu
 protected:
   ShenandoahHeap* const _heap;
 
-  template <class T, GenerationMode GENERATION>
+  template <class T, ShenandoahGenerationType GENERATION>
   inline void work(T* p);
 
 public:
@@ -82,7 +83,7 @@ public:
   };
 };
 
-template <GenerationMode GENERATION>
+template <ShenandoahGenerationType GENERATION>
 class ShenandoahMarkUpdateRefsClosure : public ShenandoahMarkUpdateRefsSuperClosure {
 private:
   template <class T>
@@ -96,7 +97,7 @@ public:
   virtual void do_oop(oop* p)       { do_oop_work(p); }
 };
 
-template <GenerationMode GENERATION>
+template <ShenandoahGenerationType GENERATION>
 class ShenandoahMarkRefsClosure : public ShenandoahMarkRefsSuperClosure {
 private:
   template <class T>

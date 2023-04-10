@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -181,7 +181,8 @@ const char* ShenandoahOldGeneration::name() const {
 }
 
 bool ShenandoahOldGeneration::contains(ShenandoahHeapRegion* region) const {
-  return region->affiliation() != YOUNG_GENERATION;
+  // TODO: Should this be region->is_old() instead?
+  return !region->is_young();
 }
 
 void ShenandoahOldGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {

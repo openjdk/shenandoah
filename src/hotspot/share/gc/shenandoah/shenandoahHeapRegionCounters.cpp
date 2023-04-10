@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016, 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -155,7 +156,7 @@ static int encode_phase(ShenandoahHeap* heap) {
 }
 
 static int get_generation_shift(ShenandoahGeneration* generation) {
-  switch (generation->generation_mode()) {
+  switch (generation->type()) {
     case GLOBAL: return 0;
     case OLD:    return 2;
     case YOUNG:  return 4;

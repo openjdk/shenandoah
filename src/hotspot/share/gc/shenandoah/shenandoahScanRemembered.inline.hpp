@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. or its affiliates.  All rights reserved.
- *
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +34,7 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 
 inline size_t
 ShenandoahDirectCardMarkRememberedSet::last_valid_index() const {

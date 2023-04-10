@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -92,7 +93,7 @@ void ShenandoahDegenGC::op_degenerated() {
 
 #ifdef ASSERT
   if (heap->mode()->is_generational()) {
-    if (_generation->generation_mode() == GenerationMode::GLOBAL) {
+    if (_generation->is_global()) {
       // We can only get to a degenerated global cycle _after_ a concurrent global cycle
       // has been cancelled. In which case, we expect the concurrent global cycle to have
       // cancelled the old gc already.
@@ -133,11 +134,10 @@ void ShenandoahDegenGC::op_degenerated() {
       // Note that we can only do this for "outside-cycle" degens, otherwise we would risk
       // changing the cycle parameters mid-cycle during concurrent -> degenerated handover.
       heap->set_unload_classes(_generation->heuristics()->can_unload_classes() &&
-                                (!heap->mode()->is_generational() || _generation->generation_mode() == GLOBAL));
+                                (!heap->mode()->is_generational() || _generation->is_global()));
 
       if (heap->mode()->is_generational() &&
-            (_generation->generation_mode() == YOUNG ||
-                (_generation->generation_mode() == GLOBAL && ShenandoahVerify))) {
+            (_generation->is_young() || (_generation->is_global() && ShenandoahVerify))) {
         // Swap remembered sets for young, or if the verifier will run during a global collect
         // TODO: This path should not depend on ShenandoahVerify
         _generation->swap_remembered_set();
@@ -188,7 +188,7 @@ void ShenandoahDegenGC::op_degenerated() {
 
     case _degenerated_evac:
 
-      if (heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
+      if (heap->mode()->is_generational() && _generation->is_global()) {
         op_global_coalesce_and_fill();
       }
 

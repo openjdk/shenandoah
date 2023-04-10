@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -159,7 +160,7 @@ inline void ShenandoahHeapRegion::internal_increase_live_data(size_t s) {
   size_t used_bytes = used();
   assert(live_bytes <= used_bytes,
          "%s Region " SIZE_FORMAT " can't have more live data than used: " SIZE_FORMAT ", " SIZE_FORMAT " after adding " SIZE_FORMAT,
-         affiliation_name(affiliation()), index(), live_bytes, used_bytes, s * HeapWordSize);
+         affiliation_name(), index(), live_bytes, used_bytes, s * HeapWordSize);
 #endif
 }
 
@@ -206,8 +207,12 @@ inline void ShenandoahHeapRegion::set_update_watermark_at_safepoint(HeapWord* w)
   _update_watermark = w;
 }
 
-inline ShenandoahRegionAffiliation ShenandoahHeapRegion::affiliation() const {
+inline ShenandoahAffiliation ShenandoahHeapRegion::affiliation() const {
   return ShenandoahHeap::heap()->region_affiliation(this);
+}
+
+inline const char* ShenandoahHeapRegion::affiliation_name() const {
+  return shenandoah_affiliation_name(affiliation());
 }
 
 inline void ShenandoahHeapRegion::clear_young_lab_flags() {
@@ -223,11 +228,15 @@ inline bool ShenandoahHeapRegion::has_young_lab_flag() {
 }
 
 inline bool ShenandoahHeapRegion::is_young() const {
-  return ShenandoahHeap::heap()->region_affiliation(this) == YOUNG_GENERATION;
+  return affiliation() == YOUNG_GENERATION;
 }
 
 inline bool ShenandoahHeapRegion::is_old() const {
-  return ShenandoahHeap::heap()->region_affiliation(this) == OLD_GENERATION;
+  return affiliation() == OLD_GENERATION;
+}
+
+inline bool ShenandoahHeapRegion::is_affiliated() const {
+  return affiliation() != FREE;
 }
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -97,7 +98,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // to exclude one of the regions because it might require evacuation of too much live data.
   // TODO: Split it in the separate methods for clarity.
   bool is_generational = heap->mode()->is_generational();
-  bool is_global = (_generation->generation_mode() == GLOBAL);
+  bool is_global = _generation->is_global();
   size_t capacity = heap->young_generation()->max_capacity();
 
   // cur_young_garbage represents the amount of memory to be reclaimed from young-gen.  In the case that live objects

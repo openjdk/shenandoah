@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@
 #include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
@@ -65,53 +64,3 @@ ShenandoahHeuristics* ShenandoahGenerationalMode::initialize_heuristics(Shenando
   return new ShenandoahAdaptiveHeuristics(generation);
 }
 
-// TODO: These have no place in this compilation unit. Should probably be in shenandoahHeap.cpp
-
-const char* affiliation_name(oop ptr) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  assert(heap->is_in(ptr), "Oop must be in the heap.");
-  ShenandoahHeapRegion* region = heap->heap_region_containing(ptr);
-  return affiliation_name(region->affiliation());
-}
-
-const char affiliation_code(ShenandoahRegionAffiliation type) {
-  switch(type) {
-    case ShenandoahRegionAffiliation::FREE:
-      return 'F';
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return 'Y';
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return 'O';
-    default:
-      ShouldNotReachHere();
-      return 'X';
-  }
-}
-
-const char* affiliation_name(ShenandoahRegionAffiliation type) {
-  switch (type) {
-    case ShenandoahRegionAffiliation::FREE:
-      return "FREE";
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return "YOUNG";
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return "OLD";
-    default:
-      ShouldNotReachHere();
-      return nullptr;
-  }
-}
-
-const char* generation_name(GenerationMode mode) {
-  switch (mode) {
-    case GenerationMode::GLOBAL:
-      return "Global";
-    case GenerationMode::OLD:
-      return "Old";
-    case GenerationMode::YOUNG:
-      return "Young";
-    default:
-      ShouldNotReachHere();
-      return nullptr;
-  }
-}

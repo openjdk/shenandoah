@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016, 2023, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -93,13 +94,13 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   size_t live = r->get_live_data_bytes();
   size_t garbage = r->garbage();
 
-  if (r->affiliation() == YOUNG_GENERATION) {
+  if (r->is_young()) {
     _young_region_count++;
     _young_bytes_to_evacuate += live;
     if (r->age() >= InitialTenuringThreshold) {
       _young_bytes_to_promote += live;
     }
-  } else if (r->affiliation() == OLD_GENERATION) {
+  } else if (r->is_old()) {
     _old_region_count++;
     _old_bytes_to_evacuate += live;
     _old_garbage += garbage;
