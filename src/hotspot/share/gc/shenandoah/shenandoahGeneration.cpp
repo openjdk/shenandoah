@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -162,7 +162,6 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   size_t v_soft_max_capacity = soft_max_capacity();
   size_t v_max_capacity = max_capacity();
   size_t v_available = available();
-  size_t v_adjusted_avail = adjusted_available();
   size_t v_humongous_waste = get_humongous_waste();
   LogGcInfo::print("%s: %s generation used: " SIZE_FORMAT "%s, used regions: " SIZE_FORMAT "%s, "
                    "humongous waste: " SIZE_FORMAT "%s, soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, "
@@ -933,14 +932,19 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
 }
 
 size_t ShenandoahGeneration::increment_affiliated_region_count() {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
+  // During full gc, multiple GC worker threads may change region affiliations without a lock.  No lock is enforced
+  // on read and write of _affiliated_region_count.  At the end of full gc, a single thread overwrites the count with
+  // a coherent value.
   _affiliated_region_count++;
   return _affiliated_region_count;
 }
 
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
-  assert(_affiliated_region_count > 0, "affiliated_region_count cannot be negative");
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
+  // During full gc, multiple GC worker threads may change region affiliations without a lock.  No lock is enforced
+  // on read and write of _affiliated_region_count.  At the end of full gc, a single thread overwrites the count with
+  // a coherent value.
   _affiliated_region_count--;
   return _affiliated_region_count;
 }
