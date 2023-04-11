@@ -37,6 +37,7 @@ protected:
    ShenandoahHeap* _heap;
 
 public:
+  // TODO: Have a separate memory pool implementation for non-generational
   ShenandoahMemoryPool(ShenandoahHeap* pool,
                       const char* name = "Shenandoah");
   virtual MemoryUsage get_memory_usage();
