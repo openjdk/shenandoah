@@ -105,7 +105,7 @@ public:
           }
 
           // Then register the humongous object and DIRTY relevant remembered set cards
-          scanner->register_object_wo_lock(obj_addr);
+          scanner->register_object_without_lock(obj_addr);
           obj->oop_iterate(&dirty_cards_for_interesting_pointers);
         } else if (!r->is_humongous()) {
           // First, clear the remembered set
@@ -117,7 +117,7 @@ public:
           while (obj_addr < t) {
             oop obj = cast_to_oop(obj_addr);
             size_t size = obj->size();
-            scanner->register_object_wo_lock(obj_addr);
+            scanner->register_object_without_lock(obj_addr);
             obj_addr += obj->oop_iterate_size(&dirty_cards_for_interesting_pointers);
           }
         } // else, ignore humongous continuation region

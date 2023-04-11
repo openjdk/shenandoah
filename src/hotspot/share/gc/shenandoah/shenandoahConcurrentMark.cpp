@@ -178,9 +178,9 @@ template<ShenandoahGenerationType GENERATION>
 void ShenandoahMarkConcurrentRootsTask<GENERATION>::work(uint worker_id) {
   ShenandoahConcurrentWorkerSession worker_session(worker_id);
   ShenandoahObjToScanQueue* q = _queue_set->queue(worker_id);
-  ShenandoahObjToScanQueue* old = (_old_queue_set == nullptr) ?
+  ShenandoahObjToScanQueue* old_q = (_old_queue_set == nullptr) ?
           nullptr : _old_queue_set->queue(worker_id);
-  ShenandoahMarkRefsClosure<GENERATION> cl(q, _rp, old);
+  ShenandoahMarkRefsClosure<GENERATION> cl(q, _rp, old_q);
   _root_scanner.roots_do(&cl, worker_id);
 }
 

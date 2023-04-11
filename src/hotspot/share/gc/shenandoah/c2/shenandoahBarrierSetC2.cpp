@@ -1017,7 +1017,7 @@ void ShenandoahBarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node*
     Node* shift = node->unique_out();
     Node* addp = shift->unique_out();
     for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
-      Node *mem = addp->last_out(j);
+      Node* mem = addp->last_out(j);
       if (UseCondCardMark && mem->is_Load()) {
         assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
         // The load is checking if the card has been written so
