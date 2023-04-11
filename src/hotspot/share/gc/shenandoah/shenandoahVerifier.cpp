@@ -1107,6 +1107,7 @@ void ShenandoahVerifier::verify_after_fullgc() {
   );
 }
 
+// TODO: This should be OopClosure, because it verifies roots?
 class ShenandoahVerifyNoForwared : public BasicOopIterateClosure {
 private:
   template <class T>
