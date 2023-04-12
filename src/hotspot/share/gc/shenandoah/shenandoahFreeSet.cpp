@@ -38,8 +38,6 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
-#undef KELVIN_MONITOR
-
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
   _mutator_free_bitmap(max_regions, mtGC),
@@ -53,11 +51,6 @@ ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
 inline void ShenandoahFreeSet::increase_used(size_t num_bytes) {
   shenandoah_assert_heaplocked();
   _used += num_bytes;
-
-#undef KELVIN_INCREASE_USED
-#ifdef KELVIN_INCREASE_USED
-  log_info(gc, ergo)("FreeSet::increase_used by " SIZE_FORMAT ", yielding " SIZE_FORMAT, num_bytes, _used);
-#endif
   assert(_used <= _capacity, "must not use (" SIZE_FORMAT ") more than we have (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
          _used, _capacity, num_bytes);
 }
@@ -136,11 +129,6 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
                                                            ShenandoahAllocRequest& req, bool& in_new_region) {
   size_t rightmost = _old_collector_rightmost;
   size_t leftmost = _old_collector_leftmost;
-#ifdef KELVIN_MONITOR
-  size_t old_regions_examined = 0;
-  size_t region_with_most_avail = 0;
-  size_t avail_in_largest_region = 0;
-#endif
   if (_old_collector_search_left_to_right) {
     // This mode picks up stragglers following a full GC
     for (size_t c = leftmost; c <= rightmost; c++) {
@@ -151,20 +139,7 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
                "is_old_collector_free region has bad affiliation");
         if (r->affiliation() == affiliation) {
           HeapWord* result = try_allocate_in(r, req, in_new_region);
-#ifdef KELVIN_MONITOR
-          size_t region_available = r->end() - r->top();
-          if ((old_regions_examined++ == 0) || (region_available > avail_in_largest_region)) {
-            region_with_most_avail = c;
-            avail_in_largest_region = region_available;
-          }
-#endif
           if (result != nullptr) {
-#ifdef KELVIN_MONITOR
-            log_info(gc, ergo)("aowa succeeds for %s size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ", actual_size: " SIZE_FORMAT
-                               ", in region " SIZE_FORMAT ", remaining available: " SIZE_FORMAT,
-                               req.is_lab_alloc()? "PLAB": "shared", req.size(), req.is_lab_alloc()? req.min_size(): req.size(),
-                               req.actual_size(), r->index(), r->end() - r->top());
-#endif
             return result;
           }
         }
@@ -182,32 +157,13 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
                "is_old_collector_free region has bad affiliation");
         if (r->affiliation() == affiliation) {
           HeapWord* result = try_allocate_in(r, req, in_new_region);
-#ifdef KELVIN_MONITOR
-          size_t region_available = r->end() - r->top();
-          if ((old_regions_examined++ == 0) || (region_available > avail_in_largest_region)) {
-            region_with_most_avail = idx;
-            avail_in_largest_region = region_available;
-          }
-#endif
           if (result != nullptr) {
-#ifdef KELVIN_MONITOR
-            log_info(gc, ergo)("aowa succeeds for %s size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ", actual_size: " SIZE_FORMAT
-                               ", in region " SIZE_FORMAT ", remaining availalble: " SIZE_FORMAT,
-                               req.is_lab_alloc()? "PLAB": "shared", req.size(), req.is_lab_alloc()? req.min_size(): req.size(),
-                               req.actual_size(), r->index(), r->end() - r->top());
-#endif
             return result;
           }
         }
       }
     }
   }
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("aowa failed for %s size: " SIZE_FORMAT ", min_size: " SIZE_FORMAT ", scanned " SIZE_FORMAT
-                     " from " SIZE_FORMAT " to " SIZE_FORMAT ", largest available: " SIZE_FORMAT " at region " SIZE_FORMAT,
-                     req.is_lab_alloc()? "PLAB": "shared", req.size(), req.is_lab_alloc()? req.min_size(): req.size(),
-                     old_regions_examined, leftmost, rightmost, avail_in_largest_region, region_with_most_avail);
-#endif
   return nullptr;
 }
 
@@ -548,22 +504,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
   }
 
-#ifdef KELVIN_INCREASE_USED
-  if (result != nullptr) {
-    log_info(gc, ergo)("try_allocate_in() allocated " SIZE_FORMAT " in region " SIZE_FORMAT ", leaving remnant free: " SIZE_FORMAT,
-                       size * HeapWordSize, r->index(), r->free());
-  } else {
-    log_info(gc, ergo)("try_allocate_in() failed to allocate " SIZE_FORMAT " in region " SIZE_FORMAT ", which has free: " SIZE_FORMAT,
-                       size * HeapWordSize, r->index(), r->free());
-  }
-  log_info(gc, ergo)("has_no_alloc_capacity(" SIZE_FORMAT ") is %d", r->index(), has_no_alloc_capacity(r));
-#endif
-
   if (result == nullptr || has_no_alloc_capacity(r)) {
-#ifdef KELVIN_INCREASE_USED
-    log_info(gc, ergo)("Retire this region");
-#endif
-
     // Region cannot afford this or future allocations. Retire it.
     //
     // While this seems a bit harsh, especially in the case when this large allocation does not
@@ -735,15 +676,6 @@ bool ShenandoahFreeSet::expand_old_collector_bounds_maybe(size_t idx) {
 }
 
 void ShenandoahFreeSet::adjust_bounds() {
-#ifdef KELVIN_MONITOR
-  size_t original_m_left = _mutator_leftmost;
-  size_t original_m_right = _mutator_rightmost;
-  size_t original_c_left = _collector_leftmost;
-  size_t original_c_right = _collector_rightmost;
-  size_t original_oc_left = _old_collector_leftmost;
-  size_t original_oc_right = _old_collector_rightmost;
-#endif
-
   // Rewind both mutator bounds until the next bit.
   while (_mutator_leftmost < _max && !is_mutator_free(_mutator_leftmost)) {
     _mutator_leftmost++;
@@ -765,18 +697,6 @@ void ShenandoahFreeSet::adjust_bounds() {
   while (_old_collector_rightmost > 0 && !is_old_collector_free(_old_collector_rightmost)) {
     _old_collector_rightmost--;
   }
-#ifdef KELVIN_MONITOR
-  if ((original_c_left != _collector_leftmost) || (original_c_right != _collector_rightmost) ||
-      (original_oc_left != _old_collector_leftmost) || (original_oc_right != _old_collector_rightmost)) {
-    log_info(gc, ergo)("adjust_bounds for mutator [" SIZE_FORMAT "-" SIZE_FORMAT "] => [" SIZE_FORMAT "-" SIZE_FORMAT
-                       "], for collector [" SIZE_FORMAT "-" SIZE_FORMAT "] -> [" SIZE_FORMAT "-" SIZE_FORMAT
-                       "], for old collector [" SIZE_FORMAT "-" SIZE_FORMAT "] -> [" SIZE_FORMAT "-" SIZE_FORMAT "]",
-                       original_m_left, original_m_right, _mutator_leftmost, _mutator_rightmost,
-                       original_c_left, original_c_right, _collector_leftmost, _collector_rightmost,
-                       original_oc_left, original_oc_right, _old_collector_leftmost, _old_collector_rightmost);
-    // Don't report mutator adjustments.  They are too frequent.
-  }
-#endif
 }
 
 HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
@@ -884,9 +804,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   // Allocated at left/rightmost? Move the bounds appropriately.
   if (beg == _mutator_leftmost || end == _mutator_rightmost) {
-#ifdef KELVIN_MONITOR
-    log_info(gc, ergo)("alloc_contiguous(" SIZE_FORMAT "-" SIZE_FORMAT ") is adjusting bounds", beg, end);
-#endif
     adjust_bounds();
   }
   assert_bounds();
@@ -942,24 +859,11 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   assert(_mutator_free_bitmap.at(idx), "Should be in mutator view");
   assert(can_allocate_from(r), "Should not be allocated");
 
-#ifdef KELVIN_MONITOR
-  size_t original_left = _old_collector_leftmost;
-  size_t original_right = _old_collector_rightmost;
-#endif
   clear_mutator_free(idx);
   set_old_collector_free(idx);
   bool result = expand_old_collector_bounds_maybe(idx);
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("Flipping region " SIZE_FORMAT " to OLD GC, %s collector range: [" SIZE_FORMAT "-" SIZE_FORMAT "] to ["
-                     SIZE_FORMAT "-" SIZE_FORMAT "]", idx, result? "expanded": "preserved",
- original_left, original_right, _old_collector_leftmost, _old_collector_rightmost);
-#endif
 
   _capacity -= alloc_capacity(r);
-#ifdef KELVIN_INCREASE_USED
-  log_info(gc, ergo)("Capacity decreased by " SIZE_FORMAT " to " SIZE_FORMAT " after flipping region " SIZE_FORMAT
-                     " to old collector", alloc_capacity(r), _capacity, r->index());
-#endif
   adjust_mutator_bounds_if_touched(idx);
   assert_bounds();
 
@@ -974,24 +878,11 @@ void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
   assert(_mutator_free_bitmap.at(idx), "Should be in mutator view");
   assert(can_allocate_from(r), "Should not be allocated");
 
-#ifdef KELVIN_MONITOR
-  size_t original_left = _collector_leftmost;
-  size_t original_right = _collector_rightmost;
-#endif
   clear_mutator_free(idx);
   set_collector_free(idx);
   bool result = expand_collector_bounds_maybe(idx);
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("Flipping region " SIZE_FORMAT " to GC, collector range: [" SIZE_FORMAT "-" SIZE_FORMAT "] to ["
-                     SIZE_FORMAT "-" SIZE_FORMAT "]",
-                     idx, original_left, original_right, _collector_leftmost, _collector_rightmost);
-#endif
 
   _capacity -= alloc_capacity(r);
-#ifdef KELVIN_INCREASE_USED
-  log_info(gc, ergo)("Capacity decreased by " SIZE_FORMAT " to " SIZE_FORMAT " after flipping region " SIZE_FORMAT " to collector",
-                     alloc_capacity(r), _capacity, r->index());
-#endif
   adjust_mutator_bounds_if_touched(idx);
   assert_bounds();
 
@@ -1025,17 +916,8 @@ void ShenandoahFreeSet::rebuild() {
   clear();
 
   log_debug(gc, free)("Rebuilding FreeSet");
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("Rebuilding FreeSet");
-#endif
   for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
-#ifdef KELVIN_MONITOR
-    bool was_collector_free = false;
-    if (is_collector_free(idx)) {
-      was_collector_free = true;
-    }
-#endif
 
     // We move all young available regions into mutator_free set and then we take back the regions we need for our
     // reserve.  This allows us to "compact" the collector_free (survivor) regions at the high end of the heap.
@@ -1046,11 +928,6 @@ void ShenandoahFreeSet::rebuild() {
     if (region->is_alloc_allowed() || region->is_trash()) {
       assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
 
-#ifdef KELVIN_MONITOR_X
-      if (has_no_alloc_capacity(region)) {
-        log_info(gc, ergo)("Region " SIZE_FORMAT " not part of FreeSet because it has no alloc capacity", region->index());
-      }
-#endif
       // Do not add regions that would surely fail allocation
       if (has_no_alloc_capacity(region)) continue;
 
@@ -1061,38 +938,17 @@ void ShenandoahFreeSet::rebuild() {
         log_debug(gc)("  Setting Region " SIZE_FORMAT " _old_collector_free_bitmap bit to true", idx);
       } else {
         _capacity += alloc_capacity(region);
-#ifdef KELVIN_INCREASE_USED
-        log_info(gc, ergo)("Rebuild capacity increased by " SIZE_FORMAT " to " SIZE_FORMAT " for region " SIZE_FORMAT,
-                           alloc_capacity(region), _capacity, region->index());
-#endif
 
         assert(_used <= _capacity, "must not use more than we have");
         assert(!is_mutator_free(idx), "We are about to add it, it shouldn't be there already");
         set_mutator_free(idx);
-#ifdef KELVIN_MONITOR
-        if (was_collector_free) {
-          log_info(gc, ergo)("Treating Region " SIZE_FORMAT " as _mutator_free and collector_free!  region capacity: " SIZE_FORMAT
-                             ", total capacity: " SIZE_FORMAT, idx, alloc_capacity(region), _capacity);
-        }
-#endif
         log_debug(gc, free)(
           "  Adding Region " SIZE_FORMAT " (Free: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s) to mutator free set",
           idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
           byte_size_in_proper_unit(region->used()), proper_unit_for_byte_size(region->used()));
       }
     }
-#ifdef KELVIN_MONITOR_X
-    else {
-      log_info(gc, ergo)("Region " SIZE_FORMAT " not part of FreeSet because allocation not allowed and region is not trash",
-                         region->index());
-    }
-#endif
   }
-
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("After rebuild but before reserve");
-  log_status();
-#endif
 
   // Evac reserve: reserve trailing space for evacuations
   size_t young_reserve, old_reserve;
@@ -1110,49 +966,22 @@ void ShenandoahFreeSet::rebuild() {
       // We are rebuilding at the end of final mark, having established evacuation budgets for this GC pass.
       young_reserve = _heap->get_young_evac_reserve();
       old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
-#ifdef KELVIN_MONITOR
-      log_info(gc, ergo)("Freeset for this evacuation, young reserve: " SIZE_FORMAT ", old reserve: " SIZE_FORMAT,
-                         young_reserve, old_reserve);
-#endif
     } else {
       // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
       young_reserve = (_heap->young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
       old_reserve = MAX2((_heap->old_generation()->max_capacity() * ShenandoahOldEvacReserve) / 100,
                          ShenandoahOldCompactionReserve * ShenandoahHeapRegion::region_size_bytes());
-#ifdef KELVIN_MONITOR
-      log_info(gc, ergo)("Freeset for next evacuation, young reserve: " SIZE_FORMAT ", old reserve: " SIZE_FORMAT,
-                         young_reserve, old_reserve);
-#endif
     }
   }
   reserve_regions(young_reserve, old_reserve);
   recompute_bounds();
   assert_bounds();
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("After rebuild and reserve and recomputing bounds, allocate old left to right is: %s",
-                     _old_collector_search_left_to_right? "true": "false");
-#endif
   log_status();
 }
 
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
   size_t reserved = 0;
-#ifdef KELVIN_MONITOR
-  size_t original_old_capacity = _old_capacity;
-  size_t leftmost_reserved = 0;
-  size_t rightmost_reserved = 0;
-  size_t leftmost_old_reserved = 0;
-  size_t rightmost_old_reserved = 0;
-#endif
   for (size_t idx = _heap->num_regions() - 1; idx > 0; idx--) {
-#ifdef KELVIN_MONITOR_X
-    if (reserved <= to_reserve) {
-      log_info(gc, ergo)("Reserving " SIZE_FORMAT " more, region " SIZE_FORMAT " has capacity: " SIZE_FORMAT,
-                         to_reserve - reserved, idx, alloc_capacity(_heap->get_region(idx)));
-    } else {
-      log_info(gc, ergo)("Resevations are done");
-    }
-#endif
     ShenandoahHeapRegion* r = _heap->get_region(idx);
     if (_mutator_free_bitmap.at(idx) && (alloc_capacity(r) > 0)) {
       assert(!r->is_old(), "mutator_is_free regions should not be affiliated OLD");
@@ -1162,18 +991,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
         set_old_collector_free(idx);
         size_t ac = alloc_capacity(r);
         _capacity -= ac;
-#ifdef KELVIN_INCREASE_USED
-        log_info(gc, ergo)("Rebuild reserve capacity decreased by " SIZE_FORMAT " to " SIZE_FORMAT
-                           " after flipping region " SIZE_FORMAT " to old collector",
-                           ac, _capacity, r->index());
-#endif
         _old_capacity += ac;
-#ifdef KELVIN_MONITOR
-        leftmost_old_reserved = idx;
-        if (rightmost_old_reserved == 0) {
-          rightmost_old_reserved = idx;
-        }
-#endif
         log_debug(gc, free)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
       } else if (reserved < to_reserve) {
         // Note: In a previous implementation, regions were only placed into the survivor space (collector_is_free) if
@@ -1184,18 +1002,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
         set_collector_free(idx);
         size_t ac = alloc_capacity(r);
         _capacity -= ac;
-#ifdef KELVIN_INCREASE_USED
-        log_info(gc, ergo)("Rebuild reserve capacity decreased by " SIZE_FORMAT " to " SIZE_FORMAT
-                           " after flipping region " SIZE_FORMAT " to young collector",
-                           ac, _capacity, r->index());
-#endif
         reserved += ac;
-#ifdef KELVIN_MONITOR
-        leftmost_reserved = idx;
-        if (rightmost_reserved == 0) {
-          rightmost_reserved = idx;
-        }
-#endif
         log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to collector_free", idx);
       } else {
         // We've satisfied both to_reserve and to_reserved_old
@@ -1203,14 +1010,6 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
       }
     }
   }
-#ifdef KELVIN_MONITOR
-  log_info(gc, ergo)("Successfully reserved for young: " SIZE_FORMAT " between " SIZE_FORMAT " and " SIZE_FORMAT
-                     ", reserved for old: " SIZE_FORMAT " between " SIZE_FORMAT " and " SIZE_FORMAT
-                     " (of which " SIZE_FORMAT " is scattered)"
-                     ", with remaining allocation capacity: " SIZE_FORMAT,
-                     reserved, leftmost_reserved, rightmost_reserved,
-                     _old_capacity, leftmost_old_reserved, rightmost_old_reserved, original_old_capacity, _capacity);
-#endif
 }
 
 void ShenandoahFreeSet::log_status() {
@@ -1335,10 +1134,6 @@ void ShenandoahFreeSet::log_status() {
 
           total_used += r->used();
           total_free += free;
-#ifdef KELVIN_INCREASE_USED
-          log_info(gc, ergo)("FreeSet:free increased by " SIZE_FORMAT ", yielding " SIZE_FORMAT ", for region " SIZE_FORMAT,
-                             free, total_free, idx);
-#endif
           max_contig = MAX2(max_contig, empty_contig);
           last_idx = idx;
         }
