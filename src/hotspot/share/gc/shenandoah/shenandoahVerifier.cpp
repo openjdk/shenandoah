@@ -714,7 +714,7 @@ public:
   VerifyThreadGCState(const char* label, char expected) : _label(label), _expected(expected) {}
   void do_thread(Thread* t) {
     char actual = ShenandoahThreadLocalData::gc_state(t);
-    if (verify_gc_state(actual, _expected)) {
+    if (!verify_gc_state(actual, _expected)) {
       fatal("%s: Thread %s: expected gc-state %d, actual %d", _label, t->name(), _expected, actual);
     }
   }
@@ -723,7 +723,7 @@ public:
     // Old generation marking is allowed in all states.
     // TODO: This actually accepts more than just OLD_MARKING.
     // TODO: Also, only accept OLD_MARKING in generational mode.
-    return (actual != expected) && !(actual & ShenandoahHeap::OLD_MARKING);
+    return (actual == expected) || (actual & ShenandoahHeap::OLD_MARKING);
   }
 };
 
@@ -784,7 +784,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     if (enabled) {
       char actual = _heap->gc_state();
-      if (VerifyThreadGCState::verify_gc_state(actual, expected)) {
+      if (!VerifyThreadGCState::verify_gc_state(actual, expected)) {
         fatal("%s: Global gc-state: expected %d, actual %d", label, expected, actual);
       }
 
