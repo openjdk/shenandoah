@@ -47,7 +47,7 @@ class ShenandoahGeneration;
 #define SHENANDOAH_RETURN_EVENT_MESSAGE(generation_type, prefix, postfix) \
   switch (generation_type) {                                              \
     case GLOBAL:                                                          \
-      return prefix " " postfix;                                          \
+      return prefix "" postfix;                                           \
     case YOUNG:                                                           \
       return prefix " (YOUNG)" postfix;                                   \
     case OLD:                                                             \
