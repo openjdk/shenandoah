@@ -59,9 +59,22 @@ private:
 
   void assert_bounds() const NOT_DEBUG_RETURN;
 
-  bool is_mutator_free(size_t idx) const;
-  bool is_collector_free(size_t idx) const;
-  bool is_old_collector_free(size_t idx) const;
+  inline bool is_mutator_free(size_t idx) const;
+  inline bool is_collector_free(size_t idx) const;
+  inline bool is_old_collector_free(size_t idx) const;
+
+  // Routines that do not assert non-empty free, for use in assertions and during state transitions
+  inline bool peek_is_mutator_free(size_t idx) const;
+  inline bool peek_is_collector_free(size_t idx) const;
+  inline bool peek_is_old_collector_free(size_t idx) const;
+
+  inline void set_mutator_free(size_t idx);
+  inline void set_collector_free(size_t idx);
+  inline void set_old_collector_free(size_t idx);
+
+  inline void clear_mutator_free(size_t idx);
+  inline void clear_collector_free(size_t idx);
+  inline void clear_old_collector_free(size_t idx);
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
   HeapWord* allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
@@ -83,18 +96,20 @@ private:
   void recompute_bounds();
   void adjust_bounds();
   bool adjust_mutator_bounds_if_touched(size_t idx);
+  bool adjust_collector_bounds_if_touched(size_t idx);
+  bool adjust_old_collector_bounds_if_touched(size_t idx);
   bool touches_bounds(size_t num) const;
   bool expand_collector_bounds_maybe(size_t idx);
   bool expand_old_collector_bounds_maybe(size_t idx);
 
-  void increase_used(size_t amount);
+  inline void increase_used(size_t amount);
   void clear_internal();
 
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
-  bool can_allocate_from(ShenandoahHeapRegion *r);
-  size_t alloc_capacity(ShenandoahHeapRegion *r);
-  bool has_no_alloc_capacity(ShenandoahHeapRegion *r);
+  bool can_allocate_from(ShenandoahHeapRegion *r) const;
+  size_t alloc_capacity(ShenandoahHeapRegion *r) const;
+  bool has_no_alloc_capacity(ShenandoahHeapRegion *r) const;
 
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
