@@ -27,7 +27,7 @@
 
 #include "memory/allocation.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
-#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
+#include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
@@ -35,10 +35,11 @@ class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
 class ShenandoahReferenceProcessor;
 class ShenandoahHeap;
+class ShenandoahMode;
 
 class ShenandoahGeneration : public CHeapObj<mtGC> {
 private:
-  GenerationMode const _generation_mode;
+  ShenandoahGenerationType const _type;
 
   // Marking task queues and completeness
   ShenandoahObjToScanQueueSet* _task_queues;
@@ -62,22 +63,28 @@ protected:
 
 private:
   // Compute evacuation budgets prior to choosing collection set.
-  void compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions, ShenandoahCollectionSet* collection_set,
-                                  size_t &consumed_by_advance_promotion);
+  void compute_evacuation_budgets(ShenandoahHeap* heap,
+                                  bool* preselected_regions,
+                                  ShenandoahCollectionSet* collection_set,
+                                  size_t& consumed_by_advance_promotion);
 
   // Adjust evacuation budgets after choosing collection set.
-  void adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
+  void adjust_evacuation_budgets(ShenandoahHeap* heap,
+                                 ShenandoahCollectionSet* collection_set,
                                  size_t consumed_by_advance_promotion);
 
  public:
-  ShenandoahGeneration(GenerationMode generation_mode, uint max_workers, size_t max_capacity, size_t soft_max_capacity);
+  ShenandoahGeneration(ShenandoahGenerationType type,
+                       uint max_workers,
+                       size_t max_capacity,
+                       size_t soft_max_capacity);
   ~ShenandoahGeneration();
 
-  bool is_young() const  { return _generation_mode == YOUNG; }
-  bool is_old() const    { return _generation_mode == OLD; }
-  bool is_global() const { return _generation_mode == GLOBAL; }
+  bool is_young() const  { return _type == YOUNG; }
+  bool is_old() const    { return _type == OLD; }
+  bool is_global() const { return _type == GLOBAL; }
 
-  inline GenerationMode generation_mode() const { return _generation_mode; }
+  inline ShenandoahGenerationType type() const { return _type; }
 
   inline ShenandoahHeuristics* heuristics() const { return _heuristics; }
 

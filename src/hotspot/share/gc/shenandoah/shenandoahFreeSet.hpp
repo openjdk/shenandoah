@@ -77,9 +77,8 @@ private:
   inline void clear_old_collector_free(size_t idx);
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
-  HeapWord* allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
-  HeapWord* allocate_old_with_affiliation(ShenandoahRegionAffiliation affiliation,
-                                          ShenandoahAllocRequest& req, bool& in_new_region);
+  HeapWord* allocate_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
+  HeapWord* allocate_old_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
 
   // While holding the heap lock, allocate memory for a single object which is to be entirely contained
   // within a single HeapRegion as characterized by req.  The req.size() value is known to be less than or
