@@ -586,8 +586,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // Permanently retire this region if there's room for a fill object
       size_t waste = r->free();
       HeapWord* fill_addr = r->top();
-      if (waste >= ShenandoahHeap::min_fill_size()) {
-        size_t fill_size = waste / HeapWordSize;
+      size_t fill_size = waste / HeapWordSize;
+      if (fill_size >= ShenandoahHeap::min_fill_size()) {
         ShenandoahHeap::fill_with_object(fill_addr, fill_size);
         r->set_top(r->end());
         // Since we have filled the waste with an empty object, account for increased usage
