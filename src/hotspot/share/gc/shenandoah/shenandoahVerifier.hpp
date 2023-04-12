@@ -63,15 +63,15 @@ public:
     _verify_remembered_disable,
 
     // Old objects should be registered and RS cards within *read-only* RS are dirty for all
-    // interesting pointers.
+    // inter-generational pointers.
     _verify_remembered_for_marking,
 
     // Old objects should be registered and RS cards within *read-write* RS are dirty for all
-    // interesting pointers.
+    // inter-generational pointers.
     _verify_remembered_for_updating_references,
 
     // Old objects should be registered and RS cards within *read-write* RS are dirty for all
-    // interesting pointers.
+    // inter-generational pointers.
     // TODO: This differs from the previous mode by update-watermark() vs top() end range?
     _verify_remembered_after_full_gc
   } VerifyRememberedSet;

@@ -36,6 +36,9 @@ private:
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   ShenandoahOldHeuristics* _old_heuristics;
 
+  bool entry_coalesce_and_fill();
+  bool coalesce_and_fill();
+
 public:
   ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity);
 
@@ -100,10 +103,6 @@ public:
 
   void transition_to(State new_state);
   void validate_transition(State new_state) NOT_DEBUG_RETURN;
-
-private:
-  bool entry_coalesce_and_fill();
-  bool coalesce_and_fill();
 };
 
 
