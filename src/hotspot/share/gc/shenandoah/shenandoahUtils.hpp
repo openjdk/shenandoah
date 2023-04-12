@@ -44,18 +44,21 @@
 class GCTimer;
 class ShenandoahGeneration;
 
-#define SHENANDOAH_RETURN_EVENT_MESSAGE(generation_type, prefix, postfix) \
-  switch (generation_type) {                                              \
-    case GLOBAL:                                                          \
-      return prefix " (GLOBAL)" postfix;                                  \
-    case YOUNG:                                                           \
-      return prefix " (YOUNG)" postfix;                                   \
-    case OLD:                                                             \
-      return prefix " (OLD)" postfix;                                     \
-    default:                                                              \
-      ShouldNotReachHere();                                               \
-      return prefix " (?)" postfix;                                       \
-  }                                                                       \
+#define SHENANDOAH_RETURN_EVENT_MESSAGE(heap, generation_type, prefix, postfix) \
+  if (!heap->mode()->is_generational()) {                                       \
+    return prefix "" postfix;                                                   \
+  }                                                                             \
+  switch (generation_type) {                                                    \
+    case GLOBAL:                                                                \
+      return prefix " (GLOBAL)" postfix;                                        \
+    case YOUNG:                                                                 \
+      return prefix " (YOUNG)" postfix;                                         \
+    case OLD:                                                                   \
+      return prefix " (OLD)" postfix;                                           \
+    default:                                                                    \
+      ShouldNotReachHere();                                                     \
+      return prefix " (?)" postfix;                                             \
+  }                                                                             \
 
 class ShenandoahGCSession : public StackObj {
 private:
