@@ -297,8 +297,6 @@ void ShenandoahDegenGC::op_degenerated() {
   if (heap->mode()->is_generational()) {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
-
-    heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
     heap->reset_old_evac_expended();

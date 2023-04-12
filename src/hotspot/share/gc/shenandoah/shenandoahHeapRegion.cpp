@@ -1007,7 +1007,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
         // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
         // restored upon completion of Full GC.
         assert(heap->is_full_gc_in_progress() ||
-               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->adjusted_capacity()),
+               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->soft_max_capacity()),
                "Number of young regions cannot exceed adjusted capacity");
         break;
       case OLD_GENERATION:
@@ -1015,7 +1015,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
         // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
         // restored upon completion of Full GC.
         assert(heap->is_full_gc_in_progress() ||
-               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->adjusted_capacity()),
+               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->soft_max_capacity()),
                "Number of old regions cannot exceed adjusted capacity");
         break;
       default:

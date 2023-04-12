@@ -553,7 +553,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _regions(nullptr),
   _affiliations(nullptr),
   _update_refs_iterator(this),
-  _alloc_supplement_reserve(0),
   _promoted_reserve(0),
   _old_evac_reserve(0),
   _old_evac_expended(0),
@@ -1338,7 +1337,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     if (mode()->is_generational()) {
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
-          size_t young_words_available = young_generation()->adjusted_available() / HeapWordSize;
+          size_t young_words_available = young_generation()->available() / HeapWordSize;
           if (ShenandoahElasticTLAB && req.is_lab_alloc() && (req.min_size() < young_words_available)) {
             // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
             // lab size because young memory has become too fragmented.
@@ -1878,7 +1877,7 @@ void ShenandoahHeap::set_young_lab_region_flags() {
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
   if (ShenandoahElasticTLAB) {
     if (mode()->is_generational()) {
-      return MIN2(ShenandoahHeapRegion::max_tlab_size_bytes(), young_generation()->adjusted_available());
+      return MIN2(ShenandoahHeapRegion::max_tlab_size_bytes(), young_generation()->available());
     } else {
       // With Elastic TLABs, return the max allowed size, and let the allocation path
       // figure out the safe size for current allocation.

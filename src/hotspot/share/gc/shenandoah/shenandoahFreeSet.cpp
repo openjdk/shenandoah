@@ -191,15 +191,15 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   if (_heap->mode()->is_generational()) {
     switch (req.affiliation()) {
       case ShenandoahRegionAffiliation::OLD_GENERATION:
-        // Note: unsigned result from adjusted_unaffiliated_regions() will never be less than zero, but it may equal zero.
-        if (_heap->old_generation()->adjusted_unaffiliated_regions() <= 0) {
+        // Note: unsigned result from free_unaffiliated_regions() will never be less than zero, but it may equal zero.
+        if (_heap->old_generation()->free_unaffiliated_regions() <= 0) {
           allow_new_region = false;
         }
         break;
 
       case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-        // Note: unsigned result from adjusted_unaffiliated_regions() will never be less than zero, but it may equal zero.
-        if (_heap->young_generation()->adjusted_unaffiliated_regions() <= 0) {
+        // Note: unsigned result from free_unaffiliated_regions() will never be less than zero, but it may equal zero.
+        if (_heap->young_generation()->free_unaffiliated_regions() <= 0) {
           allow_new_region = false;
         }
         break;
@@ -597,7 +597,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   // Check if there are enough regions left to satisfy allocation.
   if (_heap->mode()->is_generational()) {
-    size_t avail_young_regions = generation->adjusted_unaffiliated_regions();
+    size_t avail_young_regions = generation->free_unaffiliated_regions();
     if (num > mutator_count() || (num > avail_young_regions)) {
       return nullptr;
     }

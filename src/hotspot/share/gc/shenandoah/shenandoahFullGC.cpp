@@ -180,9 +180,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
     // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
     // made valid by the time Full GC completes.
-    assert(heap->old_generation()->used_regions_size() <= heap->old_generation()->adjusted_capacity(),
+    assert(heap->old_generation()->used_regions_size() <= heap->old_generation()->soft_max_capacity(),
            "Old generation affiliated regions must be less than capacity");
-    assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->adjusted_capacity(),
+    assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->soft_max_capacity(),
            "Young generation affiliated regions must be less than capacity");
 
     assert((heap->young_generation()->used() + heap->young_generation()->get_humongous_waste())
@@ -206,11 +206,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_gc_generation(heap->global_generation());
 
   if (heap->mode()->is_generational()) {
-    // Defer unadjust_available() invocations until after Full GC finishes its efforts because Full GC makes use
-    // of young-gen memory that may have been loaned from old-gen.
-
     // No need for old_gen->increase_used() as this was done when plabs were allocated.
-    heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
     heap->reset_old_evac_expended();

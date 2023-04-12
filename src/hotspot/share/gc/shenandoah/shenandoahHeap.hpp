@@ -355,31 +355,10 @@ private:
   ShenandoahSharedFlag   _progress_last_gc;
   ShenandoahSharedFlag   _concurrent_strong_root_in_progress;
 
-  // _alloc_supplement_reserve is a supplemental budget for new_memory allocations.  During evacuation and update-references,
-  // mutator allocation requests are "authorized" iff young_gen->available() plus _alloc_supplement_reserve minus
-  // _young_evac_reserve is greater than request size.  The values of _alloc_supplement_reserve and _young_evac_reserve
-  // are zero except during evacuation and update-reference phases of GC.  Both of these values are established at
-  // the start of evacuation, and they remain constant throughout the duration of these two phases of GC.  Since these
-  // two values are constant throughout each GC phases, we introduce a new service into ShenandoahGeneration.  This service
-  // provides adjusted_available() based on an adjusted capacity.  At the start of evacuation, we adjust young capacity by
-  // adding the amount to be borrowed from old-gen and subtracting the _young_evac_reserve, we adjust old capacity by
-  // subtracting the amount to be loaned to young-gen.
-  //
-  // We always use adjusted capacities to determine permission to allocate within young and to promote into old.  Note
-  // that adjusted capacities equal traditional capacities except during evacuation and update refs.
-  //
-  // During evacuation, we assure that _old_evac_expended does not exceed _old_evac_reserve.
-  //
-  // At the end of update references, we perform the following bookkeeping activities:
-  //
-  // 1. Unadjust the capacity within young-gen and old-gen to undo the effects of borrowing memory from old-gen.  Note that
-  //    the entirety of the collection set is now available, so allocation capacity naturally increase at this time.
-  // 2. Clear (reset to zero) _alloc_supplement_reserve, _young_evac_reserve, _old_evac_reserve, and _promoted_reserve
-  //
-  // _young_evac_reserve and _old_evac_reserve are only non-zero during evacuation and update-references.
-  //
-  // Allocation of old GCLABs assures that _old_evac_expended + request-size < _old_evac_reserved.  If the allocation
+  // Allocation of old GCLABs (aka PLABs) assures that _old_evac_expended + request-size < _old_evac_reserved.  If the allocation
   //  is authorized, increment _old_evac_expended by request size.  This allocation ignores old_gen->available().
+  //
+  // TODO: The following comment is not entirely accurate, I believe.  Maybe it is not at all accurate.
   //
   // Note that the typical total expenditure on evacuation is less than the associated evacuation reserve because we generally
   // reserve ShenandoahEvacWaste (> 1.0) times the anticipated evacuation need.  In the case that there is an excessive amount
@@ -387,7 +366,6 @@ private:
   // effort.  If this happens, the requesting thread blocks until some other thread manages to evacuate the offending object.
   // Only after "all" threads fail to evacuate an object do we consider the evacuation effort to have failed.
 
-  intptr_t _alloc_supplement_reserve;  // Bytes reserved for young allocations during evac and update refs
   size_t _promoted_reserve;            // Bytes reserved within old-gen to hold the results of promotion
   volatile size_t _promoted_expended;  // Bytes of old-gen memory expended on promotions
 
@@ -489,11 +467,6 @@ public:
   // Returns previous value
   inline size_t set_young_evac_reserve(size_t new_val);
   inline size_t get_young_evac_reserve() const;
-
-  // Returns previous value.  This is a signed value because it is the amount borrowed minus the amount reserved for
-  // young-gen evacuation.  In case we cannot borrow much, this value might be negative.
-  inline intptr_t set_alloc_supplement_reserve(intptr_t new_val);
-  inline intptr_t get_alloc_supplement_reserve() const;
 
 private:
   void manage_satb_barrier(bool active);

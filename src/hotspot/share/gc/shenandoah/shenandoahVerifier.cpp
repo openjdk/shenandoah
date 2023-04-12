@@ -435,7 +435,7 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               "%s: generation (%s) used regions (" SIZE_FORMAT ") must equal regions that are in use (" SIZE_FORMAT ")",
               label, generation->name(), generation->used_regions(), stats.regions());
 
-    size_t generation_capacity = generation->adjusted_capacity();
+    size_t generation_capacity = generation->soft_max_capacity();
     if (adjust_for_deferred_accounting) {
       ShenandoahHeap* heap = ShenandoahHeap::heap();
       size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();

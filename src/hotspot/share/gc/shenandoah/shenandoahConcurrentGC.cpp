@@ -255,7 +255,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       size_t promoted_bytes = old_usage_now - old_usage_before_evac;
       heap->set_previous_promotion(promoted_bytes);
 
-      heap->set_alloc_supplement_reserve(0);
       heap->set_young_evac_reserve(0);
       heap->set_old_evac_reserve(0);
       heap->reset_old_evac_expended();
@@ -766,9 +765,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
     //  been set aside to hold objects evacuated from the young-gen collection set.  Conservatively, this value
     //  equals the entire amount of live young-gen memory within the collection set, even though some of this memory
     //  will likely be promoted.
-    //
-    // heap->get_alloc_supplement_reserve() represents the amount of old-gen memory that can be allocated during evacuation
-    // and update-refs phases of gc.  The young evacuation reserve has already been removed from this quantity.
 
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();

@@ -801,16 +801,6 @@ inline size_t ShenandoahHeap::get_young_evac_reserve() const {
   return _young_evac_reserve;
 }
 
-inline intptr_t ShenandoahHeap::set_alloc_supplement_reserve(intptr_t new_val) {
-  intptr_t orig = _alloc_supplement_reserve;
-  _alloc_supplement_reserve = new_val;
-  return orig;
-}
-
-inline intptr_t ShenandoahHeap::get_alloc_supplement_reserve() const {
-  return _alloc_supplement_reserve;
-}
-
 template<class T>
 inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, T* cl) {
   marked_object_iterate(region, cl, region->top());

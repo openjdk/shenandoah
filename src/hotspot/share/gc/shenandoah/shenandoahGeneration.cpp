@@ -567,7 +567,7 @@ ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
   _collection_thread_time_s(0.0),
   _affiliated_region_count(0), _humongous_waste(0), _used(0), _bytes_allocated_since_gc_start(0),
   _max_capacity(max_capacity), _soft_max_capacity(soft_max_capacity),
-  _adjusted_capacity(soft_max_capacity), _heuristics(nullptr) {
+  _heuristics(nullptr) {
   _is_marking_complete.set();
   assert(max_workers > 0, "At least one queue");
   for (uint i = 0; i < max_workers; ++i) {
@@ -709,7 +709,7 @@ size_t ShenandoahGeneration::used_regions() const {
 size_t ShenandoahGeneration::free_unaffiliated_regions() const {
   size_t result = soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes();
   if (_affiliated_region_count > result) {
-    result = 0;                 // If old-gen is loaning regions to young-gen, affiliated regions may exceed capacity temporarily.
+    result = 0;
   } else {
     result -= _affiliated_region_count;
   }
@@ -726,41 +726,6 @@ size_t ShenandoahGeneration::available() const {
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
-size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
-  // TODO: ysr: remove this check & warning
-  if (adjustment % ShenandoahHeapRegion::region_size_bytes() != 0) {
-    log_warning(gc)("Adjustment (" INTPTR_FORMAT ") should be a multiple of region size (" SIZE_FORMAT ")",
-                    adjustment, ShenandoahHeapRegion::region_size_bytes());
-  }
-  assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0,
-         "Adjustment to generation size must be multiple of region size");
-  _adjusted_capacity = soft_max_capacity() + adjustment;
-  return _adjusted_capacity;
-}
-
-size_t ShenandoahGeneration::unadjust_available() {
-  _adjusted_capacity = soft_max_capacity();
-  return _adjusted_capacity;
-}
-
-size_t ShenandoahGeneration::adjusted_available() const {
-  size_t in_use = used() + get_humongous_waste();
-  size_t capacity = _adjusted_capacity;
-  return in_use > capacity ? 0 : capacity - in_use;
-}
-
-size_t ShenandoahGeneration::adjusted_capacity() const {
-  return _adjusted_capacity;
-}
-
-size_t ShenandoahGeneration::adjusted_unaffiliated_regions() const {
-  assert(adjusted_capacity() >= used_regions_size(), "adjusted_unaffiliated_regions() cannot return negative");
-  assert((adjusted_capacity() - used_regions_size()) % ShenandoahHeapRegion::region_size_bytes() == 0,
-         "adjusted capacity (" SIZE_FORMAT ") and used regions size (" SIZE_FORMAT ") should be multiples of region_size_bytes",
-         adjusted_capacity(), used_regions_size());
-  return (adjusted_capacity() - used_regions_size()) / ShenandoahHeapRegion::region_size_bytes();
-}
-
 void ShenandoahGeneration::increase_capacity(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
 
@@ -771,7 +736,6 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
   assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   _max_capacity += increment;
   _soft_max_capacity += increment;
-  _adjusted_capacity += increment;
 
   // This detects arithmetic wraparound on _used
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
@@ -791,7 +755,6 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
 
   _max_capacity -= decrement;
   _soft_max_capacity -= decrement;
-  _adjusted_capacity -= decrement;
 
   // This detects arithmetic wraparound on _used
   assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
