@@ -213,11 +213,12 @@ void ShenandoahControlThread::run_service() {
           old_bootstrap_requested = true;
           generation = YOUNG;
         } else {
-          assert(!old_bootstrap_requested || (_requested_generation == OLD),
-                 "if old_bootstrap_requested, _requested_generation must be OLD");
-          generation = _requested_generation;
-          old_bootstrap_requested = false;
-        }
+	  // if (old_bootstrap_requested && (_requested_generation == OLD)), this starts the bootstrap GC that
+	  //  immediately follows the preparatory young GC.
+	  // But we will abandon the planned bootstrap GC if a GLOBAL GC has been now been requested.
+	  generation = _requested_generation;
+	  old_bootstrap_requested = false;
+	}
 
         // preemption was requested or this is a regular cycle
         cause = GCCause::_shenandoah_concurrent_gc;
