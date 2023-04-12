@@ -145,26 +145,6 @@ public:
   virtual void do_oop(oop* p)       { work(p); }
 };
 
-class ShenandoahVerifyRemSetClosure : public BasicOopIterateClosure {
-protected:
-  bool               const _init_mark;
-  ShenandoahHeap*    const _heap;
-  RememberedScanner* const _scanner;
-
-public:
-  // Argument distinguishes between initial mark or start of update refs verification.
-  ShenandoahVerifyRemSetClosure(bool init_mark) :
-      _init_mark(init_mark),
-      _heap(ShenandoahHeap::heap()),
-      _scanner(_heap->card_scan()) {}
-
-  template<class T>
-  inline void work(T* p);
-
-  virtual void do_oop(narrowOop* p) { work(p); }
-  virtual void do_oop(oop* p) { work(p); }
-};
-
 class ShenandoahSetRememberedCardsToDirtyClosure : public BasicOopIterateClosure {
 protected:
   ShenandoahHeap*    const _heap;

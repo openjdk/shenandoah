@@ -64,11 +64,11 @@ public:
 
     // Old objects should be registered and RS cards within *read-only* RS are dirty for all
     // inter-generational pointers.
-    _verify_remembered_for_marking,
+    _verify_remembered_before_marking,
 
     // Old objects should be registered and RS cards within *read-write* RS are dirty for all
     // inter-generational pointers.
-    _verify_remembered_for_updating_references,
+    _verify_remembered_before_updating_references,
 
     // Old objects should be registered and RS cards within *read-write* RS are dirty for all
     // inter-generational pointers.
@@ -211,6 +211,14 @@ public:
   void verify_roots_in_to_space();
 
   void verify_roots_no_forwarded();
+
+private:
+   void help_verify_region_rem_set(ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx,
+                                    HeapWord* from, HeapWord* top, HeapWord* update_watermark, const char* message);
+
+  void verify_rem_set_before_mark();
+  void verify_rem_set_before_update_ref();
+  void verify_rem_set_after_full_gc();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHVERIFIER_HPP
