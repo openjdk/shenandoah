@@ -998,7 +998,6 @@ size_t ShenandoahGeneration::used_regions() const {
 }
 
 size_t ShenandoahGeneration::free_unaffiliated_regions() const {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   size_t result = soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes();
   if (_affiliated_region_count > result) {
     result = 0;                 // If old-gen is loaning regions to young-gen, affiliated regions may exceed capacity temporarily.
@@ -1009,19 +1008,16 @@ size_t ShenandoahGeneration::free_unaffiliated_regions() const {
 }
 
 size_t ShenandoahGeneration::used_regions_size() const {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   return _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes();
 }
 
 size_t ShenandoahGeneration::available() const {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   size_t in_use = used() + get_humongous_waste();
   size_t soft_capacity = soft_max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0,
         "Adjustment to generation size must be multiple of region size");
   _adjusted_capacity = soft_max_capacity() + adjustment;

@@ -377,7 +377,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert(size % CardTable::card_size_in_words() == 0, "PLAB size must be multiple of remembered set card size");
     if (size <= usable_free) {
-      bool was_mutator_free = is_mutator_free(r->index());
       result = r->allocate_aligned(size, req, CardTable::card_size());
       size = req.actual_size();
       assert(result != nullptr, "Allocation cannot fail");
@@ -388,10 +387,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         // Account for the alignment padding
         size_t padding = (free - usable_free) * HeapWordSize;
         increase_used(padding);
-        // PLAB allocations are collector_is_free.  We only increase_Used for mutator allocations.
-	if (was_mutator_free) {
-	  increase_used(padding);
-	}
         assert(r->is_old(), "All PLABs reside in old-gen");
         _heap->old_generation()->increase_used(padding);
         // For verification consistency, we need to report this padding to _heap
