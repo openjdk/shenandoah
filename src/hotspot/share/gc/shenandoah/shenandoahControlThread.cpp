@@ -145,8 +145,7 @@ void ShenandoahControlThread::run_service() {
 
       if (degen_point == ShenandoahGC::_degenerated_outside_cycle) {
         _degen_generation = heap->mode()->is_generational() ?
-                            (ShenandoahGeneration*) heap->young_generation() :
-                            (ShenandoahGeneration*) heap->global_generation();
+                heap->young_generation() : heap->global_generation();
       } else {
         assert(_degen_generation != nullptr, "Need to know which generation to resume");
       }

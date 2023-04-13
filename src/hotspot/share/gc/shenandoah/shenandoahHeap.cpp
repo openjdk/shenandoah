@@ -465,8 +465,10 @@ size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
 
 size_t ShenandoahHeap::min_size_for(ShenandoahGeneration* generation) const {
   switch (generation->type()) {
-    case YOUNG:  return _generation_sizer.min_young_size();
-    case OLD:    return max_capacity() - _generation_sizer.max_young_size();
+    case YOUNG:
+      return _generation_sizer.min_young_size();
+    case OLD:
+      return max_capacity() - _generation_sizer.max_young_size();
     case GLOBAL_GEN:
     case GLOBAL_NON_GEN:
       return min_capacity();
@@ -555,8 +557,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _captured_old_usage(0),
   _previous_promotion(0),
   _cancel_requested_time(0),
-  _global_generation(nullptr),
   _young_generation(nullptr),
+  _global_generation(nullptr),
   _old_generation(nullptr),
   _control_thread(nullptr),
   _regulator_thread(nullptr),
