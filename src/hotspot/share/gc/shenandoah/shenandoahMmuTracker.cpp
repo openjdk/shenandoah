@@ -26,6 +26,7 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"

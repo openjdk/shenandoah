@@ -26,6 +26,7 @@
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "gc/shenandoah/shenandoahControlThread.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
@@ -72,7 +73,7 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
     ShenandoahControlThread::GCMode mode = _control_thread->gc_mode();
     if (mode == ShenandoahControlThread::none) {
       if (should_unload_classes()) {
-        if (_control_thread->request_concurrent_gc(GLOBAL)) {
+        if (_control_thread->request_concurrent_gc(GLOBAL_GEN)) {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
@@ -148,7 +149,7 @@ bool ShenandoahRegulatorThread::start_young_cycle() {
 }
 
 bool ShenandoahRegulatorThread::start_global_cycle() {
-  return _global_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(GLOBAL);
+  return _global_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(GLOBAL_GEN);
 }
 
 void ShenandoahRegulatorThread::stop_service() {

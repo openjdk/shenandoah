@@ -269,7 +269,7 @@ bool ShenandoahMark::in_generation(oop obj) {
     return ShenandoahHeap::heap()->is_in_young(obj);
   } else if (GENERATION == OLD) {
     return ShenandoahHeap::heap()->is_in_old(obj);
-  } else if (GENERATION == GLOBAL) {
+  } else if (GENERATION == GLOBAL_GEN || GENERATION == GLOBAL_NON_GEN) {
     return true;
   } else {
     return false;
@@ -288,20 +288,17 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
     if (in_generation<GENERATION>(obj)) {
       mark_ref(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
-      // TODO: This is v-call on very hot path, can we sense the same from GENERATION?
-      if (heap->mode()->is_generational()) {
-        // TODO: As implemented herein, GLOBAL collections reconstruct the card table during GLOBAL concurrent
-        // marking. Note that the card table is cleaned at init_mark time so it needs to be reconstructed to support
-        // future young-gen collections.  It might be better to reconstruct card table in
-        // ShenandoahHeapRegion::global_oop_iterate_and_fill_dead.  We could either mark all live memory as dirty, or could
-        // use the GLOBAL update-refs scanning of pointers to determine precisely which cards to flag as dirty.
-        if (GENERATION == YOUNG && heap->is_in_old(p)) {
-          // Mark card as dirty because remembered set scanning still finds interesting pointer.
-          heap->mark_card_as_dirty((HeapWord*)p);
-        } else if (GENERATION == GLOBAL && heap->is_in_old(p) && heap->is_in_young(obj)) {
-          // Mark card as dirty because GLOBAL marking finds interesting pointer.
-          heap->mark_card_as_dirty((HeapWord*)p);
-        }
+      // TODO: As implemented herein, GLOBAL_GEN collections reconstruct the card table during GLOBAL_GEN concurrent
+      // marking. Note that the card table is cleaned at init_mark time so it needs to be reconstructed to support
+      // future young-gen collections.  It might be better to reconstruct card table in
+      // ShenandoahHeapRegion::global_oop_iterate_and_fill_dead.  We could either mark all live memory as dirty, or could
+      // use the GLOBAL update-refs scanning of pointers to determine precisely which cards to flag as dirty.
+      if (GENERATION == YOUNG && heap->is_in_old(p)) {
+        // Mark card as dirty because remembered set scanning still finds interesting pointer.
+        heap->mark_card_as_dirty((HeapWord*)p);
+      } else if (GENERATION == GLOBAL_GEN && heap->is_in_old(p) && heap->is_in_young(obj)) {
+        // Mark card as dirty because GLOBAL marking finds interesting pointer.
+        heap->mark_card_as_dirty((HeapWord*)p);
       }
     } else if (old_q != nullptr) {
       // Young mark, bootstrapping old_q or concurrent with old_q marking.

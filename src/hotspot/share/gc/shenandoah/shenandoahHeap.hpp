@@ -55,6 +55,7 @@ class ShenandoahRegulatorThread;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahGeneration;
+class ShenandoahGlobalGeneration;
 class ShenandoahYoungGeneration;
 class ShenandoahOldGeneration;
 class ShenandoahHeuristics;
@@ -191,9 +192,7 @@ public:
   ShenandoahHeap(ShenandoahCollectorPolicy* policy);
   jint initialize() override;
   void post_initialize() override;
-  void initialize_mode();
-  void initialize_heuristics();
-  void initialize_generations();
+  void initialize_heuristics_generations();
 
   void initialize_serviceability() override;
 
@@ -518,9 +517,9 @@ public:
 //
 // Mark support
 private:
-  ShenandoahYoungGeneration* _young_generation;
-  ShenandoahGeneration*      _global_generation;
-  ShenandoahOldGeneration*   _old_generation;
+  ShenandoahGlobalGeneration* _global_generation;
+  ShenandoahYoungGeneration*  _young_generation;
+  ShenandoahOldGeneration*    _old_generation;
 
   ShenandoahControlThread*   _control_thread;
   ShenandoahRegulatorThread* _regulator_thread;
@@ -540,7 +539,7 @@ private:
 public:
   ShenandoahControlThread*   control_thread()          { return _control_thread;    }
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
-  ShenandoahGeneration*      global_generation() const { return _global_generation; }
+  ShenandoahGlobalGeneration* global_generation() const { return _global_generation; }
   ShenandoahOldGeneration*   old_generation()    const { return _old_generation;    }
   ShenandoahGeneration*      generation_for(ShenandoahAffiliation affiliation) const;
   const ShenandoahGenerationSizer* generation_sizer()  const { return &_generation_sizer;  }

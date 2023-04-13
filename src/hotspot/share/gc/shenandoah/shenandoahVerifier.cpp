@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahForwarding.inline.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
