@@ -106,10 +106,21 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
 
  private:
   static const size_t FRACTIONAL_DENOMINATOR = 64536;
+
+  // During initialization of the JVM, we search for the correct old-gen size by initally performing old-gen
+  // collection when old-gen usage is 50% more (INITIAL_GROWTH_BEFORE_COMPACTION) than the initial old-gen size
+  // estimate (3.125% of heap).  The next old-gen trigger occurs when old-gen grows 25% larger than its live
+  // memory at the end of the first old-gen collection.  Then we trigger again when old-gen growns 12.5%
+  // more than its live memory at the end of the previous old-gen collection.  Thereafter, we trigger each time
+  // old-gen grows more than 12.5% following the end of its previous old-gen collection.
   static const size_t INITIAL_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 2;          //  50.0%
   static const size_t MINIMUM_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 8;          //  12.5%
 
-  // First old-collection trigger is at 4.6875% of heap size: i.e. 50% grown beyond 3.125%
+  // INITIAL_LIVE_FRACTION represents the initial guess of how large old-gen should be.  We estimate that old-gen
+  // needs to consume 3.125% of the total heap size.  And we "pretend" that we start out with this amount of live
+  // old-gen memory.  The first old-collection trigger will occur when old-gen occupies 50% more than this initial
+  // approximation of the old-gen memory requirement, in other words when old-gen usage is 150% of 3.125%, which
+  // is 4.6875% of the total heap size.
   static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                    //   3.125%
 
   bool entry_coalesce_and_fill();
