@@ -166,12 +166,12 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   LogGcInfo::print("%s: %s generation used: " SIZE_FORMAT "%s, used regions: " SIZE_FORMAT "%s, "
                    "humongous waste: " SIZE_FORMAT "%s, soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, "
                    "available: " SIZE_FORMAT "%s", msg, name(),
-                   byte_size_in_proper_unit(v_used), proper_unit_for_byte_size(v_used),
-                   byte_size_in_proper_unit(v_used_regions), proper_unit_for_byte_size(v_used_regions),
-                   byte_size_in_proper_unit(v_humongous_waste), proper_unit_for_byte_size(v_humongous_waste),
+                   byte_size_in_proper_unit(v_used),              proper_unit_for_byte_size(v_used),
+                   byte_size_in_proper_unit(v_used_regions),      proper_unit_for_byte_size(v_used_regions),
+                   byte_size_in_proper_unit(v_humongous_waste),   proper_unit_for_byte_size(v_humongous_waste),
                    byte_size_in_proper_unit(v_soft_max_capacity), proper_unit_for_byte_size(v_soft_max_capacity),
-                   byte_size_in_proper_unit(v_max_capacity), proper_unit_for_byte_size(v_max_capacity),
-                   byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available));
+                   byte_size_in_proper_unit(v_max_capacity),      proper_unit_for_byte_size(v_max_capacity),
+                   byte_size_in_proper_unit(v_available),         proper_unit_for_byte_size(v_available));
 }
 
 void ShenandoahGeneration::reset_mark_bitmap() {
@@ -489,7 +489,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     old_regions_loaned_for_young_evac = revised_loan_for_young_evacuation;
     loaned_regions = old_regions_loaned_for_young_evac;
   } else {
-    // Undo the prevous loan, if any.
+    // Undo the previous loan, if any.
     old_regions_loaned_for_young_evac = 0;
     loaned_regions = 0;
   }
@@ -516,8 +516,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   // fragmented_old_usage is the memory that is dedicated to holding evacuated old-gen objects, which does not need
   // to be an integral number of regions.
   size_t fragmented_old_usage = old_evacuated_committed + consumed_by_advance_promotion;
-
-
 
   if (fragmented_old_total >= fragmented_old_usage) {
     // Seems this will be rare.  In this case, all of the memory required for old-gen evacuations and promotions can be
@@ -760,15 +758,20 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                      "%s, loaned for young evacuation: " SIZE_FORMAT
                      "%s, loaned for young allocations: " SIZE_FORMAT
                      "%s, excess: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                     byte_size_in_proper_unit(old_evacuation_reserve), proper_unit_for_byte_size(old_evacuation_reserve),
+                     byte_size_in_proper_unit(old_available),
+                     proper_unit_for_byte_size(old_available),
+                     byte_size_in_proper_unit(old_evacuation_reserve),
+                     proper_unit_for_byte_size(old_evacuation_reserve),
                      byte_size_in_proper_unit(consumed_by_advance_promotion),
                      proper_unit_for_byte_size(consumed_by_advance_promotion),
-                     byte_size_in_proper_unit(regular_promotion), proper_unit_for_byte_size(regular_promotion),
+                     byte_size_in_proper_unit(regular_promotion),
+                     proper_unit_for_byte_size(regular_promotion),
                      byte_size_in_proper_unit(old_bytes_loaned_for_young_evac),
                      proper_unit_for_byte_size(old_bytes_loaned_for_young_evac),
-                     byte_size_in_proper_unit(allocation_supplement), proper_unit_for_byte_size(allocation_supplement),
-                     byte_size_in_proper_unit(excess), proper_unit_for_byte_size(excess));
+                     byte_size_in_proper_unit(allocation_supplement),
+                     proper_unit_for_byte_size(allocation_supplement),
+                     byte_size_in_proper_unit(excess),
+                     proper_unit_for_byte_size(excess));
 }
 
 void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
@@ -776,14 +779,14 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahCollectionSet* collection_set = heap->collection_set();
 
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
+  assert(!is_old(), "Only YOUNG and GLOBAL GC perform evacuations");
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
     parallel_heap_region_iterate(&cl);
 
-    if (generation_mode() == YOUNG) {
+    if (is_young()) {
       // We always need to update the watermark for old regions. If there
       // are mixed collections pending, we also need to synchronize the
       // pinned status for old regions. Since we are already visiting every
@@ -841,7 +844,7 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   size_t num_regions = heap->num_regions();
   for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* r = heap->get_region(idx);
-    if (contains(r) && (r->affiliation() != FREE)) {
+    if (contains(r) && r->is_affiliated()) {
       if (heap->is_bitmap_slice_committed(r) && (context->top_at_mark_start(r) > r->bottom()) &&
           !context->is_bitmap_clear_range(r->bottom(), r->end())) {
         return false;
@@ -878,11 +881,11 @@ void ShenandoahGeneration::cancel_marking() {
   set_concurrent_mark_in_progress(false);
 }
 
-ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
+ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
                                            uint max_workers,
                                            size_t max_capacity,
                                            size_t soft_max_capacity) :
-  _generation_mode(generation_mode),
+  _type(type),
   _task_queues(new ShenandoahObjToScanQueueSet(max_workers)),
   _ref_processor(new ShenandoahReferenceProcessor(MAX2(max_workers, 1U))),
   _collection_thread_time_s(0.0),
@@ -914,7 +917,7 @@ ShenandoahObjToScanQueueSet* ShenandoahGeneration::old_gen_task_queues() const {
 }
 
 void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
-  assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
+  assert(is_young(), "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   uint nworkers = heap->workers()->active_workers();
@@ -1024,7 +1027,7 @@ size_t ShenandoahGeneration::available() const {
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0,
-	 "Adjustment to generation size must be multiple of region size");
+        "Adjustment to generation size must be multiple of region size");
   _adjusted_capacity = soft_max_capacity() + adjustment;
   return _adjusted_capacity;
 }

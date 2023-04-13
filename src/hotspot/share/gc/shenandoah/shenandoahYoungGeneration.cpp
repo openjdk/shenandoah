@@ -37,10 +37,6 @@ ShenandoahYoungGeneration::ShenandoahYoungGeneration(uint max_queues, size_t max
   _old_gen_task_queues(nullptr) {
 }
 
-const char* ShenandoahYoungGeneration::name() const {
-  return "YOUNG";
-}
-
 void ShenandoahYoungGeneration::set_concurrent_mark_in_progress(bool in_progress) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->set_concurrent_young_mark_in_progress(in_progress);
@@ -55,7 +51,7 @@ void ShenandoahYoungGeneration::set_concurrent_mark_in_progress(bool in_progress
 
 bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {
   // TODO: why not test for equals YOUNG_GENERATION?  As written, returns true for regions that are FREE
-  return region->affiliation() != OLD_GENERATION;
+  return !region->is_old();
 }
 
 void ShenandoahYoungGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
