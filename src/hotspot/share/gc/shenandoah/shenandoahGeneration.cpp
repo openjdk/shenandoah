@@ -968,18 +968,15 @@ void ShenandoahGeneration::clear_used() {
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   Atomic::add(&_used, bytes);
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
 }
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   if (bytes > 0) {
     shenandoah_assert_heaplocked_or_fullgc_safepoint();
     _humongous_waste += bytes;
@@ -987,7 +984,6 @@ void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   if (bytes > 0) {
     shenandoah_assert_heaplocked_or_fullgc_safepoint();
     assert(_humongous_waste >= bytes, "Waste cannot be negative");

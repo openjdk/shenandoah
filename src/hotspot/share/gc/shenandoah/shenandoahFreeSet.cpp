@@ -591,10 +591,10 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
-    if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+    if (req.is_young()) {
       _heap->young_generation()->increase_used(words_size * HeapWordSize);
       _heap->young_generation()->increase_humongous_waste(humongous_waste);
-    } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+    } else if (req.is_old()) {
       _heap->old_generation()->increase_used(words_size * HeapWordSize);
       _heap->old_generation()->increase_humongous_waste(humongous_waste);
     }
