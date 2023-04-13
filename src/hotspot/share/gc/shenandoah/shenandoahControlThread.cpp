@@ -62,7 +62,6 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _regulator_lock(Mutex::nosafepoint - 2, "ShenandoahRegulatorGC_lock", true),
   _periodic_task(this),
   _requested_gc_cause(GCCause::_no_cause_specified),
-  _requested_generation(ShenandoahGenerationType::GLOBAL_GEN),
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
   _degen_generation(nullptr),
   _allocs_seen(0),
@@ -73,6 +72,11 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _periodic_task.enroll();
   if (ShenandoahPacing) {
     _periodic_pacer_notify_task.enroll();
+  }
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    _requested_generation = ShenandoahGenerationType::GLOBAL_GEN;
+  } else {
+    _requested_generation = ShenandoahGenerationType::GLOBAL_NON_GEN;
   }
 }
 
