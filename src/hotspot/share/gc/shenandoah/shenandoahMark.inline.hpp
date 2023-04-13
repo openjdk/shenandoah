@@ -263,12 +263,12 @@ public:
 };
 
 template<ShenandoahGenerationType GENERATION>
-bool ShenandoahMark::in_generation(oop obj) {
+bool ShenandoahMark::in_generation(ShenandoahHeap* const heap, oop obj) {
   // Each in-line expansion of in_generation() resolves GENERATION at compile time.
   if (GENERATION == YOUNG) {
-    return ShenandoahHeap::heap()->is_in_young(obj);
+    return heap->is_in_young(obj);
   } else if (GENERATION == OLD) {
-    return ShenandoahHeap::heap()->is_in_old(obj);
+    return heap->is_in_old(obj);
   } else if (GENERATION == GLOBAL_GEN || GENERATION == GLOBAL_NON_GEN) {
     return true;
   } else {
@@ -285,7 +285,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     shenandoah_assert_not_forwarded(p, obj);
     shenandoah_assert_not_in_cset_except(p, obj, heap->cancelled_gc());
-    if (in_generation<GENERATION>(obj)) {
+    if (in_generation<GENERATION>(heap, obj)) {
       mark_ref(q, mark_context, weak, obj);
       shenandoah_assert_marked(p, obj);
       // TODO: As implemented herein, GLOBAL_GEN collections reconstruct the card table during GLOBAL_GEN concurrent
