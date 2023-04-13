@@ -192,7 +192,6 @@ void ShenandoahMmuTracker::report() {
 }
 
 void ShenandoahMmuTracker::initialize() {
-  double mutator_time_do_not_care;
   // initialize static data
   _active_processors = os::initial_active_processor_count();
 
