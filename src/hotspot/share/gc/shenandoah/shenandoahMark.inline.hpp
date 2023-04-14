@@ -278,6 +278,9 @@ bool ShenandoahMark::in_generation(ShenandoahHeap* const heap, oop obj) {
 
 template<class T, ShenandoahGenerationType GENERATION>
 inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old_q, ShenandoahMarkingContext* const mark_context, bool weak) {
+  // Note: This is a very hot code path, so the code should be conditional on GENERATION template
+  // parameter where possible, in order to generate the most efficient code.
+
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
     oop obj = CompressedOops::decode_not_null(o);
