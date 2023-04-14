@@ -62,6 +62,7 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _regulator_lock(Mutex::nosafepoint - 2, "ShenandoahRegulatorGC_lock", true),
   _periodic_task(this),
   _requested_gc_cause(GCCause::_no_cause_specified),
+  _requested_generation(select_global_generation()),
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
   _degen_generation(nullptr),
   _allocs_seen(0),
@@ -72,11 +73,6 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _periodic_task.enroll();
   if (ShenandoahPacing) {
     _periodic_pacer_notify_task.enroll();
-  }
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    _requested_generation = ShenandoahGenerationType::GLOBAL_GEN;
-  } else {
-    _requested_generation = ShenandoahGenerationType::GLOBAL_NON_GEN;
   }
 }
 
@@ -98,8 +94,7 @@ void ShenandoahControlThread::run_service() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   GCMode default_mode = concurrent_normal;
-  ShenandoahGenerationType const global = heap->mode()->is_generational() ? GLOBAL_GEN : GLOBAL_NON_GEN;
-  ShenandoahGenerationType generation = global;
+  ShenandoahGenerationType generation = select_global_generation();
   GCCause::Cause default_cause = GCCause::_shenandoah_concurrent_gc;
 
   double last_shrink_time = os::elapsedTime();
@@ -166,12 +161,12 @@ void ShenandoahControlThread::run_service() {
       } else {
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_full();
-        generation = global;
+        generation = select_global_generation();
         set_gc_mode(stw_full);
       }
     } else if (explicit_gc_requested) {
       cause = requested_gc_cause;
-      generation = global;
+      generation = select_global_generation();
       log_info(gc)("Trigger: Explicit GC request (%s)", GCCause::to_string(cause));
 
       global_heuristics->record_requested_gc();
@@ -187,7 +182,7 @@ void ShenandoahControlThread::run_service() {
       }
     } else if (implicit_gc_requested) {
       cause = requested_gc_cause;
-      generation = global;
+      generation = select_global_generation();
       log_info(gc)("Trigger: Implicit GC request (%s)", GCCause::to_string(cause));
 
       global_heuristics->record_requested_gc();
@@ -225,7 +220,7 @@ void ShenandoahControlThread::run_service() {
           set_gc_mode(servicing_old);
         }
 
-        if (generation == global) {
+        if (generation == select_global_generation()) {
           heap->set_unload_classes(global_heuristics->should_unload_classes());
         } else {
           heap->set_unload_classes(false);
@@ -251,7 +246,7 @@ void ShenandoahControlThread::run_service() {
 
     // Blow all soft references on this cycle, if handling allocation failure,
     // either implicit or explicit GC request, or we are requested to do so unconditionally.
-    if (generation == global && (alloc_failure_pending || implicit_gc_requested || explicit_gc_requested || ShenandoahAlwaysClearSoftRefs)) {
+    if (generation == select_global_generation() && (alloc_failure_pending || implicit_gc_requested || explicit_gc_requested || ShenandoahAlwaysClearSoftRefs)) {
       heap->soft_ref_policy()->set_should_clear_all_soft_refs(true);
     }
 
@@ -297,7 +292,7 @@ void ShenandoahControlThread::run_service() {
           heap->set_aging_cycle(was_aging_cycle);
           if (!service_stw_degenerated_cycle(cause, degen_point)) {
             // The degenerated GC was upgraded to a Full GC
-            generation = global;
+            generation = select_global_generation();
           }
           break;
         }
@@ -354,7 +349,7 @@ void ShenandoahControlThread::run_service() {
 
       // Clear metaspace oom flag, if current cycle unloaded classes
       if (heap->unload_classes()) {
-        assert(generation == global, "Only unload classes during GLOBAL cycle");
+        assert(generation == select_global_generation(), "Only unload classes during GLOBAL cycle");
         global_heuristics->clear_metaspace_oom();
       }
 
@@ -1031,5 +1026,13 @@ void ShenandoahControlThread::set_gc_mode(ShenandoahControlThread::GCMode new_mo
     _mode = new_mode;
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     ml.notify_all();
+  }
+}
+
+ShenandoahGenerationType ShenandoahControlThread::select_global_generation() {
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    return GLOBAL_GEN;
+  } else {
+    return GLOBAL_NON_GEN;
   }
 }
