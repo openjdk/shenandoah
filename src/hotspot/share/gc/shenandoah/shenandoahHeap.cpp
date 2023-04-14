@@ -1236,9 +1236,12 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     regulator_thread()->notify_heap_changed();
   }
 
+  if (result == nullptr) {
+    req.set_actual_size(0);
+  }
+
   // This is called regardless of the outcome of the allocation to account
   // for any waste created by retiring regions with this request.
-  assert(req.actual_size() > 0 || result == nullptr, "Actual size of failed allocation request should be zero");
   increase_used(req);
 
   if (result != nullptr) {
