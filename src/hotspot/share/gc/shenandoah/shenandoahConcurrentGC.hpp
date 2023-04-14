@@ -97,7 +97,6 @@ protected:
   void entry_class_unloading();
   void entry_strong_roots();
   void entry_cleanup_early();
-  virtual void op_final_mark();
 
 private:
   void entry_evacuate();
@@ -125,14 +124,17 @@ private:
   void op_final_roots();
   void op_cleanup_complete();
   void op_global_coalesce_and_fill();
+protected:
+  virtual void op_final_mark();
 
+private:
   void start_mark();
 
   // Messages for GC trace events, they have to be immortal for
   // passing around the logging/tracing systems
-  void init_mark_event_message(char* buf, size_t len) const;
-  void final_mark_event_message(char* buf, size_t len) const;
-  void conc_mark_event_message(char* buf, size_t len) const;
+  const char* init_mark_event_message() const;
+  const char* final_mark_event_message() const;
+  const char* conc_mark_event_message() const;
 
 protected:
   // Check GC cancellation and abort concurrent GC

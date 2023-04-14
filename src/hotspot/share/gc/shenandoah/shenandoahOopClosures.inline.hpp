@@ -31,12 +31,12 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 
-template<class T, GenerationMode GENERATION>
+template<class T, ShenandoahGenerationType GENERATION>
 inline void ShenandoahMarkRefsSuperClosure::work(T* p) {
   ShenandoahMark::mark_through_ref<T, GENERATION>(p, _queue, _old_queue, _mark_context, _weak);
 }
 
-template<class T, GenerationMode GENERATION>
+template<class T, ShenandoahGenerationType GENERATION>
 inline void ShenandoahMarkUpdateRefsSuperClosure::work(T* p) {
   // Update the location
   _heap->update_with_forwarded(p);
@@ -53,24 +53,6 @@ inline void ShenandoahSTWUpdateRefsClosure::work(T* p) {
 template<class T>
 inline void ShenandoahConcUpdateRefsClosure::work(T* p) {
   _heap->conc_update_with_forwarded(p);
-}
-
-template<class T>
-inline void ShenandoahVerifyRemSetClosure::work(T* p) {
-  T o = RawAccess<>::oop_load(p);
-  if (!CompressedOops::is_null(o)) {
-    oop obj = CompressedOops::decode_not_null(o);
-    if (_heap->is_in_young(obj)) {
-      size_t card_index = _scanner->card_index_for_addr((HeapWord*) p);
-      if (_init_mark && !_scanner->is_card_dirty(card_index)) {
-        ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
-                                        "Verify init-mark remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
-      } else if (!_init_mark && !_scanner->is_write_card_dirty(card_index)) {
-        ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
-                                        "Verify init-update-refs remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
-      }
-    }
-  }
 }
 
 template<class T>
