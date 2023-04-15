@@ -787,12 +787,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
         if (ShenandoahVerify) {
           heap->verifier()->verify_before_evacuation();
         }
-
         // TODO: we do not need to run update-references following evacuation if collection_set->is_empty().
-
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_before_evacuation();
-        }
 
         heap->set_evacuation_in_progress(true);
         // From here on, we need to update references.
