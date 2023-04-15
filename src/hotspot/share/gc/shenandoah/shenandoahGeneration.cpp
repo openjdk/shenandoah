@@ -693,7 +693,8 @@ void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
-  assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+	 (_used >= bytes), "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
 
   // Non-generational mode does not maintain affiliated region counts
@@ -727,23 +728,26 @@ size_t ShenandoahGeneration::available() const {
 }
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   shenandoah_assert_heaplocked_or_safepoint();
 
   // We do not enforce that new capacity >= heap->max_size_for(this).  The maximum generation size is treated as a rule of thumb
   // which may be violated during certain transitions, such as when we are forcing transfers for the purpose of promoting regions
   // in place.
-  assert(_max_capacity + increment <= ShenandoahHeap::heap()->max_capacity(), "Generation cannot be larger than heap size");
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+	 (_max_capacity + increment <= ShenandoahHeap::heap()->max_capacity()), "Generation cannot be larger than heap size");
   assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   _max_capacity += increment;
   _soft_max_capacity += increment;
 
   // This detects arithmetic wraparound on _used
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+	 (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
 }
 
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   shenandoah_assert_heaplocked_or_safepoint();
 
   // We do not enforce that new capacity >= heap->min_size_for(this).  The minimum generation size is treated as a rule of thumb
@@ -757,11 +761,12 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   _soft_max_capacity -= decrement;
 
   // This detects arithmetic wraparound on _used
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
-         (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+	 (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() >= _used),
          "Affiliated regions must hold more than what is currently used");
-  assert(_used <= _max_capacity, "Cannot use more than capacity");
-  assert(!ShenandoahHeap::heap()->mode()->is_generational() ||
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
+	 (_used <= _max_capacity), "Cannot use more than capacity");
+  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_affiliated_region_count * ShenandoahHeapRegion::region_size_bytes() <= _max_capacity),
          "Cannot use more than capacity");
 }
