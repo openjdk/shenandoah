@@ -1144,7 +1144,7 @@ void ShenandoahVerifier::verify_before_fullgc() {
           _verify_cset_disable,        // cset might be foobared
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_disable,     // no reliable region data here
-          _verify_size_exact,           // expect generation and heap sizes to match exactly
+          _verify_size_disable,        // if we degenerate during evacuation, usage not valid: padding and deferred accounting
           _verify_gcstate_disable      // no reliable gcstate data
   );
 }
