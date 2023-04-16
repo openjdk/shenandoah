@@ -1048,14 +1048,16 @@ void ShenandoahHeapRegion::promote_in_place() {
     ShenandoahHeapLocker locker(heap->lock());
 
     set_affiliation(OLD_GENERATION, true);
+
+    HeapWord* update_watermark = get_update_watermark();
+
     // Now that this region is affiliated with old, we can allow it to receive allocations, though it may not be in the
     // is_collector_free range.
     restore_top_before_promote();
 
     // The update_watermark was likely established while we had the artificially high value of top.  Make it sane now.
-    if (get_update_watermark() > top()) {
-      set_update_watermark(top());
-    }
+    assert(update_watermark >= top(), "original top cannot exceed preserved update_watermark");
+    set_update_watermark(top());
 
     size_t promoted_used = this->used();
     size_t promoted_free = this->free();
