@@ -292,6 +292,19 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
         return nullptr;
       }
 
+      // TODO:
+      // if (!allow_new_region && req.is_old() && (young_generation->adjusted_unaffiliated_regions() > 0)) {
+      //   transfer a region from young to old;
+      //   allow_new_region = true;
+      //   heap->set_old_evac_reserve(heap->get_old_evac_reserve() + region_size_bytes);
+      // }
+      //
+      // We should expand old-gen if this can prevent an old-gen evacuation failure.  We don't care so much about
+      // promotion failures since they can be mitigated in a subsequent GC pass.  Would be nice to know if this
+      // allocation request is for evacuation or promotion.  Individual threads limit their use of PLAB memory for
+      // promotions, so we already have an assurance that any additional memory set aside for old-gen will be used
+      // only for old-gen evacuations.
+
       if (allow_new_region) {
         // Try to steal an empty region from the mutator view.
         for (size_t c = _mutator_rightmost + 1; c > _mutator_leftmost; c--) {
