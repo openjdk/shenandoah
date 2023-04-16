@@ -1052,6 +1052,11 @@ void ShenandoahHeapRegion::promote_in_place() {
     // is_collector_free range.
     restore_top_before_promote();
 
+    // The update_watermark was likely established while we had the artificially high value of top.  Make it sane now.
+    if (get_update_watermark() > top()) {
+      set_update_watermark(top());
+    }
+
     size_t promoted_used = this->used();
     size_t promoted_free = this->free();
     size_t promo_reserve = heap->get_promoted_reserve() + promoted_free;
