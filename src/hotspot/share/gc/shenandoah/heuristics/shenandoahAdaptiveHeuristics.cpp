@@ -427,10 +427,10 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   double rate = _allocation_rate.sample(allocated);
   _last_trigger = OTHER;
 
-  size_t min_threshold = min_free_threshold();
-
   // OLD generation is maintained to be as small as possible.  Depletion-of-free-pool triggers do not apply to old generation.
   if (!_generation->is_old()) {
+
+    size_t min_threshold = min_free_threshold();
 
     if (available < min_threshold) {
       log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
