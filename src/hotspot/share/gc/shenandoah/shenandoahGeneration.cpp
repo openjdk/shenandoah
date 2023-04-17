@@ -165,13 +165,15 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   size_t v_humongous_waste = get_humongous_waste();
   LogGcInfo::print("%s: %s generation used: " SIZE_FORMAT "%s, used regions: " SIZE_FORMAT "%s, "
                    "humongous waste: " SIZE_FORMAT "%s, soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, "
-                   "available: " SIZE_FORMAT "%s", msg, name(),
-                   byte_size_in_proper_unit(v_used), proper_unit_for_byte_size(v_used),
-                   byte_size_in_proper_unit(v_used_regions), proper_unit_for_byte_size(v_used_regions),
-                   byte_size_in_proper_unit(v_humongous_waste), proper_unit_for_byte_size(v_humongous_waste),
+                   "available: " SIZE_FORMAT "%s",
+                   msg, name(),
+                   byte_size_in_proper_unit(v_used),              proper_unit_for_byte_size(v_used),
+                   byte_size_in_proper_unit(v_used_regions),      proper_unit_for_byte_size(v_used_regions),
+                   byte_size_in_proper_unit(v_humongous_waste),   proper_unit_for_byte_size(v_humongous_waste),
                    byte_size_in_proper_unit(v_soft_max_capacity), proper_unit_for_byte_size(v_soft_max_capacity),
-                   byte_size_in_proper_unit(v_max_capacity), proper_unit_for_byte_size(v_max_capacity),
-                   byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available));
+                   byte_size_in_proper_unit(v_max_capacity),      proper_unit_for_byte_size(v_max_capacity),
+                   byte_size_in_proper_unit(v_available),         proper_unit_for_byte_size(v_available));
+
   // This detects arithmetic underflow of unsigned usage value
   assert(v_used <= ShenandoahHeap::heap()->capacity(), "Generation capacity must be less than heap capacity");
 }
@@ -453,14 +455,14 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahCollectionSet* collection_set = heap->collection_set();
 
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
+  assert(!is_old(), "Only YOUNG and GLOBAL GC perform evacuations");
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
     parallel_heap_region_iterate(&cl);
 
-    if (generation_mode() == YOUNG) {
+    if (is_young()) {
       // We always need to update the watermark for old regions. If there
       // are mixed collections pending, we also need to synchronize the
       // pinned status for old regions. Since we are already visiting every
@@ -520,7 +522,7 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   size_t num_regions = heap->num_regions();
   for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* r = heap->get_region(idx);
-    if (contains(r) && (r->affiliation() != FREE)) {
+    if (contains(r) && r->is_affiliated()) {
       if (heap->is_bitmap_slice_committed(r) && (context->top_at_mark_start(r) > r->bottom()) &&
           !context->is_bitmap_clear_range(r->bottom(), r->end())) {
         return false;
@@ -557,11 +559,11 @@ void ShenandoahGeneration::cancel_marking() {
   set_concurrent_mark_in_progress(false);
 }
 
-ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
+ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
                                            uint max_workers,
                                            size_t max_capacity,
                                            size_t soft_max_capacity) :
-  _generation_mode(generation_mode),
+  _type(type),
   _task_queues(new ShenandoahObjToScanQueueSet(max_workers)),
   _ref_processor(new ShenandoahReferenceProcessor(MAX2(max_workers, 1U))),
   _collection_thread_time_s(0.0),
@@ -593,7 +595,7 @@ ShenandoahObjToScanQueueSet* ShenandoahGeneration::old_gen_task_queues() const {
 }
 
 void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
-  assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
+  assert(is_young(), "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   uint nworkers = heap->workers()->active_workers();

@@ -95,8 +95,9 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   // particular, regions that have reached tenure age will be sorted into this array before younger regions that contain
   // more garbage.  This represents one of the reasons why we keep looking at regions even after we decide, for example,
   // to exclude one of the regions because it might require evacuation of too much live data.
+  // TODO: Split it in the separate methods for clarity.
   bool is_generational = heap->mode()->is_generational();
-  bool is_global = (_generation->generation_mode() == GLOBAL);
+  bool is_global = _generation->is_global();
   size_t capacity = heap->young_generation()->max_capacity();
 
   // cur_young_garbage represents the amount of memory to be reclaimed from young-gen.  In the case that live objects
@@ -267,9 +268,10 @@ void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
     z_score = (double(available) - available_avg) / available_sd;
     log_debug(gc, ergo)("%s Available: " SIZE_FORMAT " %sB, z-score=%.3f. Average available: %.1f %sB +/- %.1f %sB.",
                         _generation->name(),
-                        byte_size_in_proper_unit(available), proper_unit_for_byte_size(available), z_score,
+                        byte_size_in_proper_unit(available),     proper_unit_for_byte_size(available),
+                        z_score,
                         byte_size_in_proper_unit(available_avg), proper_unit_for_byte_size(available_avg),
-                        byte_size_in_proper_unit(available_sd), proper_unit_for_byte_size(available_sd));
+                        byte_size_in_proper_unit(available_sd),  proper_unit_for_byte_size(available_sd));
   }
 
   _available.add(double(available));
@@ -416,7 +418,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t usable = ShenandoahHeap::heap()->free_set()->available();
   if (usable < available) {
     log_debug(gc)("Usable (" SIZE_FORMAT "%s) is less than available (" SIZE_FORMAT "%s)",
-                  byte_size_in_proper_unit(usable), proper_unit_for_byte_size(usable),
+                  byte_size_in_proper_unit(usable),    proper_unit_for_byte_size(usable),
                   byte_size_in_proper_unit(available), proper_unit_for_byte_size(available));
     available = usable;
   }
@@ -480,9 +482,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     //    For cases 1 and 2, we need to "quickly" recalibrate the average allocation rate whenever we detect a change
     //    in operation mode.  We want some way to decide that the average rate has changed.  Make average allocation rate
     //    computations an independent effort.
-
-
-
 
 
     // Check if allocation headroom is still okay. This also factors in:

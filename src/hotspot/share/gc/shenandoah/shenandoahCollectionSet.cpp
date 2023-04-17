@@ -90,25 +90,28 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
   _cset_map[r->index()] = 1;
-  if (r->affiliation() == YOUNG_GENERATION) {
+  size_t live    = r->get_live_data_bytes();
+  size_t garbage = r->garbage();
+  size_t free    = r->free();
+  if (r->is_young()) {
     _young_region_count++;
-    _young_bytes_to_evacuate += r->get_live_data_bytes();
-    _young_available_bytes_collected += r->free();
+    _young_bytes_to_evacuate += live;
+    _young_available_bytes_collected += free;
     if (r->age() >= InitialTenuringThreshold) {
-      _young_bytes_to_promote += r->get_live_data_bytes();
+      _young_bytes_to_promote += live;
     }
-  } else if (r->affiliation() == OLD_GENERATION) {
+  } else if (r->is_old()) {
     _old_region_count++;
-    _old_bytes_to_evacuate += r->get_live_data_bytes();
-    _old_garbage += r->garbage();
-    _old_available_bytes_collected += r->free();
+    _old_bytes_to_evacuate += live;
+    _old_garbage += garbage;
+    _old_available_bytes_collected += free;
   }
 
   _region_count++;
   _has_old_regions |= r->is_old();
-  _garbage += r->garbage();
+  _garbage += garbage;
   _used += r->used();
-  _live += r->get_live_data_bytes();
+  _live += live;
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
 }
@@ -189,8 +192,8 @@ void ShenandoahCollectionSet::print_on(outputStream* out) const {
   out->print_cr("Collection Set: Regions: "
                 SIZE_FORMAT ", Garbage: " SIZE_FORMAT "%s, Live: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s", count(),
                 byte_size_in_proper_unit(garbage()), proper_unit_for_byte_size(garbage()),
-                byte_size_in_proper_unit(live()), proper_unit_for_byte_size(live()),
-                byte_size_in_proper_unit(used()), proper_unit_for_byte_size(used()));
+                byte_size_in_proper_unit(live()),    proper_unit_for_byte_size(live()),
+                byte_size_in_proper_unit(used()),    proper_unit_for_byte_size(used()));
 
 #ifdef ASSERT
   // If Assertions are on, we'll dump each region selected for the collection set.  Otherwise, too much detail.

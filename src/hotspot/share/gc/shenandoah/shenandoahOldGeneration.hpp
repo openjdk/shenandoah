@@ -32,28 +32,35 @@ class ShenandoahHeapRegionClosure;
 class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
- public:
+private:
+  ShenandoahHeapRegion** _coalesce_and_fill_region_array;
+  ShenandoahOldHeuristics* _old_heuristics;
+
+  bool entry_coalesce_and_fill();
+  bool coalesce_and_fill();
+
+public:
   ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity);
 
-  const char* name() const override;
+  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
 
-  bool contains(ShenandoahHeapRegion* region) const override;
-
-  bool contains(oop obj) const override;
+  const char* name() const override {
+    return "OLD";
+  }
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
-
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
-  void set_concurrent_mark_in_progress(bool in_progress) override;
+  bool contains(ShenandoahHeapRegion* region) const override;
+  bool contains(oop obj) const override;
 
-  virtual void cancel_marking() override;
+  void set_concurrent_mark_in_progress(bool in_progress) override;
+  bool is_concurrent_mark_in_progress() override;
 
   virtual void prepare_gc() override;
-
   void prepare_regions_and_collection_set(bool concurrent) override;
-
-  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
+  virtual void record_success_concurrent(bool abbreviated) override;
+  virtual void cancel_marking() override;
 
   // We leave the SATB barrier on for the entirety of the old generation
   // marking phase. In some cases, this can cause a write to a perfectly
@@ -75,25 +82,16 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   // the performance impact would be too severe.
   void transfer_pointers_from_satb();
 
-  bool is_concurrent_mark_in_progress() override;
-
-  virtual void record_success_concurrent(bool abbreviated) override;
-
+public:
   enum State {
     IDLE, FILLING, BOOTSTRAPPING, MARKING, WAITING_FOR_EVAC, WAITING_FOR_FILL
   };
 
-  static const char* state_name(State state);
-
-  void transition_to(State new_state);
-
-#ifdef ASSERT
-  bool validate_transition(State new_state);
-#endif
-
   State state() const {
     return _state;
   }
+
+  void transition_to(State new_state);
 
   size_t get_live_bytes_after_last_mark() const;
   void set_live_bytes_after_last_mark(size_t new_live);
@@ -104,7 +102,9 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
     return _state == IDLE || _state == WAITING_FOR_FILL;
   }
 
- private:
+  static const char* state_name(State state);
+
+private:
   static const size_t FRACTIONAL_DENOMINATOR = 64536;
 
   // During initialization of the JVM, we search for the correct old-gen size by initally performing old-gen
@@ -123,14 +123,11 @@ class ShenandoahOldGeneration : public ShenandoahGeneration {
   // is 4.6875% of the total heap size.
   static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                    //   3.125%
 
-  bool entry_coalesce_and_fill();
-  bool coalesce_and_fill();
-
-  ShenandoahHeapRegion** _coalesce_and_fill_region_array;
-  ShenandoahOldHeuristics* _old_heuristics;
   State _state;
   size_t _live_bytes_after_last_mark;
   size_t _growth_before_compaction; // How much growth in usage before we trigger old collection, per 65_536
+
+  void validate_transition(State new_state) NOT_DEBUG_RETURN;
 };
 
 

@@ -47,7 +47,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _fragmentation_trigger(false),
   _growth_trigger(false)
 {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
+  assert(_generation->is_old(), "This service only available for old-gc heuristics");
 }
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
@@ -123,7 +123,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // if they are all pinned we transition to a state that will allow us to make these uncollected
     // (pinned) regions parseable.
     if (all_candidates_are_pinned()) {
-      log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned.", unprocessed_old_collection_candidates());
+      log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
       _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_FILL);
     }
   }
@@ -139,7 +139,7 @@ bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
 #endif
 
   for (uint i = _next_old_collection_candidate; i < _last_old_collection_candidate; ++i) {
-    auto region = _region_data[i]._region;
+    ShenandoahHeapRegion* region = _region_data[i]._region;
     if (!region->is_pinned()) {
       return false;
     }
@@ -187,7 +187,7 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
   //         |       | next region for mixed collections
   //         | Write pointer is here. We know this region is already in the cset
   //         | so we can clobber it with the next pinned region we find.
-  for (int32_t search = write_index - 1; search >= (int32_t)_first_pinned_candidate; --search) {
+  for (int32_t search = (int32_t)write_index - 1; search >= (int32_t)_first_pinned_candidate; --search) {
     RegionData& skipped = _region_data[search];
     if (skipped._region->is_pinned()) {
       RegionData& available_slot = _region_data[write_index];
@@ -206,15 +206,15 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
 // Both arguments are don't cares for old-gen collections
 void ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set,
                                                     ShenandoahOldHeuristics* old_heuristics) {
-  assert((collection_set == nullptr) && (old_heuristics == nullptr),
-         "Expect null arguments in ShenandoahOldHeuristics::choose_collection_set()");
+  assert(collection_set == nullptr, "Expect null");
+  assert(old_heuristics == nullptr, "Expect null");
   // Old-gen doesn't actually choose a collection set to be evacuated by its own gang of worker tasks.
   // Instead, it computes the set of regions to be evacuated by subsequent young-gen evacuation passes.
   prepare_for_old_collections();
 }
 
 void ShenandoahOldHeuristics::prepare_for_old_collections() {
-  assert(_generation->generation_mode() == OLD, "This service only available for old-gc heuristics");
+  assert(_generation->is_old(), "This service only available for old-gc heuristics");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   size_t cand_idx = 0;
@@ -311,12 +311,13 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   size_t collectable_garbage = immediate_garbage + candidates_garbage;
-  log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s consolidated with free: "
-               SIZE_FORMAT "%s, over " UINT32_FORMAT " regions, "
+  size_t old_candidates = _last_old_collection_candidate;
+  log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s "
+               "consolidated with free: " SIZE_FORMAT "%s, over " SIZE_FORMAT " regions, "
                "Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
                byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
-               byte_size_in_proper_unit(unfragmented), proper_unit_for_byte_size(unfragmented), _last_old_collection_candidate,
-               byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage), immediate_regions);
+               byte_size_in_proper_unit(unfragmented),        proper_unit_for_byte_size(unfragmented), old_candidates,
+               byte_size_in_proper_unit(immediate_garbage),   proper_unit_for_byte_size(immediate_garbage), immediate_regions);
 
   if (unprocessed_old_collection_candidates() == 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
@@ -325,6 +326,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   }
 }
 
+// TODO: Unused?
 uint ShenandoahOldHeuristics::last_old_collection_candidate_index() {
   return _last_old_collection_candidate;
 }

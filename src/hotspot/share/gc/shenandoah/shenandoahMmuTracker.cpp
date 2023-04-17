@@ -313,7 +313,7 @@ bool ShenandoahGenerationSizer::transfer_to_old(size_t regions) const {
 }
 
 // This is used when promoting humongous or highly utilized regular regions in place.  It is not required in this situation
-// that the transferred regions be unaffiliated.  In fact, we are transferring regions that already have high utilization.
+// that the transferred regions be unaffiliated.
 void ShenandoahGenerationSizer::force_transfer_to_old(size_t regions) const {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahGeneration* old_gen = heap->old_generation();

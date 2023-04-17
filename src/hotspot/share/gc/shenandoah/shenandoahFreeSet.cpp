@@ -25,6 +25,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/tlab_globals.hpp"
+#include "gc/shenandoah/shenandoahAffiliation.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -130,7 +131,7 @@ bool ShenandoahFreeSet::is_collector_free(size_t idx) const {
 //     a region that is_old_collector_free().  If that's not available, we may try to flip a region that is_mutator_free.
 //
 HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region) {
-  ShenandoahRegionAffiliation affiliation = ShenandoahRegionAffiliation::OLD_GENERATION;
+  ShenandoahAffiliation affiliation = ShenandoahAffiliation::OLD_GENERATION;
 
   size_t o_rightmost = MAX2(_collector_rightmost, _mutator_rightmost);
   size_t o_leftmost = MIN2(_collector_leftmost, _mutator_leftmost);
@@ -154,7 +155,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_old_affiliation(ShenandoahAllocReques
   return nullptr;
 }
 
-HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region) {
+HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region) {
   for (size_t c = _collector_rightmost + 1; c > _collector_leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
@@ -168,7 +169,7 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahRegionAffiliati
       }
     }
   }
-  log_debug(gc, free)("Could not allocate collector region with affiliation: %s for request " PTR_FORMAT, affiliation_name(affiliation), p2i(&req));
+  log_debug(gc, free)("Could not allocate collector region with affiliation: %s for request " PTR_FORMAT, shenandoah_affiliation_name(affiliation), p2i(&req));
   return nullptr;
 }
 
@@ -190,21 +191,23 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   bool allow_new_region = true;
   if (_heap->mode()->is_generational()) {
     switch (req.affiliation()) {
-      case ShenandoahRegionAffiliation::OLD_GENERATION:
+      case ShenandoahAffiliation::OLD_GENERATION:
         // Note: unsigned result from free_unaffiliated_regions() will never be less than zero, but it may equal zero.
         if (_heap->old_generation()->free_unaffiliated_regions() <= 0) {
           allow_new_region = false;
         }
         break;
 
-      case ShenandoahRegionAffiliation::YOUNG_GENERATION:
+      case ShenandoahAffiliation::YOUNG_GENERATION:
         // Note: unsigned result from free_unaffiliated_regions() will never be less than zero, but it may equal zero.
         if (_heap->young_generation()->free_unaffiliated_regions() <= 0) {
           allow_new_region = false;
         }
         break;
 
-      case ShenandoahRegionAffiliation::FREE:
+      case ShenandoahAffiliation::FREE:
+        fatal("Should request affiliation");
+
       default:
         ShouldNotReachHere();
         break;
@@ -216,7 +219,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       // Try to allocate in the mutator view
       for (size_t idx = _mutator_leftmost; idx <= _mutator_rightmost; idx++) {
         ShenandoahHeapRegion* r = _heap->get_region(idx);
-        if (is_mutator_free(idx) && (allow_new_region || r->affiliation() != ShenandoahRegionAffiliation::FREE)) {
+        if (is_mutator_free(idx) && (allow_new_region || r->is_affiliated())) {
           // try_allocate_in() increases used if the allocation is successful.
           HeapWord* result;
           size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab)? req.min_size(): req.size();
@@ -251,7 +254,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       } else {
         // First try to fit into a region that is already in use in the same generation.
         HeapWord* result;
-        if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+        if (req.is_old()) {
           // TODO: this is a work around to address a deficiency in FreeSet representation.  A better solution fixes
           // the FreeSet implementation to deal more efficiently with old-gen regions as being in the "collector free set"
           result = allocate_with_old_affiliation(req, in_new_region);
@@ -311,7 +314,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     return nullptr;
   }
   try_recycle_trashed(r);
-  if (r->affiliation() == ShenandoahRegionAffiliation::FREE) {
+  if (!r->is_affiliated()) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
     r->set_affiliation(req.affiliation(), false);
     if (r->is_old()) {
@@ -329,7 +332,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
   } else if (r->affiliation() != req.affiliation()) {
     assert(_heap->mode()->is_generational(), "Request for %s from %s region should only happen in generational mode.",
-           affiliation_name(req.affiliation()), affiliation_name(r->affiliation()));
+           req.affiliation_name(), r->affiliation_name());
     return nullptr;
   }
 
@@ -403,7 +406,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
             increase_used(padding);
           }
 #endif
-          assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
+          assert(r->is_old(), "All PLABs reside in old-gen");
           _heap->old_generation()->increase_used(padding);
           // For verification consistency, we need to report this padding to _heap
           _heap->increase_used(padding);
@@ -462,7 +465,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
           increase_used(padding);
         }
 #endif
-        assert(r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION, "All PLABs reside in old-gen");
+        assert(r->is_old(), "All PLABs reside in old-gen");
         _heap->old_generation()->increase_used(padding);
         // For verification consistency, we need to report this padding to _heap
         _heap->increase_used(padding);
@@ -498,7 +501,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       r->set_update_watermark(r->top());
       if (_heap->mode()->is_generational()) {
         generation->increase_used(size * HeapWordSize);
-        if (r->affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+        if (r->is_old()) {
           assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
           // for plabs, we'll sort the difference between evac and promotion usage when we retire the plab
         }
@@ -535,7 +538,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         _heap->increase_used(waste);
         if (_heap->mode()->is_generational()) {
           _heap->generation_for(req.affiliation())->increase_used(waste);
-          if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+          if (req.is_old()) {
             _heap->card_scan()->register_object(fill_addr);
           }
         }
@@ -592,7 +595,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   size_t words_size = req.size();
   size_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
 
-  assert(req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION, "Humongous regions always allocated in YOUNG");
+  assert(req.is_young(), "Humongous regions always allocated in YOUNG");
   ShenandoahGeneration* generation = _heap->generation_for(req.affiliation());
 
   // Check if there are enough regions left to satisfy allocation.
@@ -673,7 +676,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     // ctx->clear_bitmap(r);
     log_debug(gc, free)("NOT clearing bitmap for Humongous region [" PTR_FORMAT ", " PTR_FORMAT "], top_bitmap: "
                         PTR_FORMAT " at transition from FREE to %s",
-                        p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), affiliation_name(req.affiliation()));
+                        p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), req.affiliation_name());
 
     _mutator_free_bitmap.clear_bit(r->index());
   }
@@ -683,10 +686,10 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
-    if (req.affiliation() == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+    if (req.is_young()) {
       _heap->young_generation()->increase_used(words_size * HeapWordSize);
       _heap->young_generation()->increase_humongous_waste(humongous_waste);
-    } else if (req.affiliation() == ShenandoahRegionAffiliation::OLD_GENERATION) {
+    } else if (req.is_old()) {
       _heap->old_generation()->increase_used(words_size * HeapWordSize);
       _heap->old_generation()->increase_humongous_waste(humongous_waste);
     }

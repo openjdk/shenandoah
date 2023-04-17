@@ -96,7 +96,7 @@ void ShenandoahHeapRegion::report_illegal_transition(const char *method) {
   fatal("%s", ss.freeze());
 }
 
-void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation affiliation) {
+void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
@@ -173,7 +173,7 @@ void ShenandoahHeapRegion::make_humongous_start() {
   }
 }
 
-void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation) {
+void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
   set_affiliation(affiliation, false);
@@ -204,7 +204,7 @@ void ShenandoahHeapRegion::make_humongous_cont() {
   }
 }
 
-void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation) {
+void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
   set_affiliation(affiliation, false);
@@ -249,7 +249,7 @@ void ShenandoahHeapRegion::make_unpinned() {
 
   switch (_state) {
     case _pinned:
-      assert(affiliation() != FREE, "Pinned region should not be FREE");
+      assert(is_affiliated(), "Pinned region should be affiliated");
       set_state(_regular);
       return;
     case _regular:
@@ -418,19 +418,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
       ShouldNotReachHere();
   }
 
-  switch (ShenandoahHeap::heap()->region_affiliation(this)) {
-    case ShenandoahRegionAffiliation::FREE:
-      st->print("|F");
-      break;
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      st->print("|Y");
-      break;
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      st->print("|O");
-      break;
-    default:
-      ShouldNotReachHere();
-  }
+  st->print("|%s", shenandoah_affiliation_code(affiliation()));
 
 #define SHR_PTR_FORMAT "%12" PRIxPTR
 
@@ -455,7 +443,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 }
 
 // oop_iterate without closure and without cancellation.  always return true.
-bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
+bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
 
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
@@ -952,15 +940,15 @@ size_t ShenandoahHeapRegion::pin_count() const {
   return Atomic::load(&_critical_pins);
 }
 
-void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation,
-                                           bool defer_affiliated_region_count_updates) {
+void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation, bool defer_affiliated_region_count_updates) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahRegionAffiliation region_affiliation = heap->region_affiliation(this);
+
+  ShenandoahAffiliation region_affiliation = heap->region_affiliation(this);
   {
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
     log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT
                   ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT,
-                  index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation),
+                  index(), shenandoah_affiliation_name(region_affiliation), shenandoah_affiliation_name(new_affiliation),
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(_update_watermark), p2i(ctx->top_bitmap(this)));
   }
 
@@ -981,18 +969,18 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
     return;
   }
 
+
   if (!heap->mode()->is_generational()) {
+    log_trace(gc)("Changing affiliation of region %zu from %s to %s",
+                  index(), affiliation_name(), shenandoah_affiliation_name(new_affiliation));
     heap->set_affiliation(this, new_affiliation);
     return;
   }
 
-  log_trace(gc)("Changing affiliation of region %zu from %s to %s",
-    index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation));
-
   if (!defer_affiliated_region_count_updates) {
-    if (region_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+    if (is_young()) {
       heap->young_generation()->decrement_affiliated_region_count();
-    } else if (region_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+    } else if (is_old()) {
       heap->old_generation()->decrement_affiliated_region_count();
     }
 
@@ -1099,7 +1087,7 @@ void ShenandoahHeapRegion::promote_in_place() {
     if (marking_context->is_marked(obj)) {
       assert(obj->klass() != NULL, "klass should not be NULL");
       // This thread is responsible for registering all objects in this region.  No need for lock.
-      heap->card_scan()->register_object_wo_lock(obj_addr);
+      heap->card_scan()->register_object_without_lock(obj_addr);
       obj_addr += obj->size();
     } else {
       HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
@@ -1107,7 +1095,7 @@ void ShenandoahHeapRegion::promote_in_place() {
       size_t fill_size = next_marked_obj - obj_addr;
       assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-      heap->card_scan()->register_object_wo_lock(obj_addr);
+      heap->card_scan()->register_object_without_lock(obj_addr);
       obj_addr = next_marked_obj;
     }
   }
@@ -1162,7 +1150,7 @@ void ShenandoahHeapRegion::promote_humongous() {
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
-  heap->card_scan()->register_object_wo_lock(bottom());
+  heap->card_scan()->register_object_without_lock(bottom());
 
   if (obj->is_typeArray()) {
     // Primitive arrays don't need to be scanned.

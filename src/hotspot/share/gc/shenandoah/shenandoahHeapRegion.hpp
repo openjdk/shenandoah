@@ -28,6 +28,7 @@
 
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shared/spaceDecorator.hpp"
+#include "gc/shenandoah/shenandoahAffiliation.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
@@ -169,13 +170,13 @@ public:
   }
 
   // Allowed transitions from the outside code:
-  void make_regular_allocation(ShenandoahRegionAffiliation affiliation);
+  void make_regular_allocation(ShenandoahAffiliation affiliation);
   void make_young_maybe();
   void make_regular_bypass();
   void make_humongous_start();
   void make_humongous_cont();
-  void make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation);
-  void make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation);
+  void make_humongous_start_bypass(ShenandoahAffiliation affiliation);
+  void make_humongous_cont_bypass(ShenandoahAffiliation affiliation);
   void make_pinned();
   void make_unpinned();
   void make_cset();
@@ -202,6 +203,7 @@ public:
   bool is_pinned()                 const { return _state == _pinned || _state == _pinned_cset || _state == _pinned_humongous_start; }
   inline bool is_young() const;
   inline bool is_old() const;
+  inline bool is_affiliated() const;
 
   // Macro-properties:
   bool is_alloc_allowed()          const { return is_empty() || is_regular() || _state == _pinned; }
@@ -402,7 +404,7 @@ public:
   bool oop_fill_and_coalesce();
 
   // Like oop_fill_and_coalesce(), but without honoring cancellation requests.
-  bool oop_fill_and_coalesce_wo_cancel();
+  bool oop_fill_and_coalesce_without_cancel();
 
   // During global collections, this service iterates through an old-gen heap region that is not part of collection
   // set to fill and register ranges of dead memory.  Note that live objects were previously registered.  Some dead objects
@@ -453,9 +455,10 @@ public:
   inline void set_update_watermark(HeapWord* w);
   inline void set_update_watermark_at_safepoint(HeapWord* w);
 
-  inline ShenandoahRegionAffiliation affiliation() const;
+  inline ShenandoahAffiliation affiliation() const;
+  inline const char* affiliation_name() const;
 
-  void set_affiliation(ShenandoahRegionAffiliation new_affiliation, bool defer_affiliated_region_count_updates);
+  void set_affiliation(ShenandoahAffiliation new_affiliation, bool defer_affiliated_region_count_updates);
 
   uint age()           { return _age; }
   void increment_age() { _age++; }

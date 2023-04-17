@@ -28,15 +28,15 @@
 
 #include "gc/shenandoah/shenandoahMark.hpp"
 
-template <GenerationMode GENERATION>
+template <ShenandoahGenerationType GENERATION>
 class ShenandoahConcurrentMarkingTask;
-template<GenerationMode GENERATION>
+template <ShenandoahGenerationType GENERATION>
 class ShenandoahFinalMarkingTask;
 class ShenandoahGeneration;
 
 class ShenandoahConcurrentMark: public ShenandoahMark {
-  template <GenerationMode GENERATION> friend class ShenandoahConcurrentMarkingTask;
-  template <GenerationMode GENERATION> friend class ShenandoahFinalMarkingTask;
+  template <ShenandoahGenerationType GENERATION> friend class ShenandoahConcurrentMarkingTask;
+  template <ShenandoahGenerationType GENERATION> friend class ShenandoahFinalMarkingTask;
 
 public:
   ShenandoahConcurrentMark(ShenandoahGeneration* generation);
