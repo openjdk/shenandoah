@@ -88,6 +88,8 @@ gc/shenandoah/oom/TestThreadFailure.java 8306024 generic-all
 gc/shenandoah/oom/TestClassLoaderLeak 8306024 generic-all
 gc/shenandoah/mxbeans/TestChurnNotifications#generational 8306024 generic-all
 gc/stress/gcold/TestGCOldWithShenandoah.java#generational 8306024 generic-all
+gc/stress/systemgc/TestSystemGCWithShenandoah.java#generational 8306024 generic-all
+gc/stress/gclocker/TestGCLockerWithShenandoah.java#generational 8306024 generic-all
 gc/TestAllocHumongousFragment#generational 8306024 generic-all
 java/lang/Thread/virtual/TraceVirtualThreadLocals 8306024 generic-all
 
