@@ -84,6 +84,7 @@ gc/stress/TestJNIBlockFullGC/TestJNIBlockFullGC.java 8192647 generic-all
 gc/stress/TestStressG1Humongous.java 8286554 windows-x64
 
 gc/shenandoah/TestDynamicSoftMaxHeapSize.java#generational 8306024 generic-all
+gc/shenandoah/TestArrayCopyStress.java#generational 8306024 generic-all
 gc/shenandoah/oom/TestThreadFailure.java 8306024 generic-all
 gc/shenandoah/oom/TestClassLoaderLeak 8306024 generic-all
 gc/shenandoah/mxbeans/TestChurnNotifications#generational 8306024 generic-all
