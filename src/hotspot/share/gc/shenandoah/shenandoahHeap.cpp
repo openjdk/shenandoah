@@ -189,8 +189,7 @@ jint ShenandoahHeap::initialize() {
   _committed = _initial_size;
 
   // Now we know the number of regions and heap sizes, initialize the heuristics.
-  initialize_generations();
-  initialize_heuristics();
+  initialize_heuristics_generations();
 
   size_t heap_page_size   = UseLargePages ? os::large_page_size() : os::vm_page_size();
   size_t bitmap_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
@@ -453,9 +452,13 @@ jint ShenandoahHeap::initialize() {
 
 size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
   switch (generation->type()) {
-    case YOUNG:  return _generation_sizer.max_young_size();
-    case OLD:    return max_capacity() - _generation_sizer.min_young_size();
-    case GLOBAL: return max_capacity();
+    case YOUNG:
+      return _generation_sizer.max_young_size();
+    case OLD:
+      return max_capacity() - _generation_sizer.min_young_size();
+    case GLOBAL_GEN:
+    case GLOBAL_NON_GEN:
+      return max_capacity();
     default:
       ShouldNotReachHere();
       return 0;
@@ -464,32 +467,20 @@ size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
 
 size_t ShenandoahHeap::min_size_for(ShenandoahGeneration* generation) const {
   switch (generation->type()) {
-    case YOUNG:  return _generation_sizer.min_young_size();
-    case OLD:    return max_capacity() - _generation_sizer.max_young_size();
-    case GLOBAL: return min_capacity();
+    case YOUNG:
+      return _generation_sizer.min_young_size();
+    case OLD:
+      return max_capacity() - _generation_sizer.max_young_size();
+    case GLOBAL_GEN:
+    case GLOBAL_NON_GEN:
+      return min_capacity();
     default:
       ShouldNotReachHere();
       return 0;
   }
 }
 
-void ShenandoahHeap::initialize_generations() {
-  // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
-  // for old would be total heap - minimum capacity of young. This means the sum of the maximum
-  // allowed for old and young could exceed the total heap size. It remains the case that the
-  // _actual_ capacity of young + old = total.
-  _generation_sizer.heap_size_changed(soft_max_capacity());
-  size_t initial_capacity_young = _generation_sizer.max_young_size();
-  size_t max_capacity_young = _generation_sizer.max_young_size();
-  size_t initial_capacity_old = max_capacity() - max_capacity_young;
-  size_t max_capacity_old = max_capacity() - initial_capacity_young;
-
-  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
-  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-  _global_generation = new ShenandoahGlobalGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
-}
-
-void ShenandoahHeap::initialize_heuristics() {
+void ShenandoahHeap::initialize_heuristics_generations() {
   if (ShenandoahGCMode != nullptr) {
     if (strcmp(ShenandoahGCMode, "satb") == 0) {
       _gc_mode = new ShenandoahSATBMode();
@@ -516,6 +507,20 @@ void ShenandoahHeap::initialize_heuristics() {
             err_msg("GC mode \"%s\" is experimental, and must be enabled via -XX:+UnlockExperimentalVMOptions.",
                     _gc_mode->name()));
   }
+
+  // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
+  // for old would be total heap - minimum capacity of young. This means the sum of the maximum
+  // allowed for old and young could exceed the total heap size. It remains the case that the
+  // _actual_ capacity of young + old = total.
+  _generation_sizer.heap_size_changed(soft_max_capacity());
+  size_t initial_capacity_young = _generation_sizer.max_young_size();
+  size_t max_capacity_young = _generation_sizer.max_young_size();
+  size_t initial_capacity_old = max_capacity() - max_capacity_young;
+  size_t max_capacity_old = max_capacity() - initial_capacity_young;
+
+  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
+  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
+  _global_generation = new ShenandoahGlobalGeneration(_gc_mode->is_generational(), _max_workers, soft_max_capacity(), soft_max_capacity());
 
   _global_generation->initialize_heuristics(_gc_mode);
   if (mode()->is_generational()) {
@@ -3173,7 +3178,12 @@ void ShenandoahGenerationRegionClosure<OLD>::heap_region_do(ShenandoahHeapRegion
 }
 
 template<>
-void ShenandoahGenerationRegionClosure<GLOBAL>::heap_region_do(ShenandoahHeapRegion* region) {
+void ShenandoahGenerationRegionClosure<GLOBAL_GEN>::heap_region_do(ShenandoahHeapRegion* region) {
+  _cl->heap_region_do(region);
+}
+
+template<>
+void ShenandoahGenerationRegionClosure<GLOBAL_NON_GEN>::heap_region_do(ShenandoahHeapRegion* region) {
   _cl->heap_region_do(region);
 }
 
