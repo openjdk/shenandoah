@@ -586,6 +586,8 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
+    _heap->global_generation()->increase_used(words_size * HeapWordSize);
+    _heap->global_generation()->increase_humongous_waste(humongous_waste);
     if (req.is_young()) {
       _heap->young_generation()->increase_used(words_size * HeapWordSize);
       _heap->young_generation()->increase_humongous_waste(humongous_waste);

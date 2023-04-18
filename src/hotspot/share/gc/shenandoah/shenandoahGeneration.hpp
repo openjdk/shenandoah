@@ -52,7 +52,14 @@ private:
 protected:
   // Usage
   size_t _affiliated_region_count;
-  size_t _humongous_waste;      // how much waste for padding in humongous objects
+
+  // How much free memory is left in the last region of humongous objects.
+  // This is _not_ included in used, but it _is_ deducted from available,
+  // which gives the heuristics a more accurate view of how much memory remains
+  // for allocation. This figure is also included the heap status logging.
+  // The units are bytes. The value is only changed on a safepoint or under the
+  // heap lock.
+  size_t _humongous_waste;
   volatile size_t _used;
   volatile size_t _bytes_allocated_since_gc_start;
   size_t _max_capacity;

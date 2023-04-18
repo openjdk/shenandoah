@@ -1094,5 +1094,6 @@ void ShenandoahHeapRegion::decrement_humongous_waste() const {
   size_t waste_bytes = free();
   if (waste_bytes > 0) {
     ShenandoahHeap::heap()->generation_for(affiliation())->decrease_humongous_waste(waste_bytes);
+    ShenandoahHeap::heap()->global_generation()->decrease_humongous_waste(waste_bytes);
   }
 }
