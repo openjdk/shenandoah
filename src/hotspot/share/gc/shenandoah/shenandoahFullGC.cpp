@@ -36,7 +36,7 @@
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
@@ -1517,7 +1517,6 @@ void ShenandoahFullGC::phase5_epilog() {
                    byte_size_in_proper_unit(heap->young_generation()->used()), proper_unit_for_byte_size(heap->young_generation()->used()),
                    byte_size_in_proper_unit(heap->old_generation()->used()),   proper_unit_for_byte_size(heap->old_generation()->used()));
     }
-
     heap->collection_set()->clear();
     size_t young_cset_regions, old_cset_regions;
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
@@ -1525,7 +1524,7 @@ void ShenandoahFullGC::phase5_epilog() {
     // We do not separately promote humongous after Full GC.  These have been handled by separate mechanism.
 
     // We also do not expand old generation size following Full GC because we have scrambled age populations and
-    // no longer have object separted by age into distinct regions.
+    // no longer have objects separated by age into distinct regions.
 
     // TODO: Do we need to fix FullGC so that it maintains aged segregation of objects into distinct regions?
     //       A partial solution would be to remember how many objects are of tenure age following Full GC, but
@@ -1544,3 +1543,4 @@ void ShenandoahFullGC::phase5_epilog() {
   }
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }
+

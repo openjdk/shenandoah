@@ -678,6 +678,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
                         PTR_FORMAT " at transition from FREE to %s",
                         p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), req.affiliation_name());
 
+    // While individual regions report their true use, all humongous regions are marked used in the free set.
     _mutator_free_bitmap.clear_bit(r->index());
   }
 
@@ -686,6 +687,8 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
+    _heap->global_generation()->increase_used(words_size * HeapWordSize);
+    _heap->global_generation()->increase_humongous_waste(humongous_waste);
     if (req.is_young()) {
       _heap->young_generation()->increase_used(words_size * HeapWordSize);
       _heap->young_generation()->increase_humongous_waste(humongous_waste);

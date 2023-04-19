@@ -165,17 +165,13 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   size_t v_humongous_waste = get_humongous_waste();
   LogGcInfo::print("%s: %s generation used: " SIZE_FORMAT "%s, used regions: " SIZE_FORMAT "%s, "
                    "humongous waste: " SIZE_FORMAT "%s, soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, "
-                   "available: " SIZE_FORMAT "%s",
-                   msg, name(),
+                   "available: " SIZE_FORMAT "%s", msg, name(),
                    byte_size_in_proper_unit(v_used),              proper_unit_for_byte_size(v_used),
                    byte_size_in_proper_unit(v_used_regions),      proper_unit_for_byte_size(v_used_regions),
                    byte_size_in_proper_unit(v_humongous_waste),   proper_unit_for_byte_size(v_humongous_waste),
                    byte_size_in_proper_unit(v_soft_max_capacity), proper_unit_for_byte_size(v_soft_max_capacity),
                    byte_size_in_proper_unit(v_max_capacity),      proper_unit_for_byte_size(v_max_capacity),
                    byte_size_in_proper_unit(v_available),         proper_unit_for_byte_size(v_available));
-
-  // This detects arithmetic underflow of unsigned usage value
-  assert(v_used <= ShenandoahHeap::heap()->capacity(), "Generation capacity must be less than heap capacity");
 }
 
 void ShenandoahGeneration::reset_mark_bitmap() {
@@ -364,7 +360,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
-  // With auto-sizing of generations, adjust_evacuation_budgets is much simpler
 
   // Preselected regions have been inserted into the collection set, so we no longer need the preselected array.
   collection_set->abandon_preselected();
@@ -651,6 +646,7 @@ size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
 }
 
 void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   _affiliated_region_count = num_regions;
   _used = num_bytes;
@@ -658,6 +654,7 @@ void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes,
 }
 
 void ShenandoahGeneration::clear_used() {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
   Atomic::store(&_used, (size_t)0);
