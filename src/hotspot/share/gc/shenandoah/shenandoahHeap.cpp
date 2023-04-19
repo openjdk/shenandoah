@@ -551,6 +551,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _young_evac_reserve(0),
   _captured_old_usage(0),
   _previous_promotion(0),
+  _upgraded_to_full(false),
+  _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -2240,7 +2242,7 @@ void ShenandoahHeap::set_gc_state_mask(uint mask, bool value) {
 }
 
 void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
-  set_gc_state_mask(VALID_EVACUATION_RESERVE_QUANTITIES, is_valid);
+  _has_evacuation_reserve_quantities = is_valid;
 }
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {

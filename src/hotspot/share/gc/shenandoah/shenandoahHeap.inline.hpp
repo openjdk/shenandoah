@@ -667,7 +667,7 @@ inline bool ShenandoahHeap::is_stable() const {
 }
 
 inline bool ShenandoahHeap::has_evacuation_reserve_quantities() const {
-  return _gc_state.is_set(VALID_EVACUATION_RESERVE_QUANTITIES);
+  return _has_evacuation_reserve_quantities;
 }
 
 inline bool ShenandoahHeap::is_idle() const {

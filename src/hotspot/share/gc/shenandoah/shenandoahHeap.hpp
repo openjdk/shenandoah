@@ -318,9 +318,6 @@ public:
 
     // Old regions are under marking, still need SATB barriers.
     OLD_MARKING_BITPOS = 5,
-
-    // The evacuation reserves for old-gen and young-gen are available
-    VALID_EVACUATION_RESERVE_QUANTITIES_BITPOS = 6
   };
 
   enum GCState {
@@ -331,7 +328,6 @@ public:
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
     OLD_MARKING   = 1 << OLD_MARKING_BITPOS,
-    VALID_EVACUATION_RESERVE_QUANTITIES = 1 << VALID_EVACUATION_RESERVE_QUANTITIES_BITPOS
   };
 
 private:
@@ -393,8 +389,6 @@ private:
 
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
-
-
 
 public:
 
