@@ -963,13 +963,6 @@ void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes,
   _humongous_waste = humongous_waste;
 }
 
-void ShenandoahGeneration::clear_used() {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
-  assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
-  // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
-  Atomic::store(&_used, (size_t)0);
-}
-
 void ShenandoahGeneration::increase_used(size_t bytes) {
   Atomic::add(&_used, bytes);
 }
