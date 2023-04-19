@@ -541,7 +541,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_generation(nullptr),
   _prepare_for_old_mark(false),
   _initial_size(0),
-  _used(0),
   _committed(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
   _workers(nullptr),
@@ -700,7 +699,7 @@ bool ShenandoahHeap::is_gc_generation_young() const {
 }
 
 size_t ShenandoahHeap::used() const {
-  return Atomic::load(&_used);
+  return global_generation()->used();
 }
 
 size_t ShenandoahHeap::committed() const {
@@ -744,39 +743,50 @@ void ShenandoahHeap::increase_used(const ShenandoahAllocRequest& req) {
 
   if (req.is_gc_alloc()) {
     assert(wasted_bytes == 0 || req.type() == ShenandoahAllocRequest::_alloc_plab, "Only PLABs have waste");
-    generation->increase_used(actual_bytes + wasted_bytes);
-    increase_used(actual_bytes + wasted_bytes);
+    increase_used(generation, actual_bytes + wasted_bytes);
   } else {
     assert(req.is_mutator_alloc(), "Expected mutator alloc here");
     // padding and actual size both count towards allocation counter
     generation->increase_allocated(actual_bytes + wasted_bytes);
 
     // only actual size counts toward usage for mutator allocations
-    generation->increase_used(actual_bytes);
-    increase_used(actual_bytes);
+    increase_used(generation, actual_bytes);
 
     // notify pacer of both actual size and waste
     notify_mutator_alloc_words(req.actual_size(), req.waste());
 
-    if (wasted_bytes > 0) {
-      if (req.actual_size() > ShenandoahHeapRegion::humongous_threshold_words()) {
-        generation->increase_humongous_waste(wasted_bytes);
-      }
+    if (wasted_bytes > 0 && req.actual_size() > ShenandoahHeapRegion::humongous_threshold_words()) {
+      increase_humongous_waste(generation,wasted_bytes);
     }
   }
 }
 
-void ShenandoahHeap::increase_used(size_t bytes) {
-  Atomic::add(&_used, bytes, memory_order_relaxed);
+void ShenandoahHeap::increase_humongous_waste(ShenandoahGeneration* generation, size_t bytes) {
+  generation->increase_humongous_waste(bytes);
+  if (!generation->is_global()) {
+    global_generation()->increase_humongous_waste(bytes);
+  }
 }
 
-void ShenandoahHeap::set_used(size_t bytes) {
-  Atomic::store(&_used, bytes);
+void ShenandoahHeap::decrease_humongous_waste(ShenandoahGeneration* generation, size_t bytes) {
+  generation->decrease_humongous_waste(bytes);
+  if (!generation->is_global()) {
+    global_generation()->decrease_humongous_waste(bytes);
+  }
 }
 
-void ShenandoahHeap::decrease_used(size_t bytes) {
-  assert(used() >= bytes, "never decrease heap size by more than we've left");
-  Atomic::sub(&_used, bytes, memory_order_relaxed);
+void ShenandoahHeap::increase_used(ShenandoahGeneration* generation, size_t bytes) {
+  generation->increase_used(bytes);
+  if (!generation->is_global()) {
+    global_generation()->increase_used(bytes);
+  }
+}
+
+void ShenandoahHeap::decrease_used(ShenandoahGeneration* generation, size_t bytes) {
+  generation->decrease_used(bytes);
+  if (!generation->is_global()) {
+    global_generation()->decrease_used(bytes);
+  }
 }
 
 void ShenandoahHeap::notify_mutator_alloc_words(size_t words, size_t waste) {

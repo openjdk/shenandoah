@@ -1330,7 +1330,7 @@ public:
     if (r->is_trash()) {
       live = 0;
       r->recycle();
-    } else if (_is_generational) {
+    } else {
       if (r->is_old()) {
         account_for_region(r, _old_regions, _old_usage, _old_humongous_waste);
       } else if (r->is_young()) {
@@ -1350,9 +1350,20 @@ public:
   }
 
   void update_generation_usage() {
-    assert(_is_generational, "Only update generation usage if generational");
-    _heap->old_generation()->establish_usage(_old_regions, _old_usage, _old_humongous_waste);
-    _heap->young_generation()->establish_usage(_young_regions, _young_usage, _young_humongous_waste);
+    if (_is_generational) {
+      _heap->old_generation()->establish_usage(_old_regions, _old_usage, _old_humongous_waste);
+      _heap->young_generation()->establish_usage(_young_regions, _young_usage, _young_humongous_waste);
+    } else {
+      assert(_old_regions == 0, "Old regions only expected in generational mode");
+      assert(_old_usage == 0, "Old usage only expected in generational mode");
+      assert(_old_humongous_waste == 0, "Old humongous waste only expected in generational mode");
+    }
+
+    // In generational mode, global usage should be the sum of young and old. This is also true
+    // for non-generational modes except that there are no old regions.
+    _heap->global_generation()->establish_usage(_old_regions + _young_regions,
+                                                _old_usage + _young_usage,
+                                                _old_humongous_waste + _young_humongous_waste);
   }
 };
 
@@ -1493,17 +1504,13 @@ void ShenandoahFullGC::phase5_epilog() {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_rebuild);
     ShenandoahPostCompactClosure post_compact;
     heap->heap_region_iterate(&post_compact);
-    heap->set_used(post_compact.get_live());
-    if (heap->mode()->is_generational()) {
-      post_compact.update_generation_usage();
-      log_info(gc)("FullGC done: GLOBAL usage: " SIZE_FORMAT "%s, young usage: " SIZE_FORMAT "%s, old usage: " SIZE_FORMAT "%s",
-                   byte_size_in_proper_unit(post_compact.get_live()),          proper_unit_for_byte_size(post_compact.get_live()),
-                   byte_size_in_proper_unit(heap->young_generation()->used()), proper_unit_for_byte_size(heap->young_generation()->used()),
-                   byte_size_in_proper_unit(heap->old_generation()->used()),   proper_unit_for_byte_size(heap->old_generation()->used()));
-    }
+    post_compact.update_generation_usage();
+    log_info(gc)("FullGC done: global usage: " SIZE_FORMAT "%s, young usage: " SIZE_FORMAT "%s, old usage: " SIZE_FORMAT "%s",
+                 byte_size_in_proper_unit(heap->global_generation()->used()), proper_unit_for_byte_size(heap->global_generation()->used()),
+                 byte_size_in_proper_unit(heap->young_generation()->used()),  proper_unit_for_byte_size(heap->young_generation()->used()),
+                 byte_size_in_proper_unit(heap->old_generation()->used()),    proper_unit_for_byte_size(heap->old_generation()->used()));
     heap->collection_set()->clear();
     heap->free_set()->rebuild();
   }
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }
-

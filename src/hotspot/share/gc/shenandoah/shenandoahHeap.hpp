@@ -217,15 +217,16 @@ private:
            size_t _minimum_size;
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
-  volatile size_t _used;
   volatile size_t _committed;
   shenandoah_padding(1);
 
-public:
   void increase_used(const ShenandoahAllocRequest& req);
-  void increase_used(size_t bytes);
-  void decrease_used(size_t bytes);
-  void set_used(size_t bytes);
+
+public:
+  void increase_used(ShenandoahGeneration* generation, size_t bytes);
+  void decrease_used(ShenandoahGeneration* generation, size_t bytes);
+  void increase_humongous_waste(ShenandoahGeneration* generation, size_t bytes);
+  void decrease_humongous_waste(ShenandoahGeneration* generation, size_t bytes);
 
   void increase_committed(size_t bytes);
   void decrease_committed(size_t bytes);
