@@ -721,7 +721,7 @@ void ShenandoahHeap::decrease_committed(size_t bytes) {
 // * The sum of regions::used == heap::used
 // * The sum of a generation's regions::used == generation::used
 // * The sum of a generation's humongous regions::free == generation::humongous_waste
-// These invariants are checked by the verifier on safepoints.
+// These invariants are checked by the verifier on GC safepoints.
 //
 // Additional notes:
 // * When a mutator's allocation request causes a region to be retired, the
@@ -729,13 +729,14 @@ void ShenandoahHeap::decrease_committed(size_t bytes) {
 //   to the usage, but it _does_ contribute to allocation rate.
 // * The bottom of a PLAB must be aligned on card size. In some cases this will
 //   require padding in front of the PLAB (a filler object). Because this padding
-//   is included in the region's used memory we include the padding in the accounting.
+//   is included in the region's used memory we include the padding in the usage
+//   accounting as waste.
 // * Mutator allocations are used to compute an allocation rate. They are also
 //   sent to the Pacer for those purposes.
 // * There are three sources of waste:
-//  * The padding used to align a PLAB on card size
-//  * Region's free is less than minimum TLAB size and is retired
-//  * The unused portion of memory in the last region of a humongous object
+//  1. The padding used to align a PLAB on card size
+//  2. Region's free is less than minimum TLAB size and is retired
+//  3. The unused portion of memory in the last region of a humongous object
 void ShenandoahHeap::increase_used(const ShenandoahAllocRequest& req) {
   size_t actual_bytes = req.actual_size() * HeapWordSize;
   size_t wasted_bytes = req.waste() * HeapWordSize;
@@ -759,7 +760,7 @@ void ShenandoahHeap::increase_used(const ShenandoahAllocRequest& req) {
 
     if (wasted_bytes > 0) {
       if (req.actual_size() > ShenandoahHeapRegion::humongous_threshold_words()) {
-        // generation->increase_humongous_waste(wasted_bytes);
+        generation->increase_humongous_waste(wasted_bytes);
       }
     }
   }

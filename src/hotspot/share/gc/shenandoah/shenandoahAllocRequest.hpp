@@ -59,13 +59,29 @@ public:
   }
 
 private:
+  // When ShenandoahElasticTLAB is enabled, the request cannot be made smaller than _min_size.
   size_t _min_size;
+
+  // The size of the request in words.
   size_t _requested_size;
+
+  // The allocation may be increased for padding or decreased to fit in the remaining space of a region.
   size_t _actual_size;
+
+  // For a humongous object, the _waste is the amount of free memory in the last region.
+  // For other requests, the _waste will be non-zero if the request enountered one or more regions
+  // with less memory than _min_size. This waste does not contribute to the used memory for
+  // the heap, but it does contribute to the allocation rate for heuristics.
   size_t _waste;
+
+  // This is the type of the request.
   Type _alloc_type;
+
+  // This is the generation which the request is targeting.
   ShenandoahAffiliation const _affiliation;
+
 #ifdef ASSERT
+  // Check that this is set before being read.
   bool _actual_size_set;
 #endif
 
