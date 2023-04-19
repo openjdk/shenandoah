@@ -191,9 +191,7 @@ public:
   ShenandoahHeap(ShenandoahCollectorPolicy* policy);
   jint initialize() override;
   void post_initialize() override;
-  void initialize_mode();
-  void initialize_heuristics();
-  void initialize_generations();
+  void initialize_heuristics_generations();
 
   void initialize_serviceability() override;
 
@@ -206,9 +204,6 @@ public:
 
   void prepare_for_verify() override;
   void verify(VerifyOption vo) override;
-  void verify_rem_set_at_mark();
-  void verify_rem_set_at_update_ref();
-  void verify_rem_set_after_full_gc();
 
 // WhiteBox testing support.
   bool supports_concurrent_gc_breakpoints() const override {
@@ -225,9 +220,6 @@ private:
   volatile size_t _used;
   volatile size_t _committed;
   shenandoah_padding(1);
-
-  void help_verify_region_rem_set(ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx,
-                                  HeapWord* from, HeapWord* top, HeapWord* update_watermark, const char* message);
 
 public:
   void increase_used(size_t bytes);

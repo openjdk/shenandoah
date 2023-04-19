@@ -46,7 +46,7 @@ protected:
 
 public:
   template<class T, ShenandoahGenerationType GENERATION>
-  static inline void mark_through_ref(T* p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old, ShenandoahMarkingContext* const mark_context, bool weak);
+  static inline void mark_through_ref(T* p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old_q, ShenandoahMarkingContext* const mark_context, bool weak);
 
   // Loom support
   void start_mark();
@@ -83,7 +83,7 @@ private:
   void mark_loop_prework(uint worker_id, TaskTerminator *terminator, ShenandoahReferenceProcessor *rp, StringDedup::Requests* const req, bool update_refs);
 
   template <ShenandoahGenerationType GENERATION>
-  static bool in_generation(oop obj);
+  static bool in_generation(ShenandoahHeap* const heap, oop obj);
 
   static void mark_ref(ShenandoahObjToScanQueue* q,
                        ShenandoahMarkingContext* const mark_context,

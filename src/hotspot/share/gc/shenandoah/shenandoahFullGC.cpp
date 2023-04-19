@@ -36,7 +36,7 @@
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
@@ -202,8 +202,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // Defer unadjust_available() invocations until after Full GC finishes its efforts because Full GC makes use
     // of young-gen memory that may have been loaned from old-gen.
 
-    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
-
+    // No need for old_gen->increase_used() as this was done when plabs were allocated.
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
@@ -355,11 +354,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_full_gc_in_progress(false);
 
   if (ShenandoahVerify) {
-    if (heap->mode()->is_generational()) {
-      heap->verifier()->verify_after_generational_fullgc();
-    } else {
-      heap->verifier()->verify_after_fullgc();
-    }
+    heap->verifier()->verify_after_fullgc();
   }
 
   // Having reclaimed all dead memory, it is now safe to restore capacities to original values.
@@ -1511,10 +1506,9 @@ void ShenandoahFullGC::phase5_epilog() {
                    byte_size_in_proper_unit(heap->young_generation()->used()), proper_unit_for_byte_size(heap->young_generation()->used()),
                    byte_size_in_proper_unit(heap->old_generation()->used()),   proper_unit_for_byte_size(heap->old_generation()->used()));
     }
-
     heap->collection_set()->clear();
     heap->free_set()->rebuild();
   }
-
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }
+

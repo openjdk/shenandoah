@@ -168,7 +168,9 @@ private:
   // Adjust left-most and right-most indexes for the old_collector_is_free set after adding region idx to this set.
   void expand_old_collector_bounds_maybe(size_t idx);
 
-  inline void increase_used(size_t amount);
+   // Used of free set represents the amount of is_mutator_free set that has been consumed since most recent rebuild.
+  void increase_used(size_t amount);
+
   void clear_internal();
 
   void try_recycle_trashed(ShenandoahHeapRegion *r);

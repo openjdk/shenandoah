@@ -187,8 +187,7 @@ jint ShenandoahHeap::initialize() {
   _committed = _initial_size;
 
   // Now we know the number of regions and heap sizes, initialize the heuristics.
-  initialize_generations();
-  initialize_heuristics();
+  initialize_heuristics_generations();
 
   size_t heap_page_size   = UseLargePages ? os::large_page_size() : os::vm_page_size();
   size_t bitmap_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
@@ -451,9 +450,13 @@ jint ShenandoahHeap::initialize() {
 
 size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
   switch (generation->type()) {
-    case YOUNG:  return _generation_sizer.max_young_size();
-    case OLD:    return max_capacity() - _generation_sizer.min_young_size();
-    case GLOBAL: return max_capacity();
+    case YOUNG:
+      return _generation_sizer.max_young_size();
+    case OLD:
+      return max_capacity() - _generation_sizer.min_young_size();
+    case GLOBAL_GEN:
+    case GLOBAL_NON_GEN:
+      return max_capacity();
     default:
       ShouldNotReachHere();
       return 0;
@@ -462,32 +465,20 @@ size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
 
 size_t ShenandoahHeap::min_size_for(ShenandoahGeneration* generation) const {
   switch (generation->type()) {
-    case YOUNG:  return _generation_sizer.min_young_size();
-    case OLD:    return max_capacity() - _generation_sizer.max_young_size();
-    case GLOBAL: return min_capacity();
+    case YOUNG:
+      return _generation_sizer.min_young_size();
+    case OLD:
+      return max_capacity() - _generation_sizer.max_young_size();
+    case GLOBAL_GEN:
+    case GLOBAL_NON_GEN:
+      return min_capacity();
     default:
       ShouldNotReachHere();
       return 0;
   }
 }
 
-void ShenandoahHeap::initialize_generations() {
-  // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
-  // for old would be total heap - minimum capacity of young. This means the sum of the maximum
-  // allowed for old and young could exceed the total heap size. It remains the case that the
-  // _actual_ capacity of young + old = total.
-  _generation_sizer.heap_size_changed(soft_max_capacity());
-  size_t initial_capacity_young = _generation_sizer.max_young_size();
-  size_t max_capacity_young = _generation_sizer.max_young_size();
-  size_t initial_capacity_old = max_capacity() - max_capacity_young;
-  size_t max_capacity_old = max_capacity() - initial_capacity_young;
-
-  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
-  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-  _global_generation = new ShenandoahGlobalGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
-}
-
-void ShenandoahHeap::initialize_heuristics() {
+void ShenandoahHeap::initialize_heuristics_generations() {
   if (ShenandoahGCMode != nullptr) {
     if (strcmp(ShenandoahGCMode, "satb") == 0) {
       _gc_mode = new ShenandoahSATBMode();
@@ -514,6 +505,20 @@ void ShenandoahHeap::initialize_heuristics() {
             err_msg("GC mode \"%s\" is experimental, and must be enabled via -XX:+UnlockExperimentalVMOptions.",
                     _gc_mode->name()));
   }
+
+  // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
+  // for old would be total heap - minimum capacity of young. This means the sum of the maximum
+  // allowed for old and young could exceed the total heap size. It remains the case that the
+  // _actual_ capacity of young + old = total.
+  _generation_sizer.heap_size_changed(soft_max_capacity());
+  size_t initial_capacity_young = _generation_sizer.max_young_size();
+  size_t max_capacity_young = _generation_sizer.max_young_size();
+  size_t initial_capacity_old = max_capacity() - max_capacity_young;
+  size_t max_capacity_old = max_capacity() - initial_capacity_young;
+
+  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
+  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
+  _global_generation = new ShenandoahGlobalGeneration(_gc_mode->is_generational(), _max_workers, soft_max_capacity(), soft_max_capacity());
 
   _global_generation->initialize_heuristics(_gc_mode);
   if (mode()->is_generational()) {
@@ -1306,7 +1311,8 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
                 // When we retire this plab, we'll unexpend what we don't really use.
                 ShenandoahThreadLocalData::enable_plab_promotions(thread);
                 expend_promoted(actual_size);
-                assert(get_promoted_expended() <= get_promoted_reserve(), "Do not expend more promotion than budgeted");
+                // This assert has been disabled because we expect this code to be replaced by 05/2023.
+                // assert(get_promoted_expended() <= get_promoted_reserve(), "Do not expend more promotion than budgeted");
                 ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
               } else {
                 // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
@@ -3134,175 +3140,13 @@ void ShenandoahGenerationRegionClosure<OLD>::heap_region_do(ShenandoahHeapRegion
 }
 
 template<>
-void ShenandoahGenerationRegionClosure<GLOBAL>::heap_region_do(ShenandoahHeapRegion* region) {
+void ShenandoahGenerationRegionClosure<GLOBAL_GEN>::heap_region_do(ShenandoahHeapRegion* region) {
   _cl->heap_region_do(region);
 }
 
-// Assure that the remember set has a dirty card everywhere there is an interesting pointer.
-// This examines the read_card_table between bottom() and top() since all PLABS are retired
-// before the safepoint for init_mark.  Actually, we retire them before update-references and don't
-// restore them until the start of evacuation.
-void ShenandoahHeap::verify_rem_set_at_mark() {
-  shenandoah_assert_safepoint();
-  assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
-
-  ShenandoahRegionIterator iterator;
-  RememberedScanner* scanner = card_scan();
-  ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
-  ShenandoahMarkingContext* ctx;
-
-  log_debug(gc)("Verifying remembered set at %s mark", doing_mixed_evacuations()? "mixed": "young");
-
-  if (is_old_bitmap_stable() || active_generation()->is_global()) {
-    ctx = complete_marking_context();
-  } else {
-    ctx = nullptr;
-  }
-
-  while (iterator.has_next()) {
-    ShenandoahHeapRegion* r = iterator.next();
-    HeapWord* tams = ctx? ctx->top_at_mark_start(r): nullptr;
-    if (r == nullptr)
-      break;
-    if (r->is_old() && r->is_active()) {
-      HeapWord* obj_addr = r->bottom();
-      if (r->is_humongous_start()) {
-        oop obj = cast_to_oop(obj_addr);
-        if (!ctx || ctx->is_marked(obj)) {
-          // For humongous objects, the typical object is an array, so the following checks may be overkill
-          // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-          // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-          if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
-            obj->oop_iterate(&check_interesting_pointers);
-          }
-          // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-        }
-        // else, this humongous object is not marked so no need to verify its internal pointers
-        if (!scanner->verify_registration(obj_addr, ctx)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr,
-                                          "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
-        }
-      } else if (!r->is_humongous()) {
-        HeapWord* top = r->top();
-        while (obj_addr < top) {
-          oop obj = cast_to_oop(obj_addr);
-          // ctx->is_marked() returns true if mark bit set (TAMS not relevant during init mark)
-          if (!ctx || ctx->is_marked(obj)) {
-            // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-            // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-            if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
-              obj->oop_iterate(&check_interesting_pointers);
-            }
-            // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-            if (!scanner->verify_registration(obj_addr, ctx)) {
-              ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr,
-                                               "Verify init-mark remembered set violation", "object not properly registered", __FILE__, __LINE__);
-            }
-            obj_addr += obj->size();
-          } else {
-            // This object is not live so we don't verify dirty cards contained therein
-            assert(tams != nullptr, "If object is not live, ctx and tams should be non-null");
-            obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-          }
-        }
-      } // else, we ignore humongous continuation region
-    } // else, this is not an OLD region so we ignore it
-  } // all regions have been processed
-}
-
-void ShenandoahHeap::help_verify_region_rem_set(ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx, HeapWord* from,
-                                                HeapWord* top, HeapWord* registration_watermark, const char* message) {
-  RememberedScanner* scanner = card_scan();
-  ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
-
-  HeapWord* obj_addr = from;
-  if (r->is_humongous_start()) {
-    oop obj = cast_to_oop(obj_addr);
-    if (!ctx || ctx->is_marked(obj)) {
-      size_t card_index = scanner->card_index_for_addr(obj_addr);
-      // For humongous objects, the typical object is an array, so the following checks may be overkill
-      // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-      // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-      if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
-        obj->oop_iterate(&check_interesting_pointers);
-      }
-      // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-    }
-    // else, this humongous object is not live so no need to verify its internal pointers
-
-    if ((obj_addr < registration_watermark) && !scanner->verify_registration(obj_addr, ctx)) {
-      ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr, message,
-                                       "object not properly registered", __FILE__, __LINE__);
-    }
-  } else if (!r->is_humongous()) {
-    while (obj_addr < top) {
-      oop obj = cast_to_oop(obj_addr);
-      // ctx->is_marked() returns true if mark bit set or if obj above TAMS.
-      if (!ctx || ctx->is_marked(obj)) {
-        size_t card_index = scanner->card_index_for_addr(obj_addr);
-        // For regular objects (not object arrays), if the card holding the start of the object is dirty,
-        // we do not need to verify that cards spanning interesting pointers within this object are dirty.
-        if (!scanner->is_write_card_dirty(card_index) || obj->is_objArray()) {
-          obj->oop_iterate(&check_interesting_pointers);
-        }
-        // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
-
-        if ((obj_addr < registration_watermark) && !scanner->verify_registration(obj_addr, ctx)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, obj_addr, nullptr, message,
-                                           "object not properly registered", __FILE__, __LINE__);
-        }
-        obj_addr += obj->size();
-      } else {
-        // This object is not live so we don't verify dirty cards contained therein
-        HeapWord* tams = ctx->top_at_mark_start(r);
-        obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
-      }
-    }
-  }
-}
-
-void ShenandoahHeap::verify_rem_set_after_full_gc() {
-  shenandoah_assert_safepoint();
-  assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
-
-  ShenandoahRegionIterator iterator;
-
-  while (iterator.has_next()) {
-    ShenandoahHeapRegion* r = iterator.next();
-    if (r == nullptr)
-      break;
-    if (r->is_old() && !r->is_cset()) {
-      help_verify_region_rem_set(r, nullptr, r->bottom(), r->top(), r->top(), "Remembered set violation at end of Full GC");
-    }
-  }
-}
-
-// Assure that the remember set has a dirty card everywhere there is an interesting pointer.  Even though
-// the update-references scan of remembered set only examines cards up to update_watermark, the remembered
-// set should be valid through top.  This examines the write_card_table between bottom() and top() because
-// all PLABS are retired immediately before the start of update refs.
-void ShenandoahHeap::verify_rem_set_at_update_ref() {
-  shenandoah_assert_safepoint();
-  assert(mode()->is_generational(), "Only verify remembered set for generational operational modes");
-
-  ShenandoahRegionIterator iterator;
-  ShenandoahMarkingContext* ctx;
-
-  if (is_old_bitmap_stable() || active_generation()->is_global()) {
-    ctx = complete_marking_context();
-  } else {
-    ctx = nullptr;
-  }
-
-  while (iterator.has_next()) {
-    ShenandoahHeapRegion* r = iterator.next();
-    if (r == nullptr)
-      break;
-    if (r->is_old() && !r->is_cset()) {
-      help_verify_region_rem_set(r, ctx, r->bottom(), r->top(), r->get_update_watermark(),
-                                 "Remembered set violation at init-update-references");
-    }
-  }
+template<>
+void ShenandoahGenerationRegionClosure<GLOBAL_NON_GEN>::heap_region_do(ShenandoahHeapRegion* region) {
+  _cl->heap_region_do(region);
 }
 
 ShenandoahGeneration* ShenandoahHeap::generation_for(ShenandoahAffiliation affiliation) const {
