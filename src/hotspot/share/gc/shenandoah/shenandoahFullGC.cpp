@@ -1336,7 +1336,7 @@ public:
       } else if (r->is_young()) {
         account_for_region(r, _young_regions, _young_usage, _young_humongous_waste);
       } else {
-        // TODO: Assert here?
+        fatal("Unexpected region affiliation");
       }
     }
 

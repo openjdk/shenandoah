@@ -137,7 +137,7 @@ ShenandoahHeuristics* ShenandoahGeneration::initialize_heuristics(ShenandoahMode
 }
 
 size_t ShenandoahGeneration::bytes_allocated_since_gc_start() {
-  return Atomic::load(&_bytes_allocated_since_gc_start);;
+  return Atomic::load(&_bytes_allocated_since_gc_start);
 }
 
 void ShenandoahGeneration::reset_bytes_allocated_since_gc_start() {
@@ -405,7 +405,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   collection_set->establish_preselected(preselected_regions);
 }
 
-// Having chosen the collection set, adjust the budgets for generatioal mode based on its composition.  Note
+// Having chosen the collection set, adjust the budgets for generational mode based on its composition.  Note
 // that young_generation->available() now knows about recently discovered immediate garbage.
 
 void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
@@ -956,7 +956,6 @@ size_t ShenandoahGeneration::decrement_affiliated_region_count() {
 }
 
 void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   _affiliated_region_count = num_regions;
   _used = num_bytes;
