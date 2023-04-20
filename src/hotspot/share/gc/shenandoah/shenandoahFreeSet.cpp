@@ -682,7 +682,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     _mutator_free_bitmap.clear_bit(r->index());
   }
 
-  // While individual regions report their true use, all humongous regions are marked used in the free set.
   size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
   increase_used(total_humongous_size);
   if (_heap->mode()->is_generational()) {

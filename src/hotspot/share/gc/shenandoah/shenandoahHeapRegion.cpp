@@ -1127,7 +1127,7 @@ void ShenandoahHeapRegion::promote_humongous() {
     ShenandoahHeapLocker locker(heap->lock());
 
     // We promote humongous objects unconditionally, without checking for availability.  We adjust
-    // usage totals after evacuation is done.
+    // usage totals, including humongous waste, after evacuation is done.
     log_debug(gc)("promoting humongous region " SIZE_FORMAT ", spanning " SIZE_FORMAT, index(), spanned_regions);
 
     // For this region and each humongous continuation region spanned by this humongous object, change
