@@ -1279,14 +1279,12 @@ static void account_for_region(ShenandoahHeapRegion* r, size_t &region_count, si
 class ShenandoahPostCompactClosure : public ShenandoahHeapRegionClosure {
 private:
   ShenandoahHeap* const _heap;
-  size_t _live;
   bool _is_generational;
   size_t _young_regions, _young_usage, _young_humongous_waste;
   size_t _old_regions, _old_usage, _old_humongous_waste;
 
 public:
   ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()),
-                                   _live(0),
                                    _is_generational(_heap->mode()->is_generational()),
                                    _young_regions(0),
                                    _young_usage(0),
@@ -1335,18 +1333,11 @@ public:
         account_for_region(r, _old_regions, _old_usage, _old_humongous_waste);
       } else if (r->is_young()) {
         account_for_region(r, _young_regions, _young_usage, _young_humongous_waste);
-      } else {
-        fatal("Unexpected region affiliation");
       }
     }
 
     r->set_live_data(live);
     r->reset_alloc_metadata();
-    _live += live;
-  }
-
-  size_t get_live() {
-    return _live;
   }
 
   void update_generation_usage() {
@@ -1372,7 +1363,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
   //
   // This code is serial, because doing the in-slice parallel sliding is tricky. In most cases,
   // humongous regions are already compacted, and do not require further moves, which alleviates
-  // sliding costs. We may consider doing this in parallel in future.
+  // sliding costs. We may consider doing this in parallel in the future.
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
