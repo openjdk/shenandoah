@@ -513,26 +513,13 @@ void ShenandoahBarrierSetC2::post_barrier(GraphKit* kit,
 
   // Get the alias_index for raw card-mark memory
   int adr_type = Compile::AliasIdxRaw;
-  Node*   zero = __ ConI(0); // Dirty card value
+  Node* dirty = __ ConI(CardTable::dirty_card_val()); // Dirty card value
 
-  if (UseCondCardMark) {
-    // The classic GC reference write barrier is typically implemented
-    // as a store into the global card mark table.  Unfortunately
-    // unconditional stores can result in false sharing and excessive
-    // coherence traffic as well as false transactional aborts.
-    // UseCondCardMark enables MP "polite" conditional card mark
-    // stores.  In theory we could relax the load from ctrl() to
-    // no_ctrl, but that doesn't buy much latitude.
-    Node* card_val = __ load( __ ctrl(), card_adr, TypeInt::BYTE, T_BYTE, adr_type);
-    __ if_then(card_val, BoolTest::ne, zero);
-  }
-
-  // Smash zero into card
-  __ store(__ ctrl(), card_adr, zero, T_BYTE, adr_type, MemNode::unordered);
-
-  if (UseCondCardMark) {
-    __ end_if();
-  }
+  // Check if card is dirty, and make it so, if not
+  Node* card_val = __ load( __ ctrl(), card_adr, TypeInt::BYTE, T_BYTE, adr_type);
+  __ if_then(card_val, BoolTest::ne, dirty);
+  __ store(__ ctrl(), card_adr, dirty, T_BYTE, adr_type, MemNode::unordered);
+  __ end_if();
 
   // Final sync IdealKit and GraphKit.
   kit->final_sync(ideal);
@@ -1018,7 +1005,7 @@ void ShenandoahBarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node*
     Node* addp = shift->unique_out();
     for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
       Node* mem = addp->last_out(j);
-      if (UseCondCardMark && mem->is_Load()) {
+      if (mem->is_Load()) {
         assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
         // The load is checking if the card has been written so
         // replace it with zero to fold the test.

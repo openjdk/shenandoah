@@ -189,7 +189,9 @@ template <DecoratorSet decorators, typename T>
 inline void ShenandoahBarrierSet::write_ref_field_post(T* field) {
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
     volatile CardTable::CardValue* byte = card_table()->byte_for(field);
-    *byte = CardTable::dirty_card_val();
+    if (*byte != CardTable::dirty_card_val()) {
+      *byte = CardTable::dirty_card_val();
+    }
   }
 }
 
