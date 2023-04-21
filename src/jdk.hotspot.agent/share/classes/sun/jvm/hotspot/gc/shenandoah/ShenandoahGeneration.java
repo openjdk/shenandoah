@@ -46,7 +46,7 @@ public class ShenandoahGeneration extends VMObject {
 
     private static synchronized void initialize(TypeDataBase db) {
         Type type = db.lookupType("ShenandoahGeneration");
-        used = type.getCIntegerField("_committed");
+        used = type.getCIntegerField("_used");
     }
 
     public ShenandoahGeneration(Address addr) {
