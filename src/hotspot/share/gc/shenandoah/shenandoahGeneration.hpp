@@ -38,6 +38,7 @@ class ShenandoahHeap;
 class ShenandoahMode;
 
 class ShenandoahGeneration : public CHeapObj<mtGC> {
+  friend class VMStructs;
 private:
   ShenandoahGenerationType const _type;
 
