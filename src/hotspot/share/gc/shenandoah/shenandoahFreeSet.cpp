@@ -665,6 +665,7 @@ bool ShenandoahFreeSet::touches_bounds(size_t num) const {
           num == _mutator_leftmost || num == _mutator_rightmost);
 }
 
+// Recompute bounds is onl
 void ShenandoahFreeSet::recompute_bounds() {
   // Reset to the most pessimistic case:
   _mutator_rightmost = _max - 1;
@@ -1028,6 +1029,12 @@ void ShenandoahFreeSet::rebuild() {
     }
   }
   reserve_regions(young_reserve, old_reserve);
+
+  // TODO: bounds have been computed incrementally so we do not NEED to recompute bounds.  However, we currently
+  // rely on recompute_bounds to decide whether old-collector allocations should be performed from left to right
+  // or right to left.  Refactor this code to eliminate redundant computation of bounds and reduce effort required
+  // for deciding direction of old-collector allocations.
+  recompute_bounds();
   assert_bounds();
   log_status();
 }
