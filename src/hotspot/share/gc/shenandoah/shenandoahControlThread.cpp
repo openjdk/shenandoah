@@ -526,17 +526,17 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
       _allow_old_preemption.unset();
 
       if (heap->is_prepare_for_old_mark_in_progress()) {
+        // Coalescing threads detected the cancellation request and aborted. Stay
+        // in this state so control thread may resume the coalescing work.
         assert(old_generation->state() == ShenandoahOldGeneration::FILLING, "Prepare for mark should be in progress");
         return;
       }
 
-      assert(old_generation->state() == ShenandoahOldGeneration::BOOTSTRAPPING, "Finished with filling, should be bootstrapping");
-    }
-    case ShenandoahOldGeneration::BOOTSTRAPPING: {
       // It is possible for a young generation request to preempt this nascent old
       // collection cycle _after_ we've finished making the old regions parseable (filling),
-      // but _before_ we have unset the preemption flag. So, we must check if we
-      // have been preempted before we start a bootstrap cycle.
+      // but _before_ we have unset the preemption flag. It is also possible for an
+      // allocation failure to occur after the threads have finished filling. We must
+      // check if we have been cancelled before we start a bootstrap cycle.
       if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) {
         if (heap->cancelled_gc()) {
           // If this was a preemption request, the cancellation would have been cleared
@@ -551,7 +551,9 @@ void ShenandoahControlThread::service_concurrent_old_cycle(const ShenandoahHeap*
           return;
         }
       }
-
+      old_generation->transition_to(ShenandoahOldGeneration::BOOTSTRAPPING);
+    }
+    case ShenandoahOldGeneration::BOOTSTRAPPING: {
       // Configure the young generation's concurrent mark to put objects in
       // old regions into the concurrent mark queues associated with the old
       // generation. The young cycle will run as normal except that rather than
