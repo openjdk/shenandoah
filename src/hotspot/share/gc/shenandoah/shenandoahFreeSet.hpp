@@ -29,8 +29,15 @@
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 
+enum MemoryReserve {
+  Mutator,
+  Collector,
+  OldCollector
+};
+
 class ShenandoahFreeSet : public CHeapObj<mtGC> {
 private:
+
   ShenandoahHeap* const _heap;
   CHeapBitMap _mutator_free_bitmap;
 
@@ -49,9 +56,14 @@ private:
   size_t _max;
 
   // Left-most and right-most region indexes. There are no free regions outside of [left-most; right-most] index intervals.
-  // The sets are not necessarily contiguous.  It is common for collector_is_free regions to reside within the mutator_is_free
-  // range, and for _old_collector_is_free regions to reside within the collector_is_free range.
+  // For a free set of a given kind (mutator, collector, old_collector), we maintain left and right indices to limit
+  // searching. The intervals represented by these extremal indices designate the lowest and highest indices at which
+  // that kind of free region exists. These intervals may overlap. In particular, it is quite common for the collector
+  // free interval to overlap the mutator free interval on one side (the low end) and the old_collector free interval
+  // on the other (the high end).  It is also possible for the mutator interval to overlap the old_collector free
+  // interval.
   size_t _mutator_leftmost, _mutator_rightmost;
+
   size_t _collector_leftmost, _collector_rightmost;
   size_t _old_collector_leftmost, _old_collector_rightmost;
 
@@ -97,29 +109,20 @@ private:
   // mechanism to directly inquire as to whether a region is not_free.  not_free membership is implied by not member of
   // mutator_free, collector_free and old_collector_free sets.
   //
-  // in_xx_set() implies that the region has allocation capacity (i.e. is not yet fully allocated).  Assertions enforce
-  // that in_xx_set(idx) implies has_alloc_capacity(idx).
+  // in_set() implies that the region has allocation capacity (i.e. is not yet fully allocated) as assured by assertions.
   //
   // TODO: a future implementation may replace the three bitmaps with a single array of enums to simplify the representation
   // of membership within these four mutually exclusive sets.
-  inline bool in_mutator_set(size_t idx) const;
-  inline bool in_collector_set(size_t idx) const;
-  inline bool in_old_collector_set(size_t idx) const;
 
-  // The following three probe routines mimic the behavior is in_mutator_set(), in_collector_set() and in_old_collector_set()
-  // but do not assert that the regions have allocation capacity.  These probe routines are used in assertions enforced
-  // during certain state transitions.
-  inline bool probe_mutator_set(size_t idx) const;
-  inline bool probe_collector_set(size_t idx) const;
-  inline bool probe_old_collector_set(size_t idx) const;
+  template <MemoryReserve SET> inline bool in_set(size_t idx) const;
 
-  inline void add_to_mutator_set(size_t idx);
-  inline void add_to_collector_set(size_t idx);
-  inline void add_to_old_collector_set(size_t idx);
+  // The following probe routine mimics the behavior is in_set() but does not assert that regions have allocation capacity.
+  // This probe routine is used in assertions enforced during certain state transitions.
+  template <MemoryReserve SET> inline bool probe_set(size_t idx) const;
 
-  inline void remove_from_mutator_set(size_t idx);
-  inline void remove_from_collector_set(size_t idx);
-  inline void remove_from_old_collector_set(size_t idx);
+  // The next two methods change set membership of regions
+  template <MemoryReserve SET> inline void add_to_set(size_t idx);
+  template <MemoryReserve SSET> inline void remove_from_set(size_t idx);
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
 
@@ -150,23 +153,14 @@ private:
   //  following minor changes to at least one set membership.
   void adjust_bounds();
 
-  // Adjust left-most and right-most indexes for the mutator_is_free set after removing region idx from this set.
-  bool adjust_mutator_bounds_if_touched(size_t idx);
+  // Adjust left-most and right-most indexes for the <SET> free set after adding region idx to this set.
+  template <MemoryReserve SET> inline void expand_bounds_maybe(size_t idx);
 
-  // Adjust left-most and right-most indexes for the collector_is_free set after removing region idx from this set.
-  bool adjust_collector_bounds_if_touched(size_t idx);
-
-  // Adjust left-most and right-most indexes for the old_collector_is_free set after removing region idx from this set.
-  bool adjust_old_collector_bounds_if_touched(size_t idx);
+  // Adjust left-most and right-most indexes for the <SET> free set after removing region idx from this set.
+  template <MemoryReserve SET> bool adjust_bounds_if_touched(size_t idx);
 
   // Return true iff region idx was the left-most or right-most index for one of the three free sets.
   bool touches_bounds(size_t idx) const;
-
-  // Adjust left-most and right-most indexes for the collector_is_free set after adding region idx to this set.
-  void expand_collector_bounds_maybe(size_t idx);
-
-  // Adjust left-most and right-most indexes for the old_collector_is_free set after adding region idx to this set.
-  void expand_old_collector_bounds_maybe(size_t idx);
 
    // Used of free set represents the amount of is_mutator_free set that has been consumed since most recent rebuild.
   void increase_used(size_t amount);
