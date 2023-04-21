@@ -65,12 +65,11 @@ public:
   inline ShenandoahGeneration* generation() { return _generation; };
 
 private:
-  template <GenerationMode GENERATION>
   inline AgeTable* get_local_age_table(uint worker_id) const;
 
 // ---------- Marking loop and tasks
 
-  template <class T, StringDedupMode STRING_DEDUP, GenerationMode GENERATION>
+  template <class T, StringDedupMode STRING_DEDUP>
   inline void do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task, uint worker_id);
 
   template <class T>
@@ -79,7 +78,6 @@ private:
   template <class T>
   inline void do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop array, int chunk, int pow, bool weak);
 
-  template <GenerationMode GENERATION>
   inline void count_liveness(ShenandoahLiveData* live_data, oop obj, uint worker_id);
 
   template <class T, ShenandoahGenerationType GENERATION, bool CANCELLABLE, StringDedupMode STRING_DEDUP>

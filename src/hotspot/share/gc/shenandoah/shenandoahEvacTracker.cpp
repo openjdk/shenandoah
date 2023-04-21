@@ -69,7 +69,7 @@ void ShenandoahEvacuationStats::print_on(outputStream* st) {
             _evacuations_completed,
             byte_size_in_proper_unit(abandoned_size),   proper_unit_for_byte_size(abandoned_size),
             abandoned_count);
-  _age_table.print_on(st, InitialTenuringThreshold);
+  // _age_table.print_on(st, InitialTenuringThreshold);
 }
 
 void ShenandoahEvacuationTracker::print_global_on(outputStream* st) {

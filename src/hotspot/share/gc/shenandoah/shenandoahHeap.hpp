@@ -386,7 +386,7 @@ private:
   // once the per-worker  data is consolidated into the appropriate table at each minor
   // collection. So we have 16 x n entries, one for each age per worker, then we have
   // 16 x 16 entries one for each of the last 16 minor gc's.
-  AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold 
+  AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold
   AgeTable** _local_age_table;       // Local scratch age tables to track object ages
   uint _epoch;                       // Current epoch (modulo max age)
 
