@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016, 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,11 +58,13 @@ private:
   size_t                _young_region_count;
   size_t                _old_region_count;
 
-  size_t                _old_garbage;        // How many bytes of old garbage are present in a mixed collection set?
+  // How many bytes of old garbage are present in a mixed collection set?
+  size_t                _old_garbage;
 
-  bool*                 _preselected_regions;   // Points to array identifying which tenure-age regions have been preselected
-                                                // for inclusion in collection set.  This field is only valid during brief
-                                                // spans of time while collection set is being constructed.
+  // Points to array identifying which tenure-age regions have been preselected
+  // for inclusion in collection set. This field is only valid during brief
+  // spans of time while collection set is being constructed.
+  bool*                 _preselected_regions;
 
   shenandoah_padding(0);
   volatile size_t       _current_index;
@@ -99,17 +102,16 @@ public:
   // This represents total amount of work to be performed by evacuation, including evacuations to young, to old,
   // and promotions from young to old.  This equals get_young_bytes_reserved_for_evacuation() plus
   // get_old_bytes_reserved_for_evacuation().
+  // TODO: Seems unused.
   inline size_t get_bytes_reserved_for_evacuation();
 
   // It is not known how many of these bytes will be promoted.
   inline size_t get_young_bytes_reserved_for_evacuation();
-
   inline size_t get_old_bytes_reserved_for_evacuation();
 
   inline size_t get_young_bytes_to_be_promoted();
 
   inline size_t get_old_region_count();
-
   inline size_t get_young_region_count();
 
   inline size_t get_old_garbage();

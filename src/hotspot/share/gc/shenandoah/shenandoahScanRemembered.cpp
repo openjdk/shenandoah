@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. or its affiliates.  All rights reserved.
- *
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -85,7 +84,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
     log_debug(gc)("ShenandoahScanRememberedTask::do_work(%u), processing slice of region "
                   SIZE_FORMAT " at offset " SIZE_FORMAT ", size: " SIZE_FORMAT,
                   worker_id, region->index(), assignment._chunk_offset, assignment._chunk_size);
-    if (region->affiliation() == OLD_GENERATION) {
+    if (region->is_old()) {
       size_t cluster_size =
         CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
       size_t clusters = assignment._chunk_size / cluster_size;

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013, 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -94,7 +95,7 @@ void ShenandoahHeapRegion::report_illegal_transition(const char *method) {
   fatal("%s", ss.freeze());
 }
 
-void ShenandoahHeapRegion::make_regular_allocation(ShenandoahRegionAffiliation affiliation) {
+void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
@@ -171,7 +172,7 @@ void ShenandoahHeapRegion::make_humongous_start() {
   }
 }
 
-void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahRegionAffiliation affiliation) {
+void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
   set_affiliation(affiliation);
@@ -202,7 +203,7 @@ void ShenandoahHeapRegion::make_humongous_cont() {
   }
 }
 
-void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahRegionAffiliation affiliation) {
+void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
   set_affiliation(affiliation);
@@ -247,7 +248,7 @@ void ShenandoahHeapRegion::make_unpinned() {
 
   switch (_state) {
     case _pinned:
-      assert(affiliation() != FREE, "Pinned region should not be FREE");
+      assert(is_affiliated(), "Pinned region should be affiliated");
       set_state(_regular);
       return;
     case _regular:
@@ -281,11 +282,17 @@ void ShenandoahHeapRegion::make_trash() {
   shenandoah_assert_heaplocked();
   reset_age();
   switch (_state) {
-    case _cset:
-      // Reclaiming cset regions
     case _humongous_start:
     case _humongous_cont:
-      // Reclaiming humongous regions
+    {
+      // Reclaiming humongous regions and reclaim humongous waste.  When this region is eventually recycled, we'll reclaim
+      // its used memory.  At recycle time, we no longer recognize this as a humongous region.
+      if (ShenandoahHeap::heap()->mode()->is_generational()) {
+        decrement_humongous_waste();
+      }
+    }
+    case _cset:
+      // Reclaiming cset regions
     case _regular:
       // Immediate region reclaim
       set_state(_trash);
@@ -409,19 +416,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
       ShouldNotReachHere();
   }
 
-  switch (ShenandoahHeap::heap()->region_affiliation(this)) {
-    case ShenandoahRegionAffiliation::FREE:
-      st->print("|F");
-      break;
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      st->print("|Y");
-      break;
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      st->print("|O");
-      break;
-    default:
-      ShouldNotReachHere();
-  }
+  st->print("|%s", shenandoah_affiliation_code(affiliation()));
 
 #define SHR_PTR_FORMAT "%12" PRIxPTR
 
@@ -446,7 +441,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 }
 
 // oop_iterate without closure and without cancellation.  always return true.
-bool ShenandoahHeapRegion::oop_fill_and_coalesce_wo_cancel() {
+bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
 
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
@@ -666,7 +661,9 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_heaplocked();
 
-  heap->generation_for(affiliation())->decrease_used(used());
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    heap->generation_for(affiliation())->decrease_used(used());
+  }
 
   set_top(bottom());
   clear_live_data();
@@ -934,15 +931,15 @@ size_t ShenandoahHeapRegion::pin_count() const {
   return Atomic::load(&_critical_pins);
 }
 
-void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affiliation) {
+void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-  ShenandoahRegionAffiliation region_affiliation = heap->region_affiliation(this);
+  ShenandoahAffiliation region_affiliation = heap->region_affiliation(this);
   {
     ShenandoahMarkingContext* const ctx = heap->complete_marking_context();
     log_debug(gc)("Setting affiliation of Region " SIZE_FORMAT " from %s to %s, top: " PTR_FORMAT ", TAMS: " PTR_FORMAT
                   ", watermark: " PTR_FORMAT ", top_bitmap: " PTR_FORMAT,
-                  index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation),
+                  index(), shenandoah_affiliation_name(region_affiliation), shenandoah_affiliation_name(new_affiliation),
                   p2i(top()), p2i(ctx->top_at_mark_start(this)), p2i(_update_watermark), p2i(ctx->top_bitmap(this)));
   }
 
@@ -969,11 +966,11 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahRegionAffiliation new_affil
   }
 
   log_trace(gc)("Changing affiliation of region %zu from %s to %s",
-    index(), affiliation_name(region_affiliation), affiliation_name(new_affiliation));
+    index(), shenandoah_affiliation_name(region_affiliation), shenandoah_affiliation_name(new_affiliation));
 
-  if (region_affiliation == ShenandoahRegionAffiliation::YOUNG_GENERATION) {
+  if (region_affiliation == ShenandoahAffiliation::YOUNG_GENERATION) {
     heap->young_generation()->decrement_affiliated_region_count();
-  } else if (region_affiliation == ShenandoahRegionAffiliation::OLD_GENERATION) {
+  } else if (region_affiliation == ShenandoahAffiliation::OLD_GENERATION) {
     heap->old_generation()->decrement_affiliated_region_count();
   }
 
@@ -1047,9 +1044,16 @@ size_t ShenandoahHeapRegion::promote_humongous() {
         log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
                       r->index(), p2i(r->bottom()), p2i(r->top()));
         // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
-        r->set_affiliation(OLD_GENERATION);
         old_generation->increase_used(r->used());
         young_generation->decrease_used(r->used());
+        r->set_affiliation(OLD_GENERATION);
+      }
+
+      ShenandoahHeapRegion* tail = heap->get_region(index_limit - 1);
+      size_t waste = tail->free();
+      if (waste != 0) {
+        old_generation->increase_humongous_waste(waste);
+        young_generation->decrease_humongous_waste(waste);
       }
       // Then fall through to finish the promotion after releasing the heap lock.
     } else {
@@ -1070,7 +1074,7 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   heap->card_scan()->reset_object_range(bottom(), bottom() + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
-  heap->card_scan()->register_object_wo_lock(bottom());
+  heap->card_scan()->register_object_without_lock(bottom());
 
   if (obj->is_typeArray()) {
     // Primitive arrays don't need to be scanned.
@@ -1083,4 +1087,13 @@ size_t ShenandoahHeapRegion::promote_humongous() {
     heap->card_scan()->mark_range_as_dirty(bottom(), obj->size());
   }
   return index_limit - index();
+}
+
+void ShenandoahHeapRegion::decrement_humongous_waste() const {
+  assert(is_humongous(), "Should only use this for humongous regions");
+  size_t waste_bytes = free();
+  if (waste_bytes > 0) {
+    ShenandoahHeap::heap()->generation_for(affiliation())->decrease_humongous_waste(waste_bytes);
+    ShenandoahHeap::heap()->global_generation()->decrease_humongous_waste(waste_bytes);
+  }
 }

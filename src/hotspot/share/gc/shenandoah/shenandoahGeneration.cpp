@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -162,17 +162,16 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   size_t v_soft_max_capacity = soft_max_capacity();
   size_t v_max_capacity = max_capacity();
   size_t v_available = available();
-  size_t v_adjusted_avail = adjusted_available();
+  size_t v_humongous_waste = get_humongous_waste();
   LogGcInfo::print("%s: %s generation used: " SIZE_FORMAT "%s, used regions: " SIZE_FORMAT "%s, "
-                   "soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, available: " SIZE_FORMAT "%s, "
-                   "adjusted available: " SIZE_FORMAT "%s",
-                   msg, name(),
-                   byte_size_in_proper_unit(v_used), proper_unit_for_byte_size(v_used),
-                   byte_size_in_proper_unit(v_used_regions), proper_unit_for_byte_size(v_used_regions),
+                   "humongous waste: " SIZE_FORMAT "%s, soft capacity: " SIZE_FORMAT "%s, max capacity: " SIZE_FORMAT "%s, "
+                   "available: " SIZE_FORMAT "%s", msg, name(),
+                   byte_size_in_proper_unit(v_used),              proper_unit_for_byte_size(v_used),
+                   byte_size_in_proper_unit(v_used_regions),      proper_unit_for_byte_size(v_used_regions),
+                   byte_size_in_proper_unit(v_humongous_waste),   proper_unit_for_byte_size(v_humongous_waste),
                    byte_size_in_proper_unit(v_soft_max_capacity), proper_unit_for_byte_size(v_soft_max_capacity),
-                   byte_size_in_proper_unit(v_max_capacity), proper_unit_for_byte_size(v_max_capacity),
-                   byte_size_in_proper_unit(v_available), proper_unit_for_byte_size(v_available),
-                   byte_size_in_proper_unit(v_adjusted_avail), proper_unit_for_byte_size(v_adjusted_avail));
+                   byte_size_in_proper_unit(v_max_capacity),      proper_unit_for_byte_size(v_max_capacity),
+                   byte_size_in_proper_unit(v_available),         proper_unit_for_byte_size(v_available));
 }
 
 void ShenandoahGeneration::reset_mark_bitmap() {
@@ -249,9 +248,8 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // accumulate there until they can be promoted.  This increases the young-gen marking and evacuation work.
 
   // Do not fill up old-gen memory with promotions.  Reserve some amount of memory for compaction purposes.
-  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
   size_t young_evac_reserve_max = 0;
-  if (old_heuristics->unprocessed_old_collection_candidates() > 0) {
+  if (heap->doing_mixed_evacuations()) {
     // Compute old_evacuation_reserve: how much memory are we reserving to hold the results of
     // evacuating old-gen heap regions?  In order to sustain a consistent pace of young-gen collections,
     // the goal is to maintain a consistent value for this parameter (when the candidate set is not
@@ -262,7 +260,8 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     //   3. ((young_gen->capacity * ShenandoahEvacReserve / 100) * ShenandoahOldEvacRatioPercent) / 100
     //       (e.g. old evacuation should be no larger than 12% of young-gen evacuation)
     old_evacuation_reserve = old_generation->available();
-    assert(old_evacuation_reserve > minimum_evacuation_reserve, "Old-gen available has not been preserved!");
+    // This assertion has been disabled because we expect this code to be replaced by 05/2023
+    // assert(old_evacuation_reserve > minimum_evacuation_reserve, "Old-gen available has not been preserved!");
     size_t old_evac_reserve_max = old_generation->soft_max_capacity() * ShenandoahOldEvacReserve / 100;
     if (old_evac_reserve_max < old_evacuation_reserve) {
       old_evacuation_reserve = old_evac_reserve_max;
@@ -441,15 +440,17 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   size_t loaned_regions = 0;
   size_t available_loan_remnant = 0; // loaned memory that is not yet dedicated to any particular budget
 
-  assert(((consumed_by_advance_promotion * 33) / 32) >= collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste,
-         "Advance promotion (" SIZE_FORMAT ") should be at least young_bytes_to_be_promoted (" SIZE_FORMAT
-         ")* ShenandoahEvacWaste, totalling: " SIZE_FORMAT ", within round-off errors of up to 3.125%%",
-         consumed_by_advance_promotion, collection_set->get_young_bytes_to_be_promoted(),
-         (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
+  // We expect this code to be replaced by 05/01/23.
+  //
+  // assert(((consumed_by_advance_promotion * 33) / 32) >= collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste,
+  //       "Advance promotion (" SIZE_FORMAT ") should be at least young_bytes_to_be_promoted (" SIZE_FORMAT
+  //       ")* ShenandoahEvacWaste, totalling: " SIZE_FORMAT ", within round-off errors of up to 3.125%%",
+  //       consumed_by_advance_promotion, collection_set->get_young_bytes_to_be_promoted(),
+  //       (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
 
-  assert(consumed_by_advance_promotion <= (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste * 33) / 32,
-         "Round-off errors should be less than 3.125%%, consumed by advance: " SIZE_FORMAT ", promoted: " SIZE_FORMAT,
-         consumed_by_advance_promotion, (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
+  // assert(consumed_by_advance_promotion <= (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste * 33) / 32,
+  //       "Round-off errors should be less than 3.125%%, consumed by advance: " SIZE_FORMAT ", promoted: " SIZE_FORMAT,
+  //       consumed_by_advance_promotion, (size_t) (collection_set->get_young_bytes_to_be_promoted() * ShenandoahEvacWaste));
 
   collection_set->abandon_preselected();
 
@@ -491,7 +492,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
     old_regions_loaned_for_young_evac = revised_loan_for_young_evacuation;
     loaned_regions = old_regions_loaned_for_young_evac;
   } else {
-    // Undo the prevous loan, if any.
+    // Undo the previous loan, if any.
     old_regions_loaned_for_young_evac = 0;
     loaned_regions = 0;
   }
@@ -518,8 +519,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   // fragmented_old_usage is the memory that is dedicated to holding evacuated old-gen objects, which does not need
   // to be an integral number of regions.
   size_t fragmented_old_usage = old_evacuated_committed + consumed_by_advance_promotion;
-
-
 
   if (fragmented_old_total >= fragmented_old_usage) {
     // Seems this will be rare.  In this case, all of the memory required for old-gen evacuations and promotions can be
@@ -762,15 +761,20 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
                      "%s, loaned for young evacuation: " SIZE_FORMAT
                      "%s, loaned for young allocations: " SIZE_FORMAT
                      "%s, excess: " SIZE_FORMAT "%s",
-                     byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                     byte_size_in_proper_unit(old_evacuation_reserve), proper_unit_for_byte_size(old_evacuation_reserve),
+                     byte_size_in_proper_unit(old_available),
+                     proper_unit_for_byte_size(old_available),
+                     byte_size_in_proper_unit(old_evacuation_reserve),
+                     proper_unit_for_byte_size(old_evacuation_reserve),
                      byte_size_in_proper_unit(consumed_by_advance_promotion),
                      proper_unit_for_byte_size(consumed_by_advance_promotion),
-                     byte_size_in_proper_unit(regular_promotion), proper_unit_for_byte_size(regular_promotion),
+                     byte_size_in_proper_unit(regular_promotion),
+                     proper_unit_for_byte_size(regular_promotion),
                      byte_size_in_proper_unit(old_bytes_loaned_for_young_evac),
                      proper_unit_for_byte_size(old_bytes_loaned_for_young_evac),
-                     byte_size_in_proper_unit(allocation_supplement), proper_unit_for_byte_size(allocation_supplement),
-                     byte_size_in_proper_unit(excess), proper_unit_for_byte_size(excess));
+                     byte_size_in_proper_unit(allocation_supplement),
+                     proper_unit_for_byte_size(allocation_supplement),
+                     byte_size_in_proper_unit(excess),
+                     proper_unit_for_byte_size(excess));
 }
 
 void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
@@ -778,15 +782,14 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahCollectionSet* collection_set = heap->collection_set();
 
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  assert(generation_mode() != OLD, "Only YOUNG and GLOBAL GC perform evacuations");
-  
+  assert(!is_old(), "Only YOUNG and GLOBAL GC perform evacuations");
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_region_states);
     ShenandoahFinalMarkUpdateRegionStateClosure cl(complete_marking_context());
     parallel_heap_region_iterate(&cl);
 
-    if (generation_mode() == YOUNG) {
+    if (is_young()) {
       // We always need to update the watermark for old regions. If there
       // are mixed collections pending, we also need to synchronize the
       // pinned status for old regions. Since we are already visiting every
@@ -847,7 +850,7 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   size_t num_regions = heap->num_regions();
   for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* r = heap->get_region(idx);
-    if (contains(r) && (r->affiliation() != FREE)) {
+    if (contains(r) && r->is_affiliated()) {
       if (heap->is_bitmap_slice_committed(r) && (context->top_at_mark_start(r) > r->bottom()) &&
           !context->is_bitmap_clear_range(r->bottom(), r->end())) {
         return false;
@@ -884,15 +887,15 @@ void ShenandoahGeneration::cancel_marking() {
   set_concurrent_mark_in_progress(false);
 }
 
-ShenandoahGeneration::ShenandoahGeneration(GenerationMode generation_mode,
+ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
                                            uint max_workers,
                                            size_t max_capacity,
                                            size_t soft_max_capacity) :
-  _generation_mode(generation_mode),
+  _type(type),
   _task_queues(new ShenandoahObjToScanQueueSet(max_workers)),
   _ref_processor(new ShenandoahReferenceProcessor(MAX2(max_workers, 1U))),
   _collection_thread_time_s(0.0),
-  _affiliated_region_count(0), _used(0), _bytes_allocated_since_gc_start(0),
+  _affiliated_region_count(0), _humongous_waste(0), _used(0), _bytes_allocated_since_gc_start(0),
   _max_capacity(max_capacity), _soft_max_capacity(soft_max_capacity),
   _adjusted_capacity(soft_max_capacity), _heuristics(nullptr) {
   _is_marking_complete.set();
@@ -920,7 +923,7 @@ ShenandoahObjToScanQueueSet* ShenandoahGeneration::old_gen_task_queues() const {
 }
 
 void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
-  assert(generation_mode() == YOUNG, "Should only scan remembered set for young generation.");
+  assert(is_young(), "Should only scan remembered set for young generation.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   uint nworkers = heap->workers()->active_workers();
@@ -938,16 +941,33 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
 }
 
 size_t ShenandoahGeneration::increment_affiliated_region_count() {
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
+  // During full gc, multiple GC worker threads may change region affiliations without a lock.  No lock is enforced
+  // on read and write of _affiliated_region_count.  At the end of full gc, a single thread overwrites the count with
+  // a coherent value.
   _affiliated_region_count++;
   return _affiliated_region_count;
 }
 
 size_t ShenandoahGeneration::decrement_affiliated_region_count() {
+  shenandoah_assert_heaplocked_or_fullgc_safepoint();
+  // During full gc, multiple GC worker threads may change region affiliations without a lock.  No lock is enforced
+  // on read and write of _affiliated_region_count.  At the end of full gc, a single thread overwrites the count with
+  // a coherent value.
   _affiliated_region_count--;
   return _affiliated_region_count;
 }
 
+void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste) {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
+  assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
+  _affiliated_region_count = num_regions;
+  _used = num_bytes;
+  _humongous_waste = humongous_waste;
+}
+
 void ShenandoahGeneration::clear_used() {
+  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
   Atomic::store(&_used, (size_t)0);
@@ -960,6 +980,23 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 void ShenandoahGeneration::decrease_used(size_t bytes) {
   assert(_used >= bytes, "cannot reduce bytes used by generation below zero");
   Atomic::sub(&_used, bytes);
+}
+
+void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
+  if (bytes > 0) {
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+    _humongous_waste += bytes;
+  }
+}
+
+void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
+  if (bytes > 0) {
+    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+    assert(_humongous_waste >= bytes, "Waste cannot be negative");
+    assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
+           "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")", _humongous_waste, bytes);
+    _humongous_waste -= bytes;
+  }
 }
 
 size_t ShenandoahGeneration::used_regions() const {
@@ -981,19 +1018,14 @@ size_t ShenandoahGeneration::used_regions_size() const {
 }
 
 size_t ShenandoahGeneration::available() const {
-  size_t in_use = used();
+  size_t in_use = used() + get_humongous_waste();
   size_t soft_capacity = soft_max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
 size_t ShenandoahGeneration::adjust_available(intptr_t adjustment) {
-  // TODO: ysr: remove this check & warning
-  if (adjustment % ShenandoahHeapRegion::region_size_bytes() != 0) {
-    log_warning(gc)("Adjustment (" INTPTR_FORMAT ") should be a multiple of region size (" SIZE_FORMAT ")",
-                    adjustment, ShenandoahHeapRegion::region_size_bytes());
-  }
   assert(adjustment % ShenandoahHeapRegion::region_size_bytes() == 0,
-         "Adjustment to generation size must be multiple of region size");
+        "Adjustment to generation size must be multiple of region size");
   _adjusted_capacity = soft_max_capacity() + adjustment;
   return _adjusted_capacity;
 }
@@ -1004,7 +1036,7 @@ size_t ShenandoahGeneration::unadjust_available() {
 }
 
 size_t ShenandoahGeneration::adjusted_available() const {
-  size_t in_use = used();
+  size_t in_use = used() + get_humongous_waste();
   size_t capacity = _adjusted_capacity;
   return in_use > capacity ? 0 : capacity - in_use;
 }
@@ -1014,7 +1046,8 @@ size_t ShenandoahGeneration::adjusted_capacity() const {
 }
 
 size_t ShenandoahGeneration::adjusted_unaffiliated_regions() const {
-  assert(adjusted_capacity() >= used_regions_size(), "adjusted_unaffiliated_regions() cannot return negative");
+  // This assertion has been disabled because we expect this code to be replaced by 05/2023
+  // assert(adjusted_capacity() >= used_regions_size(), "adjusted_unaffiliated_regions() cannot return negative");
   assert((adjusted_capacity() - used_regions_size()) % ShenandoahHeapRegion::region_size_bytes() == 0,
          "adjusted capacity (" SIZE_FORMAT ") and used regions size (" SIZE_FORMAT ") should be multiples of region_size_bytes",
          adjusted_capacity(), used_regions_size());

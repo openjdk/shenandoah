@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,7 +50,7 @@ private:
   bool is_collector_free(size_t idx) const;
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
-  HeapWord* allocate_with_affiliation(ShenandoahRegionAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
+  HeapWord* allocate_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
   HeapWord* allocate_with_old_affiliation(ShenandoahAllocRequest& req, bool& in_new_region);
 
   // While holding the heap lock, allocate memory for a single object which is to be entirely contained
@@ -67,6 +68,7 @@ private:
   void adjust_bounds();
   bool touches_bounds(size_t num) const;
 
+  // Used of free set represents the amount of is_mutator_free set that has been consumed since most recent rebuild.
   void increase_used(size_t amount);
   void clear_internal();
 

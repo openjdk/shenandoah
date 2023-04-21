@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -63,8 +64,9 @@ private:
   void op_degenerated_futile();
   void op_degenerated_fail();
 
-  void degen_event_message(ShenandoahDegenPoint point, char* buf, size_t len) const;
   void upgrade_to_full();
+
+  const char* degen_event_message(ShenandoahDegenPoint point) const;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHDEGENERATEDGC_HPP

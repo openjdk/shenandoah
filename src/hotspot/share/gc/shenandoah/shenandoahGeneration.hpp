@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,7 @@
 
 #include "memory/allocation.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
-#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
+#include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
@@ -35,10 +35,11 @@ class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
 class ShenandoahReferenceProcessor;
 class ShenandoahHeap;
+class ShenandoahMode;
 
 class ShenandoahGeneration : public CHeapObj<mtGC> {
 private:
-  GenerationMode const _generation_mode;
+  ShenandoahGenerationType const _type;
 
   // Marking task queues and completeness
   ShenandoahObjToScanQueueSet* _task_queues;
@@ -51,6 +52,14 @@ private:
 protected:
   // Usage
   size_t _affiliated_region_count;
+
+  // How much free memory is left in the last region of humongous objects.
+  // This is _not_ included in used, but it _is_ deducted from available,
+  // which gives the heuristics a more accurate view of how much memory remains
+  // for allocation. This figure is also included the heap status logging.
+  // The units are bytes. The value is only changed on a safepoint or under the
+  // heap lock.
+  size_t _humongous_waste;
   volatile size_t _used;
   volatile size_t _bytes_allocated_since_gc_start;
   size_t _max_capacity;
@@ -62,22 +71,28 @@ protected:
 
 private:
   // Compute evacuation budgets prior to choosing collection set.
-  void compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions, ShenandoahCollectionSet* collection_set,
-                                  size_t &consumed_by_advance_promotion);
+  void compute_evacuation_budgets(ShenandoahHeap* heap,
+                                  bool* preselected_regions,
+                                  ShenandoahCollectionSet* collection_set,
+                                  size_t& consumed_by_advance_promotion);
 
   // Adjust evacuation budgets after choosing collection set.
-  void adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set,
+  void adjust_evacuation_budgets(ShenandoahHeap* heap,
+                                 ShenandoahCollectionSet* collection_set,
                                  size_t consumed_by_advance_promotion);
 
  public:
-  ShenandoahGeneration(GenerationMode generation_mode, uint max_workers, size_t max_capacity, size_t soft_max_capacity);
+  ShenandoahGeneration(ShenandoahGenerationType type,
+                       uint max_workers,
+                       size_t max_capacity,
+                       size_t soft_max_capacity);
   ~ShenandoahGeneration();
 
-  bool is_young() const  { return _generation_mode == YOUNG; }
-  bool is_old() const    { return _generation_mode == OLD; }
-  bool is_global() const { return _generation_mode == GLOBAL; }
+  bool is_young() const  { return _type == YOUNG; }
+  bool is_old() const    { return _type == OLD; }
+  bool is_global() const { return _type == GLOBAL_GEN || _type == GLOBAL_NON_GEN; }
 
-  inline GenerationMode generation_mode() const { return _generation_mode; }
+  inline ShenandoahGenerationType type() const { return _type; }
 
   inline ShenandoahHeuristics* heuristics() const { return _heuristics; }
 
@@ -183,9 +198,15 @@ private:
   // Return the updated value of affiliated_region_count
   size_t decrement_affiliated_region_count();
 
+  void establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste);
+
   void clear_used();
   void increase_used(size_t bytes);
   void decrease_used(size_t bytes);
+
+  void increase_humongous_waste(size_t bytes);
+  void decrease_humongous_waste(size_t bytes);
+  size_t get_humongous_waste() const { return _humongous_waste; }
 
   virtual bool is_concurrent_mark_in_progress() = 0;
   void confirm_heuristics_mode();

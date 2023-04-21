@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,20 +34,25 @@ private:
 public:
   ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t max_soft_capacity);
 
-  const char* name() const override;
+  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
+
+  const char* name() const override {
+    return "YOUNG";
+  }
 
   void set_concurrent_mark_in_progress(bool in_progress) override;
-  void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
+  bool is_concurrent_mark_in_progress() override;
 
+  void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   bool contains(ShenandoahHeapRegion* region) const override;
   bool contains(oop obj) const override;
 
+  void reserve_task_queues(uint workers) override;
   void set_old_gen_task_queues(ShenandoahObjToScanQueueSet* old_gen_queues) {
     _old_gen_task_queues = old_gen_queues;
   }
-
   ShenandoahObjToScanQueueSet* old_gen_task_queues() const override {
     return _old_gen_task_queues;
   }
@@ -58,15 +63,7 @@ public:
     return _old_gen_task_queues != nullptr;
   }
 
-  void reserve_task_queues(uint workers) override;
-
-  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
-
   virtual void add_collection_time(double time_seconds) override;
-
- protected:
-  bool is_concurrent_mark_in_progress() override;
-
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP

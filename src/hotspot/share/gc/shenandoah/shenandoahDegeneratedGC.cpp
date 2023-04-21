@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -69,8 +70,7 @@ void ShenandoahDegenGC::vmop_degenerated() {
 }
 
 void ShenandoahDegenGC::entry_degenerated() {
-  char msg[1024];
-  degen_event_message(_degen_point, msg, sizeof(msg));
+  const char* msg = degen_event_message(_degen_point);
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::degen_gc, true /* log_heap_usage */);
   EventMark em("%s", msg);
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -92,16 +92,16 @@ void ShenandoahDegenGC::op_degenerated() {
 
 #ifdef ASSERT
   if (heap->mode()->is_generational()) {
-    if (_generation->generation_mode() == GenerationMode::GLOBAL) {
+    if (_generation->is_global()) {
       // We can only get to a degenerated global cycle _after_ a concurrent global cycle
       // has been cancelled. In which case, we expect the concurrent global cycle to have
       // cancelled the old gc already.
-      assert(!heap->is_old_gc_active(), "Old GC should not be active during global cycle.");
+      assert(!heap->is_old_gc_active(), "Old GC should not be active during global cycle");
     }
 
     if (!heap->is_concurrent_old_mark_in_progress()) {
       // If we are not marking the old generation, there should be nothing in the old mark queues
-      assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty.");
+      assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty");
     }
   }
 #endif
@@ -132,10 +132,13 @@ void ShenandoahDegenGC::op_degenerated() {
 
       // Note that we can only do this for "outside-cycle" degens, otherwise we would risk
       // changing the cycle parameters mid-cycle during concurrent -> degenerated handover.
-      heap->set_unload_classes((!heap->mode()->is_generational() || _generation->generation_mode() == GLOBAL) && _generation->heuristics()->can_unload_classes());
+      heap->set_unload_classes(_generation->heuristics()->can_unload_classes() &&
+                                (!heap->mode()->is_generational() || _generation->is_global()));
 
-      if (heap->mode()->is_generational() && (_generation->generation_mode() == YOUNG || (_generation->generation_mode() == GLOBAL && ShenandoahVerify))) {
+      if (heap->mode()->is_generational() &&
+            (_generation->is_young() || (_generation->is_global() && ShenandoahVerify))) {
         // Swap remembered sets for young, or if the verifier will run during a global collect
+        // TODO: This path should not depend on ShenandoahVerify
         _generation->swap_remembered_set();
       }
 
@@ -184,7 +187,7 @@ void ShenandoahDegenGC::op_degenerated() {
 
     case _degenerated_evac:
 
-      if (heap->mode()->is_generational() && _generation->generation_mode() == GLOBAL) {
+      if (heap->mode()->is_generational() && _generation->is_global()) {
         op_global_coalesce_and_fill();
       }
 
@@ -275,12 +278,13 @@ void ShenandoahDegenGC::op_degenerated() {
   }
 
   if (heap->mode()->is_generational()) {
-    // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
-    // Otherwise, these actions have no effect.
+    // In case degeneration interrupted concurrent evacuation or update references,
+    // we need to clean up transient state. Otherwise, these actions have no effect.
 
     heap->young_generation()->unadjust_available();
     heap->old_generation()->unadjust_available();
-    // No need to old_gen->increase_used().  That was done when plabs were allocated, accounting for both old evacs and promotions.
+    // No need to old_gen->increase_used(). That was done when plabs were allocated,
+    // accounting for both old evacs and promotions.
 
     heap->set_alloc_supplement_reserve(0);
     heap->set_young_evac_reserve(0);
@@ -437,8 +441,25 @@ void ShenandoahDegenGC::op_degenerated_futile() {
   full_gc.op_full(GCCause::_shenandoah_upgrade_to_full_gc);
 }
 
-void ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point, char* buf, size_t len) const {
-  jio_snprintf(buf, len, "Pause Degenerated %s GC (%s)", _generation->name(), ShenandoahGC::degen_point_to_string(point));
+const char* ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point) const {
+  const ShenandoahHeap* heap = ShenandoahHeap::heap();
+  switch (point) {
+    case _degenerated_unset:
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (<UNSET>)");
+    case _degenerated_outside_cycle:
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (Outside of Cycle)");
+    case _degenerated_roots:
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (Roots)");
+    case _degenerated_mark:
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (Mark)");
+    case _degenerated_evac:
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (Evacuation)");
+    case _degenerated_updaterefs:
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (Update Refs)");
+    default:
+      ShouldNotReachHere();
+      SHENANDOAH_RETURN_EVENT_MESSAGE(heap, _generation->type(), "Pause Degenerated GC", " (?)");
+  }
 }
 
 void ShenandoahDegenGC::upgrade_to_full() {

@@ -1,5 +1,5 @@
    /*
-    * Copyright (c) 2022 Amazon.com, Inc. All rights reserved.
+    * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
     * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
     *
     * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,7 @@
     *
     * @run main/othervm -Xmx1g -Xms1g -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
     *      -XX:+ShenandoahRegionSampling -XX:+ShenandoahRegionSampling
-    *      -Xlog:gc+region=debug:region-snapshots-%p.log::filesize=100,filecount=3
+    *      -Xlog:gc+region=trace:region-snapshots-%p.log::filesize=100,filecount=3
     *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=adaptive
     *      TestShenandoahLogRotation
     */

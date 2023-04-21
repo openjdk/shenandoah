@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -61,7 +62,9 @@ private:
   void resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst, Register tmp = noreg);
   void load_reference_barrier(MacroAssembler* masm, Register dst, Address load_addr, DecoratorSet decorators);
 
-  void gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators, Register start, Register count, Register scratch, RegSet saved_regs);
+  void gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
+                                        Register start, Register count,
+                                        Register scratch, RegSet saved_regs);
 
 public:
 

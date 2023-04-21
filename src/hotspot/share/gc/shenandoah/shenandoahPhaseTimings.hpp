@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -44,7 +45,7 @@ class outputStream;
   f(CNT_PREFIX ## CLDUnlink,                DESC_PREFIX "Unlink CLDs")                 \
   f(CNT_PREFIX ## WeakRefProc,              DESC_PREFIX "Weak References")             \
   f(CNT_PREFIX ## ParallelMark,             DESC_PREFIX "Parallel Mark")               \
-  f(CNT_PREFIX ## ScanClusters,             DESC_PREFIX "Scan Clusters")
+  f(CNT_PREFIX ## ScanClusters,             DESC_PREFIX "Scan Clusters")               \
   // end
 
 #define SHENANDOAH_PHASE_DO(f)                                                         \
@@ -178,6 +179,7 @@ class outputStream;
   f(full_gc_copy_objects,                           "  Copy Objects")                  \
   f(full_gc_copy_objects_regular,                   "    Regular Objects")             \
   f(full_gc_copy_objects_humong,                    "    Humongous Objects")           \
+  f(full_gc_recompute_generation_usage,             "    Recompute generation usage")  \
   f(full_gc_copy_objects_reset_complete,            "    Reset Complete Bitmap")       \
   f(full_gc_copy_objects_rebuild,                   "    Rebuild Region Sets")         \
   f(full_gc_reconstruct_remembered_set,             "    Reconstruct Remembered Set")  \
@@ -259,8 +261,10 @@ private:
   double _start_time;
   EventGCPhaseParallel _event;
 public:
-  ShenandoahWorkerTimingsTracker(ShenandoahPhaseTimings::Phase phase, ShenandoahPhaseTimings::ParPhase par_phase,
-                                 uint worker_id, bool cumulative = false);
+  ShenandoahWorkerTimingsTracker(ShenandoahPhaseTimings::Phase phase,
+                                 ShenandoahPhaseTimings::ParPhase par_phase,
+                                 uint worker_id,
+                                 bool cumulative = false);
   ~ShenandoahWorkerTimingsTracker();
 };
 

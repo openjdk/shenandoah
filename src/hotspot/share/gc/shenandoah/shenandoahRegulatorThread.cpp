@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,7 +72,7 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
     ShenandoahControlThread::GCMode mode = _control_thread->gc_mode();
     if (mode == ShenandoahControlThread::none) {
       if (should_unload_classes()) {
-        if (_control_thread->request_concurrent_gc(GLOBAL)) {
+        if (_control_thread->request_concurrent_gc(ShenandoahControlThread::select_global_generation())) {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
@@ -148,7 +148,7 @@ bool ShenandoahRegulatorThread::start_young_cycle() {
 }
 
 bool ShenandoahRegulatorThread::start_global_cycle() {
-  return _global_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(GLOBAL);
+  return _global_heuristics->should_start_gc() && _control_thread->request_concurrent_gc(ShenandoahControlThread::select_global_generation());
 }
 
 void ShenandoahRegulatorThread::stop_service() {

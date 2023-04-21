@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Amazon, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,13 +28,15 @@
 #include "utilities/ostream.hpp"
 
 class ShenandoahEvacuationStats : public CHeapObj<mtGC> {
- private:
+private:
   size_t _evacuations_completed;
   size_t _bytes_completed;
   size_t _evacuations_attempted;
   size_t _bytes_attempted;
 
  public:
+  // AgeTable _age_table;
+
   ShenandoahEvacuationStats();
   void begin_evacuation(size_t bytes);
   void end_evacuation(size_t bytes);
@@ -50,19 +52,20 @@ struct ShenandoahCycleStats {
 };
 
 class ShenandoahEvacuationTracker : public CHeapObj<mtGC> {
- private:
-  ShenandoahEvacuationStats  _workers_global;
-  ShenandoahEvacuationStats  _mutators_global;
+private:
+  ShenandoahEvacuationStats _workers_global;
+  ShenandoahEvacuationStats _mutators_global;
 
- public:
+public:
   void begin_evacuation(Thread* thread, size_t bytes);
   void end_evacuation(Thread* thread, size_t bytes);
 
   void print_global_on(outputStream* st);
-  static void print_evacuations_on(outputStream* st, ShenandoahEvacuationStats* workers, ShenandoahEvacuationStats* mutators);
+  static void print_evacuations_on(outputStream* st,
+                                   ShenandoahEvacuationStats* workers,
+                                   ShenandoahEvacuationStats* mutators);
 
   ShenandoahCycleStats flush_cycle_to_global();
- private:
 };
 
 #endif //SHARE_GC_SHENANDOAH_SHENANDOAHEVACTRACKER_HPP

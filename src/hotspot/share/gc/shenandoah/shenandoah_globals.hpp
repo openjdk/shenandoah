@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2023, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2016, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,7 +78,7 @@
           " compact - run GC more frequently and with deeper targets to "   \
           "free up more memory.")                                           \
                                                                             \
-  product(ccstr, ShenandoahOldGCHeuristics, "adaptive",                     \
+  product(ccstr, ShenandoahOldGCHeuristics, "adaptive", EXPERIMENTAL,       \
           "Similar to ShenandoahGCHeuristics, but applied to the old "      \
           "generation. This configuration is only used to trigger old "     \
           "collections and does not change how regions are selected "       \
@@ -204,13 +205,13 @@
           "time from active application. Time is in milliseconds. "         \
           "Setting this to 0 disables the feature.")                        \
                                                                             \
-  product(uintx, ShenandoahGuaranteedOldGCInterval, 10*60*1000,  EXPERIMENTAL,  \
+  product(uintx, ShenandoahGuaranteedOldGCInterval, 10*60*1000, EXPERIMENTAL, \
           "Run a collection of the old generation at least this often. "    \
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
                                                                             \
-  product(uintx, ShenandoahGuaranteedYoungGCInterval, 5*60*1000,  EXPERIMENTAL,  \
-          "Run a collection of the young generation at least this often. "    \
+  product(uintx, ShenandoahGuaranteedYoungGCInterval, 5*60*1000, EXPERIMENTAL, \
+          "Run a collection of the young generation at least this often. "  \
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
                                                                             \
@@ -370,13 +371,13 @@
           "events.")                                                        \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahMinYoungPercentage, 20,                                \
+  product(uintx, ShenandoahMinYoungPercentage, 20, EXPERIMENTAL,            \
           "The minimum percentage of the heap to use for the young "        \
           "generation. Heuristics will not adjust the young generation "    \
           "to be less than this.")                                          \
           range(0, 100)                                                     \
                                                                             \
-  product(uintx, ShenandoahMaxYoungPercentage, 80,                                \
+  product(uintx, ShenandoahMaxYoungPercentage, 80, EXPERIMENTAL,            \
           "The maximum percentage of the heap to use for the young "        \
           "generation. Heuristics will not adjust the young generation "    \
           "to be more than this.")                                          \
@@ -450,6 +451,15 @@
                                                                             \
   product(bool, ShenandoahAllocFailureALot, false, DIAGNOSTIC,              \
           "Testing: make lots of artificial allocation failures.")          \
+                                                                            \
+  product(uintx, ShenandoahCoalesceChance, 0, DIAGNOSTIC,                   \
+          "Testing: Abandon remaining mixed collections with this "         \
+          "likelihood. Following each mixed collection, abandon all "       \
+          "remaining mixed collection candidate regions with likelihood "   \
+          "ShenandoahCoalesceChance. Abandoning a mixed collection will "   \
+          "cause the old regions to be made parseable, rather than being "  \
+          "evacuated.")                                                     \
+          range(0, 100)                                                     \
                                                                             \
   product(intx, ShenandoahMarkScanPrefetch, 32, EXPERIMENTAL,               \
           "How many objects to prefetch ahead when traversing mark bitmaps."\

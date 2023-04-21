@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2022, Amazon.com, Inc. or its affiliates.  All rights reserved.
- *
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved. *
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +34,8 @@ void ShenandoahCardStats::log() const {
     log_info(gc,remset)("Card stats: dirty " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
       " clean " SIZE_FORMAT " (max run: " SIZE_FORMAT "),"
       " dirty scans/objs " SIZE_FORMAT,
-      _dirty_card_cnt, _max_dirty_run, _clean_card_cnt, _max_clean_run,
+      _dirty_card_cnt, _max_dirty_run,
+      _clean_card_cnt, _max_clean_run,
       _dirty_scan_obj_cnt);
   }
 }

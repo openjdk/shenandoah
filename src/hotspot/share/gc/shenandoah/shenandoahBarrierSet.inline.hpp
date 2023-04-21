@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015, 2022, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -185,7 +186,7 @@ inline void ShenandoahBarrierSet::keep_alive_if_weak(DecoratorSet decorators, oo
 }
 
 template <DecoratorSet decorators, typename T>
-inline void ShenandoahBarrierSet::write_ref_field_post(T* field, oop newVal) {
+inline void ShenandoahBarrierSet::write_ref_field_post(T* field) {
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
     volatile CardTable::CardValue* byte = card_table()->byte_for(field);
     *byte = CardTable::dirty_card_val();
@@ -255,7 +256,9 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_loa
 template <DecoratorSet decorators, typename BarrierSetT>
 template <typename T>
 inline void ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_store_common(T* addr, oop value) {
-  shenandoah_assert_marked_if(nullptr, value, !CompressedOops::is_null(value) && ShenandoahHeap::heap()->is_evacuation_in_progress() &&
+  shenandoah_assert_marked_if(nullptr, value,
+                              !CompressedOops::is_null(value) &&
+                              ShenandoahHeap::heap()->is_evacuation_in_progress() &&
                               !(ShenandoahHeap::heap()->is_gc_generation_young() && ShenandoahHeap::heap()->heap_region_containing(value)->is_old()));
   shenandoah_assert_not_in_cset_if(addr, value, value != nullptr && !ShenandoahHeap::heap()->cancelled_gc());
   ShenandoahBarrierSet* const bs = ShenandoahBarrierSet::barrier_set();
@@ -277,7 +280,8 @@ inline void ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_st
   shenandoah_assert_not_forwarded_except  (addr, value, value == nullptr || ShenandoahHeap::heap()->cancelled_gc() || !ShenandoahHeap::heap()->is_concurrent_mark_in_progress());
 
   oop_store_common(addr, value);
-  ShenandoahBarrierSet::barrier_set()->write_ref_field_post<decorators>(addr, value);
+  ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
+  bs->write_ref_field_post<decorators>(addr);
 }
 
 template <DecoratorSet decorators, typename BarrierSetT>
@@ -299,7 +303,7 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   assert((decorators & (AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF)) == 0, "must be absent");
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   oop result = bs->oop_cmpxchg(decorators, addr, compare_value, new_value);
-  bs->write_ref_field_post<decorators>(addr, new_value);
+  bs->write_ref_field_post<decorators>(addr);
   return result;
 }
 
@@ -310,7 +314,7 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
   auto addr = AccessInternal::oop_field_addr<decorators>(base, offset);
   oop result = bs->oop_cmpxchg(resolved_decorators, addr, compare_value, new_value);
-  bs->write_ref_field_post<decorators>(addr, new_value);
+  bs->write_ref_field_post<decorators>(addr);
   return result;
 }
 
@@ -328,7 +332,7 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   assert((decorators & (AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF)) == 0, "must be absent");
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   oop result = bs->oop_xchg(decorators, addr, new_value);
-  bs->write_ref_field_post<decorators>(addr, new_value);
+  bs->write_ref_field_post<decorators>(addr);
   return result;
 }
 
@@ -339,7 +343,7 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
   DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
   auto addr = AccessInternal::oop_field_addr<decorators>(base, offset);
   oop result = bs->oop_xchg(resolved_decorators, addr, new_value);
-  bs->write_ref_field_post<decorators>(addr, new_value);
+  bs->write_ref_field_post<decorators>(addr);
   return result;
 }
 
@@ -405,7 +409,7 @@ void ShenandoahBarrierSet::arraycopy_barrier(T* src, T* dst, size_t count) {
   }
   int gc_state = _heap->gc_state();
   if ((gc_state & ShenandoahHeap::YOUNG_MARKING) != 0) {
-    arraycopy_marking(src, dst, count);
+    arraycopy_marking(src, dst, count, false);
     return;
   }
 
@@ -422,17 +426,62 @@ void ShenandoahBarrierSet::arraycopy_barrier(T* src, T* dst, size_t count) {
       // Note that we can't do the arraycopy marking using the 'src' array when
       // SATB mode is enabled (so we can't do this as part of the iteration for
       // evacuation or update references).
-      arraycopy_marking(src, dst, count);
+      arraycopy_marking(src, dst, count, true);
     }
   }
 }
 
 template <class T>
-void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count) {
+void ShenandoahBarrierSet::arraycopy_marking(T* src, T* dst, size_t count, bool is_old_marking) {
   assert(_heap->is_concurrent_mark_in_progress(), "only during marking");
-  T* array = ShenandoahSATBBarrier ? dst : src;
-  if (!_heap->marking_context()->allocated_after_mark_start(reinterpret_cast<HeapWord*>(array))) {
-    arraycopy_work<T, false, false, true>(array, count);
+  /*
+   * Note that an old-gen object is considered live if it is live at the start of OLD marking or if it is promoted
+   * following the start of OLD marking.
+   *
+   * 1. Every object promoted following the start of OLD marking will be above TAMS within its old-gen region
+   * 2. Every object live at the start of OLD marking will be referenced from a "root" or it will be referenced from
+   *    another live OLD-gen object.  With regards to old-gen, roots include stack locations and all of live young-gen.
+   *    All root references to old-gen are identified during a bootstrap young collection.  All references from other
+   *    old-gen objects will be marked during the traversal of all old objects, or will be marked by the SATB barrier.
+   *
+   * During old-gen marking (which is interleaved with young-gen collections), call arraycopy_work() if:
+   *
+   * 1. The overwritten array resides in old-gen and it is below TAMS within its old-gen region
+   * 2. Do not call arraycopy_work for any array residing in young-gen because young-gen collection is idle at this time
+   *
+   * During young-gen marking, call arraycopy_work() if:
+   *
+   * 1. The overwritten array resides in young-gen and is below TAMS within its young-gen region
+   * 2. Additionally, if array resides in old-gen, regardless of its relationship to TAMS because this old-gen array
+   *    may hold references to young-gen
+   */
+  if (ShenandoahSATBBarrier) {
+    T* array = dst;
+    HeapWord* array_addr = reinterpret_cast<HeapWord*>(array);
+    ShenandoahHeapRegion* r = _heap->heap_region_containing(array_addr);
+    if (is_old_marking) {
+      // Generational, old marking
+      assert(_heap->mode()->is_generational(), "Invariant");
+      if (r->is_old() && (array_addr < _heap->marking_context()->top_at_mark_start(r))) {
+        arraycopy_work<T, false, false, true>(array, count);
+      }
+    } else if (_heap->mode()->is_generational()) {
+      // Generational, young marking
+      if (r->is_old() || (array_addr < _heap->marking_context()->top_at_mark_start(r))) {
+        arraycopy_work<T, false, false, true>(array, count);
+      }
+    } else if (array_addr < _heap->marking_context()->top_at_mark_start(r)) {
+      // Non-generational, marking
+      arraycopy_work<T, false, false, true>(array, count);
+    }
+  } else {
+    // Incremental Update mode, marking
+    T* array = src;
+    HeapWord* array_addr = reinterpret_cast<HeapWord*>(array);
+    ShenandoahHeapRegion* r = _heap->heap_region_containing(array_addr);
+    if (array_addr < _heap->marking_context()->top_at_mark_start(r)) {
+      arraycopy_work<T, false, false, true>(array, count);
+    }
   }
 }
 

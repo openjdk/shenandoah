@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +49,9 @@ public:
     return barrier_set_cast<ShenandoahBarrierSet>(BarrierSet::barrier_set());
   }
 
-  inline ShenandoahCardTable* card_table()  { return _card_table; }
+  inline ShenandoahCardTable* card_table() {
+    return _card_table;
+  }
 
   static ShenandoahSATBMarkQueueSet& satb_mark_queue_set() {
     return barrier_set()->_satb_mark_queue_set;
@@ -116,13 +119,13 @@ public:
   inline oop oop_xchg(DecoratorSet decorators, T* addr, oop new_value);
 
   template <DecoratorSet decorators, typename T>
-  void write_ref_field_post(T* field, oop newVal);
+  void write_ref_field_post(T* field);
 
   void write_ref_array(HeapWord* start, size_t count);
 
 private:
   template <class T>
-  inline void arraycopy_marking(T* src, T* dst, size_t count);
+  inline void arraycopy_marking(T* src, T* dst, size_t count, bool is_old_marking);
   template <class T>
   inline void arraycopy_evacuation(T* src, size_t count);
   template <class T>

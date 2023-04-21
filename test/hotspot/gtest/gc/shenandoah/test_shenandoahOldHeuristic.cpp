@@ -1,3 +1,26 @@
+/*
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
 #include "precompiled.hpp"
 #include "unittest.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -65,6 +88,10 @@ class ShenandoahOldHeuristicTest : public ::testing::Test {
     _heap->set_old_evac_reserve(_heap->old_generation()->soft_max_capacity() / 4);
     _heuristics->abandon_collection_candidates();
     _collection_set->clear();
+  }
+
+  ShenandoahOldGeneration::State old_generation_state() {
+    return _heap->old_generation()->state();
   }
 
   size_t make_garbage(size_t region_idx, size_t garbage_bytes) {
@@ -311,4 +338,24 @@ TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
   EXPECT_EQ(_heuristics->unprocessed_old_collection_candidates(), 0UL);
 }
 
+TEST_VM_F(ShenandoahOldHeuristicTest, all_candidates_are_pinned) {
+  SKIP_IF_NOT_SHENANDOAH();
+
+  size_t g1 = make_garbage_above_threshold(0);
+  size_t g2 = make_garbage_above_threshold(1);
+  size_t g3 = make_garbage_above_threshold(2);
+
+  make_pinned(0);
+  make_pinned(1);
+  make_pinned(2);
+  _heuristics->prepare_for_old_collections();
+  _heuristics->prime_collection_set(_collection_set);
+
+  // In the case when all candidates are pinned, we want to abandon
+  // this set of mixed collection candidates so that another old collection
+  // can run. This is meant to defend against "bad" JNI code that permanently
+  // leaves an old region in the pinned state.
+  EXPECT_EQ(_collection_set->count(), 0UL);
+  EXPECT_EQ(old_generation_state(), ShenandoahOldGeneration::WAITING_FOR_FILL);
+}
 #undef SKIP_IF_NOT_SHENANDOAH

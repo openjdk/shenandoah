@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,9 +23,9 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
@@ -52,51 +52,15 @@ void ShenandoahGenerationalMode::initialize_flags() const {
   SHENANDOAH_CHECK_FLAG_SET(ShenandoahCloneBarrier);
 }
 
-const char* affiliation_name(oop ptr) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  assert(heap->is_in(ptr), "Oop must be in the heap.");
-  ShenandoahHeapRegion* region = heap->heap_region_containing(ptr);
-  return affiliation_name(region->affiliation());
+ShenandoahHeuristics* ShenandoahGenerationalMode::initialize_heuristics(ShenandoahGeneration* generation) const {
+  if (ShenandoahGCHeuristics == nullptr) {
+    vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option (null)");
+  }
+
+  if (strcmp(ShenandoahGCHeuristics, "adaptive") != 0) {
+    vm_exit_during_initialization("Generational mode requires the (default) adaptive heuristic");
+  }
+
+  return new ShenandoahAdaptiveHeuristics(generation);
 }
 
-const char affiliation_code(ShenandoahRegionAffiliation type) {
-  switch(type) {
-    case ShenandoahRegionAffiliation::FREE:
-      return 'F';
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return 'Y';
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return 'O';
-    default:
-      ShouldNotReachHere();
-      return 'X';
-  }
-}
-
-const char* affiliation_name(ShenandoahRegionAffiliation type) {
-  switch (type) {
-    case ShenandoahRegionAffiliation::FREE:
-      return "FREE";
-    case ShenandoahRegionAffiliation::YOUNG_GENERATION:
-      return "YOUNG";
-    case ShenandoahRegionAffiliation::OLD_GENERATION:
-      return "OLD";
-    default:
-      ShouldNotReachHere();
-      return nullptr;
-  }
-}
-
-const char* generation_name(GenerationMode mode) {
-  switch (mode) {
-    case GenerationMode::GLOBAL:
-      return "Global";
-    case GenerationMode::OLD:
-      return "Old";
-    case GenerationMode::YOUNG:
-      return "Young";
-    default:
-      ShouldNotReachHere();
-      return nullptr;
-  }
-}

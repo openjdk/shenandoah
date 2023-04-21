@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, 2022, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -96,7 +97,6 @@ private:
 
     // TODO: Preserve these stats somewhere for mutator threads.
     delete _evacuation_stats;
-    _evacuation_stats = nullptr;
   }
 
   static ShenandoahThreadLocalData* data(Thread* thread) {
@@ -207,6 +207,7 @@ public:
   }
 
   static void subtract_from_plab_evacuated(Thread* thread, size_t increment) {
+    // TODO: Assert underflow
     data(thread)->_plab_evacuated -= increment;
   }
 
@@ -223,6 +224,7 @@ public:
   }
 
   static void subtract_from_plab_promoted(Thread* thread, size_t increment) {
+    // TODO: Assert underflow
     data(thread)->_plab_promoted -= increment;
   }
 

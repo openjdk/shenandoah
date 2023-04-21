@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Amazon.com, Inc. and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,8 +32,8 @@
 // A "generation" that represents the whole heap.
 class ShenandoahGlobalGeneration : public ShenandoahGeneration {
 public:
-  ShenandoahGlobalGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity)
-  : ShenandoahGeneration(GLOBAL, max_queues, max_capacity, soft_max_capacity) { }
+  ShenandoahGlobalGeneration(bool generational, uint max_queues, size_t max_capacity, size_t soft_max_capacity)
+  : ShenandoahGeneration(generational ? GLOBAL_GEN : GLOBAL_NON_GEN, max_queues, max_capacity, soft_max_capacity) { }
 
 public:
   virtual const char* name() const override;
@@ -45,17 +45,20 @@ public:
   virtual size_t used() const override;
   virtual size_t available() const override;
 
-  virtual void set_concurrent_mark_in_progress(bool in_progress)  override;
+  virtual void set_concurrent_mark_in_progress(bool in_progress) override;
 
-  bool contains(ShenandoahHeapRegion* region) const  override;
+  bool contains(ShenandoahHeapRegion* region) const override;
 
-  bool contains(oop obj) const override { return true; }
+  bool contains(oop obj) const override {
+    // TODO: Should this assert is_in()?
+    return true;
+  }
 
-  void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl)  override;
+  void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
-  void heap_region_iterate(ShenandoahHeapRegionClosure* cl)  override;
+  void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
-  bool is_concurrent_mark_in_progress()  override;
+  bool is_concurrent_mark_in_progress() override;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGLOBALGENERATION_HPP

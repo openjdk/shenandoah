@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,28 +26,11 @@
 #define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
 
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
-#include "oops/oopsHierarchy.hpp"
-
-enum GenerationMode {
-  YOUNG,
-  OLD,
-  GLOBAL
-};
-
-enum ShenandoahRegionAffiliation {
-  FREE,
-  YOUNG_GENERATION,
-  OLD_GENERATION
-};
-
-const char* affiliation_name(oop ptr);
-const char* affiliation_name(ShenandoahRegionAffiliation type);
-const char affiliation_code(ShenandoahRegionAffiliation type);
-const char* generation_name(GenerationMode mode);
 
 class ShenandoahGenerationalMode : public ShenandoahMode {
 public:
   virtual void initialize_flags() const;
+  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahGeneration* generation) const;
   virtual const char* name()     { return "Generational"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }

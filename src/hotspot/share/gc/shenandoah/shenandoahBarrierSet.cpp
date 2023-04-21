@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2022, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -132,6 +133,7 @@ void ShenandoahBarrierSet::on_thread_detach(Thread *thread) {
     // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.
     // This is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each
     // PLAB is aligned with the start of each card's memory range.
+    // TODO: Assert this in retire_plab?
     if (plab != nullptr) {
       _heap->retire_plab(plab);
     }

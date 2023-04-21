@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,7 +38,7 @@ protected:
 
 public:
   ShenandoahMemoryPool(ShenandoahHeap* pool,
-                      const char* name = "Shenandoah");
+                       const char* name = "Shenandoah");
   virtual MemoryUsage get_memory_usage();
   virtual size_t used_in_bytes();
   virtual size_t max_size() const;

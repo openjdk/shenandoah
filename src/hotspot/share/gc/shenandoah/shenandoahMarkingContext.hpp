@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -59,6 +60,7 @@ public:
   inline bool mark_weak(oop obj);
 
   // Simple versions of marking accessors, to be used outside of marking (e.g. no possible concurrent updates)
+  // TODO: Do these really need to be const?
   inline bool is_marked(const oop) const;
   inline bool is_marked_strong(const oop obj) const;
   inline bool is_marked_weak(const oop obj) const;

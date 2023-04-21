@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Amazon.com, Inc. or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,7 +54,7 @@ void ShenandoahOldGC::op_final_mark() {
   }
 
   if (!heap->cancelled_gc()) {
-    assert(_mark.generation()->generation_mode() == OLD, "Generation of Old-Gen GC should be OLD");
+    assert(_mark.generation()->is_old(), "Generation of Old-Gen GC should be OLD");
     _mark.finish_mark();
     assert(!heap->cancelled_gc(), "STW mark cannot OOM");
 
