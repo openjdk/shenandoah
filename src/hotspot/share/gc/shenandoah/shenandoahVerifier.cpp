@@ -405,10 +405,10 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
 
   static void validate_usage(const bool adjust_for_padding, const bool adjust_for_deferred_accounting,
                              const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
     size_t generation_used = generation->used();
     size_t generation_used_regions = generation->used_regions();
     if (adjust_for_deferred_accounting) {
-      ShenandoahHeap* heap = ShenandoahHeap::heap();
       ShenandoahGeneration* young_generation = heap->young_generation();
       size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
       size_t humongous_bytes_promoted = heap->get_promotable_humongous_usage();
@@ -442,9 +442,9 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               label, generation->name(), generation->used_regions(), stats.regions());
 
     size_t generation_capacity = generation->soft_max_capacity();
+    size_t humongous_regions_promoted = 0;
     if (adjust_for_deferred_accounting) {
-      ShenandoahHeap* heap = ShenandoahHeap::heap();
-      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
+      humongous_regions_promoted = heap->get_promotable_humongous_regions();
       size_t transferred_regions = humongous_regions_promoted;
       generation_capacity += transferred_regions * ShenandoahHeapRegion::region_size_bytes();
     }
@@ -454,6 +454,13 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               byte_size_in_proper_unit(generation_capacity), proper_unit_for_byte_size(generation_capacity));
 
     size_t humongous_waste = generation->get_humongous_waste();
+    if (adjust_for_deferred_accounting) {
+      size_t promoted_humongous_bytes = heap->get_promotable_humongous_usage();
+      size_t promoted_regions_span = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
+      assert(promoted_regions_span > promoted_humongous_bytes, "sanity");
+      size_t promoted_waste = promoted_regions_span - promoted_humongous_bytes;
+      humongous_waste += promoted_waste;
+    }
     guarantee(stats.waste() == humongous_waste,
               "%s: generation (%s) humongous waste must be consistent: generation: " SIZE_FORMAT "%s, regions: " SIZE_FORMAT "%s",
               label, generation->name(),
