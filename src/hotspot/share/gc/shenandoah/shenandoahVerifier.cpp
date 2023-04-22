@@ -457,7 +457,7 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     if (adjust_for_deferred_accounting) {
       size_t promoted_humongous_bytes = heap->get_promotable_humongous_usage();
       size_t promoted_regions_span = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
-      assert(promoted_regions_span > promoted_humongous_bytes, "sanity");
+      assert(promoted_regions_span >= promoted_humongous_bytes, "sanity");
       size_t promoted_waste = promoted_regions_span - promoted_humongous_bytes;
       humongous_waste += promoted_waste;
     }
