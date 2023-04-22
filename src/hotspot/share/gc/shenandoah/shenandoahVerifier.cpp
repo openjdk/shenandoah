@@ -446,7 +446,13 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     if (adjust_for_deferred_accounting) {
       humongous_regions_promoted = heap->get_promotable_humongous_regions();
       size_t transferred_regions = humongous_regions_promoted;
-      generation_capacity += transferred_regions * ShenandoahHeapRegion::region_size_bytes();
+      if (generation->is_old()) {
+	// Promoted-in-place regions are labeled as old, but generation->soft_max_capacity() has not yet been increased
+	generation_capacity += transferred_regions * ShenandoahHeapRegion::region_size_bytes();
+      } else if (generation->is_young()) {
+	// Promoted-in-place regions are labeled as old, but generation->soft_max_capacity() has not yet been decreased
+	generation_capacity -= transferred_regions * ShenandoahHeapRegion::region_size_bytes();
+      }
     }
     guarantee(stats.span() <= generation_capacity,
               "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") must not exceed current capacity (" SIZE_FORMAT "%s)",
@@ -459,7 +465,14 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
       size_t promoted_regions_span = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
       assert(promoted_regions_span >= promoted_humongous_bytes, "sanity");
       size_t promoted_waste = promoted_regions_span - promoted_humongous_bytes;
-      humongous_waste += promoted_waste;
+      if (generation->is_old()) {
+	// Promoted-in-place regions are labeled as old, but generation->get_humongous_waste() has not yet been increased
+	humongous_waste += promoted_waste;
+      } else if (generation->is_young()) {
+	// Promoted-in-place regions are labeled as old, but generation->get_humongous_waste() has not yet been decreased
+	assert(humongous_waste >= promoted_waste, "Cannot promote in place more waste than exists in young");
+	humongous_waste -= promoted_waste;
+      }
     }
     guarantee(stats.waste() == humongous_waste,
               "%s: generation (%s) humongous waste must be consistent: generation: " SIZE_FORMAT "%s, regions: " SIZE_FORMAT "%s",
