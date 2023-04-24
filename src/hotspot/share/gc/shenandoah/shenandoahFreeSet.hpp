@@ -29,68 +29,91 @@
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 
-enum MemoryReserve {
+enum MemoryReserve : uint8_t {
+  NotFree,
   Mutator,
   Collector,
-  OldCollector
+  OldCollector,
+  NumFreeSets
 };
 
-class ShenandoahFreeSet : public CHeapObj<mtGC> {
+class ShenandoahSetsOfFree {
 private:
-
-  ShenandoahHeap* const _heap;
-  CHeapBitMap _mutator_free_bitmap;
-
-  // The _collector_free regions hold survivor objects within young-generation and within traditional single-generation
-  // collections.  In general, the _collector_free regions are at the high end of memory and mutator-free regions are at
-  // the low-end of memory.  In generational mode, the young survivor regions are typically recycled after the region reaches
-  // tenure age.  In the case that a young survivor region reaches tenure age and has sufficiently low amount of garbage,
-  // the region will be promoted in place.  This means the region will simply be relabled as an old-generation region and
-  // will not be evacuated until an old-generation collection chooses to do so.
-  CHeapBitMap _collector_free_bitmap;
-
-  // We keep the _old_collector regions separate from the young collector regions.  This allows us to pack the old regions
-  // further to the right than the young collector regions.  This is desirable because the old collector regions are recycled
-  // even less frequently than the young survivor regions.
-  CHeapBitMap _old_collector_free_bitmap;
   size_t _max;
+  ShenandoahFreeSet* _free_set;
+  size_t _region_size_bytes;
+  MemoryReserve* _membership;
+  size_t _left_mosts[NumFreeSets];
+  size_t _right_mosts[NumFreeSets];
+  size_t _left_mosts_empty[NumFreeSets];
+  size_t _right_mosts_empty[NumFreeSets];
+  size_t _capacity_of[NumFreeSets];
+  size_t _used_by[NumFreeSets];
+  bool _left_to_right_bias[NumFreeSets];
+  size_t _region_counts[NumFreeSets];
 
-  // Left-most and right-most region indexes. There are no free regions outside of [left-most; right-most] index intervals.
-  // For a free set of a given kind (mutator, collector, old_collector), we maintain left and right indices to limit
-  // searching. The intervals represented by these extremal indices designate the lowest and highest indices at which
-  // that kind of free region exists. These intervals may overlap. In particular, it is quite common for the collector
-  // free interval to overlap the mutator free interval on one side (the low end) and the old_collector free interval
-  // on the other (the high end).  It is also possible for the mutator interval to overlap the old_collector free
-  // interval.
-  size_t _mutator_leftmost, _mutator_rightmost;
+  inline void shrink_bounds_if_touched(MemoryReserve set, size_t idx);
+  inline void expand_bounds_maybe(MemoryReserve set, size_t idx, size_t capacity);
 
-  size_t _collector_leftmost, _collector_rightmost;
-  size_t _old_collector_leftmost, _old_collector_rightmost;
+  // Restore all state variables to initial default state.
+  void clear_internal();
 
-  // _capacity represents the amount of memory that can be allocated within the mutator set at the time of the
-  // most recent rebuild, as adjusted for the flipping of regions from mutator set to collector set or old collector set.
-  size_t _capacity;
+public:
+  ShenandoahSetsOfFree(size_t max_regions, ShenandoahFreeSet* free_set);
+  ~ShenandoahSetsOfFree();
 
-  // _used represents the amount of memory allocated within the mutator set since the time of the most recent rebuild.
-  // _used feeds into certain ShenandoanPacing decisions.  There is no need to track of the memory consumed from
-  // within the collector and old_collector sets.
-  size_t _used;
+  // Make all regions NotFree and reset all bounds
+  void clear_all();
 
-  // _old_capacity represents the amount of memory that can be allocated within the old collector set at the time
-  // of the most recent rebuild, as adjusted for the flipping of regions from mutator set to old collector set.
-  size_t _old_capacity;
+  // Remove or retire region idx from all free sets.  Requires that idx is in a free set.  This does not affect capacity.
+  void remove_from_free_sets(size_t idx);
 
-  // There is no need to compute young collector capacity.  And there is not need to consult _old_capacity once we
-  // have successfully reserved the evacuation (old_collector and collector sets) requested at rebuild time.
-  // TODO: A cleaner abstraction might encapsulate capacity (and used) information within a refactored set abstraction.
+  // Place region idx into free set which_set.  Requires that idx is currently NotFree.
+  void make_free(size_t idx, MemoryReserve which_set, size_t region_capacity);
 
+  // Place region idx into free set new_set.  Requires that idx is currently not NotFRee.
+  void move_to_set(size_t idx, MemoryReserve new_set, size_t region_capacity);
 
-  // When old_collector_set regions sparsely populate the lower address ranges of the heap, we search from left to
-  // right in order to consume (and remove from the old_collector set range) these sparsely distributed regions.
-  // This allows us to more quickly condense the range of addresses that represent old_collector_free regions.
-  bool _old_collector_search_left_to_right = true;
+  // Returns the MemoryReserve affiliation of region idx, or NotFree if this region is not currently free.  This does
+  // not enforce that free_set membership implies allocation capacity.
+  inline MemoryReserve membership(size_t idx) const;
 
-  // Assure leftmost and rightmost bounds are valid for the mutator_is_free, collector_is_free, and old_collector_is_free sets.
+  // Returns true iff region idx is in the test_set free_set.  Before returning true, asserts that the free
+  // set is not empty.  Requires that test_set != NotFree or NumFreeSets.
+  inline bool in_free_set(size_t idx, MemoryReserve which_set) const;
+
+  // Each of the following four methods returns _max to indicate absence of requested region.
+  inline size_t left_most(MemoryReserve which_set) const;
+  inline size_t right_most(MemoryReserve which_set) const;
+  size_t left_most_empty(MemoryReserve which_set);
+  size_t right_most_empty(MemoryReserve which_set);
+
+  inline void increase_used(MemoryReserve which_set, size_t bytes);
+
+  inline size_t capacity_of(MemoryReserve which_set) const {
+    shenandoah_assert_heaplocked();
+    assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+    return _capacity_of[which_set];
+  }
+
+  inline size_t used_by(MemoryReserve which_set) const {
+    shenandoah_assert_heaplocked();
+    assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+    return _used_by[which_set];
+  }
+
+  inline size_t max() const { return _max; }
+
+  inline size_t count(MemoryReserve which_set) const { return _region_counts[which_set]; }
+
+  // Return true iff regions for allocation from this set should be peformed left to right.  Otherwise, allocate
+  // from right to left.
+  inline bool alloc_from_left_bias(MemoryReserve which_set);
+
+  // Determine whether we prefer to allocate from left to right or from right to left for this free-set.
+  void establish_alloc_bias(MemoryReserve which_set);
+
+  // Assure leftmost, rightmost, leftmost_empty, and rightmost_empty bounds are valid for all free sets.
   // valid bounds honor all of the following (where max is the number of heap regions):
   //   if the set is empty, leftmost equals max and rightmost equals 0
   //   Otherwise (the set is not empty):
@@ -102,27 +125,21 @@ private:
   //       idx >= leftmost &&
   //       idx <= rightmost
   //     }
-  void assert_bounds() const NOT_DEBUG_RETURN;
+  //   if the set has no empty regions, leftmost_empty equals max and right_most_empty equals 0
+  //   Otherwise (the region has empty regions):
+  //     0 <= lefmost_empty < max and 0 <= rightmost_empty < max
+  //     rightmost_empty >= leftmost_empty
+  //     for every idx that is in the set and is empty {
+  //       idx >= leftmost &&
+  //       idx <= rightmost
+  //     }
+  void assert_bounds() NOT_DEBUG_RETURN;
+};
 
-  // Every region is in exactly one of four sets: mutator_free, collector_free, old_collector_free, not_free.
-  // Insofar as the free-set abstraction is concerned, we are only interested in regions that are free so we provide no
-  // mechanism to directly inquire as to whether a region is not_free.  not_free membership is implied by not member of
-  // mutator_free, collector_free and old_collector_free sets.
-  //
-  // in_set() implies that the region has allocation capacity (i.e. is not yet fully allocated) as assured by assertions.
-  //
-  // TODO: a future implementation may replace the three bitmaps with a single array of enums to simplify the representation
-  // of membership within these four mutually exclusive sets.
-
-  template <MemoryReserve SET> inline bool in_set(size_t idx) const;
-
-  // The following probe routine mimics the behavior is in_set() but does not assert that regions have allocation capacity.
-  // This probe routine is used in assertions enforced during certain state transitions.
-  template <MemoryReserve SET> inline bool probe_set(size_t idx) const;
-
-  // The next two methods change set membership of regions
-  template <MemoryReserve SET> inline void add_to_set(size_t idx);
-  template <MemoryReserve SSET> inline void remove_from_set(size_t idx);
+class ShenandoahFreeSet : public CHeapObj<mtGC> {
+private:
+  ShenandoahHeap* const _heap;
+  ShenandoahSetsOfFree _free_sets;
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
 
@@ -146,31 +163,11 @@ private:
   void flip_to_gc(ShenandoahHeapRegion* r);
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
-  // Compute left-most and right-most indexes for the mutator_is_free, collector_is_free, and old_collector_is_free sets.
-  void recompute_bounds();
-
-  // Adjust left-most and right-most indexes for the mutator_is_free, collector_is_free, and old_collector_is_free sets
-  //  following minor changes to at least one set membership.
-  void adjust_bounds();
-
-  // Adjust left-most and right-most indexes for the <SET> free set after adding region idx to this set.
-  template <MemoryReserve SET> inline void expand_bounds_maybe(size_t idx);
-
-  // Adjust left-most and right-most indexes for the <SET> free set after removing region idx from this set.
-  template <MemoryReserve SET> bool adjust_bounds_if_touched(size_t idx);
-
-  // Return true iff region idx was the left-most or right-most index for one of the three free sets.
-  bool touches_bounds(size_t idx) const;
-
-   // Used of free set represents the amount of is_mutator_free set that has been consumed since most recent rebuild.
-  void increase_used(size_t amount);
-
   void clear_internal();
 
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   bool can_allocate_from(ShenandoahHeapRegion *r) const;
-  size_t alloc_capacity(ShenandoahHeapRegion *r) const;
   bool has_alloc_capacity(size_t idx) const;
   bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
   bool has_no_alloc_capacity(ShenandoahHeapRegion *r) const;
@@ -178,14 +175,8 @@ private:
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
-  // Number of regions dedicated to GC allocations (for evacuation) that are at least partially free
-  size_t collector_count() const { return _collector_free_bitmap.count_one_bits(); }
-
-  // Number of regions dedicated to Old GC allocations (for evacuation or promotion) that are at least partially free
-  size_t old_collector_count() const { return _old_collector_free_bitmap.count_one_bits(); }
-
-  // Number of regions dedicated to mutator allocations that are at least partially free
-  size_t mutator_count()   const { return _mutator_free_bitmap.count_one_bits();   }
+  size_t alloc_capacity(ShenandoahHeapRegion *r) const;
+  size_t alloc_capacity(size_t idx) const;
 
   void clear();
   void rebuild();
@@ -194,11 +185,11 @@ public:
 
   void log_status();
 
-  size_t capacity()  const { return _capacity; }
-  size_t used()      const { return _used;     }
-  size_t available() const {
-    assert(_used <= _capacity, "must use less than capacity");
-    return _capacity - _used;
+  inline size_t capacity()  const { return _free_sets.capacity_of(Mutator); }
+  inline size_t used()      const { return _free_sets.used_by(Mutator);     }
+  inline size_t available() const {
+    assert(used() <= capacity(), "must use less than capacity");
+    return capacity() - used();
   }
 
   HeapWord* allocate(ShenandoahAllocRequest& req, bool& in_new_region);

@@ -38,167 +38,379 @@
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
 
-ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
-  _heap(heap),
-  _mutator_free_bitmap(max_regions, mtGC),
-  _collector_free_bitmap(max_regions, mtGC),
-  _old_collector_free_bitmap(max_regions, mtGC),
-  _max(max_regions)
+
+ShenandoahSetsOfFree::ShenandoahSetsOfFree(size_t max_regions, ShenandoahFreeSet* free_set) :
+    _max(max_regions),
+    _free_set(free_set),
+    _region_size_bytes(ShenandoahHeapRegion::region_size_bytes())
 {
+  _membership = NEW_C_HEAP_ARRAY(MemoryReserve, max_regions, mtGC);
   clear_internal();
 }
 
-inline void ShenandoahFreeSet::increase_used(size_t num_bytes) {
+ShenandoahSetsOfFree::~ShenandoahSetsOfFree() {
+  FREE_C_HEAP_ARRAY(MemoryReserve, _membership);
+}
+
+
+void ShenandoahSetsOfFree::clear_internal() {
+  for (size_t idx = 0; idx < _max; idx++) {
+    _membership[idx] = NotFree;
+  }
+
+  for (size_t idx = 0; idx < NumFreeSets; idx++) {
+    _left_mosts[idx] = _max;
+    _right_mosts[idx] = 0;
+    _left_mosts_empty[idx] = _max;
+    _right_mosts_empty[idx] = 0;
+    _capacity_of[idx] = 0;
+    _used_by[idx] = 0;
+  }
+
+  _left_to_right_bias[Mutator] = true;
+  _left_to_right_bias[Collector] = false;
+  _left_to_right_bias[OldCollector] = false;
+
+  _region_counts[Mutator] = 0;
+  _region_counts[Collector] = 0;
+  _region_counts[OldCollector] = 0;
+  _region_counts[NotFree] = _max;
+}
+
+void ShenandoahSetsOfFree::clear_all() {
   shenandoah_assert_heaplocked();
-  _used += num_bytes;
-  assert(_used <= _capacity, "must not use (" SIZE_FORMAT ") more than we have (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
-         _used, _capacity, num_bytes);
+  clear_internal();
 }
 
-template <MemoryReserve SET> inline bool ShenandoahFreeSet::probe_set(size_t idx) const {
-  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
-          idx, _max, _collector_leftmost, _collector_rightmost);
-  switch(SET) {
-    case Mutator:
-      return _mutator_free_bitmap.at(idx);
-    case Collector:
-      return _collector_free_bitmap.at(idx);
-    case OldCollector:
-      return _old_collector_free_bitmap.at(idx);
+void ShenandoahSetsOfFree::increase_used(MemoryReserve which_set, size_t bytes) {
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "Set must correspond to a valid freeset");
+  _used_by[which_set] += bytes;
+  assert (_used_by[which_set] <= _capacity_of[which_set],
+          "Must not use (" SIZE_FORMAT ") more than capacity (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
+          _used_by[which_set], _capacity_of[which_set], bytes);
+}
+                       
+inline void ShenandoahSetsOfFree::shrink_bounds_if_touched(MemoryReserve set, size_t idx) {
+  if (idx = _left_mosts[set]) {
+    while ((_left_mosts[set] < _max) && !in_free_set(_left_mosts[set], set)) {
+      _left_mosts[set]++;
+    }
+    if (_left_mosts_empty[set] < _left_mosts[set]) {
+      // This gets us closer to where we need to be; we'll scan further when left_mosts_empty is requested.
+      _left_mosts_empty[set] = _left_mosts[set];
+    }
+  }
+  if (idx == _right_mosts[set]) {
+    while (_right_mosts[set] > 0 && !in_free_set(_right_mosts[set], set)) {
+      _right_mosts[set]--;
+    }
+    if (_right_mosts_empty[set] > _right_mosts[set]) {
+      // This gets us closer to where we need to be; we'll scan further when right_mosts_empty is requested.
+      _right_mosts_empty[set] = _right_mosts[set];
+    }
   }
 }
 
-template <MemoryReserve SET> inline bool ShenandoahFreeSet::in_set(size_t idx) const {
-  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
-          idx, _max, _mutator_leftmost, _mutator_rightmost);
-  bool is_free;
-  switch(SET) {
-    case Mutator:
-      is_free = _mutator_free_bitmap.at(idx);
-      break;
-    case Collector:
-      is_free = _collector_free_bitmap.at(idx);;
-      break;
-    case OldCollector:
-      is_free = _old_collector_free_bitmap.at(idx);
-      break;
+inline void ShenandoahSetsOfFree::expand_bounds_maybe(MemoryReserve set, size_t idx, size_t region_capacity) {
+  if (region_capacity == _region_size_bytes) {
+    if (_left_mosts_empty[set] > idx) {
+      _left_mosts_empty[set] = idx;
+    }
+    if (_right_mosts_empty[set] < idx) {
+      _right_mosts_empty[set] = idx;
+    }
   }
-  assert(!is_free || has_alloc_capacity(idx), "Free set should contain useful regions");
-  return is_free;
-}
-
-template <MemoryReserve SET> inline void ShenandoahFreeSet::expand_bounds_maybe(size_t idx) {
-  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
-          idx, _max, _mutator_leftmost, _mutator_rightmost);
-  switch(SET) {
-    case Mutator:
-      if (idx < _mutator_leftmost) {
-        _mutator_leftmost = idx;
-      }
-      if (idx > _mutator_rightmost) {
-        _mutator_rightmost = idx;
-      }
-      break;
-    case Collector:
-      if (idx < _collector_leftmost) {
-        _collector_leftmost = idx;
-      }
-      if (idx > _collector_rightmost) {
-        _collector_rightmost = idx;
-      }
-      break;
-    case OldCollector:
-      if (idx < _old_collector_leftmost) {
-        _old_collector_leftmost = idx;
-      }
-      if (idx > _old_collector_rightmost) {
-        _old_collector_rightmost = idx;
-      }
-      break;
+  if (_left_mosts[set] > idx) {
+    _left_mosts[set] = idx;
+  }
+  if (_right_mosts[set] < idx) {
+    _right_mosts[set] = idx;
   }
 }
 
-template <MemoryReserve SET> inline void ShenandoahFreeSet::add_to_set(size_t idx) {
-  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
-          idx, _max, _mutator_leftmost, _mutator_rightmost);
-  assert(has_alloc_capacity(idx), "Regions added to free set should have allocation capacity");
-  switch(SET) {
-    case Mutator:
-      assert(!_collector_free_bitmap.at(idx) && !_old_collector_free_bitmap.at(idx), "Freeset membership is mutually exclusive");
-      _mutator_free_bitmap.set_bit(idx);
-      break;
-    case Collector:
-      assert(!_mutator_free_bitmap.at(idx) && !_old_collector_free_bitmap.at(idx), "Freeset membership is mutually exclusive");
-      _collector_free_bitmap.set_bit(idx);
-      break;
-    case OldCollector:
-      assert(!_mutator_free_bitmap.at(idx) && !_collector_free_bitmap.at(idx), "Freeset membership is mutually exclusive");
-      _old_collector_free_bitmap.set_bit(idx);
-      break;
-  }
-  expand_bounds_maybe<SET>(idx);
+void ShenandoahSetsOfFree::remove_from_free_sets(size_t idx) {
+  shenandoah_assert_heaplocked();
+  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
+  MemoryReserve orig_set = membership(idx);
+  assert (orig_set > NotFree && orig_set < NumFreeSets, "Cannot remove from free sets if not already free");
+  _membership[idx] = NotFree;
+  shrink_bounds_if_touched(orig_set, idx);
+
+  _region_counts[orig_set]--;
+  _region_counts[NotFree]++;
 }
 
-template <MemoryReserve SET> inline void ShenandoahFreeSet::remove_from_set(size_t idx) {
-  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
-          idx, _max, _mutator_leftmost, _mutator_rightmost);
-  switch(SET) {
-    case Mutator:
-      _mutator_free_bitmap.clear_bit(idx);
-      break;
-    case Collector:
-      _collector_free_bitmap.clear_bit(idx);
-      break;
-    case OldCollector:
-      _old_collector_free_bitmap.clear_bit(idx);
-      break;
-  }
-  adjust_bounds_if_touched<SET>(idx);
+
+void ShenandoahSetsOfFree::make_free(size_t idx, MemoryReserve which_set, size_t region_capacity) {
+  shenandoah_assert_heaplocked();
+  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
+  assert (_membership[idx] == NotFree, "Cannot make free if already free");
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  _membership[idx] = which_set;
+  _capacity_of[which_set] += region_capacity;
+  expand_bounds_maybe(which_set, idx, region_capacity);
+
+  _region_counts[NotFree]--;
+  _region_counts[which_set]++;
 }
 
-// If idx represents a mutator bound, recompute the mutator bounds, returning true iff bounds were adjusted.
-template <MemoryReserve SET> bool ShenandoahFreeSet::adjust_bounds_if_touched(size_t idx) {
-  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT " (left: " SIZE_FORMAT ", right: " SIZE_FORMAT ")",
-          idx, _max, _mutator_leftmost, _mutator_rightmost);
-  switch(SET) {
-    case Mutator:
-      if (idx == _mutator_leftmost || idx == _mutator_rightmost) {
-        // Rewind both mutator bounds until the next bit.
-        while (_mutator_leftmost < _max && !_mutator_free_bitmap.at(_mutator_leftmost)) {
-          _mutator_leftmost++;
-        }
-        while (_mutator_rightmost > 0 && !_mutator_free_bitmap.at(_mutator_rightmost)) {
-          _mutator_rightmost--;
-        }
-        return true;
-      }
-      break;        
-    case Collector:
-      if (idx == _collector_leftmost || idx == _collector_rightmost) {
-        // Rewind both collector bounds until the next bit.
-        while (_collector_leftmost < _max && !_collector_free_bitmap.at(_collector_leftmost)) {
-          _collector_leftmost++;
-        }
-        while (_collector_rightmost > 0 && !_collector_free_bitmap.at(_collector_rightmost)) {
-          _collector_rightmost--;
-        }
-        return true;
-      }
-      break;        
-    case OldCollector:
-      if (idx == _old_collector_leftmost || idx == _old_collector_rightmost) {
-        // Rewind both old_collector bounds until the next bit.
-        while (_old_collector_leftmost < _max && !_old_collector_free_bitmap.at(_old_collector_leftmost)) {
-          _old_collector_leftmost++;
-        }
-        while (_old_collector_rightmost > 0 && !_old_collector_free_bitmap.at(_old_collector_rightmost)) {
-          _old_collector_rightmost--;
-        }
-        return true;
-      }
-      break;        
+void ShenandoahSetsOfFree::move_to_set(size_t idx, MemoryReserve new_set, size_t region_capacity) {
+  shenandoah_assert_heaplocked();
+  assert (region_capacity == _region_size_bytes, "Only move entirely empty regions");
+  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
+  MemoryReserve orig_set = _membership[idx];
+  assert ((orig_set > NotFree) && (orig_set < NumFreeSets), "Cannot move free unless already free");
+  assert ((new_set > NotFree) && (new_set < NumFreeSets), "New set must be valid");
+
+  _membership[idx] = new_set;
+  _capacity_of[orig_set] -= region_capacity;
+  shrink_bounds_if_touched(orig_set, idx);
+
+  _capacity_of[new_set] += region_capacity;
+  expand_bounds_maybe(new_set, idx, region_capacity);
+
+  _region_counts[orig_set]--;
+  _region_counts[new_set]++;
+}
+
+inline MemoryReserve ShenandoahSetsOfFree::membership(size_t idx) const {
+  shenandoah_assert_heaplocked();
+  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
+  return _membership[idx];
+}
+
+  // Returns true iff region idx is in the test_set free_set.  Before returning true, asserts that the free
+  // set is not empty.  Requires that test_set != NotFree or NumFreeSets.
+inline bool ShenandoahSetsOfFree::in_free_set(size_t idx, MemoryReserve test_set) const {
+  shenandoah_assert_heaplocked();
+  assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
+  if (_membership[idx] == test_set) {
+    assert (test_set == NotFree || _free_set->alloc_capacity(idx) > 0, "Free regions must have alloc capacity");
+    return true;
+  } else {
+    return false;
   }
-  return false;
+}
+
+inline size_t ShenandoahSetsOfFree::left_most(MemoryReserve which_set) const {
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  size_t idx = _left_mosts[which_set];
+  if (idx >= _max) {
+    return _max;
+  } else {
+    assert (in_free_set(idx, which_set), "left-most region must be free");
+    return idx;
+  }
+}
+
+inline size_t ShenandoahSetsOfFree::right_most(MemoryReserve which_set) const {
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  size_t idx = _right_mosts[which_set];
+  if ((idx == 0) && (_membership[idx] != which_set)) {
+    return _max;
+  } else {
+    assert (in_free_set(idx, which_set), "right-most region must be free");
+    return idx;
+  }
+}
+
+size_t ShenandoahSetsOfFree::left_most_empty(MemoryReserve which_set) {
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  for (size_t idx = _left_mosts_empty[which_set]; idx < _max; idx++) {
+    if ((membership(idx) == which_set) && (_free_set->alloc_capacity(idx) == _region_size_bytes)) {
+      _left_mosts_empty[which_set] = idx;
+      return idx;
+    }
+  }
+  _left_mosts_empty[which_set] = _max;
+  _right_mosts_empty[which_set] = 0;
+  return _max;
+}
+
+inline size_t ShenandoahSetsOfFree::right_most_empty(MemoryReserve which_set) {
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  for (intptr_t idx = _right_mosts_empty[which_set]; idx >= 0; idx--) {
+    if ((membership(idx) == which_set) && (_free_set->alloc_capacity(idx) == _region_size_bytes)) {
+      _right_mosts_empty[which_set] = idx;
+      return idx;
+    }
+  }
+  _left_mosts_empty[which_set] = _max;
+  _right_mosts_empty[which_set] = 0;
+  return _max;
+}
+
+inline bool ShenandoahSetsOfFree::alloc_from_left_bias(MemoryReserve which_set) {
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  return _left_to_right_bias[which_set];
+}
+
+void ShenandoahSetsOfFree::establish_alloc_bias(MemoryReserve which_set) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  shenandoah_assert_heaplocked();
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+
+  size_t middle = (_left_mosts[which_set] + _right_mosts[which_set]) / 2;
+  size_t available_in_first_half = 0;
+  size_t available_in_second_half = 0;
+
+  for (size_t index = _left_mosts[which_set]; index < middle; index++) {
+    if (in_free_set(index, which_set)) {
+      ShenandoahHeapRegion* r = heap->get_region(index);
+      available_in_first_half += r->free();
+    }
+  }
+  for (size_t index = middle; index <= _right_mosts[which_set]; index++) {
+    if (in_free_set(index, which_set)) {
+      ShenandoahHeapRegion* r = heap->get_region(index);
+      available_in_second_half += r->free();
+    }
+  }
+
+  // We desire to first consume the sparsely distributed regions in order that the remaining regions are densely packed.
+  // Densely packing regions reduces the effort to search for a region that has sufficient memory to satisfy a new allocation
+  // request.  Regions become sparsely distributed following a Full GC, which tends to slide all regions to the front of the
+  // heap rather than allowing survivor regions to remain at the high end of the heap where we intend for them to congregate.
+  // In the future, we may modify Full GC so that it slides old objects to the end of the heap and young objects to the start
+  // of the heap. If this is done, we can always search survivor Collector and OldCollector regions right to left.
+  _left_to_right_bias[which_set] = (available_in_second_half > available_in_first_half);
+}
+
+#ifdef ASSERT
+void ShenandoahSetsOfFree::assert_bounds() {
+
+  size_t left_mosts[NumFreeSets];
+  size_t right_mosts[NumFreeSets];
+  size_t empty_left_mosts[NumFreeSets];
+  size_t empty_right_mosts[NumFreeSets];
+
+  for (int i = 0; i < NumFreeSets; i++) {
+    left_mosts[i] = _max;
+    empty_left_mosts[i] = _max;
+    right_mosts[i] = 0;
+    empty_right_mosts[i] = 0;
+  }
+
+  for (size_t i = 0; i < _max; i++) {
+    MemoryReserve set = membership(i);
+    switch (set) {
+      case NotFree:
+        break;
+
+      case Mutator:
+      case Collector:
+      case OldCollector:
+      {
+        size_t capacity = _free_set->alloc_capacity(i);
+        bool is_empty = (capacity == _region_size_bytes);
+        assert(capacity > 0, "free regions must have allocation capacity");
+        if (i < left_mosts[set]) {
+          left_mosts[set] = i;
+        }
+        if (is_empty && (i < empty_left_mosts[set])) {
+          empty_left_mosts[set] = i;
+        }
+        if (i > right_mosts[i]) {
+          right_mosts[set] = i;
+        }
+        if (is_empty && (i > empty_right_mosts[set])) {
+          empty_right_mosts[set] = i;
+        }
+        break;
+      }
+
+      case NumFreeSets:
+      default:
+        ShouldNotReachHere();
+    }
+  }
+
+  // Performance invariants. Failing these would not break the free set, but performance would suffer.
+  assert (left_most(Mutator) <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, left_most(Mutator),  _max);
+  assert (right_most(Mutator) <= _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(Mutator),  _max);
+
+  assert (left_most(Mutator) == _max || in_free_set(left_most(Mutator), Mutator),
+          "leftmost region should be free: " SIZE_FORMAT,  left_most(Mutator));
+  assert (left_most(Mutator) == _max || in_free_set(right_most(Mutator), Mutator),
+          "rightmost region should be free: " SIZE_FORMAT, right_most(Mutator));
+
+  // If Mutator set is empty, leftmosts will both equal max, rightmosts will both equal zero.  Likewise for empty region sets.
+  size_t beg_off = left_mosts[Mutator];
+  size_t end_off = right_mosts[Mutator];
+  assert (beg_off >= left_most(Mutator),
+          "free regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(Mutator));
+  assert (end_off <= right_most(Mutator),
+          "free regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(Mutator));
+
+  beg_off = empty_left_mosts[Mutator];
+  end_off = empty_right_mosts[Mutator];
+  assert (beg_off >= left_most_empty(Mutator),
+          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(Mutator));
+  assert (end_off <= right_most_empty(Mutator),
+          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(Mutator));
+
+  // Performance invariants. Failing these would not break the free set, but performance would suffer.
+  assert (left_most(Collector) <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, left_most(Collector),  _max);
+  assert (right_most(Collector) <= _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(Collector),  _max);
+
+  assert (left_most(Collector) == _max || in_free_set(left_most(Collector), Collector),
+          "leftmost region should be free: " SIZE_FORMAT,  left_most(Collector));
+  assert (left_most(Collector) == _max || in_free_set(right_most(Collector), Collector),
+          "rightmost region should be free: " SIZE_FORMAT, right_most(Collector));
+
+  // If Collector set is empty, leftmosts will both equal max, rightmosts will both equal zero.  Likewise for empty region sets.
+  beg_off = left_mosts[Collector];
+  end_off = right_mosts[Collector];
+  assert (beg_off >= left_most(Collector),
+          "free regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(Collector));
+  assert (end_off <= right_most(Collector),
+          "free regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(Collector));
+
+  beg_off = empty_left_mosts[Collector];
+  end_off = empty_right_mosts[Collector];
+  assert (beg_off >= left_most_empty(Collector),
+          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(Collector));
+  assert (end_off <= right_most_empty(Collector),
+          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(Collector));
+
+  // Performance invariants. Failing these would not break the free set, but performance would suffer.
+  assert (left_most(OldCollector) <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, left_most(OldCollector),  _max);
+  assert (right_most(OldCollector) <= _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(OldCollector),  _max);
+
+  assert (left_most(OldCollector) == _max || in_free_set(left_most(OldCollector), OldCollector),
+          "leftmost region should be free: " SIZE_FORMAT,  left_most(OldCollector));
+  assert (left_most(OldCollector) == _max || in_free_set(right_most(OldCollector), OldCollector),
+          "rightmost region should be free: " SIZE_FORMAT, right_most(OldCollector));
+
+  // If OldCollector set is empty, leftmosts will both equal max, rightmosts will both equal zero.  Likewise for empty region sets.
+  beg_off = left_mosts[OldCollector];
+  end_off = right_mosts[OldCollector];
+  assert (beg_off >= left_most(OldCollector),
+          "free regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(OldCollector));
+  assert (end_off <= right_most(OldCollector),
+          "free regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(OldCollector));
+
+  beg_off = empty_left_mosts[OldCollector];
+  end_off = empty_right_mosts[OldCollector];
+  assert (beg_off >= left_most_empty(OldCollector),
+          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(OldCollector));
+  assert (end_off <= right_most_empty(OldCollector),
+          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(OldCollector));
+}
+#endif
+
+
+ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
+  _heap(heap),
+  _free_sets(max_regions, this)
+{
+  clear_internal();
 }
 
 // This allocates from a region within the old_collector_set.  If affiliation equals OLD, the allocation must be taken
@@ -207,13 +419,15 @@ template <MemoryReserve SET> bool ShenandoahFreeSet::adjust_bounds_if_touched(si
 HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation affiliation,
                                                            ShenandoahAllocRequest& req, bool& in_new_region) {
   shenandoah_assert_heaplocked();
-  size_t rightmost = _old_collector_rightmost;
-  size_t leftmost = _old_collector_leftmost;
-  if (_old_collector_search_left_to_right) {
+  size_t rightmost =
+    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.right_most_empty(OldCollector): _free_sets.right_most(OldCollector);
+  size_t leftmost =
+    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.left_most_empty(OldCollector): _free_sets.left_most(OldCollector);
+  if (_free_sets.alloc_from_left_bias(OldCollector)) {
     // This mode picks up stragglers left by a full GC
-    for (size_t c = leftmost; c <= rightmost; c++) {
-      if (in_set<OldCollector>(c)) {
-        ShenandoahHeapRegion* r = _heap->get_region(c);
+    for (size_t idx = leftmost; idx <= rightmost; idx++) {
+      if (_free_sets.in_free_set(idx, OldCollector)) {
+        ShenandoahHeapRegion* r = _heap->get_region(idx);
         assert(r->is_trash() || !r->is_affiliated() || r->is_old(), "old_collector_set region has bad affiliation");
         if (r->affiliation() == affiliation) {
           HeapWord* result = try_allocate_in(r, req, in_new_region);
@@ -225,10 +439,10 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
     }
   } else {
     // This mode picks up stragglers left by a previous concurrent GC
-    for (size_t c = rightmost + 1; c > leftmost; c--) {
+    for (size_t count = rightmost + 1; count > leftmost; count--) {
       // size_t is unsigned, need to dodge underflow when _leftmost = 0
-      size_t idx = c - 1;
-      if (in_set<OldCollector>(idx)) {
+      size_t idx = count - 1;
+      if (_free_sets.in_free_set(idx, OldCollector)) {
         ShenandoahHeapRegion* r = _heap->get_region(idx);
         assert(r->is_trash() || !r->is_affiliated() || r->is_old(), "old_collector_set region has bad affiliation");
         if (r->affiliation() == affiliation) {
@@ -245,10 +459,14 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
 
 HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region) {
   shenandoah_assert_heaplocked();
-  for (size_t c = _collector_rightmost + 1; c > _collector_leftmost; c--) {
+  size_t rightmost =
+    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.right_most_empty(Collector): _free_sets.right_most(Collector);
+  size_t leftmost =
+    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.left_most_empty(Collector): _free_sets.left_most(Collector);
+  for (size_t c = rightmost + 1; c > leftmost; c--) {
     // size_t is unsigned, need to dodge underflow when _leftmost = 0
     size_t idx = c - 1;
-    if (in_set<Collector>(idx)) {
+    if (_free_sets.in_free_set(idx, Collector)) {
       ShenandoahHeapRegion* r = _heap->get_region(idx);
       if (r->affiliation() == affiliation) {
         HeapWord* result = try_allocate_in(r, req, in_new_region);
@@ -309,9 +527,9 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_tlab:
     case ShenandoahAllocRequest::_alloc_shared: {
       // Try to allocate in the mutator view
-      for (size_t idx = _mutator_leftmost; idx <= _mutator_rightmost; idx++) {
+      for (size_t idx = _free_sets.left_most(Mutator); idx <= _free_sets.right_most(Mutator); idx++) {
         ShenandoahHeapRegion* r = _heap->get_region(idx);
-        if (in_set<Mutator>(idx) && (allow_new_region || r->is_affiliated())) {
+        if (_free_sets.in_free_set(idx, Mutator) && (allow_new_region || r->is_affiliated())) {
           // try_allocate_in() increases used if the allocation is successful.
           HeapWord* result = try_allocate_in(r, req, in_new_region);
           if (result != nullptr) {
@@ -333,9 +551,9 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       if (!_heap->mode()->is_generational()) {
         // size_t is unsigned, need to dodge underflow when _leftmost = 0
         // Fast-path: try to allocate in the collector view first
-        for (size_t c = _collector_rightmost + 1; c > _collector_leftmost; c--) {
+        for (size_t c = _free_sets.right_most(Collector) + 1; c > _free_sets.left_most(Collector); c--) {
           size_t idx = c - 1;
-          if (in_set<Collector>(idx)) {
+          if (_free_sets.in_free_set(idx, Collector)) {
             HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
             if (result != nullptr) {
               return result;
@@ -386,9 +604,9 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
       if (allow_new_region) {
         // Try to steal an empty region from the mutator view.
-        for (size_t c = _mutator_rightmost + 1; c > _mutator_leftmost; c--) {
+        for (size_t c = _free_sets.right_most(Mutator) + 1; c > _free_sets.left_most(Mutator); c--) {
           size_t idx = c - 1;
-          if (in_set<Mutator>(idx)) {
+          if (_free_sets.in_free_set(idx, Mutator)) {
             ShenandoahHeapRegion* r = _heap->get_region(idx);
             if (can_allocate_from(r)) {
               if (req.is_old()) {
@@ -575,7 +793,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (req.is_mutator_alloc()) {
       assert(req.is_young(), "Mutator allocations always come from young generation.");
       generation->increase_used(size * HeapWordSize);
-      increase_used(size * HeapWordSize);
+      _free_sets.increase_used(Mutator, size * HeapWordSize);
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
 
@@ -595,138 +813,32 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
   }
 
-  if (result == nullptr || has_no_alloc_capacity(r)) {
+  if (result == nullptr || alloc_capacity(r) < PLAB::min_size() * HeapWordSize) {
     // Region cannot afford this and is likely to not afford future allocations. Retire it.
     //
     // While this seems a bit harsh, especially in the case when this large allocation does not
     // fit but the next small one would, we are risking to inflate scan times when lots of
     // almost-full regions precede the fully-empty region where we want to allocate the entire TLAB.
-    // TODO: Record first fully-empty region, and use that for large allocations and/or organize
-    // available free segments within regions for more efficient searches for "good fit".
 
     // Record the remainder as allocation waste
     size_t idx = r->index();
     if (req.is_mutator_alloc()) {
       size_t waste = r->free();
       if (waste > 0) {
-        increase_used(waste);
+        _free_sets.increase_used(Mutator, waste);
         generation->increase_allocated(waste);
         _heap->notify_mutator_alloc_words(waste >> LogHeapWordSize, true);
       }
-      assert(probe_set<Mutator>(idx), "Must be mutator free: " SIZE_FORMAT, idx);
-      remove_from_set<Mutator>(idx);
-      assert(!in_set<Collector>(idx) && !in_set<OldCollector>(idx), "Region cannot be in multiple free sets");
-    } else if (r->free() < PLAB::min_size() * HeapWordSize) {
-      // Permanently retire this region if there's room for a fill object.  By permanently retiring the region,
-      // we simplify future allocation efforts.  Regions with "very limited" available will not be added to 
-      // future collector or old_collector sets.  This allows the sets to be more represented more compactly, with
-      // a smaller delta between leftmost and rightmost indexes.  It reduces the effort required to find a region
-      // with sufficient memory to satisfy future allocation requests.  It reduces the need to rediscover that
-      // this region has insufficient memory, eliminates the need to retire the region multiple times, and
-      // reduces the need to adjust bounds each time a region is retired.
-      size_t waste = r->free();
-      HeapWord* fill_addr = r->top();
-      size_t fill_size = waste / HeapWordSize;
-      if (fill_size >= ShenandoahHeap::min_fill_size()) {
-        ShenandoahHeap::fill_with_object(fill_addr, fill_size);
-        r->set_top(r->end());
-        // Since we have filled the waste with an empty object, account for increased usage
-        _heap->increase_used(waste);
-      } else {
-        // We'll retire the region until the freeset is rebuilt. Since retiement is not permanent, we do not account for waste.
-        waste = 0;
-      }
-      if (probe_set<OldCollector>(idx)) {
-        assert(_heap->mode()->is_generational(), "Old collector free regions only present in generational mode");
-        if (waste > 0) {
-          _heap->old_generation()->increase_used(waste);
-          _heap->card_scan()->register_object(fill_addr);
-        }
-        remove_from_set<OldCollector>(idx);
-        assert(!in_set<Collector>(idx) && !in_set<Mutator>(idx), "Region cannot be in multiple free sets");
-      } else {
-        assert(probe_set<Collector>(idx), "Region that is not mutator free must be collector free or old collector free");
-        if ((waste > 0) && _heap->mode()->is_generational()) {
-          _heap->young_generation()->increase_used(waste);
-        }
-        // This applies to both generational and non-generational mode
-        remove_from_set<Collector>(idx);
-        assert(!in_set<Mutator>(idx) && !in_set<OldCollector>(idx), "Region cannot be in multiple free sets");
-      }
+      assert(_free_sets.membership(idx) == Mutator, "Must be mutator free: " SIZE_FORMAT, idx);
+    } else {
+      assert(_free_sets.membership(idx) == Collector || _free_sets.membership(idx) == OldCollector,
+             "Must be collector or old-collector free: " SIZE_FORMAT, idx);
     }
-    assert_bounds();
+    // This region is no longer considered free (in any set)
+    _free_sets.remove_from_free_sets(idx);
+    _free_sets.assert_bounds();
   }
   return result;
-}
-
-bool ShenandoahFreeSet::touches_bounds(size_t num) const {
-  return (num == _collector_leftmost || num == _collector_rightmost ||
-          num == _old_collector_leftmost || num == _old_collector_rightmost ||
-          num == _mutator_leftmost || num == _mutator_rightmost);
-}
-
-// Recompute bounds is onl
-void ShenandoahFreeSet::recompute_bounds() {
-  // Reset to the most pessimistic case:
-  _mutator_rightmost = _max - 1;
-  _mutator_leftmost = 0;
-  _collector_rightmost = _max - 1;
-  _collector_leftmost = 0;
-  _old_collector_rightmost = _max - 1;
-  _old_collector_leftmost = 0;
-
-  // ...and adjust from there
-  adjust_bounds();
-  if (_heap->mode()->is_generational()) {
-    size_t old_collector_middle = (_old_collector_leftmost + _old_collector_rightmost) / 2;
-    size_t old_collector_available_in_first_half = 0;
-    size_t old_collector_available_in_second_half = 0;
-
-    for (size_t index = _old_collector_leftmost; index < old_collector_middle; index++) {
-      if (in_set<OldCollector>(index)) {
-        ShenandoahHeapRegion* r = _heap->get_region(index);
-        old_collector_available_in_first_half += r->free();
-      }
-    }
-    for (size_t index = old_collector_middle; index <= _old_collector_rightmost; index++) {
-      if (in_set<OldCollector>(index)) {
-        ShenandoahHeapRegion* r = _heap->get_region(index);
-        old_collector_available_in_second_half += r->free();
-      }
-    }
-    // We desire to first consume the sparsely distributed old-collector regions in order that the remaining old-collector
-    // regions are densely packed.  Densely packing old-collector regions reduces the effort to search for a region that
-    // has sufficient memory to satisfy a new allocation request.  Old-collector regions become sparsely distributed following
-    // a Full GC, which tends to slide old-gen regions to the front of the heap rather than allowing them to remain
-    // at the end of the heap where we intend for them to congregate.  In the future, we may modify Full GC so that it
-    // slides old objects to the end of the heap and young objects to the start of the heap. If this is done, we can
-    // always search right to left.
-    _old_collector_search_left_to_right = (old_collector_available_in_second_half > old_collector_available_in_first_half);
-  }
-}
-
-void ShenandoahFreeSet::adjust_bounds() {
-  // Rewind both mutator bounds until the next bit.
-  while (_mutator_leftmost < _max && !in_set<Mutator>(_mutator_leftmost)) {
-    _mutator_leftmost++;
-  }
-  while (_mutator_rightmost > 0 && !in_set<Mutator>(_mutator_rightmost)) {
-    _mutator_rightmost--;
-  }
-  // Rewind both collector bounds until the next bit.
-  while (_collector_leftmost < _max && !in_set<Collector>(_collector_leftmost)) {
-    _collector_leftmost++;
-  }
-  while (_collector_rightmost > 0 && !in_set<Collector>(_collector_rightmost)) {
-    _collector_rightmost--;
-  }
-  // Rewind both old collector bounds until the next bit.
-  while (_old_collector_leftmost < _max && !in_set<OldCollector>(_old_collector_leftmost)) {
-    _old_collector_leftmost++;
-  }
-  while (_old_collector_rightmost > 0 && !in_set<OldCollector>(_old_collector_rightmost)) {
-    _old_collector_rightmost--;
-  }
 }
 
 HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
@@ -741,11 +853,11 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   // Check if there are enough regions left to satisfy allocation.
   if (_heap->mode()->is_generational()) {
     size_t avail_young_regions = generation->adjusted_unaffiliated_regions();
-    if (num > mutator_count() || (num > avail_young_regions)) {
+    if (num > _free_sets.count(Mutator) || (num > avail_young_regions)) {
       return nullptr;
     }
   } else {
-    if (num > mutator_count()) {
+    if (num > _free_sets.count(Mutator)) {
       return nullptr;
     }
   }
@@ -753,18 +865,18 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   // Find the continuous interval of $num regions, starting from $beg and ending in $end,
   // inclusive. Contiguous allocations are biased to the beginning.
 
-  size_t beg = _mutator_leftmost;
+  size_t beg = _free_sets.left_most(Mutator);
   size_t end = beg;
 
   while (true) {
-    if (end >= _max) {
+    if (end >= _free_sets.max()) {
       // Hit the end, goodbye
       return nullptr;
     }
 
     // If regions are not adjacent, then current [beg; end] is useless, and we may fast-forward.
     // If region is not completely free, the current [beg; end] is useless, and we may fast-forward.
-    if (!in_set<Mutator>(end) || !can_allocate_from(_heap->get_region(end))) {
+    if (!_free_sets.in_free_set(end, Mutator) || !can_allocate_from(_heap->get_region(end))) {
       end++;
       beg = end;
       continue;
@@ -818,10 +930,10 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
                         PTR_FORMAT " at transition from FREE to %s",
                         p2i(r->bottom()), p2i(r->end()), p2i(ctx->top_bitmap(r)), req.affiliation_name());
     // While individual regions report their true use, all humongous regions are marked used in the free set.
-    remove_from_set<Mutator>(r->index());
+    _free_sets.remove_from_free_sets(r->index());
   }
   size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
-  increase_used(total_humongous_size);
+  _free_sets.increase_used(Mutator, total_humongous_size);
   if (_heap->mode()->is_generational()) {
     size_t humongous_waste = total_humongous_size - words_size * HeapWordSize;
     _heap->global_generation()->increase_used(words_size * HeapWordSize);
@@ -834,20 +946,13 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
       _heap->old_generation()->increase_humongous_waste(humongous_waste);
     }
   }
-
   if (remainder != 0) {
     // Record this remainder as allocation waste
     size_t waste = ShenandoahHeapRegion::region_size_words() - remainder;
     _heap->notify_mutator_alloc_words(waste, true);
     generation->increase_allocated(waste * HeapWordSize);
   }
-
-  // Allocated at left/rightmost? Move the bounds appropriately.
-  if (beg == _mutator_leftmost || end == _mutator_rightmost) {
-    adjust_bounds();
-  }
-  assert_bounds();
-
+  _free_sets.assert_bounds();
   req.set_actual_size(words_size);
   return _heap->get_region(beg)->bottom();
 }
@@ -857,6 +962,11 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 // concurrent weak root processing is in progress.
 bool ShenandoahFreeSet::can_allocate_from(ShenandoahHeapRegion *r) const {
   return r->is_empty() || (r->is_trash() && !_heap->is_concurrent_weak_root_in_progress());
+}
+
+size_t ShenandoahFreeSet::alloc_capacity(size_t idx) const {
+  ShenandoahHeapRegion* r = _heap->get_region(idx);
+  return alloc_capacity(r);
 }
 
 size_t ShenandoahFreeSet::alloc_capacity(ShenandoahHeapRegion *r) const {
@@ -905,16 +1015,12 @@ void ShenandoahFreeSet::recycle_trash() {
 void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   size_t idx = r->index();
 
-  assert(_mutator_free_bitmap.at(idx), "Should be in mutator view");
+  assert(_free_sets.in_free_set(idx, Mutator), "Should be in mutator view");
   assert(can_allocate_from(r), "Should not be allocated");
 
-  remove_from_set<Mutator>(idx);
-  add_to_set<OldCollector>(idx);
-
   size_t region_capacity = alloc_capacity(r);
-  _capacity -= region_capacity;
-  _old_capacity += region_capacity;
-  assert_bounds();
+  _free_sets.move_to_set(idx, OldCollector, region_capacity);
+  _free_sets.assert_bounds();
 
   // We do not ensure that the region is no longer trash,
   // relying on try_allocate_in(), which always comes next,
@@ -924,14 +1030,12 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
 void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
   size_t idx = r->index();
 
-  assert(_mutator_free_bitmap.at(idx), "Should be in mutator view");
+  assert(_free_sets.in_free_set(idx, Mutator), "Should be in mutator view");
   assert(can_allocate_from(r), "Should not be allocated");
 
-  remove_from_set<Mutator>(idx);
-  add_to_set<Collector>(idx);
-
-  _capacity -= alloc_capacity(r);
-  assert_bounds();
+  size_t region_capacity = alloc_capacity(r);
+  _free_sets.move_to_set(idx, Collector, region_capacity);
+  _free_sets.assert_bounds();
 
   // We do not ensure that the region is no longer trash,
   // relying on try_allocate_in(), which always comes next,
@@ -944,18 +1048,7 @@ void ShenandoahFreeSet::clear() {
 }
 
 void ShenandoahFreeSet::clear_internal() {
-  _mutator_free_bitmap.clear();
-  _collector_free_bitmap.clear();
-  _old_collector_free_bitmap.clear();
-  _mutator_leftmost = _max;
-  _mutator_rightmost = 0;
-  _collector_leftmost = _max;
-  _collector_rightmost = 0;
-  _old_collector_leftmost = _max;
-  _old_collector_rightmost = 0;
-  _capacity = 0;
-  _old_capacity = 0;
-  _used = 0;
+  _free_sets.clear_all();
 }
 
 // This function places all is_old() regions that have allocation capacity into the old_collector set.  It places
@@ -969,23 +1062,19 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity() {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
     if (region->is_alloc_allowed() || region->is_trash()) {
       assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
+      assert(!_free_sets.in_free_set(idx, NotFree), "We are about to add it, it shouldn't be there already");
 
-      // Do not add regions that would surely fail allocation
-      if (has_no_alloc_capacity(region)) continue;
+      // Do not add regions that would almost surely fail allocation
+      if (alloc_capacity(region) < PLAB::min_size() * HeapWordSize) continue;
 
       if (region->is_old()) {
-        _old_capacity += alloc_capacity(region);
-        assert(!in_set<OldCollector>(idx), "We are about to add it, it shouldn't be there already");
-        add_to_set<OldCollector>(idx);
+        _free_sets.make_free(idx, OldCollector, alloc_capacity(region));
         log_debug(gc, free)(
           "  Adding Region " SIZE_FORMAT  " (Free: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s) to old collector set",
           idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
           byte_size_in_proper_unit(region->used()), proper_unit_for_byte_size(region->used()));
-
       } else {
-        _capacity += alloc_capacity(region);
-        assert(!in_set<Mutator>(idx), "We are about to add it, it shouldn't be there already");
-        add_to_set<Mutator>(idx);
+        _free_sets.make_free(idx, Mutator, alloc_capacity(region));
         log_debug(gc, free)(
           "  Adding Region " SIZE_FORMAT " (Free: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s) to mutator set",
           idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
@@ -1030,12 +1119,8 @@ void ShenandoahFreeSet::rebuild() {
   }
   reserve_regions(young_reserve, old_reserve);
 
-  // TODO: bounds have been computed incrementally so we do not NEED to recompute bounds.  However, we currently
-  // rely on recompute_bounds to decide whether old-collector allocations should be performed from left to right
-  // or right to left.  Refactor this code to eliminate redundant computation of bounds and reduce effort required
-  // for deciding direction of old-collector allocations.
-  recompute_bounds();
-  assert_bounds();
+  _free_sets.establish_alloc_bias(OldCollector);
+  _free_sets.assert_bounds();
   log_status();
 }
 
@@ -1045,29 +1130,23 @@ void ShenandoahFreeSet::rebuild() {
 // the collector set is at least to_reserve, and the memory available for allocations within the old collector set
 // is at least to_reserve_old.
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
-  size_t reserved = 0;
   for (size_t idx = _heap->num_regions() - 1; idx > 0; idx--) {
     ShenandoahHeapRegion* r = _heap->get_region(idx);
-    if (_mutator_free_bitmap.at(idx) && (alloc_capacity(r) > 0)) {
-      assert(!r->is_old(), "mutator_is_free regions should not be affiliated OLD");
+    if (_free_sets.in_free_set(idx, Mutator)) {
+      assert (!r->is_old(), "mutator_is_free regions should not be affiliated OLD");
+      size_t ac = alloc_capacity(r);
+      assert (ac > 0, "Membership in free set implies has capacity");
+
       // OLD regions that have available memory are already in the old_collector free set
-      if ((_old_capacity < to_reserve_old) && (r->is_trash() || !r->is_affiliated())) {
-        remove_from_set<Mutator>(idx);
-        add_to_set<OldCollector>(idx);
-        size_t ac = alloc_capacity(r);
-        _capacity -= ac;
-        _old_capacity += ac;
+      if ((_free_sets.capacity_of(OldCollector) < to_reserve_old) && (r->is_trash() || !r->is_affiliated())) {
+        _free_sets.move_to_set(idx, OldCollector, alloc_capacity(r));
         log_debug(gc, free)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
-      } else if (reserved < to_reserve) {
+      } else if (_free_sets.capacity_of(Collector) < to_reserve) {
         // Note: In a previous implementation, regions were only placed into the survivor space (collector_is_free) if
         // they were entirely empty.  I'm not sure I understand the rational for that.  That alternative behavior would
         // tend to mix survivor objects with ephemeral objects, making it more difficult to reclaim the memory for the
         // ephemeral objects.  It also delays aging of regions, causing promotion in place to be delayed.
-        remove_from_set<Mutator>(idx);
-        add_to_set<Collector>(idx);
-        size_t ac = alloc_capacity(r);
-        _capacity -= ac;
-        reserved += ac;
+        _free_sets.move_to_set(idx, Collector, ac);
         log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to collector_free", idx);
       } else {
         // We've satisfied both to_reserve and to_reserved_old
@@ -1093,39 +1172,31 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
-    log_info(gc, free)("FreeSet map legend (see source for unexpected codes: *, $, !, #):\n"
-                       " m:mutator_free c:collector_free C:old_collector_free"
+    log_info(gc, free)("FreeSet map legend:"
+                       " mM:mutator_free cC:collector_free oO:old_collector_free"
                        " h:humongous young H:humongous old ~:retired old _:retired young");
     log_info(gc, free)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocates from %s",
-                       _mutator_leftmost, _mutator_rightmost, _collector_leftmost, _collector_rightmost,
-                       _old_collector_leftmost, _old_collector_rightmost,
-                       _old_collector_search_left_to_right? "left to right": "right to left");
+                       _free_sets.left_most(Mutator), _free_sets.right_most(Mutator),
+                       _free_sets.left_most(Collector), _free_sets.right_most(Collector),
+                       _free_sets.left_most(OldCollector), _free_sets.right_most(OldCollector),
+                       _free_sets.alloc_from_left_bias(OldCollector)? "left to right": "right to left");
+
     for (uint i = 0; i < _heap->num_regions(); i++) {
       ShenandoahHeapRegion *r = _heap->get_region(i);
       uint idx = i % 64;
       if ((i != 0) && (idx == 0)) {
         log_info(gc, free)(" %6u: %s", i-64, buffer);
       }
-      if (in_set<Mutator>(i) && in_set<Collector>(i) && in_set<OldCollector>(i)) {
-        buffer[idx] = '*';
-      } else if (in_set<Mutator>(i) && in_set<Collector>(i)) {
-        assert(!r->is_old(), "Old regions should not be in collector_free set");
-        buffer[idx] = '$';
-      } else if (in_set<Mutator>(i) && in_set<OldCollector>(i)) {
-        // Note that young regions may be in the old_collector_free set.
-        buffer[idx] = '!';
-      } else if (in_set<Collector>(i) && in_set<OldCollector>(i)) {
-        buffer[idx] = '#';
-      } else if (in_set<Mutator>(i)) {
+      if (_free_sets.in_free_set(i, Mutator)) {
         assert(!r->is_old(), "Old regions should not be in mutator_free set");
-        buffer[idx] = 'm';
-      } else if (in_set<Collector>(i)) {
+        buffer[idx] = (alloc_capacity(r) == region_size_bytes)? 'M': 'm';
+      } else if (_free_sets.in_free_set(i, Collector)) {
         assert(!r->is_old(), "Old regions should not be in collector_free set");
-        buffer[idx] = 'c';
-      } else if (in_set<OldCollector>(i)) {
-        buffer[idx] = 'C';
+        buffer[idx] = (alloc_capacity(r) == region_size_bytes)? 'C': 'c';
+      } else if (_free_sets.in_free_set(i, OldCollector)) {
+        buffer[idx] = (alloc_capacity(r) == region_size_bytes)? 'O': 'o';
       } else if (r->is_humongous()) {
         if (r->is_old()) {
           buffer[idx] = 'H';
@@ -1142,7 +1213,6 @@ void ShenandoahFreeSet::log_status() {
           buffer[idx] = '_';
           retired_young += region_size_bytes;
         }
-
       }
     }
     uint remnant = _heap->num_regions() % 64;
@@ -1178,13 +1248,11 @@ void ShenandoahFreeSet::log_status() {
       size_t total_free = 0;
       size_t total_free_ext = 0;
 
-      for (size_t idx = _mutator_leftmost; idx <= _mutator_rightmost; idx++) {
-        if (in_set<Mutator>(idx)) {
+      for (size_t idx = _free_sets.left_most(Mutator); idx <= _free_sets.right_most(Mutator); idx++) {
+        if (_free_sets.in_free_set(idx, Mutator)) {
           ShenandoahHeapRegion *r = _heap->get_region(idx);
           size_t free = alloc_capacity(r);
-
           max = MAX2(max, free);
-
           if (r->is_empty()) {
             total_free_ext += free;
             if (last_idx + 1 == idx) {
@@ -1195,7 +1263,6 @@ void ShenandoahFreeSet::log_status() {
           } else {
             empty_contig = 0;
           }
-
           total_used += r->used();
           total_free += free;
           max_contig = MAX2(max_contig, empty_contig);
@@ -1226,14 +1293,14 @@ void ShenandoahFreeSet::log_status() {
       ls.print(SIZE_FORMAT "%% external, ", frag_ext);
 
       size_t frag_int;
-      if (mutator_count() > 0) {
-        frag_int = (100 * (total_used / mutator_count()) / ShenandoahHeapRegion::region_size_bytes());
+      if (_free_sets.count(Mutator) > 0) {
+        frag_int = (100 * (total_used / _free_sets.count(Mutator)) / ShenandoahHeapRegion::region_size_bytes());
       } else {
         frag_int = 0;
       }
       ls.print(SIZE_FORMAT "%% internal; ", frag_int);
       ls.print("Used: " SIZE_FORMAT "%s, Mutator Free: " SIZE_FORMAT,
-               byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used), mutator_count());
+               byte_size_in_proper_unit(total_used), proper_unit_for_byte_size(total_used), _free_sets.count(Mutator));
     }
 
     {
@@ -1241,8 +1308,8 @@ void ShenandoahFreeSet::log_status() {
       size_t total_free = 0;
       size_t total_used = 0;
 
-      for (size_t idx = _collector_leftmost; idx <= _collector_rightmost; idx++) {
-        if (in_set<Collector>(idx)) {
+      for (size_t idx = _free_sets.left_most(Collector); idx <= _free_sets.right_most(Collector); idx++) {
+        if (_free_sets.in_free_set(idx, Collector)) {
           ShenandoahHeapRegion *r = _heap->get_region(idx);
           size_t free = alloc_capacity(r);
           max = MAX2(max, free);
@@ -1261,8 +1328,8 @@ void ShenandoahFreeSet::log_status() {
       size_t total_free = 0;
       size_t total_used = 0;
 
-      for (size_t idx = _old_collector_leftmost; idx <= _old_collector_rightmost; idx++) {
-        if (in_set<OldCollector>(idx)) {
+      for (size_t idx = _free_sets.left_most(OldCollector); idx <= _free_sets.right_most(OldCollector); idx++) {
+        if (_free_sets.in_free_set(idx, OldCollector)) {
           ShenandoahHeapRegion *r = _heap->get_region(idx);
           size_t free = alloc_capacity(r);
           max = MAX2(max, free);
@@ -1280,7 +1347,7 @@ void ShenandoahFreeSet::log_status() {
 
 HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_region) {
   shenandoah_assert_heaplocked();
-  assert_bounds();
+  _free_sets.assert_bounds();
 
   // Allocation request is known to satisfy all memory budgeting constraints.
   if (req.size() > ShenandoahHeapRegion::humongous_threshold_words()) {
@@ -1308,8 +1375,8 @@ HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_
 size_t ShenandoahFreeSet::unsafe_peek_free() const {
   // Deliberately not locked, this method is unsafe when free set is modified.
 
-  for (size_t index = _mutator_leftmost; index <= _mutator_rightmost; index++) {
-    if (index < _max && in_set<Mutator>(index)) {
+  for (size_t index = _free_sets.left_most(Mutator); index <= _free_sets.right_most(Mutator); index++) {
+    if (index < _free_sets.max() && _free_sets.in_free_set(index, Mutator)) {
       ShenandoahHeapRegion* r = _heap->get_region(index);
       if (r->free() >= MinTLABSize) {
         return r->free();
@@ -1322,16 +1389,24 @@ size_t ShenandoahFreeSet::unsafe_peek_free() const {
 }
 
 void ShenandoahFreeSet::print_on(outputStream* out) const {
-  out->print_cr("Mutator Free Set: " SIZE_FORMAT "", mutator_count());
-  for (size_t index = _mutator_leftmost; index <= _mutator_rightmost; index++) {
-    if (in_set<Mutator>(index)) {
+  out->print_cr("Mutator Free Set: " SIZE_FORMAT "", _free_sets.count(Mutator));
+  for (size_t index = _free_sets.left_most(Mutator); index <= _free_sets.right_most(Mutator); index++) {
+    if (_free_sets.in_free_set(index, Mutator)) {
       _heap->get_region(index)->print_on(out);
     }
   }
-  out->print_cr("Collector Free Set: " SIZE_FORMAT "", collector_count());
-  for (size_t index = _collector_leftmost; index <= _collector_rightmost; index++) {
-    if (in_set<Collector>(index)) {
+  out->print_cr("Collector Free Set: " SIZE_FORMAT "", _free_sets.count(Collector));
+  for (size_t index = _free_sets.left_most(Collector); index <= _free_sets.right_most(Collector); index++) {
+    if (_free_sets.in_free_set(index, Collector)) {
       _heap->get_region(index)->print_on(out);
+    }
+  }
+  if (_heap->mode()->is_generational()) {
+    out->print_cr("Old Collector Free Set: " SIZE_FORMAT "", _free_sets.count(OldCollector));
+    for (size_t index = _free_sets.left_most(OldCollector); index <= _free_sets.right_most(OldCollector); index++) {
+      if (_free_sets.in_free_set(index, OldCollector)) {
+        _heap->get_region(index)->print_on(out);
+      }
     }
   }
 }
@@ -1362,8 +1437,8 @@ double ShenandoahFreeSet::internal_fragmentation() {
   double linear = 0;
   int count = 0;
 
-  for (size_t index = _mutator_leftmost; index <= _mutator_rightmost; index++) {
-    if (in_set<Mutator>(index)) {
+  for (size_t index = _free_sets.left_most(Mutator); index <= _free_sets.right_most(Mutator); index++) {
+    if (_free_sets.in_free_set(index, Mutator)) {
       ShenandoahHeapRegion* r = _heap->get_region(index);
       size_t used = r->used();
       squared += used * used;
@@ -1400,8 +1475,8 @@ double ShenandoahFreeSet::external_fragmentation() {
 
   size_t free = 0;
 
-  for (size_t index = _mutator_leftmost; index <= _mutator_rightmost; index++) {
-    if (in_set<Mutator>(index)) {
+  for (size_t index = _free_sets.left_most(Mutator); index <= _free_sets.right_most(Mutator); index++) {
+    if (_free_sets.in_free_set(index, Mutator)) {
       ShenandoahHeapRegion* r = _heap->get_region(index);
       if (r->is_empty()) {
         free += ShenandoahHeapRegion::region_size_bytes();
@@ -1426,41 +1501,3 @@ double ShenandoahFreeSet::external_fragmentation() {
   }
 }
 
-#ifdef ASSERT
-void ShenandoahFreeSet::assert_bounds() const {
-  // Performance invariants. Failing these would not break the free set, but performance
-  // would suffer.
-  assert (_mutator_leftmost <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, _mutator_leftmost,  _max);
-  assert (_mutator_rightmost < _max, "rightmost in bounds: " SIZE_FORMAT " < " SIZE_FORMAT, _mutator_rightmost, _max);
-
-  assert (_mutator_leftmost == _max || in_set<Mutator>(_mutator_leftmost),  "leftmost region should be free: " SIZE_FORMAT,  _mutator_leftmost);
-  assert (_mutator_rightmost == 0   || in_set<Mutator>(_mutator_rightmost), "rightmost region should be free: " SIZE_FORMAT, _mutator_rightmost);
-
-  size_t beg_off = _mutator_free_bitmap.find_first_set_bit(0);
-  size_t end_off = _mutator_free_bitmap.find_first_set_bit(_mutator_rightmost + 1);
-  assert (beg_off >= _mutator_leftmost, "free regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, _mutator_leftmost);
-  assert (end_off == _max,      "free regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, _mutator_rightmost);
-
-  assert (_collector_leftmost <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, _collector_leftmost,  _max);
-  assert (_collector_rightmost < _max, "rightmost in bounds: " SIZE_FORMAT " < " SIZE_FORMAT, _collector_rightmost, _max);
-
-  assert (_collector_leftmost == _max || in_set<Collector>(_collector_leftmost),  "leftmost region should be free: " SIZE_FORMAT,  _collector_leftmost);
-  assert (_collector_rightmost == 0   || in_set<Collector>(_collector_rightmost), "rightmost region should be free: " SIZE_FORMAT, _collector_rightmost);
-
-  beg_off = _collector_free_bitmap.find_first_set_bit(0);
-  end_off = _collector_free_bitmap.find_first_set_bit(_collector_rightmost + 1);
-  assert (beg_off >= _collector_leftmost, "free regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, _collector_leftmost);
-  assert (end_off == _max,      "free regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, _collector_rightmost);
-
-  assert (_old_collector_leftmost <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, _old_collector_leftmost,  _max);
-  assert (_old_collector_rightmost < _max, "rightmost in bounds: " SIZE_FORMAT " < " SIZE_FORMAT, _old_collector_rightmost, _max);
-
-  assert (_old_collector_leftmost == _max || in_set<OldCollector>(_old_collector_leftmost),  "leftmost region should be free: " SIZE_FORMAT,  _old_collector_leftmost);
-  assert (_old_collector_rightmost == 0   || in_set<OldCollector>(_old_collector_rightmost), "rightmost region should be free: " SIZE_FORMAT, _old_collector_rightmost);
-
-  beg_off = _old_collector_free_bitmap.find_first_set_bit(0);
-  end_off = _old_collector_free_bitmap.find_first_set_bit(_old_collector_rightmost + 1);
-  assert (beg_off >= _old_collector_leftmost, "free regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, _old_collector_leftmost);
-  assert (end_off == _max,      "free regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, _old_collector_rightmost);
-}
-#endif
