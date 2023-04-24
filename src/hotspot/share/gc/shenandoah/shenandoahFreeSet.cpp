@@ -90,7 +90,7 @@ void ShenandoahSetsOfFree::increase_used(MemoryReserve which_set, size_t bytes) 
           "Must not use (" SIZE_FORMAT ") more than capacity (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
           _used_by[which_set], _capacity_of[which_set], bytes);
 }
-                       
+
 inline void ShenandoahSetsOfFree::shrink_bounds_if_touched(MemoryReserve set, size_t idx) {
   if (idx = _left_mosts[set]) {
     while ((_left_mosts[set] < _max) && !in_free_set(_left_mosts[set], set)) {
