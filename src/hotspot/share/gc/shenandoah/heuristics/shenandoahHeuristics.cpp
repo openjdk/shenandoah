@@ -102,125 +102,125 @@ static int compare_by_aged_live(AgedRegionData a, AgedRegionData b) {
 
 // Returns bytes of old-gen memory consumed by selected aged regions
 size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
+  assert(heap->mode()->is_generational(), "Only in generational mode");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* const ctx = heap->marking_context();
   size_t old_consumed = 0;
   size_t promo_potential = 0;
   size_t anticipated_promote_in_place_live = 0;
-  if (heap->mode()->is_generational()) {
-    heap->clear_promotion_in_place_potential();
-    heap->clear_promotion_potential();
-    size_t candidates = 0;
-    size_t candidates_live = 0;
-    size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
-    size_t promote_in_place_regions = 0;
-    size_t promote_in_place_live = 0;
-    size_t promote_in_place_pad = 0;
-    size_t anticipated_candidates = 0;
-    size_t anticipated_promote_in_place_regions = 0;
 
-    // Sort the promotion-eligible regions according to live-data-bytes so that we can first reclaim regions that require
-    // less evacuation effort.  This prioritizes garbage first, expanding the allocation pool before we begin the work of
-    // reclaiming regions that require more effort.
-    AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
-    for (size_t i = 0; i < num_regions; i++) {
-      ShenandoahHeapRegion* r = heap->get_region(i);
-      if (r->is_empty() || !r->has_live() || !r->is_young() || !r->is_regular()) {
-        continue;
-      }
-      if (r->age() >= InitialTenuringThreshold) {
-        r->save_top_before_promote();
-        if ((r->garbage() < old_garbage_threshold)) {
-          HeapWord* tams = ctx->top_at_mark_start(r);
-          HeapWord* original_top = r->top();
-          if (tams == original_top) {
-            // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,
-            // newly allocated objects will not be parseable when promote in place tries to register them.  Furthermore, any
-            // new allocations would not necessarily be eligible for promotion.  This addresses both issues.
-            size_t remnant_size = r->free() / HeapWordSize;
-            if (remnant_size > ShenandoahHeap::min_fill_size()) {
-              ShenandoahHeap::fill_with_object(original_top, remnant_size);
-              r->set_top(r->end());
-              promote_in_place_pad += remnant_size * HeapWordSize;
-            } else {
-              // Since the remnant is so small that it cannot be filled, we don't have to worry about any accidental
-              // allocations occuring within this region before the region is promoted in place.
-            }
-            promote_in_place_regions++;
-            promote_in_place_live += r->get_live_data_bytes();
+  heap->clear_promotion_in_place_potential();
+  heap->clear_promotion_potential();
+  size_t candidates = 0;
+  size_t candidates_live = 0;
+  size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
+  size_t promote_in_place_regions = 0;
+  size_t promote_in_place_live = 0;
+  size_t promote_in_place_pad = 0;
+  size_t anticipated_candidates = 0;
+  size_t anticipated_promote_in_place_regions = 0;
+
+  // Sort the promotion-eligible regions according to live-data-bytes so that we can first reclaim regions that require
+  // less evacuation effort.  This prioritizes garbage first, expanding the allocation pool before we begin the work of
+  // reclaiming regions that require more effort.
+  AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
+  for (size_t i = 0; i < num_regions; i++) {
+    ShenandoahHeapRegion* r = heap->get_region(i);
+    if (r->is_empty() || !r->has_live() || !r->is_young() || !r->is_regular()) {
+      continue;
+    }
+    if (r->age() >= InitialTenuringThreshold) {
+      r->save_top_before_promote();
+      if ((r->garbage() < old_garbage_threshold)) {
+        HeapWord* tams = ctx->top_at_mark_start(r);
+        HeapWord* original_top = r->top();
+        if (tams == original_top) {
+          // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,
+          // newly allocated objects will not be parseable when promote in place tries to register them.  Furthermore, any
+          // new allocations would not necessarily be eligible for promotion.  This addresses both issues.
+          size_t remnant_size = r->free() / HeapWordSize;
+          if (remnant_size > ShenandoahHeap::min_fill_size()) {
+            ShenandoahHeap::fill_with_object(original_top, remnant_size);
+            r->set_top(r->end());
+            promote_in_place_pad += remnant_size * HeapWordSize;
+          } else {
+            // Since the remnant is so small that it cannot be filled, we don't have to worry about any accidental
+            // allocations occuring within this region before the region is promoted in place.
           }
-          // Else, we do not promote this region (either in place or by copy) because it has received new allocations.
-
-          // During evacuation, we exclude from promotion regions for which age > tenure threshold, garbage < garbage-threshold,
-          //  and get_top_before_promote() != tams
-        } else {
-          // After sorting and selecting best candidates below, we may decide to exclude this promotion-eligible region
-          // from the current collection sets.  If this happens, we will consider this region as part of the anticipated
-          // promotion potential for the next GC pass.
-          size_t live_data = r->get_live_data_bytes();
-          candidates_live += live_data;
-          sorted_regions[candidates]._region = r;
-          sorted_regions[candidates++]._live_data = live_data;
+          promote_in_place_regions++;
+          promote_in_place_live += r->get_live_data_bytes();
         }
+        // Else, we do not promote this region (either in place or by copy) because it has received new allocations.
+        
+        // During evacuation, we exclude from promotion regions for which age > tenure threshold, garbage < garbage-threshold,
+        //  and get_top_before_promote() != tams
       } else {
-        // We only anticipate to promote regular regions if garbage() is above threshold.  Tenure-aged regions with less
-        // garbage are promoted in place.  These take a different path to old-gen.  Note that certain regions that are
-        // excluded from anticipated promotion because their garbage content is too low (causing us to anticipate that
-        // the region would be promoted in place) may be eligible for evacuation promotion by the time promotion takes
-        // place during a subsequent GC pass because more garbage is found within the region between now and then.  This
-        // should not happen if we are properly adapting the tenure age.  The theory behind adaptive tenuring threshold
-        // is to choose the youngest age that demonstrates no "significant" futher loss of population since the previous
-        // age.  If not this, we expect the tenure age to demonstrate linear population decay for at least two population
-        // samples, whereas we expect to observe exponetial population decay for ages younger than the tenure age.
-        //
-        // In the case that certain regions which were anticipated to be promoted in place need to be promoted by
-        // evacuation, it may be the case that there is not sufficient reserve within old-gen to hold evacuation of
-        // these regions.  The likely outcome is that these regions will not be selected for evacuation or promotion
-        // in the current cycle and we will anticipate that they will be promoted in the next cycle.  This will cause
-        // us to reserve more old-gen memory so that these objects can be promoted in the subsequent cycle.
-        //
-        // TODO:
-        //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
-        //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
-        //   the tenure age can be increased.
-        if (r->age() + 1 == InitialTenuringThreshold) {
-          if (r->garbage() >= old_garbage_threshold) {
-            anticipated_candidates++;
-            promo_potential += r->get_live_data_bytes();
-          }
-          else {
-            anticipated_promote_in_place_regions++;
-            anticipated_promote_in_place_live += r->get_live_data_bytes();
-          }
+        // After sorting and selecting best candidates below, we may decide to exclude this promotion-eligible region
+        // from the current collection sets.  If this happens, we will consider this region as part of the anticipated
+        // promotion potential for the next GC pass.
+        size_t live_data = r->get_live_data_bytes();
+        candidates_live += live_data;
+        sorted_regions[candidates]._region = r;
+        sorted_regions[candidates++]._live_data = live_data;
+      }
+    } else {
+      // We only anticipate to promote regular regions if garbage() is above threshold.  Tenure-aged regions with less
+      // garbage are promoted in place.  These take a different path to old-gen.  Note that certain regions that are
+      // excluded from anticipated promotion because their garbage content is too low (causing us to anticipate that
+      // the region would be promoted in place) may be eligible for evacuation promotion by the time promotion takes
+      // place during a subsequent GC pass because more garbage is found within the region between now and then.  This
+      // should not happen if we are properly adapting the tenure age.  The theory behind adaptive tenuring threshold
+      // is to choose the youngest age that demonstrates no "significant" futher loss of population since the previous
+      // age.  If not this, we expect the tenure age to demonstrate linear population decay for at least two population
+      // samples, whereas we expect to observe exponetial population decay for ages younger than the tenure age.
+      //
+      // In the case that certain regions which were anticipated to be promoted in place need to be promoted by
+      // evacuation, it may be the case that there is not sufficient reserve within old-gen to hold evacuation of
+      // these regions.  The likely outcome is that these regions will not be selected for evacuation or promotion
+      // in the current cycle and we will anticipate that they will be promoted in the next cycle.  This will cause
+      // us to reserve more old-gen memory so that these objects can be promoted in the subsequent cycle.
+      //
+      // TODO:
+      //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
+      //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
+      //   the tenure age can be increased.
+      if (r->age() + 1 == InitialTenuringThreshold) {
+        if (r->garbage() >= old_garbage_threshold) {
+          anticipated_candidates++;
+          promo_potential += r->get_live_data_bytes();
+        }
+        else {
+          anticipated_promote_in_place_regions++;
+          anticipated_promote_in_place_live += r->get_live_data_bytes();
         }
       }
-      // Note that we keep going even if one region is excluded from selection.
-      // Subsequent regions may be selected if they have smaller live data.
     }
-    // Sort in increasing order according to live data bytes.  Note that candidates represents the number of regions
-    // that qualify to be promoted by evacuation.
-    if (candidates > 0) {
-      QuickSort::sort<AgedRegionData>(sorted_regions, candidates, compare_by_aged_live, false);
-      for (size_t i = 0; i < candidates; i++) {
-        size_t region_live_data = sorted_regions[i]._live_data;
-        size_t promotion_need = (size_t) (region_live_data * ShenandoahPromoEvacWaste);
-        if (old_consumed + promotion_need <= old_available) {
-          ShenandoahHeapRegion* region = sorted_regions[i]._region;
-          old_consumed += promotion_need;
-          preselected_regions[region->index()] = true;
-        } else {
-          // We rejected this promotable region from the collection set because we had no room to hold its copy.
-          // Add this region to promo potential for next GC.
-          promo_potential += region_live_data;
-        }
-        // We keep going even if one region is excluded from selection because we need to accumulate all eligible
-        // regions that are not preselected into promo_potential
-      }
-    }
-    heap->set_pad_for_promote_in_place(promote_in_place_pad);
-    heap->set_promotion_potential(promo_potential);
-    heap->set_promotion_in_place_potential(anticipated_promote_in_place_live);
+    // Note that we keep going even if one region is excluded from selection.
+    // Subsequent regions may be selected if they have smaller live data.
   }
+  // Sort in increasing order according to live data bytes.  Note that candidates represents the number of regions
+  // that qualify to be promoted by evacuation.
+  if (candidates > 0) {
+    QuickSort::sort<AgedRegionData>(sorted_regions, candidates, compare_by_aged_live, false);
+    for (size_t i = 0; i < candidates; i++) {
+      size_t region_live_data = sorted_regions[i]._live_data;
+      size_t promotion_need = (size_t) (region_live_data * ShenandoahPromoEvacWaste);
+      if (old_consumed + promotion_need <= old_available) {
+        ShenandoahHeapRegion* region = sorted_regions[i]._region;
+        old_consumed += promotion_need;
+        preselected_regions[region->index()] = true;
+      } else {
+        // We rejected this promotable region from the collection set because we had no room to hold its copy.
+        // Add this region to promo potential for next GC.
+        promo_potential += region_live_data;
+      }
+      // We keep going even if one region is excluded from selection because we need to accumulate all eligible
+      // regions that are not preselected into promo_potential
+    }
+  }
+  heap->set_pad_for_promote_in_place(promote_in_place_pad);
+  heap->set_promotion_potential(promo_potential);
+  heap->set_promotion_in_place_potential(anticipated_promote_in_place_live);
   return old_consumed;
 }
 
