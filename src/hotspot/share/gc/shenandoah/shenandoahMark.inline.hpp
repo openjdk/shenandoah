@@ -57,7 +57,7 @@ void ShenandoahMark::dedup_string(oop obj, StringDedup::Requests* const req) {
   }
 }
 
-template <class T, StringDedupMode STRING_DEDUP>
+template <class T, ShenandoahGenerationType GENERATION, StringDedupMode STRING_DEDUP>
 void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task, uint worker_id) {
   oop obj = task->obj();
 
@@ -99,7 +99,7 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
     // Avoid double-counting objects that are visited twice due to upgrade
     // from final- to strong mark.
     if (task->count_liveness()) {
-      count_liveness(live_data, obj, worker_id);
+      count_liveness<GENERATION>(live_data, obj, worker_id);
     }
   } else {
     // Case 4: Array chunk, has sensible chunk id. Process it.
@@ -114,6 +114,7 @@ inline AgeTable* ShenandoahMark::get_local_age_table(uint worker_id) const {
 }
 
 
+template <ShenandoahGenerationType GENERATION>
 inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, uint worker_id) {
   const ShenandoahHeap* const heap = ShenandoahHeap::heap();
   const size_t region_idx = heap->heap_region_index_containing(obj);
@@ -131,7 +132,8 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   // them age 1 objects, and so forth. However, I wonder if this may throw off degenerate and full
   // collections, so I will hold off on this for now.
 
-  if (region->is_young()) {
+  if (GENERATION == YOUNG) {
+    assert(region->is_young(), "Error");
     // age census count
     uint age = ShenandoahHeap::get_object_age(obj);
     get_local_age_table(worker_id)->add(age, size);

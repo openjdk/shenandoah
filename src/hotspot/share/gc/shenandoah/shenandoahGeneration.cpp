@@ -803,9 +803,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
 
-    // Age table updates
-    heap->update_epoch();
-
     collection_set->clear();
     ShenandoahHeapLocker locker(heap->lock());
     if (heap->mode()->is_generational()) {
@@ -822,6 +819,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
       // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
       // GC is evacuating and updating references.
+
+      // Age table updates
+      heap->update_epoch();
 
       // Budgeting parameters to compute_evacuation_budgets are passed by reference.
       compute_evacuation_budgets(heap, preselected_regions, collection_set, consumed_by_advance_promotion);
