@@ -38,6 +38,8 @@ enum MemoryReserve : uint8_t {
 };
 
 class ShenandoahSetsOfFree {
+  friend class ShenandoahFreeSet;
+
 private:
   size_t _max;
   ShenandoahFreeSet* _free_set;

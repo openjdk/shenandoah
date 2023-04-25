@@ -602,6 +602,13 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       // promotions, so we already have an assurance that any additional memory set aside for old-gen will be used
       // only for old-gen evacuations.
 
+      // Also TODO:
+      // if (GC is idle (out of cycle) and mutator allocation fails and there is memory reserved in Collector
+      // or OldCollector sets, transfer a region of memory so that we can satisfy the allocation request, and
+      // immediately trigger the start of GC.  Is better to satisfy the allocation than to trigger out-of-cycle
+      // allocation failure (even if this means we have a little less memory to handle evacuations during the
+      // subsequent GC pass).
+
       if (allow_new_region) {
         // Try to steal an empty region from the mutator view.
         for (size_t c = _free_sets.right_most(Mutator) + 1; c > _free_sets.left_most(Mutator); c--) {
@@ -1048,7 +1055,7 @@ void ShenandoahFreeSet::clear() {
 }
 
 void ShenandoahFreeSet::clear_internal() {
-  _free_sets.clear_all();
+  _free_sets.clear_internal();
 }
 
 // This function places all is_old() regions that have allocation capacity into the old_collector set.  It places
@@ -1062,7 +1069,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity() {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
     if (region->is_alloc_allowed() || region->is_trash()) {
       assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
-      assert(!_free_sets.in_free_set(idx, NotFree), "We are about to add it, it shouldn't be there already");
+      assert(_free_sets.in_free_set(idx, NotFree), "We are about to make region free; it should not be free already");
 
       // Do not add regions that would almost surely fail allocation
       if (alloc_capacity(region) < PLAB::min_size() * HeapWordSize) continue;
