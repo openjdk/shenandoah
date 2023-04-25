@@ -792,7 +792,9 @@ void ShenandoahHeap::decrease_used(ShenandoahGeneration* generation, size_t byte
 void ShenandoahHeap::notify_mutator_alloc_words(size_t words, size_t waste) {
   if (ShenandoahPacing) {
     control_thread()->pacing_notify_alloc(words);
-    pacer()->claim_for_alloc(waste, true);
+    if (waste > 0) {
+      pacer()->claim_for_alloc(waste, true);
+    }
   }
 }
 
