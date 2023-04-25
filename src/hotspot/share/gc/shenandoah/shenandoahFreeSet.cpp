@@ -92,7 +92,7 @@ void ShenandoahSetsOfFree::increase_used(MemoryReserve which_set, size_t bytes) 
 }
 
 inline void ShenandoahSetsOfFree::shrink_bounds_if_touched(MemoryReserve set, size_t idx) {
-  if (idx = _left_mosts[set]) {
+  if (idx == _left_mosts[set]) {
     while ((_left_mosts[set] < _max) && !in_free_set(_left_mosts[set], set)) {
       _left_mosts[set]++;
     }
@@ -157,11 +157,19 @@ void ShenandoahSetsOfFree::make_free(size_t idx, MemoryReserve which_set, size_t
 
 void ShenandoahSetsOfFree::move_to_set(size_t idx, MemoryReserve new_set, size_t region_capacity) {
   shenandoah_assert_heaplocked();
-  assert (region_capacity == _region_size_bytes, "Only move entirely empty regions");
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
+  assert ((new_set > NotFree) && (new_set < NumFreeSets), "New set must be valid");
   MemoryReserve orig_set = _membership[idx];
   assert ((orig_set > NotFree) && (orig_set < NumFreeSets), "Cannot move free unless already free");
-  assert ((new_set > NotFree) && (new_set < NumFreeSets), "New set must be valid");
+  // Expected transitions:
+  //  During rebuild: Mutator => Collector
+  //                  Mutator empty => Collector
+  //  During flip_to_gc:
+  //                  Mutator empty => Collector
+  //                  Mutator empty => Old Collector
+  assert (((region_capacity < _region_size_bytes) && (orig_set == Mutator) && (new_set == Collector)) ||
+	  ((region_capacity == _region_size_bytes) && (orig_set == Mutator) && (new_set == Collector || new_set == OldCollector)),
+	  "Unexpected movement between sets");
 
   _membership[idx] = new_set;
   _capacity_of[orig_set] -= region_capacity;
@@ -316,7 +324,7 @@ void ShenandoahSetsOfFree::assert_bounds() {
         if (is_empty && (i < empty_left_mosts[set])) {
           empty_left_mosts[set] = i;
         }
-        if (i > right_mosts[i]) {
+        if (i > right_mosts[set]) {
           right_mosts[set] = i;
         }
         if (is_empty && (i > empty_right_mosts[set])) {
@@ -1180,8 +1188,8 @@ void ShenandoahFreeSet::log_status() {
       buffer[i] = '\0';
     }
     log_info(gc, free)("FreeSet map legend:"
-                       " mM:mutator_free cC:collector_free oO:old_collector_free"
-                       " h:humongous young H:humongous old ~:retired old _:retired young");
+                       " M:mutator_free C:collector_free O:old_collector_free"
+                       " H:humongous ~:retired old _:retired young");
     log_info(gc, free)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocates from %s",

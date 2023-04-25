@@ -93,13 +93,11 @@ public:
   inline void increase_used(MemoryReserve which_set, size_t bytes);
 
   inline size_t capacity_of(MemoryReserve which_set) const {
-    shenandoah_assert_heaplocked();
     assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
     return _capacity_of[which_set];
   }
 
   inline size_t used_by(MemoryReserve which_set) const {
-    shenandoah_assert_heaplocked();
     assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
     return _used_by[which_set];
   }
