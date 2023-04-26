@@ -297,15 +297,16 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t unfragmented = 0;
 
   for (size_t i = 0; i < cand_idx; i++) {
-    size_t region_garbage = candidates[i]._region->garbage();
     size_t live = candidates[i]._u._live_data;
     if (live > live_threshold) {
       // Candidates are sorted in increasing order of live data, so no regions after this will be below the threshold.
       _last_old_collection_candidate = (uint)i;
       break;
     }
+    size_t region_garbage = candidates[i]._region->garbage();
+    size_t region_free = candidates[i]._region->free();
     candidates_garbage += region_garbage;
-    unfragmented += unused;
+    unfragmented += region_free;
   }
 
   // Note that we do not coalesce and fill occupied humongous regions
