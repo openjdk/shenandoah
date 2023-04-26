@@ -932,7 +932,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
     r->set_affiliation(req.affiliation());
     r->set_top(r->bottom() + used_words);
-y
+
     // While individual regions report their true use, all humongous regions are marked used in the free set.
     _free_sets.remove_from_free_sets(r->index());
   }
