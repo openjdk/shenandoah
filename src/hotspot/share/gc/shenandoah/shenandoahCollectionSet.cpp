@@ -195,8 +195,6 @@ void ShenandoahCollectionSet::print_on(outputStream* out) const {
                 byte_size_in_proper_unit(live()),    proper_unit_for_byte_size(live()),
                 byte_size_in_proper_unit(used()),    proper_unit_for_byte_size(used()));
 
-#ifdef ASSERT
-  // If Assertions are on, we'll dump each region selected for the collection set.  Otherwise, too much detail.
   debug_only(size_t regions = 0;)
   for (size_t index = 0; index < _heap->num_regions(); index ++) {
     if (is_in(index)) {
@@ -205,5 +203,4 @@ void ShenandoahCollectionSet::print_on(outputStream* out) const {
     }
   }
   assert(regions == count(), "Must match");
-#endif
 }
