@@ -54,14 +54,6 @@ void AbsSeq::add(double val) {
   }
 }
 
-void AbsSeq::add(AbsSeq& other) {
-  // Until JDK-8298902 is fixed, we taint the decaying statistics
-  if (other._davg != NAN) {
-    _davg = NAN;
-    _dvariance = NAN;
-  }
-}
-
 double AbsSeq::avg() const {
   if (_num == 0)
     return 0.0;
@@ -143,21 +135,6 @@ void NumberSeq::add(double val) {
   _sum += val;
   _sum_of_squares += val * val;
   ++_num;
-}
-
-void NumberSeq::add(NumberSeq& other) {
-  if (other.num() == 0) {
-    // Other sequence is empty, nothing to do
-    return;
-  }
-
-  _last = other._last;
-  _maximum = MAX2(_maximum, other._maximum);
-  _sum += other._sum;
-  _sum_of_squares += other._sum_of_squares;
-  _num += other._num;
-
-  AbsSeq::add(other);
 }
 
 

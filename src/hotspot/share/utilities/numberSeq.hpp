@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,7 +64,6 @@ public:
 
   virtual void add(double val); // adds a new element to the sequence
   void add(unsigned val) { add((double) val); }
-  void add(AbsSeq& other);
   virtual double maximum() const = 0; // maximum element in the sequence
   virtual double last() const = 0; // last element added in the sequence
 
@@ -98,7 +97,6 @@ public:
   NumberSeq(double alpha = DEFAULT_ALPHA_VALUE);
 
   virtual void add(double val);
-  void add(NumberSeq& other);
   virtual double maximum() const { return _maximum; }
   virtual double last() const { return _last; }
 
@@ -123,7 +121,6 @@ public:
                double alpha = DEFAULT_ALPHA_VALUE);
   ~TruncatedSeq();
   virtual void add(double val);
-  // TODO: add(TruncatedSeq& other)?
   virtual double maximum() const;
   virtual double last() const; // the last value added to the sequence
 

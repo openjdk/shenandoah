@@ -122,6 +122,11 @@ double HdrSeq::percentile(double level) const {
 }
 
 void HdrSeq::add(HdrSeq& other) {
+  if (other.num() == 0) {
+    // Other sequence is empty, return
+    return;
+  }
+
   for (int mag = 0; mag < MagBuckets; mag++) {
     int* other_bucket = other._hdr[mag];
     if (other_bucket == nullptr) {
@@ -129,21 +134,34 @@ void HdrSeq::add(HdrSeq& other) {
       continue;
     }
     int* bucket = _hdr[mag];
-    if (bucket == nullptr) {
+    if (bucket != nullptr) {
+      // Add into our bucket
+      for (int val = 0; val < ValBuckets; val++) {
+        bucket[val] += other_bucket[val];
+      }
+    } else {
       // Create our bucket and copy the contents over
       bucket = NEW_C_HEAP_ARRAY(int, ValBuckets, mtInternal);
       for (int val = 0; val < ValBuckets; val++) {
         bucket[val] = other_bucket[val];
       }
       _hdr[mag] = bucket;
-    } else {
-      // Add into our bucket
-      for (int val = 0; val < ValBuckets; val++) {
-        bucket[val] += other_bucket[val];
-      }
     }
   }
-  NumberSeq::add(other);
+
+  // This is a hacky way to only update the fields we want.
+  // This inlines NumberSeq code without going into AbsSeq and
+  // dealing with decayed average/variance, which we do not
+  // know how to compute yet.
+  _last = other._last;
+  _maximum = MAX2(_maximum, other._maximum);
+  _sum += other._sum;
+  _sum_of_squares += other._sum_of_squares;
+  _num += other._num;
+
+  // Until JDK-8298902 is fixed, we taint the decaying statistics
+  _davg = NAN;
+  _dvariance = NAN;
 }
 
 void HdrSeq::clear() {
