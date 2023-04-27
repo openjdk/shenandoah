@@ -217,12 +217,8 @@ inline size_t ShenandoahSetsOfFree::right_most(MemoryReserve which_set) const {
   shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   size_t idx = _right_mosts[which_set];
-  if ((idx == 0) && (_membership[idx] != which_set)) {
-    return _max;
-  } else {
-    assert (in_free_set(idx, which_set), "right-most region must be free");
-    return idx;
-  }
+  assert ((_left_mosts[which_set] == _max) || in_free_set(idx, which_set), "right-most region must be free");
+  return idx;
 }
 
 size_t ShenandoahSetsOfFree::left_most_empty(MemoryReserve which_set) {
@@ -250,7 +246,7 @@ inline size_t ShenandoahSetsOfFree::right_most_empty(MemoryReserve which_set) {
   }
   _left_mosts_empty[which_set] = _max;
   _right_mosts_empty[which_set] = 0;
-  return _max;
+  return 0;
 }
 
 inline bool ShenandoahSetsOfFree::alloc_from_left_bias(MemoryReserve which_set) {
@@ -341,7 +337,7 @@ void ShenandoahSetsOfFree::assert_bounds() {
 
   // Performance invariants. Failing these would not break the free set, but performance would suffer.
   assert (left_most(Mutator) <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, left_most(Mutator),  _max);
-  assert (right_most(Mutator) <= _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(Mutator),  _max);
+  assert (right_most(Mutator) < _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(Mutator),  _max);
 
   assert (left_most(Mutator) == _max || in_free_set(left_most(Mutator), Mutator),
           "leftmost region should be free: " SIZE_FORMAT,  left_most(Mutator));
@@ -359,13 +355,13 @@ void ShenandoahSetsOfFree::assert_bounds() {
   beg_off = empty_left_mosts[Mutator];
   end_off = empty_right_mosts[Mutator];
   assert (beg_off >= left_most_empty(Mutator),
-          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(Mutator));
+          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most_empty(Mutator));
   assert (end_off <= right_most_empty(Mutator),
-          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(Mutator));
+          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most_empty(Mutator));
 
   // Performance invariants. Failing these would not break the free set, but performance would suffer.
   assert (left_most(Collector) <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, left_most(Collector),  _max);
-  assert (right_most(Collector) <= _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(Collector),  _max);
+  assert (right_most(Collector) < _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(Collector),  _max);
 
   assert (left_most(Collector) == _max || in_free_set(left_most(Collector), Collector),
           "leftmost region should be free: " SIZE_FORMAT,  left_most(Collector));
@@ -383,13 +379,13 @@ void ShenandoahSetsOfFree::assert_bounds() {
   beg_off = empty_left_mosts[Collector];
   end_off = empty_right_mosts[Collector];
   assert (beg_off >= left_most_empty(Collector),
-          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(Collector));
+          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most_empty(Collector));
   assert (end_off <= right_most_empty(Collector),
-          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(Collector));
+          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most_empty(Collector));
 
   // Performance invariants. Failing these would not break the free set, but performance would suffer.
   assert (left_most(OldCollector) <= _max, "leftmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, left_most(OldCollector),  _max);
-  assert (right_most(OldCollector) <= _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(OldCollector),  _max);
+  assert (right_most(OldCollector) < _max, "rightmost in bounds: "  SIZE_FORMAT " < " SIZE_FORMAT, right_most(OldCollector),  _max);
 
   assert (left_most(OldCollector) == _max || in_free_set(left_most(OldCollector), OldCollector),
           "leftmost region should be free: " SIZE_FORMAT,  left_most(OldCollector));
@@ -407,9 +403,9 @@ void ShenandoahSetsOfFree::assert_bounds() {
   beg_off = empty_left_mosts[OldCollector];
   end_off = empty_right_mosts[OldCollector];
   assert (beg_off >= left_most_empty(OldCollector),
-          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most(OldCollector));
+          "free empty regions before the leftmost: " SIZE_FORMAT ", bound " SIZE_FORMAT, beg_off, left_most_empty(OldCollector));
   assert (end_off <= right_most_empty(OldCollector),
-          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most(OldCollector));
+          "free empty regions past the rightmost: " SIZE_FORMAT ", bound " SIZE_FORMAT,  end_off, right_most_empty(OldCollector));
 }
 #endif
 
@@ -619,7 +615,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
       if (allow_new_region) {
         // Try to steal an empty region from the mutator view.
-        for (size_t c = _free_sets.right_most(Mutator) + 1; c > _free_sets.left_most(Mutator); c--) {
+        for (size_t c = _free_sets.right_most_empty(Mutator) + 1; c > _free_sets.left_most_empty(Mutator); c--) {
           size_t idx = c - 1;
           if (_free_sets.in_free_set(idx, Mutator)) {
             ShenandoahHeapRegion* r = _heap->get_region(idx);
