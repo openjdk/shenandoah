@@ -149,8 +149,10 @@ void HdrSeq::add(HdrSeq& other) {
 void HdrSeq::clear() {
   for (int mag = 0; mag < MagBuckets; mag++) {
     int* bucket = _hdr[mag];
-    for (int c = 0; c < ValBuckets; c++) {
-      bucket[c] = 0;
+    if (bucket != nullptr) {
+      for (int c = 0; c < ValBuckets; c++) {
+        bucket[c] = 0;
+      }
     }
   }
 }

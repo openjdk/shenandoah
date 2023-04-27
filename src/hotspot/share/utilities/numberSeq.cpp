@@ -55,9 +55,11 @@ void AbsSeq::add(double val) {
 }
 
 void AbsSeq::add(AbsSeq& other) {
-  // TODO: Prove these actually work...
-  _davg = pow(_alpha, _num) * _davg + other._davg;
-  _dvariance = sqrt(_dvariance*_dvariance + other._dvariance*other._dvariance);
+  // Until JDK-8298902 is fixed, we taint the decaying statistics
+  if (other._davg != NAN) {
+    _davg = NAN;
+    _dvariance = NAN;
+  }
 }
 
 double AbsSeq::avg() const {

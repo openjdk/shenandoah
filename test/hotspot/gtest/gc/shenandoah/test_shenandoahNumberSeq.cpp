@@ -127,6 +127,8 @@ TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
   }
   EXPECT_NEAR(merged.avg(), seq3.avg(), err);
   EXPECT_NEAR(merged.sd(),  seq3.sd(),  err);
-  EXPECT_NEAR(merged.davg(), seq3.davg(), err);
-  EXPECT_NEAR(merged.dvariance(), seq3.dvariance(), err);
+
+  // These are not implemented
+  EXPECT_TRUE(isnan(merged.davg()));
+  EXPECT_TRUE(isnan(merged.dvariance()));
 }
