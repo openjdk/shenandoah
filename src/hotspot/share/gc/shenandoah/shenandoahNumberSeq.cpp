@@ -165,6 +165,7 @@ void HdrSeq::add(HdrSeq& other) {
 }
 
 void HdrSeq::clear() {
+  // Clear the storage
   for (int mag = 0; mag < MagBuckets; mag++) {
     int* bucket = _hdr[mag];
     if (bucket != nullptr) {
@@ -173,6 +174,15 @@ void HdrSeq::clear() {
       }
     }
   }
+
+  // Clear other fields too
+  _last = 0;
+  _maximum = 0;
+  _sum = 0;
+  _sum_of_squares = 0;
+  _num = 0;
+  _davg = 0;
+  _dvariance = 0;
 }
 
 BinaryMagnitudeSeq::BinaryMagnitudeSeq() {
