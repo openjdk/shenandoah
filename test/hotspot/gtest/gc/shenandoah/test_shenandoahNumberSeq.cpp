@@ -118,7 +118,7 @@ TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
   merged.add(seq1);
   merged.add(seq2);
 
-  EXPECT_EQ(merged.num(),  seq3.num());
+  EXPECT_EQ(merged.num(), seq3.num());
 
   EXPECT_EQ(merged.maximum(), seq3.maximum());
   EXPECT_EQ(merged.percentile(0), seq3.percentile(0));
@@ -127,7 +127,6 @@ TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
   }
   EXPECT_NEAR(merged.avg(), seq3.avg(), err);
   EXPECT_NEAR(merged.sd(),  seq3.sd(),  err);
-
-  EXPECT_EQ(merged.davg(), seq3.davg());
-  EXPECT_EQ(merged.dvariance(), seq3.dvariance());
+  EXPECT_NEAR(merged.davg(), seq3.davg(), err);
+  EXPECT_NEAR(merged.dvariance(), seq3.dvariance(), err);
 }

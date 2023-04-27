@@ -55,8 +55,9 @@ void AbsSeq::add(double val) {
 }
 
 void AbsSeq::add(AbsSeq& other) {
+  // TODO: Prove these actually work...
   _davg = pow(_alpha, _num) * _davg + other._davg;
-  // Hm... :(
+  _dvariance = sqrt(_dvariance*_dvariance + other._dvariance*other._dvariance);
 }
 
 double AbsSeq::avg() const {
