@@ -64,6 +64,7 @@ public:
 
   virtual void add(double val); // adds a new element to the sequence
   void add(unsigned val) { add((double) val); }
+  void add(AbsSeq& other);
   virtual double maximum() const = 0; // maximum element in the sequence
   virtual double last() const = 0; // last element added in the sequence
 
@@ -83,9 +84,6 @@ public:
   // Debugging/Printing
   virtual void dump();
   virtual void dump_on(outputStream* s);
-
-  // Merge this AbsSeq into seq2, optionally clearing this AbsSeq
-  void merge(AbsSeq& seq2, bool clear_this = true);
 };
 
 class NumberSeq: public AbsSeq {
@@ -100,14 +98,12 @@ public:
   NumberSeq(double alpha = DEFAULT_ALPHA_VALUE);
 
   virtual void add(double val);
+  void add(NumberSeq& other);
   virtual double maximum() const { return _maximum; }
   virtual double last() const { return _last; }
 
   // Debugging/Printing
   virtual void dump_on(outputStream* s);
-
-  // Merge this NumberSeq into seq2, optionally clearing this NumberSeq
-  void merge(NumberSeq& seq2, bool clear_this = true);
 };
 
 class TruncatedSeq: public AbsSeq {
@@ -127,6 +123,7 @@ public:
                double alpha = DEFAULT_ALPHA_VALUE);
   ~TruncatedSeq();
   virtual void add(double val);
+  // TODO: add(TruncatedSeq& other)?
   virtual double maximum() const;
   virtual double last() const; // the last value added to the sequence
 
@@ -135,9 +132,6 @@ public:
 
   // Debugging/Printing
   virtual void dump_on(outputStream* s);
-
-  // Merge this AbsSeq into seq2, optionally clearing this AbsSeq
-  void merge(AbsSeq& seq2, bool clear_this = true);
 };
 
 #endif // SHARE_UTILITIES_NUMBERSEQ_HPP

@@ -966,7 +966,8 @@ template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::merge_worker_card_stats_cumulative(
   HdrSeq* worker_stats, HdrSeq* cum_stats) {
   for (int i = 0; i < MAX_CARD_STAT_TYPE; i++) {
-    worker_stats[i].merge(cum_stats[i]);
+    cum_stats[i].add(worker_stats[i]);
+    worker_stats[i].clear();
   }
 }
 #endif
