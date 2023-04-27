@@ -78,12 +78,10 @@ void ShenandoahSetsOfFree::clear_internal() {
 }
 
 void ShenandoahSetsOfFree::clear_all() {
-  shenandoah_assert_heaplocked();
   clear_internal();
 }
 
 void ShenandoahSetsOfFree::increase_used(MemoryReserve which_set, size_t bytes) {
-  shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "Set must correspond to a valid freeset");
   _used_by[which_set] += bytes;
   assert (_used_by[which_set] <= _capacity_of[which_set],
@@ -130,7 +128,6 @@ inline void ShenandoahSetsOfFree::expand_bounds_maybe(MemoryReserve set, size_t 
 }
 
 void ShenandoahSetsOfFree::remove_from_free_sets(size_t idx) {
-  shenandoah_assert_heaplocked();
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   MemoryReserve orig_set = membership(idx);
   assert (orig_set > NotFree && orig_set < NumFreeSets, "Cannot remove from free sets if not already free");
@@ -143,7 +140,6 @@ void ShenandoahSetsOfFree::remove_from_free_sets(size_t idx) {
 
 
 void ShenandoahSetsOfFree::make_free(size_t idx, MemoryReserve which_set, size_t region_capacity) {
-  shenandoah_assert_heaplocked();
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert (_membership[idx] == NotFree, "Cannot make free if already free");
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
@@ -156,7 +152,6 @@ void ShenandoahSetsOfFree::make_free(size_t idx, MemoryReserve which_set, size_t
 }
 
 void ShenandoahSetsOfFree::move_to_set(size_t idx, MemoryReserve new_set, size_t region_capacity) {
-  shenandoah_assert_heaplocked();
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert ((new_set > NotFree) && (new_set < NumFreeSets), "New set must be valid");
   MemoryReserve orig_set = _membership[idx];
@@ -183,7 +178,6 @@ void ShenandoahSetsOfFree::move_to_set(size_t idx, MemoryReserve new_set, size_t
 }
 
 inline MemoryReserve ShenandoahSetsOfFree::membership(size_t idx) const {
-  shenandoah_assert_heaplocked();
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   return _membership[idx];
 }
@@ -191,7 +185,6 @@ inline MemoryReserve ShenandoahSetsOfFree::membership(size_t idx) const {
   // Returns true iff region idx is in the test_set free_set.  Before returning true, asserts that the free
   // set is not empty.  Requires that test_set != NotFree or NumFreeSets.
 inline bool ShenandoahSetsOfFree::in_free_set(size_t idx, MemoryReserve test_set) const {
-  shenandoah_assert_heaplocked();
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   if (_membership[idx] == test_set) {
     assert (test_set == NotFree || _free_set->alloc_capacity(idx) > 0, "Free regions must have alloc capacity");
@@ -202,7 +195,6 @@ inline bool ShenandoahSetsOfFree::in_free_set(size_t idx, MemoryReserve test_set
 }
 
 inline size_t ShenandoahSetsOfFree::left_most(MemoryReserve which_set) const {
-  shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   size_t idx = _left_mosts[which_set];
   if (idx >= _max) {
@@ -214,7 +206,6 @@ inline size_t ShenandoahSetsOfFree::left_most(MemoryReserve which_set) const {
 }
 
 inline size_t ShenandoahSetsOfFree::right_most(MemoryReserve which_set) const {
-  shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   size_t idx = _right_mosts[which_set];
   assert ((_left_mosts[which_set] == _max) || in_free_set(idx, which_set), "right-most region must be free");
@@ -222,7 +213,6 @@ inline size_t ShenandoahSetsOfFree::right_most(MemoryReserve which_set) const {
 }
 
 size_t ShenandoahSetsOfFree::left_most_empty(MemoryReserve which_set) {
-  shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   for (size_t idx = _left_mosts_empty[which_set]; idx < _max; idx++) {
     if ((membership(idx) == which_set) && (_free_set->alloc_capacity(idx) == _region_size_bytes)) {
@@ -236,7 +226,6 @@ size_t ShenandoahSetsOfFree::left_most_empty(MemoryReserve which_set) {
 }
 
 inline size_t ShenandoahSetsOfFree::right_most_empty(MemoryReserve which_set) {
-  shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   for (intptr_t idx = _right_mosts_empty[which_set]; idx >= 0; idx--) {
     if ((membership(idx) == which_set) && (_free_set->alloc_capacity(idx) == _region_size_bytes)) {
@@ -250,7 +239,6 @@ inline size_t ShenandoahSetsOfFree::right_most_empty(MemoryReserve which_set) {
 }
 
 inline bool ShenandoahSetsOfFree::alloc_from_left_bias(MemoryReserve which_set) {
-  shenandoah_assert_heaplocked();
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   return _left_to_right_bias[which_set];
 }
