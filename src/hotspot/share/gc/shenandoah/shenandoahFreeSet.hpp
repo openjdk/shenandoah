@@ -143,6 +143,8 @@ private:
 
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
 
+  HeapWord* allocate_aligned_plab(size_t size, ShenandoahAllocRequest& req, ShenandoahHeapRegion* r);
+
   // Satisfy young-generation or single-generation collector allocation request req by finding memory that matches
   // affiliation, which either equals req.affiliation or FREE.  We know req.is_young().
   HeapWord* allocate_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
