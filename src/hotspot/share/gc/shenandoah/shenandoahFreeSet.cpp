@@ -163,8 +163,8 @@ void ShenandoahSetsOfFree::move_to_set(size_t idx, MemoryReserve new_set, size_t
   //                  Mutator empty => Collector
   //                  Mutator empty => Old Collector
   assert (((region_capacity < _region_size_bytes) && (orig_set == Mutator) && (new_set == Collector)) ||
-	  ((region_capacity == _region_size_bytes) && (orig_set == Mutator) && (new_set == Collector || new_set == OldCollector)),
-	  "Unexpected movement between sets");
+          ((region_capacity == _region_size_bytes) && (orig_set == Mutator) && (new_set == Collector || new_set == OldCollector)),
+          "Unexpected movement between sets");
 
   _membership[idx] = new_set;
   _capacity_of[orig_set] -= region_capacity;
