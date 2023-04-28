@@ -109,6 +109,35 @@ TEST_VM_F(BasicShenandoahNumberSeqTest, percentile_test) {
   EXPECT_NEAR(100, seq1.percentile(100), err);
 }
 
+TEST_VM_F(BasicShenandoahNumberSeqTest, clear_test) {
+  HdrSeq test;
+  test.add(1);
+
+  EXPECT_NE(test.num(), 0);
+  EXPECT_NE(test.sum(), 0);
+  EXPECT_NE(test.maximum(), 0);
+  EXPECT_NE(test.avg(), 0);
+  EXPECT_EQ(test.sd(), 0);
+  EXPECT_NE(test.davg(), 0);
+  EXPECT_EQ(test.dvariance(), 0);
+  for (int i = 0; i <= 100; i += 10) {
+    EXPECT_NE(test.percentile(i), 0);
+  }
+
+  test.clear();
+
+  EXPECT_EQ(test.num(), 0);
+  EXPECT_EQ(test.sum(), 0);
+  EXPECT_EQ(test.maximum(), 0);
+  EXPECT_EQ(test.avg(), 0);
+  EXPECT_EQ(test.sd(), 0);
+  EXPECT_EQ(test.davg(), 0);
+  EXPECT_EQ(test.dvariance(), 0);
+  for (int i = 0; i <= 100; i += 10) {
+    EXPECT_EQ(test.percentile(i), 0);
+  }
+}
+
 TEST_VM_F(ShenandoahNumberSeqMergeTest, merge_test) {
   EXPECT_EQ(seq1.num(), 80);
   EXPECT_EQ(seq2.num(), 20);

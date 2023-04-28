@@ -50,7 +50,7 @@ public:
   ~HdrSeq();
 
   virtual void add(double val);
-  void add(HdrSeq& other);
+  void add(const HdrSeq& other);
   double percentile(double level) const;
   void clear();
 };

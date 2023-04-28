@@ -121,7 +121,7 @@ double HdrSeq::percentile(double level) const {
   return maximum();
 }
 
-void HdrSeq::add(HdrSeq& other) {
+void HdrSeq::add(const HdrSeq& other) {
   if (other.num() == 0) {
     // Other sequence is empty, return
     return;
