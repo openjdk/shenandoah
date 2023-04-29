@@ -29,7 +29,7 @@
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 
-enum MemoryReserve : uint8_t {
+enum FreeMemoryType : uint8_t {
   NotFree,
   Mutator,
   Collector,
@@ -38,13 +38,12 @@ enum MemoryReserve : uint8_t {
 };
 
 class ShenandoahSetsOfFree {
-  friend class ShenandoahFreeSet;
 
 private:
-  size_t _max;
+  size_t _max;                  // The maximum number of heap regions
   ShenandoahFreeSet* _free_set;
   size_t _region_size_bytes;
-  MemoryReserve* _membership;
+  FreeMemoryType* _membership;
   size_t _left_mosts[NumFreeSets];
   size_t _right_mosts[NumFreeSets];
   size_t _left_mosts_empty[NumFreeSets];
@@ -54,8 +53,8 @@ private:
   bool _left_to_right_bias[NumFreeSets];
   size_t _region_counts[NumFreeSets];
 
-  inline void shrink_bounds_if_touched(MemoryReserve set, size_t idx);
-  inline void expand_bounds_maybe(MemoryReserve set, size_t idx, size_t capacity);
+  inline void shrink_bounds_if_touched(FreeMemoryType set, size_t idx);
+  inline void expand_bounds_maybe(FreeMemoryType set, size_t idx, size_t capacity);
 
   // Restore all state variables to initial default state.
   void clear_internal();
@@ -71,47 +70,55 @@ public:
   void remove_from_free_sets(size_t idx);
 
   // Place region idx into free set which_set.  Requires that idx is currently NotFree.
-  void make_free(size_t idx, MemoryReserve which_set, size_t region_capacity);
+  void make_free(size_t idx, FreeMemoryType which_set, size_t region_capacity);
 
   // Place region idx into free set new_set.  Requires that idx is currently not NotFRee.
-  void move_to_set(size_t idx, MemoryReserve new_set, size_t region_capacity);
+  void move_to_set(size_t idx, FreeMemoryType new_set, size_t region_capacity);
 
-  // Returns the MemoryReserve affiliation of region idx, or NotFree if this region is not currently free.  This does
+  // Returns the FreeMemoryType affiliation of region idx, or NotFree if this region is not currently free.  This does
   // not enforce that free_set membership implies allocation capacity.
-  inline MemoryReserve membership(size_t idx) const;
+  inline FreeMemoryType membership(size_t idx) const;
 
   // Returns true iff region idx is in the test_set free_set.  Before returning true, asserts that the free
   // set is not empty.  Requires that test_set != NotFree or NumFreeSets.
-  inline bool in_free_set(size_t idx, MemoryReserve which_set) const;
+  inline bool in_free_set(size_t idx, FreeMemoryType which_set) const;
 
-  // Each of the following four methods returns _max to indicate absence of requested region.
-  inline size_t left_most(MemoryReserve which_set) const;
-  inline size_t right_most(MemoryReserve which_set) const;
-  size_t left_most_empty(MemoryReserve which_set);
-  size_t right_most_empty(MemoryReserve which_set);
+  // The following four methods return the left-most and right-most bounds on ranges of regions representing
+  // the requested set.  The _empty variants represent bounds on the range that holds completely empty
+  // regions, which are required for humongous allocations and desired for "very large" allocations.  A
+  // return value of -1 from left_most() or left_most_empty() denotes that the corresponding set is empty.
+  // In other words:
+  //   if the requested which_set is empty:
+  //     left_most() and left_most_empty() return _max, right_most() and right_most_empty() return 0
+  //   otherwise, expect the following:
+  //     0 <= leftmost <= leftmost_empty <= rightmost_empty <= rightmost < _max
+  inline size_t left_most(FreeMemoryType which_set) const;
+  inline size_t right_most(FreeMemoryType which_set) const;
+  size_t left_most_empty(FreeMemoryType which_set);
+  size_t right_most_empty(FreeMemoryType which_set);
 
-  inline void increase_used(MemoryReserve which_set, size_t bytes);
+  inline void increase_used(FreeMemoryType which_set, size_t bytes);
 
-  inline size_t capacity_of(MemoryReserve which_set) const {
+  inline size_t capacity_of(FreeMemoryType which_set) const {
     assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
     return _capacity_of[which_set];
   }
 
-  inline size_t used_by(MemoryReserve which_set) const {
+  inline size_t used_by(FreeMemoryType which_set) const {
     assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
     return _used_by[which_set];
   }
 
   inline size_t max() const { return _max; }
 
-  inline size_t count(MemoryReserve which_set) const { return _region_counts[which_set]; }
+  inline size_t count(FreeMemoryType which_set) const { return _region_counts[which_set]; }
 
   // Return true iff regions for allocation from this set should be peformed left to right.  Otherwise, allocate
   // from right to left.
-  inline bool alloc_from_left_bias(MemoryReserve which_set);
+  inline bool alloc_from_left_bias(FreeMemoryType which_set);
 
   // Determine whether we prefer to allocate from left to right or from right to left for this free-set.
-  void establish_alloc_bias(MemoryReserve which_set);
+  void establish_alloc_bias(FreeMemoryType which_set);
 
   // Assure leftmost, rightmost, leftmost_empty, and rightmost_empty bounds are valid for all free sets.
   // valid bounds honor all of the following (where max is the number of heap regions):
