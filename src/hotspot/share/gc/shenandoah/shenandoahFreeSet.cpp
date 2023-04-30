@@ -301,7 +301,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
       break;
     }
     default:
-      assert(false, "The request type %d is unrecognized", req.type());
+      ShouldNotReachHere();
   }
   return nullptr;
 }
