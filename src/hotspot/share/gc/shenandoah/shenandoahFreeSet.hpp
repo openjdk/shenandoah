@@ -121,7 +121,7 @@ public:
   void establish_alloc_bias(ShenandoahFreeMemoryType which_set);
 
   // Assure leftmost, rightmost, leftmost_empty, and rightmost_empty bounds are valid for all free sets.
-  // valid bounds honor all of the following (where max is the number of heap regions):
+  // Valid bounds honor all of the following (where max is the number of heap regions):
   //   if the set is empty, leftmost equals max and rightmost equals 0
   //   Otherwise (the set is not empty):
   //     0 <= leftmost < max and 0 <= rightmost < max
