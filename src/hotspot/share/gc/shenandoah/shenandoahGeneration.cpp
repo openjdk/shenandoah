@@ -252,7 +252,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
 
   // First priority is to reclaim the easy garbage out of young-gen.
 
-  // maximum_old_evacuations limits the sum of old collections and promotions to old
+  // maximum_young_evacuation_reserve is upper bound on memory to be evacuated out of young
   size_t maximum_young_evacuation_reserve = (young_generation->max_capacity() * ShenandoahEvacReserve) / 100;
   size_t young_evacuation_reserve = maximum_young_evacuation_reserve;
   size_t excess_young;
