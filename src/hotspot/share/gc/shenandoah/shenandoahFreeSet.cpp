@@ -269,8 +269,9 @@ void ShenandoahSetsOfFree::establish_alloc_bias(ShenandoahFreeMemoryType which_s
   // Densely packing regions reduces the effort to search for a region that has sufficient memory to satisfy a new allocation
   // request.  Regions become sparsely distributed following a Full GC, which tends to slide all regions to the front of the
   // heap rather than allowing survivor regions to remain at the high end of the heap where we intend for them to congregate.
-  // In the future, we may modify Full GC so that it slides old objects to the end of the heap and young objects to the start
-  // of the heap. If this is done, we can always search survivor Collector and OldCollector regions right to left.
+
+  // TODO: In the future, we may modify Full GC so that it slides old objects to the end of the heap and young objects to the
+  // front of the heap. If this is done, we can always search survivor Collector and OldCollector regions right to left.
   _left_to_right_bias[which_set] = (available_in_second_half > available_in_first_half);
 }
 
