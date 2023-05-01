@@ -355,11 +355,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   heap->set_full_gc_in_progress(false);
 
   if (ShenandoahVerify) {
-    if (heap->mode()->is_generational()) {
-      heap->verifier()->verify_after_generational_fullgc();
-    } else {
-      heap->verifier()->verify_after_fullgc();
-    }
+    heap->verifier()->verify_after_fullgc();
   }
 
   // Humongous regions are promoted on demand and are accounted for by normal Full GC mechanisms.

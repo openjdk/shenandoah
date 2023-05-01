@@ -1192,20 +1192,6 @@ void ShenandoahVerifier::verify_before_fullgc() {
   );
 }
 
-void ShenandoahVerifier::verify_after_generational_fullgc() {
-  verify_at_safepoint(
-          "After Full Generational GC",
-          _verify_remembered_after_full_gc,  // verify read-write remembered set
-          _verify_forwarded_none,      // all objects are non-forwarded
-          _verify_marked_complete,     // all objects are marked in complete bitmap
-          _verify_cset_none,           // no cset references
-          _verify_liveness_disable,    // no reliable liveness data anymore
-          _verify_regions_notrash_nocset, // no trash, no cset
-          _verify_size_exact,           // expect generation and heap sizes to match exactly
-          _verify_gcstate_stable       // full gc cleaned up everything
-  );
-}
-
 void ShenandoahVerifier::verify_after_fullgc() {
   verify_at_safepoint(
           "After Full GC",

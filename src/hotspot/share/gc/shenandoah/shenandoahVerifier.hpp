@@ -219,7 +219,6 @@ public:
   void verify_after_updaterefs();
   void verify_before_fullgc();
   void verify_after_fullgc();
-  void verify_after_generational_fullgc();
   void verify_after_degenerated();
   void verify_generic(VerifyOption option);
 
