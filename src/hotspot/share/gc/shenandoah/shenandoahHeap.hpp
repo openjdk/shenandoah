@@ -347,10 +347,8 @@ private:
   ShenandoahSharedFlag   _progress_last_gc;
   ShenandoahSharedFlag   _concurrent_strong_root_in_progress;
 
-  // Allocation of old GCLABs (aka PLABs) assures that _old_evac_expended + request-size < _old_evac_reserved.  If the allocation
-  //  is authorized, increment _old_evac_expended by request size.  This allocation ignores old_gen->available().
-  //
-  // TODO: The following comment is not entirely accurate, I believe.  Maybe it is not at all accurate.
+  // TODO: Revisit the following comment.  It may not accurately represent the true behavior when evacuations fail due to
+  // difficulty finding memory to hold evacuated objects.
   //
   // Note that the typical total expenditure on evacuation is less than the associated evacuation reserve because we generally
   // reserve ShenandoahEvacWaste (> 1.0) times the anticipated evacuation need.  In the case that there is an excessive amount
@@ -360,6 +358,9 @@ private:
 
   size_t _promoted_reserve;            // Bytes reserved within old-gen to hold the results of promotion
   volatile size_t _promoted_expended;  // Bytes of old-gen memory expended on promotions
+
+  // Allocation of old GCLABs (aka PLABs) assures that _old_evac_expended + request-size < _old_evac_reserved.  If the allocation
+  //  is authorized, increment _old_evac_expended by request size.  This allocation ignores old_gen->available().
 
   size_t _old_evac_reserve;            // Bytes reserved within old-gen to hold evacuated objects from old-gen collection set
   volatile size_t _old_evac_expended;  // Bytes of old-gen memory expended on old-gen evacuations
