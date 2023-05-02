@@ -346,7 +346,6 @@ void ShenandoahConcurrentGC::entry_final_roots() {
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->is_aging_cycle()) {
-    // TODO: Do we even care about this?  Do we want to parallelize it?
     ShenandoahMarkingContext* ctx = heap->complete_marking_context();
 
     for (size_t i = 0; i < heap->num_regions(); i++) {
@@ -356,8 +355,7 @@ void ShenandoahConcurrentGC::entry_final_roots() {
         HeapWord* top = r->top();
         if (top > tams) {
           r->reset_age();
-        } else if (heap->is_aging_cycle()) {
-          // TODO: Does _incr_region_ages imply heap->is_aging_cycle()?
+        } else {
           r->increment_age();
         }
       }
