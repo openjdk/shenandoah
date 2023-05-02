@@ -344,24 +344,6 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (heap->is_aging_cycle()) {
-    ShenandoahMarkingContext* ctx = heap->complete_marking_context();
-
-    for (size_t i = 0; i < heap->num_regions(); i++) {
-      ShenandoahHeapRegion *r = heap->get_region(i);
-      if (r->is_active() && r->is_young()) {
-        HeapWord* tams = ctx->top_at_mark_start(r);
-        HeapWord* top = r->top();
-        if (top > tams) {
-          r->reset_age();
-        } else {
-          r->increment_age();
-        }
-      }
-    }
-  }
-
   op_final_roots();
 }
 
@@ -1222,6 +1204,25 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
 }
 
 void ShenandoahConcurrentGC::op_final_roots() {
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if (heap->is_aging_cycle()) {
+    ShenandoahMarkingContext* ctx = heap->complete_marking_context();
+
+    for (size_t i = 0; i < heap->num_regions(); i++) {
+      ShenandoahHeapRegion *r = heap->get_region(i);
+      if (r->is_active() && r->is_young()) {
+        HeapWord* tams = ctx->top_at_mark_start(r);
+        HeapWord* top = r->top();
+        if (top > tams) {
+          r->reset_age();
+        } else {
+          r->increment_age();
+        }
+      }
+    }
+  }
+
   ShenandoahHeap::heap()->set_concurrent_weak_root_in_progress(false);
 }
 
