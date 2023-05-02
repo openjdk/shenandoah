@@ -151,7 +151,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
           promote_in_place_live += r->get_live_data_bytes();
         }
         // Else, we do not promote this region (either in place or by copy) because it has received new allocations.
-        
+
         // During evacuation, we exclude from promotion regions for which age > tenure threshold, garbage < garbage-threshold,
         //  and get_top_before_promote() != tams
       } else {
