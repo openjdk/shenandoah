@@ -248,25 +248,12 @@ inline bool ShenandoahHeap::cancelled_gc() const {
 }
 
 inline bool ShenandoahHeap::check_cancelled_gc_and_yield(bool sts_active) {
-  if (! (sts_active && ShenandoahSuspendibleWorkers)) {
-    return cancelled_gc();
-  }
-
-  jbyte prev = _cancelled_gc.cmpxchg(NOT_CANCELLED, CANCELLABLE);
-  if (prev == CANCELLABLE || prev == NOT_CANCELLED) {
+  if (sts_active && ShenandoahSuspendibleWorkers && !cancelled_gc()) {
     if (SuspendibleThreadSet::should_yield()) {
       SuspendibleThreadSet::yield();
     }
-
-    // Back to CANCELLABLE. The thread that poked NOT_CANCELLED first gets
-    // to restore to CANCELLABLE.
-    if (prev == CANCELLABLE) {
-      _cancelled_gc.set(CANCELLABLE);
-    }
-    return false;
-  } else {
-    return true;
   }
+  return cancelled_gc();
 }
 
 inline void ShenandoahHeap::clear_cancelled_gc(bool clear_oom_handler) {
@@ -662,8 +649,13 @@ inline bool ShenandoahHeap::in_collection_set_loc(void* p) const {
   return collection_set()->is_in_loc(p);
 }
 
+
 inline bool ShenandoahHeap::is_stable() const {
   return _gc_state.is_clear();
+}
+
+inline bool ShenandoahHeap::has_evacuation_reserve_quantities() const {
+  return _has_evacuation_reserve_quantities;
 }
 
 inline bool ShenandoahHeap::is_idle() const {

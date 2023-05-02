@@ -36,6 +36,7 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/tlab_globals.hpp"
 
+#include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahClosures.inline.hpp"
@@ -77,6 +78,7 @@
 #include "gc/shenandoah/mode/shenandoahIUMode.hpp"
 #include "gc/shenandoah/mode/shenandoahPassiveMode.hpp"
 #include "gc/shenandoah/mode/shenandoahSATBMode.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 #if INCLUDE_JFR
 #include "gc/shenandoah/shenandoahJfrSupport.hpp"
@@ -382,7 +384,7 @@ jint ShenandoahHeap::initialize() {
 
     // We are initializing free set.  We ignore cset region tallies.
     _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
-    _free_set->rebuild(0);
+    _free_set->rebuild();
   }
 
   if (AlwaysPreTouch) {
@@ -547,7 +549,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _initial_size(0),
   _promotion_potential(0),
   _promotion_in_place_potential(0),
-  _used(0),
   _committed(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
   _workers(nullptr),
@@ -563,6 +564,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _young_evac_reserve(0),
   _captured_old_usage(0),
   _previous_promotion(0),
+  _upgraded_to_full(false),
+  _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -695,9 +698,7 @@ bool ShenandoahHeap::doing_mixed_evacuations() {
 }
 
 bool ShenandoahHeap::is_old_bitmap_stable() const {
-  ShenandoahOldGeneration::State state = _old_generation->state();
-  return state != ShenandoahOldGeneration::MARKING
-      && state != ShenandoahOldGeneration::BOOTSTRAPPING;
+  return _old_generation->is_mark_complete();
 }
 
 bool ShenandoahHeap::is_gc_generation_young() const {
@@ -705,7 +706,7 @@ bool ShenandoahHeap::is_gc_generation_young() const {
 }
 
 size_t ShenandoahHeap::used() const {
-  return Atomic::load(&_used);
+  return global_generation()->used();
 }
 
 size_t ShenandoahHeap::committed() const {
@@ -722,29 +723,84 @@ void ShenandoahHeap::decrease_committed(size_t bytes) {
   _committed -= bytes;
 }
 
-void ShenandoahHeap::increase_used(size_t bytes) {
-  Atomic::add(&_used, bytes, memory_order_relaxed);
-}
+// For tracking usage based on allocations, it should be the case that:
+// * The sum of regions::used == heap::used
+// * The sum of a generation's regions::used == generation::used
+// * The sum of a generation's humongous regions::free == generation::humongous_waste
+// These invariants are checked by the verifier on GC safepoints.
+//
+// Additional notes:
+// * When a mutator's allocation request causes a region to be retired, the
+//   free memory left in that region is considered waste. It does not contribute
+//   to the usage, but it _does_ contribute to allocation rate.
+// * The bottom of a PLAB must be aligned on card size. In some cases this will
+//   require padding in front of the PLAB (a filler object). Because this padding
+//   is included in the region's used memory we include the padding in the usage
+//   accounting as waste.
+// * Mutator allocations are used to compute an allocation rate. They are also
+//   sent to the Pacer for those purposes.
+// * There are three sources of waste:
+//  1. The padding used to align a PLAB on card size
+//  2. Region's free is less than minimum TLAB size and is retired
+//  3. The unused portion of memory in the last region of a humongous object
+void ShenandoahHeap::increase_used(const ShenandoahAllocRequest& req) {
+  size_t actual_bytes = req.actual_size() * HeapWordSize;
+  size_t wasted_bytes = req.waste() * HeapWordSize;
+  ShenandoahGeneration* generation = generation_for(req.affiliation());
 
-void ShenandoahHeap::set_used(size_t bytes) {
-  Atomic::store(&_used, bytes);
-}
+  if (req.is_gc_alloc()) {
+    assert(wasted_bytes == 0 || req.type() == ShenandoahAllocRequest::_alloc_plab, "Only PLABs have waste");
+    increase_used(generation, actual_bytes + wasted_bytes);
+  } else {
+    assert(req.is_mutator_alloc(), "Expected mutator alloc here");
+    // padding and actual size both count towards allocation counter
+    generation->increase_allocated(actual_bytes + wasted_bytes);
 
-void ShenandoahHeap::decrease_used(size_t bytes) {
-  assert(used() >= bytes, "never decrease heap size by more than we've left");
-  Atomic::sub(&_used, bytes, memory_order_relaxed);
-}
+    // only actual size counts toward usage for mutator allocations
+    increase_used(generation, actual_bytes);
 
-void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {
-  size_t bytes = words * HeapWordSize;
-  if (!waste) {
-    increase_used(bytes);
+    // notify pacer of both actual size and waste
+    notify_mutator_alloc_words(req.actual_size(), req.waste());
+
+    if (wasted_bytes > 0 && req.actual_size() > ShenandoahHeapRegion::humongous_threshold_words()) {
+      increase_humongous_waste(generation,wasted_bytes);
+    }
   }
+}
 
+void ShenandoahHeap::increase_humongous_waste(ShenandoahGeneration* generation, size_t bytes) {
+  generation->increase_humongous_waste(bytes);
+  if (!generation->is_global()) {
+    global_generation()->increase_humongous_waste(bytes);
+  }
+}
+
+void ShenandoahHeap::decrease_humongous_waste(ShenandoahGeneration* generation, size_t bytes) {
+  generation->decrease_humongous_waste(bytes);
+  if (!generation->is_global()) {
+    global_generation()->decrease_humongous_waste(bytes);
+  }
+}
+
+void ShenandoahHeap::increase_used(ShenandoahGeneration* generation, size_t bytes) {
+  generation->increase_used(bytes);
+  if (!generation->is_global()) {
+    global_generation()->increase_used(bytes);
+  }
+}
+
+void ShenandoahHeap::decrease_used(ShenandoahGeneration* generation, size_t bytes) {
+  generation->decrease_used(bytes);
+  if (!generation->is_global()) {
+    global_generation()->decrease_used(bytes);
+  }
+}
+
+void ShenandoahHeap::notify_mutator_alloc_words(size_t words, size_t waste) {
   if (ShenandoahPacing) {
     control_thread()->pacing_notify_alloc(words);
-    if (waste) {
-      pacer()->claim_for_alloc(words, true);
+    if (waste > 0) {
+      pacer()->claim_for_alloc(waste, true);
     }
   }
 }
@@ -1297,28 +1353,29 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     regulator_thread()->notify_heap_changed();
   }
 
+  if (result == nullptr) {
+    req.set_actual_size(0);
+  }
+
+  // This is called regardless of the outcome of the allocation to account
+  // for any waste created by retiring regions with this request.
+  increase_used(req);
+
   if (result != nullptr) {
-    ShenandoahGeneration* alloc_generation = generation_for(req.affiliation());
     size_t requested = req.size();
     size_t actual = req.actual_size();
-    size_t actual_bytes = actual * HeapWordSize;
 
     assert (req.is_lab_alloc() || (requested == actual),
             "Only LAB allocations are elastic: %s, requested = " SIZE_FORMAT ", actual = " SIZE_FORMAT,
             ShenandoahAllocRequest::alloc_type_to_string(req.type()), requested, actual);
 
     if (req.is_mutator_alloc()) {
-      notify_mutator_alloc_words(actual, false);
-      alloc_generation->increase_allocated(actual_bytes);
-
       // If we requested more than we were granted, give the rest back to pacer.
       // This only matters if we are in the same pacing epoch: do not try to unpace
       // over the budget for the other phase.
       if (ShenandoahPacing && (pacer_epoch > 0) && (requested > actual)) {
         pacer()->unpace_for_alloc(pacer_epoch, requested - actual);
       }
-    } else {
-      increase_used(actual_bytes);
     }
   }
 
@@ -2361,6 +2418,10 @@ void ShenandoahHeap::set_gc_state_mask(uint mask, bool value) {
   set_gc_state_all_threads(_gc_state.raw_value());
 }
 
+void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
+  _has_evacuation_reserve_quantities = is_valid;
+}
+
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   if (has_forwarded_objects()) {
     set_gc_state_mask(YOUNG_MARKING | UPDATEREFS, in_progress);
@@ -2433,20 +2494,8 @@ size_t ShenandoahHeap::tlab_used(Thread* thread) const {
 }
 
 bool ShenandoahHeap::try_cancel_gc() {
-  while (true) {
-    jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
-    if (prev == CANCELLABLE) return true;
-    else if (prev == CANCELLED) return false;
-    assert(ShenandoahSuspendibleWorkers, "should not get here when not using suspendible workers");
-    assert(prev == NOT_CANCELLED, "must be NOT_CANCELLED");
-    Thread* thread = Thread::current();
-    if (thread->is_Java_thread()) {
-      // We need to provide a safepoint here, otherwise we might
-      // spin forever if a SP is pending.
-      ThreadBlockInVM sp(JavaThread::cast(thread));
-      SpinPause();
-    }
-  }
+  jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
+  return prev == CANCELLABLE;
 }
 
 void ShenandoahHeap::cancel_concurrent_mark() {
@@ -3065,7 +3114,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // within partially consumed regions of memory.
   }
   // Rebuild free set based on adjusted generation sizes.
-  _free_set->rebuild(0);
+  _free_set->rebuild();
 
   if (mode()->is_generational()) {
     size_t old_available = old_generation()->available();

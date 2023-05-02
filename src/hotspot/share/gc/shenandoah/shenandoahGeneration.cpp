@@ -137,7 +137,7 @@ ShenandoahHeuristics* ShenandoahGeneration::initialize_heuristics(ShenandoahMode
 }
 
 size_t ShenandoahGeneration::bytes_allocated_since_gc_start() {
-  return Atomic::load(&_bytes_allocated_since_gc_start);;
+  return Atomic::load(&_bytes_allocated_since_gc_start);
 }
 
 void ShenandoahGeneration::reset_bytes_allocated_since_gc_start() {
@@ -499,6 +499,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
     }
   }
+
+  // Freeset construction uses reserve quantities if they are valid
+  heap->set_evacuation_reserve_quantities(true);
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
                             ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
@@ -507,8 +510,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
-    heap->free_set()->rebuild((size_t)(collection_set->get_young_bytes_reserved_for_evacuation() * ShenandoahEvacWaste));
+    heap->free_set()->rebuild();
   }
+  heap->set_evacuation_reserve_quantities(false);
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {
@@ -648,18 +652,10 @@ size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
 }
 
 void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes, size_t humongous_waste) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
   _affiliated_region_count = num_regions;
   _used = num_bytes;
   _humongous_waste = humongous_waste;
-}
-
-void ShenandoahGeneration::clear_used() {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for generational usage");
-  assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
-  // Do this atomically to assure visibility to other threads, even though these other threads may be idle "right now"..
-  Atomic::store(&_used, (size_t)0);
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
@@ -675,23 +671,17 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   if (bytes > 0) {
-    shenandoah_assert_heaplocked_or_fullgc_safepoint();
-    _humongous_waste += bytes;
-    // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
-    assert(is_global() || ShenandoahHeap::heap()->is_full_gc_in_progress() ||
-           (_used + _humongous_waste <= _affiliated_region_count * ShenandoahHeapRegion::region_size_bytes()),
-           "waste cannot exceed regions");
+    Atomic::add(&_humongous_waste, bytes);
   }
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   if (bytes > 0) {
-    shenandoah_assert_heaplocked_or_fullgc_safepoint();
-    // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
-    assert(is_global() || ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
+    assert(_humongous_waste >= bytes, "Waste cannot be negative");
+    assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
            "Waste (" SIZE_FORMAT ") cannot be negative (after subtracting " SIZE_FORMAT ")", _humongous_waste, bytes);
-    _humongous_waste -= bytes;
+    Atomic::sub(&_humongous_waste, bytes);
   }
 }
 

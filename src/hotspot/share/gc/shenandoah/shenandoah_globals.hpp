@@ -267,7 +267,8 @@
           " 4 = previous level, plus all marked objects")                   \
                                                                             \
   product(bool, ShenandoahElasticTLAB, true, DIAGNOSTIC,                    \
-          "Use Elastic TLABs with Shenandoah")                              \
+          "Use Elastic TLABs with Shenandoah. This allows Shenandoah to "   \
+          "decrease the size of a TLAB to fit in a region's remaining space") \
                                                                             \
   product(uintx, ShenandoahEvacReserve, 5, EXPERIMENTAL,                    \
           "How much of (young-generation) heap to reserve for "             \
@@ -469,7 +470,7 @@
           "How many times to maximum attempt to flush SATB buffers at the " \
           "end of concurrent marking.")                                     \
                                                                             \
-  product(bool, ShenandoahSuspendibleWorkers, false, EXPERIMENTAL,          \
+  product(bool, ShenandoahSuspendibleWorkers, true, EXPERIMENTAL,           \
           "Suspend concurrent GC worker threads at safepoints")             \
                                                                             \
   product(bool, ShenandoahSATBBarrier, true, DIAGNOSTIC,                    \
