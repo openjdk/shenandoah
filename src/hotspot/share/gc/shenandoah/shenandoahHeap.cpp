@@ -1928,12 +1928,6 @@ void ShenandoahHeap::prepare_for_verify() {
   }
 }
 
-void ShenandoahHeap::mutator_threads_do(ThreadClosure* tcl) const {
-  ShenandoahJavaThreadsIterator _java_threads(ShenandoahPhaseTimings::thread_iteration_roots, 1);
-  // Just use one worker_id for now
-  _java_threads.threads_do(tcl, 0);
-}
-
 void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
   if (_shenandoah_policy->is_at_shutdown()) {
     return;

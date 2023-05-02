@@ -267,7 +267,6 @@ public:
   WorkerThreads* safepoint_workers() override;
 
   void gc_threads_do(ThreadClosure* tcl) const override;
-  void mutator_threads_do(ThreadClosure* tcl) const;
 
 // ---------- Heap regions handling machinery
 //
