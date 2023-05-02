@@ -213,7 +213,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_cleanup_complete();
   } else {
     // We chose not to evacuate because we found sufficient immediate garbage.
-    vmop_entry_final_roots(heap->is_aging_cycle());
+    vmop_entry_final_roots();
     _abbreviated = true;
   }
 
@@ -283,14 +283,14 @@ void ShenandoahConcurrentGC::vmop_entry_final_updaterefs() {
   VMThread::execute(&op);
 }
 
-void ShenandoahConcurrentGC::vmop_entry_final_roots(bool increment_region_ages) {
+void ShenandoahConcurrentGC::vmop_entry_final_roots() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->stw_collection_counters());
   ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::final_roots_gross);
 
   // This phase does not use workers, no need for setup
   heap->try_inject_alloc_failure();
-  VM_ShenandoahFinalRoots op(this, increment_region_ages);
+  VM_ShenandoahFinalRoots op(this);
   VMThread::execute(&op);
 }
 
@@ -343,6 +343,26 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   static const char* msg = "Pause Final Roots";
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if (heap->is_aging_cycle()) {
+    // TODO: Do we even care about this?  Do we want to parallelize it?
+    ShenandoahMarkingContext* ctx = heap->complete_marking_context();
+
+    for (size_t i = 0; i < heap->num_regions(); i++) {
+      ShenandoahHeapRegion *r = heap->get_region(i);
+      if (r->is_active() && r->is_young()) {
+        HeapWord* tams = ctx->top_at_mark_start(r);
+        HeapWord* top = r->top();
+        if (top > tams) {
+          r->reset_age();
+        } else if (heap->is_aging_cycle()) {
+          // TODO: Does _incr_region_ages imply heap->is_aging_cycle()?
+          r->increment_age();
+        }
+      }
+    }
+  }
 
   op_final_roots();
 }
