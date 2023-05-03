@@ -557,6 +557,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _young_evac_reserve(0),
   _captured_old_usage(0),
   _previous_promotion(0),
+  _upgraded_to_full(false),
+  _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -2300,6 +2302,10 @@ void ShenandoahHeap::set_gc_state_mask(uint mask, bool value) {
   set_gc_state_all_threads(_gc_state.raw_value());
 }
 
+void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
+  _has_evacuation_reserve_quantities = is_valid;
+}
+
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   if (has_forwarded_objects()) {
     set_gc_state_mask(YOUNG_MARKING | UPDATEREFS, in_progress);
@@ -2372,20 +2378,8 @@ size_t ShenandoahHeap::tlab_used(Thread* thread) const {
 }
 
 bool ShenandoahHeap::try_cancel_gc() {
-  while (true) {
-    jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
-    if (prev == CANCELLABLE) return true;
-    else if (prev == CANCELLED) return false;
-    assert(ShenandoahSuspendibleWorkers, "should not get here when not using suspendible workers");
-    assert(prev == NOT_CANCELLED, "must be NOT_CANCELLED");
-    Thread* thread = Thread::current();
-    if (thread->is_Java_thread()) {
-      // We need to provide a safepoint here, otherwise we might
-      // spin forever if a SP is pending.
-      ThreadBlockInVM sp(JavaThread::cast(thread));
-      SpinPause();
-    }
-  }
+  jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
+  return prev == CANCELLABLE;
 }
 
 void ShenandoahHeap::cancel_concurrent_mark() {
