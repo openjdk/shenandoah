@@ -135,7 +135,7 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   if (GENERATION == YOUNG) {
     assert(region->is_young(), "Error");
     // age census count
-    uint age = ShenandoahHeap::get_object_age(obj);
+    uint age = ShenandoahHeap::get_object_age_concurrent(obj);
     get_local_age_table(worker_id)->add(age, size);
   }
 

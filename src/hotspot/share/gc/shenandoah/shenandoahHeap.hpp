@@ -864,6 +864,7 @@ public:
 
   static inline void increase_object_age(oop obj, uint additional_age);
   static inline uint get_object_age(oop obj);
+  static inline uint get_object_age_concurrent(oop obj);
 
   void transfer_old_pointers_from_satb();
 

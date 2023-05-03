@@ -547,6 +547,13 @@ uint ShenandoahHeap::get_object_age(oop obj) {
   return w.age();
 }
 
+uint ShenandoahHeap::get_object_age_concurrent(oop obj) {
+  // This is impossible to do unless we "freeze" ABA-type oscillations
+  guarantee(false, "NYI");
+  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
+  return w.age();
+}
+
 inline bool ShenandoahHeap::clear_old_evacuation_failure() {
   return _old_gen_oom_evac.try_unset();
 }
