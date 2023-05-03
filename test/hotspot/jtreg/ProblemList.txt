@@ -83,6 +83,10 @@ gc/stress/gclocker/TestGCLockerWithG1.java 8180622 generic-all
 gc/stress/TestJNIBlockFullGC/TestJNIBlockFullGC.java 8192647 generic-all
 gc/stress/TestStressG1Humongous.java 8286554 windows-x64
 
+gc/shenandoah/oom/TestThreadFailure.java
+gc/shenandoah/TestDynamicSoftMaxHeapSize.java#generational
+gc/stress/gclocker/TestGCLockerWithShenandoah.java#generational
+
 #############################################################################
 
 # :hotspot_runtime
