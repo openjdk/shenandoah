@@ -225,7 +225,6 @@ void ShenandoahGeneration::prepare_gc() {
 void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
                                                       ShenandoahCollectionSet* collection_set,
                                                       size_t &consumed_by_advance_promotion) {
-  assert(heap->mode()->is_generational(), "Only generational mode uses evacuation budgets.");
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t regions_available_to_loan = 0;
   size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * region_size_bytes;
@@ -354,8 +353,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   // objects.  Memory in partially occupied regions is not "available" to be loaned.  Note that an increase in old-gen
   // available that results from a decrease in memory consumed by old evacuation is not necessarily available to be loaned
   // to young-gen.
-
-  assert(heap->mode()->is_generational(), "Only generational mode uses evacuation budgets.");
 
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahOldGeneration* old_generation = heap->old_generation();
@@ -659,7 +656,6 @@ void ShenandoahGeneration::establish_usage(size_t num_regions, size_t num_bytes,
 }
 
 void ShenandoahGeneration::increase_used(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   Atomic::add(&_used, bytes);
   // This detects arithmetic wraparound on _used.  Non-generational mode does not keep track of _affiliated_region_count
   // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
@@ -669,14 +665,12 @@ void ShenandoahGeneration::increase_used(size_t bytes) {
 }
 
 void ShenandoahGeneration::increase_humongous_waste(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   if (bytes > 0) {
     Atomic::add(&_humongous_waste, bytes);
   }
 }
 
 void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   if (bytes > 0) {
     assert(_humongous_waste >= bytes, "Waste cannot be negative");
     assert(ShenandoahHeap::heap()->is_full_gc_in_progress() || (_humongous_waste >= bytes),
@@ -686,7 +680,6 @@ void ShenandoahGeneration::decrease_humongous_waste(size_t bytes) {
 }
 
 void ShenandoahGeneration::decrease_used(size_t bytes) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
   assert(is_global() || ShenandoahHeap::heap()->is_full_gc_in_progress() ||
          (_used >= bytes), "cannot reduce bytes used by generation below zero");
@@ -724,7 +717,6 @@ size_t ShenandoahGeneration::available() const {
 }
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   shenandoah_assert_heaplocked_or_safepoint();
 
   // We do not enforce that new capacity >= heap->max_size_for(this).  The maximum generation size is treated as a rule of thumb
@@ -745,7 +737,6 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
 }
 
 void ShenandoahGeneration::decrease_capacity(size_t decrement) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode accounts for used within generations");
   shenandoah_assert_heaplocked_or_safepoint();
 
   // We do not enforce that new capacity >= heap->min_size_for(this).  The minimum generation size is treated as a rule of thumb

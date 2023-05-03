@@ -459,7 +459,9 @@ void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* regi
   // is_mutator_free nor is_collector_free nor is_old_collector_free.
 
   assert(_free_sets.membership(idx) == NotFree, "Regions promoted in place should not be in any free set");
-  _free_sets.make_free(idx, OldCollector, alloc_capacity(region));
+  if (alloc_capacity(region) >= PLAB::min_size() * HeapWordSize) {
+    _free_sets.make_free(idx, OldCollector, alloc_capacity(region));
+  }
 }
 
 HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahAffiliation affiliation,
