@@ -1497,9 +1497,8 @@ void ShenandoahFullGC::phase5_epilog() {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_rebuild);
     ShenandoahPostCompactClosure post_compact;
     heap->heap_region_iterate(&post_compact);
+    post_compact.update_generation_usage();
     if (heap->mode()->is_generational()) {
-      post_compact.update_generation_usage();
-
       size_t old_usage = heap->old_generation()->used_regions_size();
       size_t old_capacity = heap->old_generation()->max_capacity();
 
