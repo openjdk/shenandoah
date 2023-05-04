@@ -282,7 +282,6 @@ void ShenandoahGenerationSizer::recalculate_min_max_young_length(size_t heap_reg
   assert(_min_desired_young_regions <= _max_desired_young_regions, "Invalid min/max young gen size values");
 }
 
-// TODO: this is not hooked anywhere.
 void ShenandoahGenerationSizer::heap_size_changed(size_t heap_size) {
   recalculate_min_max_young_length(heap_size / ShenandoahHeapRegion::region_size_bytes());
 }
