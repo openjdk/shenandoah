@@ -87,24 +87,9 @@ public:
     IDLE, FILLING, BOOTSTRAPPING, MARKING, WAITING_FOR_EVAC, WAITING_FOR_FILL
   };
 
-  State state() const {
-    return _state;
-  }
-
-  void transition_to(State new_state);
-
-  size_t get_live_bytes_after_last_mark() const;
-  void set_live_bytes_after_last_mark(size_t new_live);
-
-  size_t usage_trigger_threshold() const;
-
-  bool can_start_gc() {
-    return _state == IDLE || _state == WAITING_FOR_FILL;
-  }
-
-  static const char* state_name(State state);
-
 private:
+  State _state;
+
   static const size_t FRACTIONAL_DENOMINATOR = 64536;
 
   // During initialization of the JVM, we search for the correct old-gen size by initally performing old-gen
@@ -122,12 +107,28 @@ private:
   // approximation of the old-gen memory requirement, in other words when old-gen usage is 150% of 3.125%, which
   // is 4.6875% of the total heap size.
   static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                    //   3.125%
-
-  State _state;
   size_t _live_bytes_after_last_mark;
   size_t _growth_before_compaction; // How much growth in usage before we trigger old collection, per 65_536
 
   void validate_transition(State new_state) NOT_DEBUG_RETURN;
+
+public:
+  State state() const {
+    return _state;
+  }
+
+  void transition_to(State new_state);
+
+  size_t get_live_bytes_after_last_mark() const;
+  void set_live_bytes_after_last_mark(size_t new_live);
+
+  size_t usage_trigger_threshold() const;
+
+  bool can_start_gc() {
+    return _state == IDLE || _state == WAITING_FOR_FILL;
+  }
+
+  static const char* state_name(State state);
 };
 
 
