@@ -1905,24 +1905,16 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 
   shenandoah_policy()->record_cycle_start();
   generation->heuristics()->record_cycle_start();
-
-  // When a cycle starts, attribute any thread activity when the collector
-  // is idle to the global generation.
-  _mmu_tracker.record(global_generation());
 }
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
   generation->heuristics()->record_cycle_end();
-
   if (mode()->is_generational() && (generation->is_global() || upgraded_to_full())) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
     young_generation()->heuristics()->record_cycle_end();
     old_generation()->heuristics()->record_cycle_end();
   }
   set_gc_cause(GCCause::_no_gc);
-
-  // When a cycle ends, the thread activity is attributed to the respective generation
-  _mmu_tracker.record(generation);
 }
 
 void ShenandoahHeap::verify(VerifyOption vo) {

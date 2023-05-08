@@ -284,6 +284,8 @@ public:
   void heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* blk) const;
 
+  inline ShenandoahMmuTracker* const mmu_tracker() { return &_mmu_tracker; };
+
 // ---------- GC state machinery
 //
 // GC state describes the important parts of collector state, that may be

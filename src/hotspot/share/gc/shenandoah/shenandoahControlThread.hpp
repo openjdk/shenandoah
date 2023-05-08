@@ -173,11 +173,11 @@ public:
   void prepare_for_graceful_shutdown();
   bool in_graceful_shutdown();
 
-  void service_concurrent_normal_cycle(const ShenandoahHeap* heap,
+  void service_concurrent_normal_cycle(ShenandoahHeap* heap,
                                        const ShenandoahGenerationType generation,
                                        GCCause::Cause cause);
 
-  void service_concurrent_old_cycle(const ShenandoahHeap* heap,
+  void service_concurrent_old_cycle(ShenandoahHeap* heap,
                                     GCCause::Cause &cause);
 
   void set_gc_mode(GCMode new_mode);

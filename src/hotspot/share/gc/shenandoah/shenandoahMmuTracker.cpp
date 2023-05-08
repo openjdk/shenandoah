@@ -53,12 +53,35 @@ class ThreadTimeAccumulator : public ThreadClosure {
   }
 };
 
-double ShenandoahMmuTracker::gc_thread_time_seconds() {
+ShenandoahMmuTracker::ShenandoahMmuTracker() :
+    _most_recent_timestamp(0.0),
+    _most_recent_gc_time(0.0),
+    _most_recent_gcu(0.0),
+    _most_recent_mutator_time(0.0),
+    _most_recent_mu(0.0),
+    _most_recent_periodic_time_stamp(0.0),
+    _most_recent_periodic_gc_time(0.0),
+    _most_recent_periodic_mutator_time(0.0),
+    _mmu_periodic_task(new ShenandoahMmuTask(this)) {
+}
+
+ShenandoahMmuTracker::~ShenandoahMmuTracker() {
+  _mmu_periodic_task->disenroll();
+  delete _mmu_periodic_task;
+}
+
+void ShenandoahMmuTracker::fetch_cpu_times(double &gc_time, double &mutator_time) {
   ThreadTimeAccumulator cl;
   // We include only the gc threads because those are the only threads
   // we are responsible for.
   ShenandoahHeap::heap()->gc_threads_do(&cl);
-  return double(cl.total_time) / NANOSECS_PER_SEC;
+  double most_recent_gc_thread_time = double(cl.total_time) / NANOSECS_PER_SEC;
+  gc_time = most_recent_gc_thread_time;
+
+  double process_real_time(0.0), process_user_time(0.0), process_system_time(0.0);
+  bool valid = os::getTimesSecs(&process_real_time, &process_user_time, &process_system_time);
+  assert(valid, "don't know why this would not be valid");
+  mutator_time =(process_user_time + process_system_time) - most_recent_gc_thread_time;
 }
 
 double ShenandoahMmuTracker::process_time_seconds() {
@@ -70,49 +93,111 @@ double ShenandoahMmuTracker::process_time_seconds() {
   return 0.0;
 }
 
-ShenandoahMmuTracker::ShenandoahMmuTracker() :
-    _generational_reference_time_s(0.0),
-    _process_reference_time_s(0.0),
-    _collector_reference_time_s(0.0),
-    _mmu_periodic_task(new ShenandoahMmuTask(this)),
-    _mmu_average(10, ShenandoahAdaptiveDecayFactor) {
+void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char *msg) {
+  double current = os::elapsedTime();
+  _most_recent_gcid = gcid;
+  _most_recent_is_full = false;
+
+  if (gcid == 0) {
+    fetch_cpu_times(_most_recent_gc_time, _most_recent_mutator_time);
+
+    _most_recent_timestamp = current;
+  } else {
+    double gc_cycle_duration = current - _most_recent_timestamp;
+    _most_recent_timestamp = current;
+
+    double gc_thread_time, mutator_thread_time;
+    fetch_cpu_times(gc_thread_time, mutator_thread_time);
+    double gc_time = gc_thread_time - _most_recent_gc_time;
+    _most_recent_gc_time = gc_thread_time;
+    _most_recent_gcu = gc_time / (_active_processors * gc_cycle_duration);
+    double mutator_time = mutator_thread_time - _most_recent_mutator_time;
+    _most_recent_mutator_time = mutator_thread_time;
+    _most_recent_mu = mutator_time / (_active_processors * gc_cycle_duration);
+    log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% for duration %.3fs",
+                       msg, _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_duration);
+  }
 }
 
-ShenandoahMmuTracker::~ShenandoahMmuTracker() {
-  _mmu_periodic_task->disenroll();
-  delete _mmu_periodic_task;
+void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, uint gcid) {
+  help_record_concurrent(generation, gcid, "Concurrent Young GC");
 }
 
-void ShenandoahMmuTracker::record(ShenandoahGeneration* generation) {
-  shenandoah_assert_control_or_vm_thread();
-  double collector_time_s = gc_thread_time_seconds();
-  double elapsed_gc_time_s = collector_time_s - _generational_reference_time_s;
-  generation->add_collection_time(elapsed_gc_time_s);
-  _generational_reference_time_s = collector_time_s;
+void ShenandoahMmuTracker::record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool candidates_for_mixed) {
+  // Not likely that this will represent an "ideal" GCU, but doesn't hurt to try
+  help_record_concurrent(generation, gcid, "Bootstrap Old GC");
+  if (candidates_for_mixed) {
+    _doing_mixed_evacuations = true;
+  }
+  // Else, there are no candidates for mixed evacuations, so we are not going to do mixed evacuations.
+}
+
+void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done,
+                                                        bool has_old_candidates) {
+  // No special processing for old marking
+  double duration = os::elapsedTime() - _most_recent_timestamp;
+  double gc_time, mutator_time;
+  fetch_cpu_times(gc_time, mutator_time);
+  double gcu = (gc_time - _most_recent_gc_time) / duration;
+  double mu = (mutator_time - _most_recent_mutator_time) / duration;
+  if (has_old_candidates) {
+    _doing_mixed_evacuations = true;
+  }
+  log_info(gc, ergo)("At end of %s: GC Utilization: %.1f%% for duration %.3fs (which is subsumed in next concurrent gc report)",
+                     old_marking_done? "last OLD marking increment": "OLD marking increment",
+                     _most_recent_gcu * 100, duration);
+}
+
+void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done) {
+  help_record_concurrent(generation, gcid, "Mixed Concurrent GC");
+}
+
+void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
+                                              uint gcid, bool is_old_bootstrap, bool is_mixed_done) {
+  if ((gcid == _most_recent_gcid) && _most_recent_is_full) {
+    // Do nothing.  This is a redundant recording for the full gc that just completed.
+  } else if (is_old_bootstrap) {
+    help_record_concurrent(generation, gcid, "Degenerated Bootstrap Old GC");
+    if (!is_mixed_done) {
+      _doing_mixed_evacuations = true;
+    }
+  } else {
+    help_record_concurrent(generation, gcid, "Degenerated Young GC");
+  }
+}
+
+void ShenandoahMmuTracker::record_full(ShenandoahGeneration* generation, uint gcid) {
+  help_record_concurrent(generation, gcid, "Full GC");
+  _most_recent_is_full = true;
+  _doing_mixed_evacuations = false;
 }
 
 void ShenandoahMmuTracker::report() {
   // This is only called by the periodic thread.
-  double process_time_s = process_time_seconds();
-  double elapsed_process_time_s = process_time_s - _process_reference_time_s;
-  if (elapsed_process_time_s <= 0.01) {
-    // No cpu time for this interval?
-    return;
-  }
+  double current = os::elapsedTime();
+  double time_delta = current - _most_recent_periodic_time_stamp;
+  _most_recent_periodic_time_stamp = current;
 
-  _process_reference_time_s = process_time_s;
-  double collector_time_s = gc_thread_time_seconds();
-  double elapsed_collector_time_s = collector_time_s - _collector_reference_time_s;
-  _collector_reference_time_s = collector_time_s;
-  double minimum_mutator_utilization = ((elapsed_process_time_s - elapsed_collector_time_s) / elapsed_process_time_s) * 100;
-  _mmu_average.add(minimum_mutator_utilization);
-  log_info(gc)("Average MMU = %.3f", _mmu_average.davg());
+  double gc_time, mutator_time;
+  fetch_cpu_times(gc_time, mutator_time);
+
+  double gc_delta = gc_time - _most_recent_periodic_gc_time;
+  _most_recent_periodic_gc_time = gc_time;
+
+  double mutator_delta = mutator_time - _most_recent_periodic_mutator_time;
+  _most_recent_periodic_mutator_time = mutator_time;
+
+  double mu = mutator_delta / (_active_processors * time_delta);
+  double gcu = gc_delta / (_active_processors * time_delta);
+  log_info(gc)("Periodic Sample: Average GCU = %.3f%%, Average MU = %.3f%%", gcu * 100, mu * 100);
 }
 
 void ShenandoahMmuTracker::initialize() {
-  _process_reference_time_s = process_time_seconds();
-  _generational_reference_time_s = gc_thread_time_seconds();
-  _collector_reference_time_s = _generational_reference_time_s;
+  // initialize static data
+  _active_processors = os::initial_active_processor_count();
+
+  double _most_recent_periodic_time_stamp = os::elapsedTime();
+  fetch_cpu_times(_most_recent_periodic_gc_time, _most_recent_periodic_mutator_time);
   _mmu_periodic_task->enroll();
 }
 
@@ -208,9 +293,10 @@ bool ShenandoahGenerationSizer::adjust_generation_sizes() const {
     return false;
   }
 
-  if (_mmu_tracker->average() >= double(GCTimeRatio)) {
-    return false;
-  }
+  // With simplified MU implementation, we no longer use _mmu_tracker->average to trigger resizing
+  // if (_mmu_tracker->average() >= double(GCTimeRatio)) {
+  //   return false;
+  // }
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahOldGeneration *old = heap->old_generation();

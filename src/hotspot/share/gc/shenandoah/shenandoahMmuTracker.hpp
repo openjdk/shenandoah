@@ -50,16 +50,32 @@ class ShenandoahMmuTask;
  * MMU.
  */
 class ShenandoahMmuTracker {
+private:
+  // For reporting utilization during most recent GC cycle
+  double _most_recent_timestamp;
+  double _most_recent_gc_time;
+  double _most_recent_gcu;
+  double _most_recent_mutator_time;
+  double _most_recent_mu;
 
-  double _generational_reference_time_s;
-  double _process_reference_time_s;
-  double _collector_reference_time_s;
+  // For periodic MU/GCU reports
+  double _most_recent_periodic_time_stamp;
+  double _most_recent_periodic_gc_time;
+  double _most_recent_periodic_mutator_time;
+
+  uint _most_recent_gcid;
+  uint _active_processors;
+
+  bool _most_recent_is_full;
+  bool _doing_mixed_evacuations;
 
   ShenandoahMmuTask* _mmu_periodic_task;
   TruncatedSeq _mmu_average;
 
-  static double gc_thread_time_seconds();
   static double process_time_seconds();
+  static void fetch_cpu_times(double &gc_time, double &mutator_time);
+
+  void help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char* msg);
 
 public:
   explicit ShenandoahMmuTracker();
@@ -68,22 +84,22 @@ public:
   // This enrolls the periodic task after everything is initialized.
   void initialize();
 
-  // This is called at the start and end of a GC cycle. The GC thread times
-  // will be accumulated in this generation. Note that the bootstrap cycle
-  // for an old collection should be counted against the old generation.
-  // When the collector is idle, it still runs a regulator and a control.
-  // The times for these threads are attributed to the global generation.
-  void record(ShenandoahGeneration* generation);
+  // At completion of each GC cycle (not including interrupted cycles), we invoke one of the following to record the
+  // GC utilization during this cycle.
+  //
+  // We may redundantly record degen and full, in which case the gcid will repeat.  We log these as FULL.
+  // Full gets reported first.
+  void record_young(ShenandoahGeneration* generation, uint gcid);
+  void record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool has_old_candidates);
+  void record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done, bool has_old_candidates);
+  void record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done);
+  void record_full(ShenandoahGeneration* generation, uint gcid);
+  void record_degenerated(ShenandoahGeneration* generation, uint gcid, bool is_old_boostrap, bool is_mixed_done);
 
   // This is called by the periodic task timer. The interval is defined by
   // GCPauseIntervalMillis and defaults to 5 seconds. This method computes
   // the MMU over the elapsed interval and records it in a running average.
-  // This method also logs the average MMU.
   void report();
-
-  double average() {
-    return _mmu_average.davg();
-  }
 };
 
 class ShenandoahGenerationSizer {
