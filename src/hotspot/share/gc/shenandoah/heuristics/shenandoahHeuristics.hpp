@@ -108,6 +108,13 @@ protected:
   ShenandoahSharedFlag _metaspace_oom;
 
   static int compare_by_garbage(RegionData a, RegionData b);
+
+  // Compare by live is used to prioritize compaction of old-gen regions.  With old-gen compaction, the goal is
+  // to tightly pack long-lived objects into available regions.  In most cases, there has not been an accumulation
+  // of garbage within old-gen regions.  The more likely opportunity will be to combine multiple sparsely populated
+  // old-gen regions which may have been promoted in place into a smaller number of densely packed old-gen regions.
+  // This improves subsequent allocation efficiency and reduces the likelihood of allocation failure (including
+  // humongous allocation failure) due to fragmentation of the available old-gen allocation pool
   static int compare_by_live(RegionData a, RegionData b);
 
   // TODO: We need to enhance this API to give visibility to accompanying old-gen evacuation effort.

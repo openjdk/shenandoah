@@ -302,9 +302,9 @@
           range(1.0,100.0)                                                  \
                                                                             \
   product(double, ShenandoahPromoEvacWaste, 1.2, EXPERIMENTAL,              \
-          "How much waste evacuations produce within the reserved space. "  \
+          "How much waste promotions produce within the reserved space. "   \
           "Larger values make evacuations more resilient against "          \
-          "evacuation conflicts, at expense of evacuating less on each "    \
+          "evacuation conflicts, at expense of promoting less on each "     \
           "GC cycle.  Smaller values increase the risk of evacuation "      \
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
