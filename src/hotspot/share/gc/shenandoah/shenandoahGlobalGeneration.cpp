@@ -41,7 +41,7 @@ size_t ShenandoahGlobalGeneration::max_capacity() const {
 
 size_t ShenandoahGlobalGeneration::used_regions() const {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  assert(heap->mode()->is_generational(), "Region usage account is only for generational mode");
+  assert(heap->mode()->is_generational(), "Region usage accounting is only for generational mode");
   return heap->old_generation()->used_regions() + heap->young_generation()->used_regions();
 }
 
