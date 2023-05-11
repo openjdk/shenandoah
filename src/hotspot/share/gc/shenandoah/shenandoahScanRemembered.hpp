@@ -183,6 +183,7 @@
 #include "gc/shenandoah/shenandoahNumberSeq.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 #include "memory/iterator.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 class ShenandoahReferenceProcessor;
 class ShenandoahConcurrentMark;
@@ -393,12 +394,15 @@ private:
   static const uint16_t ObjectStartsInCardRegion = 0x80;
   static const uint16_t FirstStartBits           = 0x7f;
 
+  // Check that we have enough bits to store the largest possible offset into a card for an object start
+  static const int MaxCardSize = NOT_LP64(512) LP64_ONLY(1024);
+  STATIC_ASSERT((MaxCardSize / HeapWordSize) - 1 <= FirstStartBits);
+
   crossing_info *object_starts;
 
 public:
   // If we're setting first_start, assume the card has an object.
   inline void set_first_start(size_t card_index, uint8_t value) {
-    assert(value < FirstStartBits, "Offset into card would be truncated");
     object_starts[card_index].offsets.first = ObjectStartsInCardRegion | value;
   }
 
