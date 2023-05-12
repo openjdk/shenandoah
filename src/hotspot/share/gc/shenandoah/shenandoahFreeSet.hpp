@@ -220,7 +220,7 @@ public:
 
   void print_on(outputStream* out) const;
 
-  void find_regions_with_alloc_capacity();
+  void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions);
   void reserve_regions(size_t young_reserve, size_t old_reserve);
 };
 
