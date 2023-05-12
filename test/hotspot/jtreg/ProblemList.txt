@@ -83,11 +83,15 @@ gc/stress/gclocker/TestGCLockerWithG1.java 8180622 generic-all
 gc/stress/TestJNIBlockFullGC/TestJNIBlockFullGC.java 8192647 generic-all
 gc/stress/TestStressG1Humongous.java 8286554 windows-x64
 
-# kelvin wants to try enabling these tests
+# kelvin wants to try enabling all tests
 # gc/shenandoah/oom/TestClassLoaderLeak.java 8306336 generic-all
 # gc/shenandoah/mxbeans/TestChurnNotifications.java#generational 8306337 generic-all
 # gc/stress/gcold/TestGCOldWithShenandoah.java#generational 8306339 generic-all
 # gc/stress/systemgc/TestSystemGCWithShenandoah.java#generational 8306340 generic-all
+# gc/stress/gclocker/TestGCLockerWithShenandoah.java#generational 8306341 generic-all
+# gc/shenandoah/oom/TestThreadFailure.java 8306335 generic-all
+# gc/shenandoah/oom/TestClassLoaderLeak.java 8306336 generic-all
+# gc/shenandoah/TestDynamicSoftMaxHeapSize.java#generational 8306333 generic-all
 # gc/stress/gclocker/TestGCLockerWithShenandoah.java#generational 8306341 generic-all
 
 #############################################################################
@@ -140,6 +144,7 @@ serviceability/attach/ConcAttachTest.java 8290043 linux-all
 
 #############################################################################
 
+gtest/NMTGtests.java 8306561 aix-ppc64
 
 #############################################################################
 
