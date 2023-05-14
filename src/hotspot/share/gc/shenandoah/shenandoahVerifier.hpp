@@ -150,9 +150,10 @@ public:
 
     // Expect promote-in-place adjustments: padding inserted to temporarily prevent further allocation in regular regions
     _verify_size_adjusted_for_padding,
-
+#ifdef KELVIN_DEPRECATE
     // Expect promote-in-place adjustments: usage within regions promoted in place is transferred at end of update refs
     _verify_size_adjusted_for_deferred_accounting
+#endif
   } VerifySize;
 
   typedef enum {

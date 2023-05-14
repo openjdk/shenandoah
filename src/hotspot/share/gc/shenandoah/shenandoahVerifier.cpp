@@ -929,16 +929,21 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       ShenandoahGenerationStatsClosure::log_usage(_heap->global_generation(), cl.global);
     }
 
+#ifdef KELVIN_DEPRECATE
+    // I think I can also deprecate second argument to validate_usage:
+    // that is always false
+
     if (sizeness == _verify_size_adjusted_for_deferred_accounting) {
       ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->old_generation(), cl.old);
       ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->young_generation(), cl.young);
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
-    } else if  (sizeness == _verify_size_adjusted_for_padding) {
+    } else 
+#endif
+    if (sizeness == _verify_size_adjusted_for_padding) {
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
       ShenandoahGenerationStatsClosure::validate_usage(true, false, label, _heap->young_generation(), cl.young);
       ShenandoahGenerationStatsClosure::validate_usage(true, false, label, _heap->global_generation(), cl.global);
-    }
-    else if (sizeness == _verify_size_exact) {
+    } else if (sizeness == _verify_size_exact) {
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->young_generation(), cl.young);
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
@@ -1062,8 +1067,9 @@ void ShenandoahVerifier::verify_generic(VerifyOption vo) {
 
 void ShenandoahVerifier::verify_before_concmark() {
     verify_at_safepoint(
-            "Before Mark",
-            _verify_remembered_before_marking,  // verify read-only remembered set from bottom() to top()
+          "Before Mark",
+          _verify_remembered_before_marking,
+                                       // verify read-only remembered set from bottom() to top()
           _verify_forwarded_none,      // UR should have fixed up
           _verify_marked_disable,      // do not verify marked: lots ot time wasted checking dead allocations
           _verify_cset_none,           // UR should have fixed this
@@ -1079,7 +1085,8 @@ void ShenandoahVerifier::verify_after_concmark() {
           "After Mark",
           _verify_remembered_disable,  // do not verify remembered set
           _verify_forwarded_none,      // no forwarded references
-          _verify_marked_complete_except_references, // bitmaps as precise as we can get, except dangling j.l.r.Refs
+          _verify_marked_complete_except_references,
+                                       // bitmaps as precise as we can get, except dangling j.l.r.Refs
           _verify_cset_none,           // no references to cset anymore
           _verify_liveness_complete,   // liveness data must be complete here
           _verify_regions_disable,     // trash regions not yet recycled
@@ -1126,8 +1133,7 @@ void ShenandoahVerifier::verify_after_evacuation() {
           _verify_cset_forwarded,      // all cset refs are fully forwarded
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash,     // trash regions have been recycled already
-          _verify_size_adjusted_for_deferred_accounting,
-                                       // expect generation and heap sizes to match after adjustments for promote in place
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_forwarded    // evacuation produced some forwarded objects
   );
 }
@@ -1136,15 +1142,13 @@ void ShenandoahVerifier::verify_before_updaterefs() {
   verify_at_safepoint(
           "Before Updating References",
           _verify_remembered_before_updating_references,  // verify read-write remembered set
-          _verify_forwarded_allow,                     // forwarded references allowed
-          _verify_marked_complete,                     // bitmaps might be stale, but alloc-after-mark should be well
-          _verify_cset_forwarded,                      // all cset refs are fully forwarded
-          _verify_liveness_disable,                    // no reliable liveness data anymore
-          _verify_regions_notrash,                     // trash regions have been recycled already
-          _verify_size_adjusted_for_deferred_accounting,
-                                                       // expect generation and heap sizes to match after adjustments
-                                                       //  for promote in place
-          _verify_gcstate_updating                     // evacuation should have produced some forwarded objects
+          _verify_forwarded_allow,     // forwarded references allowed
+          _verify_marked_complete,     // bitmaps might be stale, but alloc-after-mark should be well
+          _verify_cset_forwarded,      // all cset refs are fully forwarded
+          _verify_liveness_disable,    // no reliable liveness data anymore
+          _verify_regions_notrash,     // trash regions have been recycled already
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
+          _verify_gcstate_updating     // evacuation should have produced some forwarded objects
   );
 }
 
@@ -1158,8 +1162,7 @@ void ShenandoahVerifier::verify_after_updaterefs() {
           _verify_cset_none,           // no cset references, all updated
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_nocset,      // no cset regions, trash regions have appeared
-          _verify_size_adjusted_for_deferred_accounting,
-                                       // expect generation and heap sizes to match after adjustments for promote in place
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // update refs had cleaned up forwarded objects
   );
 }
@@ -1173,7 +1176,7 @@ void ShenandoahVerifier::verify_after_degenerated() {
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
-          _verify_size_exact,           // expect generation and heap sizes to match exactly
+          _verify_size_exact,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable       // degenerated refs had cleaned up forwarded objects
   );
 }

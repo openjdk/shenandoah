@@ -452,15 +452,11 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
 void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
   size_t idx = region->index();
-  // TODO: the region that has been promoted in place may have been previously identified as is_collector_free or
-  // is_mutator_free.  When we restructure the implementation of ShenandoahFreeSet to give special handling to
-  // is_old_collector_free, we should also enforce that the region to be promoted, which is YOUNG and has no
-  // available memory after its promote-in-place-pad has been inserted above original top, is identified as neither
-  // is_mutator_free nor is_collector_free nor is_old_collector_free.
-
+  size_t capacity = alloc_capacity(region);
   assert(_free_sets.membership(idx) == NotFree, "Regions promoted in place should not be in any free set");
-  if (alloc_capacity(region) >= PLAB::min_size() * HeapWordSize) {
-    _free_sets.make_free(idx, OldCollector, alloc_capacity(region));
+  if (capacity >= PLAB::min_size() * HeapWordSize) {
+    _free_sets.make_free(idx, OldCollector, capacity);
+    _heap->augment_promo_reserve(capacity);
   }
 }
 
@@ -597,13 +593,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
         return nullptr;
       }
 
-      // TODO:
-      // if (!allow_new_region && req.is_old() && (young_generation->adjusted_unaffiliated_regions() > 0)) {
-      //   transfer a region from young to old;
-      //   allow_new_region = true;
-      //   heap->set_old_evac_reserve(heap->get_old_evac_reserve() + region_size_bytes);
-      // }
-      //
+      if (!allow_new_region && req.is_old() && (_heap->young_generation()->free_unaffiliated_regions() > 0)) {
+        // This allows us to flip a mutator region to old_collector
+        allow_new_region = true;
+      }
+
       // We should expand old-gen if this can prevent an old-gen evacuation failure.  We don't care so much about
       // promotion failures since they can be mitigated in a subsequent GC pass.  Would be nice to know if this
       // allocation request is for evacuation or promotion.  Individual threads limit their use of PLAB memory for
@@ -994,14 +988,15 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   size_t idx = r->index();
 
   assert(_free_sets.in_free_set(idx, Mutator), "Should be in mutator view");
+  // Note: can_allocate_from(r) means r is entirely empty
   assert(can_allocate_from(r), "Should not be allocated");
 
   size_t region_capacity = alloc_capacity(r);
   _free_sets.move_to_set(idx, OldCollector, region_capacity);
   _free_sets.assert_bounds();
-
-  // We do not ensure that the region is no longer trash,
-  // relying on try_allocate_in(), which always comes next,
+  _heap->generation_sizer()->force_transfer_to_old(1);
+  _heap->augment_old_evac_reserve(region_capacity);
+  // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
   // to recycle trash before attempting to allocate anything in the region.
 }
 
@@ -1015,8 +1010,7 @@ void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
   _free_sets.move_to_set(idx, Collector, region_capacity);
   _free_sets.assert_bounds();
 
-  // We do not ensure that the region is no longer trash,
-  // relying on try_allocate_in(), which always comes next,
+  // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
   // to recycle trash before attempting to allocate anything in the region.
 }
 
@@ -1036,21 +1030,19 @@ void ShenandoahFreeSet::clear_internal() {
 // next highest addresses of the heap, with mutator memory consuming the lowest addresses of the heap.
 void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions) {
 
-  young_cset_regions = 0;
   old_cset_regions = 0;
-
+  young_cset_regions = 0;
   for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
     if (region->is_trash()) {
       // Trashed regions represent regions that had been in the collection set but have not yet been "cleaned up".
       if (region->is_old()) {
-	old_cset_regions++;
+        old_cset_regions++;
       } else {
-	assert(region->is_young(), "Trashed region should be old or young");
-	young_cset_regions++;
+        assert(region->is_young(), "Trashed region should be old or young");
+        young_cset_regions++;
       }
     }
-
     if (region->is_alloc_allowed() || region->is_trash()) {
       assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
       assert(_free_sets.in_free_set(idx, NotFree), "We are about to make region free; it should not be free already");
@@ -1075,9 +1067,8 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
   }
 }
 
-// Return the amount of young-gen memory that is about to be reycled
+// Overwrite arguments to represent the amount of memory in each generation that is about to be recycled
 void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions) {
-  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   shenandoah_assert_heaplocked();
   // This resets all state information, removing all regions from all sets.
   clear();

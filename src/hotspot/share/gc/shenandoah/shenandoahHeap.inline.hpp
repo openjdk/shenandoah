@@ -754,6 +754,14 @@ inline size_t ShenandoahHeap::get_old_evac_reserve() const {
   return _old_evac_reserve;
 }
 
+inline void ShenandoahHeap::augment_old_evac_reserve(size_t increment) {
+  _old_evac_reserve += increment;
+}
+
+inline void ShenandoahHeap::augment_promo_reserve(size_t increment) {
+  _promoted_reserve += increment;
+}
+
 inline void ShenandoahHeap::reset_old_evac_expended() {
   Atomic::store(&_old_evac_expended, (size_t) 0);
 }

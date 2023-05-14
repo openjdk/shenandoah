@@ -293,7 +293,7 @@
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
                                                                             \
-  product(double, ShenandoahOldEvacWaste, 1.6, EXPERIMENTAL,                \
+  product(double, ShenandoahOldEvacWaste, 1.4, EXPERIMENTAL,                \
           "How much waste evacuations produce within the reserved space. "  \
           "Larger values make evacuations more resilient against "          \
           "evacuation conflicts, at expense of evacuating less on each "    \

@@ -1203,8 +1203,9 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
            "Unaffiliated available must be less than total available");
 
     // We want this much memory to be unfragmented in order to reliably evacuate old.  This is conservative because we
-    // only have to evacuate the live memory within mixed candidate.
-    size_t max_evac_need = (size_t) (mixed_candidates * region_size_bytes * ShenandoahOldEvacWaste);
+    // may not evacuate the entirety of unprocessed candidates in a single mixed evacuation.
+    size_t max_evac_need = (size_t)
+      (old_heuristics()->unprocessed_old_collection_candidates_live_memory() * ShenandoahOldEvacWaste);
     size_t old_fragmented_available =
       old_generation()->available() - old_generation()->free_unaffiliated_regions() * region_size_bytes;
     reserve_for_mixed = max_evac_need + old_fragmented_available;
@@ -1227,7 +1228,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   }
   old_reserve = reserve_for_mixed + reserve_for_promo;
   assert(old_reserve <= max_old_reserve, "cannot reserve more than max for old evacuations");
-
   size_t old_available = old_generation()->available() + old_cset_regions * region_size_bytes;
   size_t young_available = young_generation()->available() + young_cset_regions * region_size_bytes;
   size_t old_region_deficit = 0;
@@ -1253,9 +1253,9 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   }
 
   if (old_region_deficit > max_old_region_xfer) {
-    // If we're running short on young-gen memory, limit the xfer
+    // If we're running short on young-gen memory, limit the xfer.  Old-gen collection activities will be curtailed
+    // if the budget is smaller than desired.
     old_region_deficit = max_old_region_xfer;
-    // old-gen collection activities will be curtailed if the budget is smaller than desired.
   }
   set_old_region_surplus(old_region_surplus);
   set_old_region_deficit(old_region_deficit);
@@ -3064,6 +3064,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational()) {
+#ifdef KELVIN_DEPRECATE
     // Promote aged humongous regions.  We know that all of the regions to be transferred exist in young.
     size_t humongous_regions_promoted = get_promotable_humongous_regions();
     size_t humongous_bytes_promoted = get_promotable_humongous_usage();
@@ -3078,18 +3079,26 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                          ", representing total usage of " SIZE_FORMAT,
                          humongous_regions_promoted, regular_regions_promoted_in_place, bytes_promoted_in_place);
       size_t free_old_regions = old_generation()->free_unaffiliated_regions();
+      // usage, affiliated region counts, and humongous waste are now accounted when the regions are promoted
+
       // Decrease usage within young before we transfer capacity to old in order to avoid certain assertion failures.
       young_generation()->decrease_humongous_waste(humongous_waste_promoted);
       young_generation()->decrease_used(bytes_promoted_in_place);
       young_generation()->decrease_affiliated_region_count(total_regions_promoted);
+
       if (free_old_regions < total_regions_promoted) {
+        // Regions that were promoted in place were transferred at the time they were promoted.
         size_t needed_regions = total_regions_promoted - free_old_regions;
         generation_sizer()->force_transfer_to_old(needed_regions);
       }
+
+      // usage, affiliated region counts, and humongous waste are now accounted when the regions are promoted
+
       old_generation()->increase_affiliated_region_count(total_regions_promoted);
       old_generation()->increase_used(bytes_promoted_in_place);
       old_generation()->increase_humongous_waste(humongous_waste_promoted);
     }
+#endif
     assert(verify_generation_usage(true, old_generation()->used_regions(),
                                    old_generation()->used(), old_generation()->get_humongous_waste(),
                                    true, young_generation()->used_regions(),

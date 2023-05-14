@@ -458,6 +458,7 @@ public:
   // Returns previous value
   inline size_t set_promoted_reserve(size_t new_val);
   inline size_t get_promoted_reserve() const;
+  inline void augment_promo_reserve(size_t increment);
 
   inline void reset_promoted_expended();
   inline size_t expend_promoted(size_t increment);
@@ -467,6 +468,7 @@ public:
   // Returns previous value
   inline size_t set_old_evac_reserve(size_t new_val);
   inline size_t get_old_evac_reserve() const;
+  inline void augment_old_evac_reserve(size_t increment);
 
   inline void reset_old_evac_expended();
   inline size_t expend_old_evac(size_t increment);

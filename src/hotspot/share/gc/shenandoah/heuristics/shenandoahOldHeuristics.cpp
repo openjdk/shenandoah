@@ -68,13 +68,33 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
   size_t old_evacuation_budget = (size_t) ((double) heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
+  size_t unfragmented_available = heap->old_generation()->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
+  size_t fragmented_available;
+  size_t excess_fragmented_available;
+
+  if (unfragmented_available > old_evacuation_budget) {
+    unfragmented_available = old_evacuation_budget;
+    fragmented_available = 0;
+    excess_fragmented_available = 0;
+  } else {
+    assert(heap->old_generation()->available() > old_evacuation_budget, "Cannot budget more than is available");
+    fragmented_available = heap->old_generation()->available() - unfragmented_available;
+    assert(fragmented_available + unfragmented_available >= old_evacuation_budget, "Budgets do not add up");
+    if (fragmented_available + unfragmented_available > old_evacuation_budget) {
+      excess_fragmented_available = (fragmented_available + unfragmented_available) - old_evacuation_budget;
+      fragmented_available -= excess_fragmented_available;
+    }
+  }
+
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
   log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
                byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
                unprocessed_old_collection_candidates());
 
   // The number of old-gen regions that were selected as candidates for collection at the end of the most recent old-gen
-  // concurrent marking phase and have not yet been collected is represented by unprocessed_old_collection_candidates()
+  // concurrent marking phase and have not yet been collected is represented by unprocessed_old_collection_candidates().
+  // Candidate regions are ordered according to increasing amount of live data.  If there is not sufficient room to
+  // evacuate region N, then there is no need to even consider evacuating region N+1.
   while (unprocessed_old_collection_candidates() > 0) {
     // Old collection candidates are sorted in order of decreasing garbage contained therein.
     ShenandoahHeapRegion* r = next_old_collection_candidate();
@@ -82,28 +102,72 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       break;
     }
 
-    // If we choose region r to be collected, then we need to decrease the capacity to hold other evacuations by
-    // the size of r's free memory.
-    size_t lost_evacuation_capacity = r->free();
+    // If region r is evacuated to fragmented memory (to free memory within a partially used region), then we need
+    // to decrease the capacity of the fragmented memory by the scaled loss.
+
     size_t live_data_for_evacuation = r->get_live_data_bytes();
-    if (live_data_for_evacuation + lost_evacuation_capacity <= remaining_old_evacuation_budget) {
-      // Decrement remaining evacuation budget by bytes that will be copied.
-      remaining_old_evacuation_budget -= (live_data_for_evacuation + lost_evacuation_capacity);
-      collection_set->add_region(r);
-      included_old_regions++;
-      evacuated_old_bytes += live_data_for_evacuation;
-      collected_old_bytes += r->garbage();
-      consume_old_collection_candidate();
-    } else {
-      break;
+    size_t lost_available = r->free();
+
+    if ((lost_available > 0) && (excess_fragmented_available > 0)) {
+      if (lost_available < excess_fragmented_available) {
+        excess_fragmented_available -= lost_available;
+        lost_available  = 0;
+      } else {
+        lost_available -= excess_fragmented_available;
+        excess_fragmented_available = 0;
+      }
     }
+    size_t scaled_loss = (size_t) ((double) lost_available / ShenandoahOldEvacWaste);
+    if ((lost_available > 0) && (fragmented_available > 0)) {
+      if (scaled_loss + live_data_for_evacuation < fragmented_available) {
+        fragmented_available -= scaled_loss;
+        scaled_loss = 0;
+      } else {
+        // We will have to allocate this region's evacuation memory from unfragmented memory, so don't bother
+        // to decrement scaled_loss
+      }
+    }
+    if (scaled_loss > 0) {
+      // We were not able to account for the lost free memory within fragmented memory, so we need to take this
+      // allocation out of unfragmented memory.  Unfragmented memory does not need to account for loss of free.
+      if (live_data_for_evacuation > unfragmented_available) {
+        // There is not room to evacuate this region or any that come after it in within the candidates array.
+        break;
+      } else {
+        unfragmented_available -= live_data_for_evacuation;
+      }
+    } else {
+      // Since scaled_loss == 0, we have accounted for the loss of free memory, so we can allocate from either
+      // fragmented or unfragmented available memory.  Use up the fragmented memory budget first.
+      size_t evacuation_need = live_data_for_evacuation;
+
+      if (evacuation_need > fragmented_available) {
+        evacuation_need -= fragmented_available;
+        fragmented_available = 0;
+      } else {
+        fragmented_available -= evacuation_need;
+        evacuation_need = 0;
+      }
+      if (evacuation_need > unfragmented_available) {
+        // There is not room to evacuate this region or any that come after it in within the candidates array.
+        break;
+      } else {
+        unfragmented_available -= evacuation_need;
+        // dead code: evacuation_need == 0;  
+      }
+    }
+    collection_set->add_region(r);
+    included_old_regions++;
+    evacuated_old_bytes += live_data_for_evacuation;
+    collected_old_bytes += r->garbage();
+    consume_old_collection_candidate();
   }
 
   if (_first_pinned_candidate != NOT_FOUND) {
     // Need to deal with pinned regions
     slide_pinned_regions_to_front();
   }
-
+  decrease_unprocessed_old_collection_candidates_live_memory(evacuated_old_bytes);
   if (included_old_regions > 0) {
     log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
                  included_old_regions,
@@ -283,11 +347,13 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   //
   // TODO: allow ShenandoahOldGarbageThreshold to be determined adaptively, by heuristics.
 
+  const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+
   // The convention is to collect regions that have more than this amount of garbage.
-  const size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold / 100;
+  const size_t garbage_threshold = region_size_bytes * ShenandoahOldGarbageThreshold / 100;
 
   // Englightened interpretation: collect regions that have less than this amount of live.
-  const size_t live_threshold = ShenandoahHeapRegion::region_size_bytes() - garbage_threshold;
+  const size_t live_threshold = region_size_bytes - garbage_threshold;
 
   size_t candidates_garbage = 0;
   _last_old_region = (uint)cand_idx;
@@ -319,13 +385,28 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
                byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
                byte_size_in_proper_unit(unfragmented),        proper_unit_for_byte_size(unfragmented), old_candidates,
                byte_size_in_proper_unit(immediate_garbage),   proper_unit_for_byte_size(immediate_garbage), immediate_regions);
-
+  size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
+  set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
   if (unprocessed_old_collection_candidates() == 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   } else {
     _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_EVAC);
   }
 }
+
+size_t ShenandoahOldHeuristics::unprocessed_old_collection_candidates_live_memory() const {
+  return _live_bytes_in_unprocessed_candidates;
+}
+
+void ShenandoahOldHeuristics::set_unprocessed_old_collection_candidates_live_memory(size_t initial_live) {
+  _live_bytes_in_unprocessed_candidates = initial_live;
+}
+
+void ShenandoahOldHeuristics::decrease_unprocessed_old_collection_candidates_live_memory(size_t evacuated_live) {
+  assert(evacuated_live <= _live_bytes_in_unprocessed_candidates, "Cannot evacuate more than was present");
+  _live_bytes_in_unprocessed_candidates -= evacuated_live;
+}
+
 
 // TODO: Unused?
 uint ShenandoahOldHeuristics::last_old_collection_candidate_index() {
@@ -389,6 +470,11 @@ void ShenandoahOldHeuristics::record_cycle_end() {
   clear_triggers();
 }
 
+void ShenandoahOldHeuristics::trigger_old_has_grown() {
+  _growth_trigger = true;
+}
+
+
 void ShenandoahOldHeuristics::clear_triggers() {
   // Clear any triggers that were set during mixed evacuations.  Conditions may be different now that this phase has finished.
   _promotion_failed = false;
@@ -433,16 +519,23 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   }
 
   if (_growth_trigger) {
+    // Growth may be falsely triggered during mixed evacuations, before the mixed-evacuation candidates have been
+    // evacuated.  Before acting on a false trigger, we check to confirm the trigger condition is still satisfied.
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahOldGeneration* old_gen = heap->old_generation();
     size_t current_usage = old_gen->used();
-    size_t live_at_previous_old = old_gen->get_live_bytes_after_last_mark();
-    double percent_growth = 100.0 * ((double) current_usage - live_at_previous_old) / live_at_previous_old;
-    log_info(gc)("Trigger (OLD): Old has overgrown, live at end of previous OLD marking: "
-                 SIZE_FORMAT "%s, current usage: " SIZE_FORMAT "%s, percent growth: %.1f%%",
-                 byte_size_in_proper_unit(live_at_previous_old), proper_unit_for_byte_size(live_at_previous_old),
-                 byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage), percent_growth);
-    return true;
+    size_t trigger_threshold = old_gen->usage_trigger_threshold();
+    if (current_usage > trigger_threshold) {
+      size_t live_at_previous_old = old_gen->get_live_bytes_after_last_mark();
+      double percent_growth = 100.0 * ((double) current_usage - live_at_previous_old) / live_at_previous_old;
+      log_info(gc)("Trigger (OLD): Old has overgrown, live at end of previous OLD marking: "
+                   SIZE_FORMAT "%s, current usage: " SIZE_FORMAT "%s, percent growth: %.1f%%",
+                   byte_size_in_proper_unit(live_at_previous_old), proper_unit_for_byte_size(live_at_previous_old),
+                   byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage), percent_growth);
+      return true;
+    } else {
+      _growth_trigger = false;
+    }
   }
 
   // Otherwise, defer to configured heuristic for gc trigger.
