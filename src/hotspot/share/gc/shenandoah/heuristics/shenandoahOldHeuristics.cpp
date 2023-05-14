@@ -153,7 +153,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
         break;
       } else {
         unfragmented_available -= evacuation_need;
-        // dead code: evacuation_need == 0;  
+        // dead code: evacuation_need == 0;
       }
     }
     collection_set->add_region(r);

@@ -937,7 +937,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->old_generation(), cl.old);
       ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->young_generation(), cl.young);
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
-    } else 
+    } else
 #endif
     if (sizeness == _verify_size_adjusted_for_padding) {
       ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
