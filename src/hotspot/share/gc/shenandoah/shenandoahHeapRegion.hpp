@@ -458,7 +458,7 @@ public:
   inline ShenandoahAffiliation affiliation() const;
   inline const char* affiliation_name() const;
 
-  void set_affiliation(ShenandoahAffiliation new_affiliation, bool defer_affiliated_region_count_updates);
+  void set_affiliation(ShenandoahAffiliation new_affiliation);
 
   uint age()           { return _age; }
   void increment_age() { _age++; }

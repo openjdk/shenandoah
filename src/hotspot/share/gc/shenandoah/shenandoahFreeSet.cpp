@@ -705,7 +705,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   try_recycle_trashed(r);
   if (!r->is_affiliated()) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
-    r->set_affiliation(req.affiliation(), false);
+    r->set_affiliation(req.affiliation());
     if (r->is_old()) {
       // Any OLD region allocated during concurrent coalesce-and-fill does not need to be coalesced and filled because
       // all objects allocated within this region are above TAMS (and thus are implicitly marked).  In case this is an
@@ -715,6 +715,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // coalesce-and-fill processing.
       r->end_preemptible_coalesce_and_fill();
       _heap->clear_cards_for(r);
+      _heap->old_generation()->increment_affiliated_region_count();
+    } else {
+      _heap->young_generation()->increment_affiliated_region_count();
     }
 
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
@@ -912,13 +915,14 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
       used_words = ShenandoahHeapRegion::region_size_words();
     }
 
-    r->set_affiliation(req.affiliation(), false);
+    r->set_affiliation(req.affiliation());
     r->set_update_watermark(r->bottom());
     r->set_top(r->bottom() + used_words);
 
     // While individual regions report their true use, all humongous regions are marked used in the free set.
     _free_sets.remove_from_free_sets(r->index());
   }
+  _heap->young_generation()->increase_affiliated_region_count(num);
 
   size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
   _free_sets.increase_used(Mutator, total_humongous_size);

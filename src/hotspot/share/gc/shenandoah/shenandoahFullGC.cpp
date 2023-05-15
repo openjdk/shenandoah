@@ -539,7 +539,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           ShenandoahHeapRegion* new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(OLD_GENERATION, false);
+          new_to_region->set_affiliation(OLD_GENERATION);
           _old_to_region = new_to_region;
           _old_compact_point = _old_to_region->bottom();
           promote_object = true;
@@ -565,7 +565,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(OLD_GENERATION, false);
+          new_to_region->set_affiliation(OLD_GENERATION);
         } else {
           // If we've exhausted the previously selected _old_to_region, we know that the _old_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.
@@ -610,7 +610,7 @@ public:
         if (_empty_regions_pos < _empty_regions.length()) {
           new_to_region = _empty_regions.at(_empty_regions_pos);
           _empty_regions_pos++;
-          new_to_region->set_affiliation(YOUNG_GENERATION, false);
+          new_to_region->set_affiliation(YOUNG_GENERATION);
         } else {
           // If we've exhausted the previously selected _young_to_region, we know that the _young_to_region is distinct
           // from _from_region.  That's because there is always room for _from_region to be compacted into itself.

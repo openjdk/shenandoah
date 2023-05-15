@@ -103,7 +103,8 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affilia
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      set_affiliation(affiliation, false);
+      set_affiliation(affiliation);
+      ShenandoahHeap::heap()->generation_for(affiliation)->increment_affiliated_region_count();
       set_state(_regular);
     case _regular:
     case _pinned:
@@ -123,7 +124,8 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _cset:
    case _humongous_start:
    case _humongous_cont:
-     set_affiliation(YOUNG_GENERATION, false);
+     set_affiliation(YOUNG_GENERATION);
+     ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
      return;
    case _pinned_cset:
    case _regular:
@@ -176,7 +178,8 @@ void ShenandoahHeapRegion::make_humongous_start() {
 void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
-  set_affiliation(affiliation, false);
+  set_affiliation(affiliation);
+  ShenandoahHeap::heap()->generation_for(affiliation)->increment_affiliated_region_count();
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -207,7 +210,8 @@ void ShenandoahHeapRegion::make_humongous_cont() {
 void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
-  set_affiliation(affiliation, false);
+  set_affiliation(affiliation);
+  ShenandoahHeap::heap()->generation_for(affiliation)->increment_affiliated_region_count();
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -673,8 +677,8 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
-  set_affiliation(FREE, false);
-
+  ShenandoahHeap::heap()->generation_for(affiliation())->decrement_affiliated_region_count();
+  set_affiliation(FREE);
   if (ZapUnusedHeapArea) {
     SpaceMangler::mangle_region(MemRegion(bottom(), end()));
   }
@@ -930,7 +934,7 @@ size_t ShenandoahHeapRegion::pin_count() const {
   return Atomic::load(&_critical_pins);
 }
 
-void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation, bool defer_affiliated_region_count_updates) {
+void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   ShenandoahAffiliation region_affiliation = heap->region_affiliation(this);
@@ -959,7 +963,6 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
     return;
   }
 
-
   if (!heap->mode()->is_generational()) {
     log_trace(gc)("Changing affiliation of region %zu from %s to %s",
                   index(), affiliation_name(), shenandoah_affiliation_name(new_affiliation));
@@ -967,46 +970,22 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
     return;
   }
 
-#ifdef KELVIN_DEPRECATE
-  // my plan is to get rid of the defer_affiliated_region_count_updates argument so I can immediately update
-  if (!defer_affiliated_region_count_updates) {
-#endif
-    if (is_young()) {
-      heap->young_generation()->decrement_affiliated_region_count();
-    } else if (is_old()) {
-      heap->old_generation()->decrement_affiliated_region_count();
-    }
-    size_t regions;
-    switch (new_affiliation) {
-      case FREE:
-        assert(!has_live(), "Free region should not have live data");
-        break;
-      case YOUNG_GENERATION:
-        reset_age();
-        regions = heap->young_generation()->increment_affiliated_region_count();
-        // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
-        // restored upon completion of Full GC.
-        assert(heap->is_full_gc_in_progress() ||
-               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->young_generation()->soft_max_capacity()),
-               "Number of young regions cannot exceed capacity");
-        break;
-      case OLD_GENERATION:
-        regions = heap->old_generation()->increment_affiliated_region_count();
-        // During Full GC, we allow temporary violation of this requirement.  We enforce that this condition is
-        // restored upon completion of Full GC.
-        assert(heap->is_full_gc_in_progress() ||
-               (regions * ShenandoahHeapRegion::region_size_bytes() <= heap->old_generation()->soft_max_capacity()),
-               "Number of old regions cannot exceed capacity");
-        break;
-      default:
-        ShouldNotReachHere();
-        return;
-    }
-#ifdef KELVIN_DEPRECATE
-  } else if (new_affiliation == YOUNG_GENERATION) {
-    reset_age();
+  size_t regions;
+  switch (new_affiliation) {
+    case FREE:
+      assert(!has_live(), "Free region should not have live data");
+      break;
+    case YOUNG_GENERATION:
+      reset_age();
+      break;
+    case OLD_GENERATION:
+      // TODO: should we reset_age() for OLD as well?  Examine invocations of set_affiliation(). Some contexts redundantly
+      //       invoke reset_age().
+      break;
+    default:
+      ShouldNotReachHere();
+      return;
   }
-#endif
   heap->set_affiliation(this, new_affiliation);
 }
 
@@ -1051,12 +1030,13 @@ void ShenandoahHeapRegion::promote_in_place() {
     // we would be trading a fully empty region for a partially used region.
 
     young_gen->decrease_used(region_used);
+    young_gen->decrement_affiliated_region_count();
 
     // transfer_to_old() increases capacity of old and decreases capacity of young
     heap->generation_sizer()->force_transfer_to_old(1);
 
-    // set_affiliation() increments affiliated_regions for OLD, decrements for YOUNG
-    set_affiliation(OLD_GENERATION, true);
+    set_affiliation(OLD_GENERATION);
+    old_gen->increment_affiliated_region_count();
     old_gen->increase_used(region_used);
 
     // add_old_collector_free_region() increases promoted_reserve() if available space exceeds PLAB::min_size()
@@ -1127,6 +1107,7 @@ void ShenandoahHeapRegion::promote_humongous() {
 
     young_generation->decrease_used(used_bytes);
     young_generation->decrease_humongous_waste(humongous_waste);
+    young_generation->decrease_affiliated_region_count(spanned_regions);
 
     // transfer_to_old() increases capacity of old and decreases capacity of young
     heap->generation_sizer()->force_transfer_to_old(spanned_regions);
@@ -1139,9 +1120,10 @@ void ShenandoahHeapRegion::promote_humongous() {
       log_debug(gc)("promoting humongous region " SIZE_FORMAT ", from " PTR_FORMAT " to " PTR_FORMAT,
                     r->index(), p2i(r->bottom()), p2i(r->top()));
       // We mark the entire humongous object's range as dirty after loop terminates, so no need to dirty the range here
-      r->set_affiliation(OLD_GENERATION, true);
+      r->set_affiliation(OLD_GENERATION);
     }
 
+    young_generation->increase_affiliated_region_count(spanned_regions);
     old_generation->increase_used(used_bytes);
     old_generation->increase_humongous_waste(humongous_waste);
   }
