@@ -103,8 +103,7 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affilia
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      set_affiliation(affiliation);
-      ShenandoahHeap::heap()->generation_for(affiliation)->increment_affiliated_region_count();
+      assert(this->affiliation() == affiliation, "Region affiliation should already be established");
       set_state(_regular);
     case _regular:
     case _pinned:
@@ -124,8 +123,13 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _cset:
    case _humongous_start:
    case _humongous_cont:
-     set_affiliation(YOUNG_GENERATION);
-     ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
+     if (affiliation() != YOUNG_GENERATION) {
+       if (is_old()) {
+	 ShenandoahHeap::heap()->old_generation()->decrement_affiliated_region_count();
+       }
+       set_affiliation(YOUNG_GENERATION);
+       ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
+     }
      return;
    case _pinned_cset:
    case _regular:
@@ -178,8 +182,8 @@ void ShenandoahHeapRegion::make_humongous_start() {
 void ShenandoahHeapRegion::make_humongous_start_bypass(ShenandoahAffiliation affiliation) {
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
+  // Don't bother to account for affiliated regions during Full GC.  We recompute totals at end.
   set_affiliation(affiliation);
-  ShenandoahHeap::heap()->generation_for(affiliation)->increment_affiliated_region_count();
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -211,7 +215,7 @@ void ShenandoahHeapRegion::make_humongous_cont_bypass(ShenandoahAffiliation affi
   shenandoah_assert_heaplocked();
   assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
   set_affiliation(affiliation);
-  ShenandoahHeap::heap()->generation_for(affiliation)->increment_affiliated_region_count();
+  // Don't bother to account for affiliated regions during Full GC.  We recompute totals at end.
   reset_age();
   switch (_state) {
     case _empty_committed:
@@ -1034,8 +1038,8 @@ void ShenandoahHeapRegion::promote_in_place() {
 
     // transfer_to_old() increases capacity of old and decreases capacity of young
     heap->generation_sizer()->force_transfer_to_old(1);
-
     set_affiliation(OLD_GENERATION);
+
     old_gen->increment_affiliated_region_count();
     old_gen->increase_used(region_used);
 
@@ -1123,7 +1127,7 @@ void ShenandoahHeapRegion::promote_humongous() {
       r->set_affiliation(OLD_GENERATION);
     }
 
-    young_generation->increase_affiliated_region_count(spanned_regions);
+    old_generation->increase_affiliated_region_count(spanned_regions);
     old_generation->increase_used(used_bytes);
     old_generation->increase_humongous_waste(humongous_waste);
   }
