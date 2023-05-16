@@ -974,7 +974,6 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
     return;
   }
 
-  size_t regions;
   switch (new_affiliation) {
     case FREE:
       assert(!has_live(), "Free region should not have live data");
