@@ -206,7 +206,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     }
   } else {
     // Traditional Shenandoah (non-generational)
-    size_t capacity    = ShenandoahHeap::heap()->soft_max_capacity();
+    size_t capacity    = ShenandoahHeap::heap()->max_capacity();
     size_t max_cset    = (size_t)((1.0 * capacity / 100 * ShenandoahEvacReserve) / ShenandoahEvacWaste);
     size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_cset;
     size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
@@ -334,7 +334,8 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
 
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
-  size_t available = _generation->available();
+  size_t usage = _generation->used();
+  size_t available = (capacity > usage)? capacity - usage: 0;
   size_t allocated = _generation->bytes_allocated_since_gc_start();
 
   size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_bytes_collected();
@@ -405,7 +406,8 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
-  size_t available = _generation->available();
+  size_t usage = _generation->used();
+  size_t available = (capacity > usage)? capacity - usage: 0;
   size_t allocated = _generation->bytes_allocated_since_gc_start();
 
   log_debug(gc)("should_start_gc (%s)? available: " SIZE_FORMAT ", soft_max_capacity: " SIZE_FORMAT

@@ -696,7 +696,7 @@ size_t ShenandoahGeneration::used_regions() const {
 }
 
 size_t ShenandoahGeneration::free_unaffiliated_regions() const {
-  size_t result = soft_max_capacity() / ShenandoahHeapRegion::region_size_bytes();
+  size_t result = max_capacity() / ShenandoahHeapRegion::region_size_bytes();
   if (_affiliated_region_count > result) {
     result = 0;
   } else {
@@ -711,7 +711,7 @@ size_t ShenandoahGeneration::used_regions_size() const {
 
 size_t ShenandoahGeneration::available() const {
   size_t in_use = used() + get_humongous_waste();
-  size_t soft_capacity = soft_max_capacity();
+  size_t soft_capacity = max_capacity();
   return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 

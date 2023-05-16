@@ -180,9 +180,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
     // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
     // made valid by the time Full GC completes.
-    assert(heap->old_generation()->used_regions_size() <= heap->old_generation()->soft_max_capacity(),
+    assert(heap->old_generation()->used_regions_size() <= heap->old_generation()->max_capacity(),
            "Old generation affiliated regions must be less than capacity");
-    assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->soft_max_capacity(),
+    assert(heap->young_generation()->used_regions_size() <= heap->young_generation()->max_capacity(),
            "Young generation affiliated regions must be less than capacity");
 
     assert((heap->young_generation()->used() + heap->young_generation()->get_humongous_waste())

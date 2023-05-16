@@ -441,16 +441,16 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               "%s: generation (%s) used regions (" SIZE_FORMAT ") must equal regions that are in use (" SIZE_FORMAT ")",
               label, generation->name(), generation->used_regions(), stats.regions());
 
-    size_t generation_capacity = generation->soft_max_capacity();
+    size_t generation_capacity = generation->max_capacity();
     size_t humongous_regions_promoted = 0;
     if (adjust_for_deferred_accounting) {
       humongous_regions_promoted = heap->get_promotable_humongous_regions();
       size_t transferred_regions = humongous_regions_promoted;
       if (generation->is_old()) {
-        // Promoted-in-place regions are labeled as old, but generation->soft_max_capacity() has not yet been increased
+        // Promoted-in-place regions are labeled as old, but generation->max_capacity() has not yet been increased
         generation_capacity += transferred_regions * ShenandoahHeapRegion::region_size_bytes();
       } else if (generation->is_young()) {
-        // Promoted-in-place regions are labeled as old, but generation->soft_max_capacity() has not yet been decreased
+        // Promoted-in-place regions are labeled as old, but generation->max_capacity() has not yet been decreased
         generation_capacity -= transferred_regions * ShenandoahHeapRegion::region_size_bytes();
       }
     }

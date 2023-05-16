@@ -515,7 +515,7 @@ void ShenandoahHeap::initialize_heuristics_generations() {
   // allowed for old and young could exceed the total heap size. It remains the case that the
   // _actual_ capacity of young + old = total.
   if (strcmp(ShenandoahGCMode, "generational") == 0) {
-    _generation_sizer.heap_size_changed(soft_max_capacity());
+    _generation_sizer.heap_size_changed(max_capacity());
     size_t initial_capacity_young = _generation_sizer.max_young_size();
     size_t max_capacity_young = _generation_sizer.max_young_size();
     size_t initial_capacity_old = max_capacity() - max_capacity_young;
@@ -523,15 +523,15 @@ void ShenandoahHeap::initialize_heuristics_generations() {
 
     _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
     _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-    _global_generation = new ShenandoahGlobalGeneration(true, _max_workers, soft_max_capacity(), soft_max_capacity());
+    _global_generation = new ShenandoahGlobalGeneration(true, _max_workers, max_capacity(), max_capacity());
     _global_generation->initialize_heuristics(_gc_mode);
     _young_generation->initialize_heuristics(_gc_mode);
     _old_generation->initialize_heuristics(_gc_mode);
 
   } else {
-    _young_generation = new ShenandoahYoungGeneration(_max_workers, soft_max_capacity(), soft_max_capacity());
+    _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity(), max_capacity());
     _old_generation = new ShenandoahOldGeneration(_max_workers, 0L, 0L);
-    _global_generation = new ShenandoahGlobalGeneration(false, _max_workers, soft_max_capacity(), soft_max_capacity());
+    _global_generation = new ShenandoahGlobalGeneration(false, _max_workers, max_capacity(), max_capacity());
     _global_generation->initialize_heuristics(_gc_mode);
   }
 }
@@ -826,6 +826,8 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
          min_capacity(), v, max_capacity());
   Atomic::store(&_soft_max_size, v);
 
+#ifdef KELVIN_DEPRECATE
+  // soft_max affects heuristic triggers, but has no impact on generation sizes
   if (mode()->is_generational()) {
     _generation_sizer.heap_size_changed(_soft_max_size);
     size_t soft_max_capacity_young = _generation_sizer.max_young_size();
@@ -833,6 +835,7 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
     _young_generation->set_soft_max_capacity(soft_max_capacity_young);
     _old_generation->set_soft_max_capacity(soft_max_capacity_old);
   }
+#endif
 }
 
 size_t ShenandoahHeap::min_capacity() const {

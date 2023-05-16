@@ -555,5 +555,8 @@ bool ShenandoahHeuristics::in_generation(ShenandoahHeapRegion* region) {
 size_t ShenandoahHeuristics::min_free_threshold() {
   assert(!_generation->is_old(), "min_free_threshold is only relevant to young GC");
   size_t min_free_threshold = ShenandoahMinFreeThreshold;
-  return _generation->soft_max_capacity() / 100 * min_free_threshold;
+  // Note that soft_max_capacity() / 100 * min_free_threshold is smaller than max_capacity() / 100 * min_free_threshold.
+  // We want to behave conservatively here, so use max_capacity().  By returning a larger value, we cause the GC to
+  // trigger when the remaining amount of free shrinks below the larger threshold.
+  return _generation->max_capacity() / 100 * min_free_threshold;
 }
