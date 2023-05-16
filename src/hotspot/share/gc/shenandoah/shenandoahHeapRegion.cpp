@@ -125,7 +125,7 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _humongous_cont:
      if (affiliation() != YOUNG_GENERATION) {
        if (is_old()) {
-	 ShenandoahHeap::heap()->old_generation()->decrement_affiliated_region_count();
+         ShenandoahHeap::heap()->old_generation()->decrement_affiliated_region_count();
        }
        set_affiliation(YOUNG_GENERATION);
        ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
