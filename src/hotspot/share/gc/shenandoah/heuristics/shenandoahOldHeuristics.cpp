@@ -31,9 +31,8 @@
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "utilities/quickSort.hpp"
 
-#define BYTES_FORMAT SIZE_FORMAT "%s"
-#define FORMAT_BYTES(b) \
-  byte_size_in_proper_unit(b), proper_unit_for_byte_size(b)
+#define BYTES_FORMAT    SIZE_FORMAT "%s"
+#define FORMAT_BYTES(b) byte_size_in_proper_unit(b), proper_unit_for_byte_size(b)
 
 uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
@@ -128,7 +127,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
       _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_FILL);
     } else {
-      log_info(gc)("No regions selected fro mixed collection. "
+      log_info(gc)("No regions selected for mixed collection. "
                    "Evacuation budget: " BYTES_FORMAT ", Lost capacity: " BYTES_FORMAT
                    ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
                     FORMAT_BYTES(remaining_old_evacuation_budget),
