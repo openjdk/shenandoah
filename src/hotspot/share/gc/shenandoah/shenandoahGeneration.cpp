@@ -820,7 +820,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
         // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
         // GC is evacuating and updating references.
-  
+
         // Age table updates
         heap->update_epoch();
       }
