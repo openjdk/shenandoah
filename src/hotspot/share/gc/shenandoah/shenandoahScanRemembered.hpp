@@ -183,6 +183,7 @@
 #include "gc/shenandoah/shenandoahNumberSeq.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 #include "memory/iterator.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 class ShenandoahReferenceProcessor;
 class ShenandoahConcurrentMark;
@@ -391,7 +392,12 @@ private:
   // a particular card region.  We pack this bit into start byte under assumption that start byte is accessed less
   // frequently than last byte.  This is true when number of clean cards is greater than number of dirty cards.
   static const uint16_t ObjectStartsInCardRegion = 0x80;
-  static const uint16_t FirstStartBits           = 0x3f;
+  static const uint16_t FirstStartBits           = 0x7f;
+
+  // Check that we have enough bits to store the largest possible offset into a card for an object start.
+  // The value for maximum card size is based on the constraints for GCCardSizeInBytes in gc_globals.hpp.
+  static const int MaxCardSize = NOT_LP64(512) LP64_ONLY(1024);
+  STATIC_ASSERT((MaxCardSize / HeapWordSize) - 1 <= FirstStartBits);
 
   crossing_info *object_starts;
 
@@ -927,14 +933,14 @@ public:
   // Log stats related to card/RS stats for given phase t
   void log_card_stats(uint nworkers, CardStatLogType t) PRODUCT_RETURN;
 private:
-  // Log stats for given worker id related into given cumulative card/RS stats
-  void log_worker_card_stats(uint worker_id, HdrSeq* cum_stats) PRODUCT_RETURN;
+  // Log stats for given worker id related into given summary card/RS stats
+  void log_worker_card_stats(uint worker_id, HdrSeq* sum_stats) PRODUCT_RETURN;
 
   // Log given stats
   inline void log_card_stats(HdrSeq* stats) PRODUCT_RETURN;
 
   // Merge the stats from worked_id into the given summary stats, and clear the worker_id's stats.
-  void merge_worker_card_stats_cumulative(HdrSeq* worker_stats, HdrSeq* cum_stats) PRODUCT_RETURN;
+  void merge_worker_card_stats_cumulative(HdrSeq* worker_stats, HdrSeq* sum_stats) PRODUCT_RETURN;
 };
 
 

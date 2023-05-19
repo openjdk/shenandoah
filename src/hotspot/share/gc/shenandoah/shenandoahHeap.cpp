@@ -65,7 +65,6 @@
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.inline.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
-#include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahSTWMark.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -523,7 +522,7 @@ void ShenandoahHeap::initialize_heuristics_generations() {
   // for old would be total heap - minimum capacity of young. This means the sum of the maximum
   // allowed for old and young could exceed the total heap size. It remains the case that the
   // _actual_ capacity of young + old = total.
-  _generation_sizer.heap_size_changed(soft_max_capacity());
+  _generation_sizer.heap_size_changed(max_capacity());
   size_t initial_capacity_young = _generation_sizer.max_young_size();
   size_t max_capacity_young = _generation_sizer.max_young_size();
   size_t initial_capacity_old = max_capacity() - max_capacity_young;
@@ -571,6 +570,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _global_age_table(nullptr),
   _local_age_table(nullptr),
   _epoch(0),
+  _upgraded_to_full(false),
+  _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -833,11 +834,10 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
   Atomic::store(&_soft_max_size, v);
 
   if (mode()->is_generational()) {
-    _generation_sizer.heap_size_changed(_soft_max_size);
-    size_t soft_max_capacity_young = _generation_sizer.max_young_size();
-    size_t soft_max_capacity_old = _soft_max_size - soft_max_capacity_young;
-    _young_generation->set_soft_max_capacity(soft_max_capacity_young);
-    _old_generation->set_soft_max_capacity(soft_max_capacity_old);
+    size_t max_capacity_young = _generation_sizer.max_young_size();
+    size_t min_capacity_young = _generation_sizer.min_young_size();
+    size_t new_capacity_young = clamp(v, min_capacity_young, max_capacity_young);
+    _young_generation->set_soft_max_capacity(new_capacity_young);
   }
 }
 
@@ -1884,9 +1884,6 @@ void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
   if (_safepoint_workers != nullptr) {
     _safepoint_workers->threads_do(tcl);
   }
-  if (ShenandoahStringDedup::is_enabled()) {
-    ShenandoahStringDedup::threads_do(tcl);
-  }
 }
 
 void ShenandoahHeap::print_tracing_info() const {
@@ -2314,6 +2311,10 @@ void ShenandoahHeap::set_gc_state_mask(uint mask, bool value) {
   set_gc_state_all_threads(_gc_state.raw_value());
 }
 
+void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
+  _has_evacuation_reserve_quantities = is_valid;
+}
+
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   if (has_forwarded_objects()) {
     set_gc_state_mask(YOUNG_MARKING | UPDATEREFS, in_progress);
@@ -2386,20 +2387,8 @@ size_t ShenandoahHeap::tlab_used(Thread* thread) const {
 }
 
 bool ShenandoahHeap::try_cancel_gc() {
-  while (true) {
-    jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
-    if (prev == CANCELLABLE) return true;
-    else if (prev == CANCELLED) return false;
-    assert(ShenandoahSuspendibleWorkers, "should not get here when not using suspendible workers");
-    assert(prev == NOT_CANCELLED, "must be NOT_CANCELLED");
-    Thread* thread = Thread::current();
-    if (thread->is_Java_thread()) {
-      // We need to provide a safepoint here, otherwise we might
-      // spin forever if a SP is pending.
-      ThreadBlockInVM sp(JavaThread::cast(thread));
-      SpinPause();
-    }
-  }
+  jbyte prev = _cancelled_gc.cmpxchg(CANCELLED, CANCELLABLE);
+  return prev == CANCELLABLE;
 }
 
 void ShenandoahHeap::cancel_concurrent_mark() {
@@ -3048,13 +3037,13 @@ bool ShenandoahHeap::uncommit_bitmap_slice(ShenandoahHeapRegion *r) {
 }
 
 void ShenandoahHeap::safepoint_synchronize_begin() {
-  if (ShenandoahSuspendibleWorkers || UseStringDeduplication) {
+  if (ShenandoahSuspendibleWorkers) {
     SuspendibleThreadSet::synchronize();
   }
 }
 
 void ShenandoahHeap::safepoint_synchronize_end() {
-  if (ShenandoahSuspendibleWorkers || UseStringDeduplication) {
+  if (ShenandoahSuspendibleWorkers) {
     SuspendibleThreadSet::desynchronize();
   }
 }
