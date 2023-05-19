@@ -132,7 +132,7 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   // them age 1 objects, and so forth. However, I wonder if this may throw off degenerate and full
   // collections, so I will hold off on this for now.
 
-  if (GENERATION == YOUNG) {
+  if (GENERATION == YOUNG && !GenShenCensusAtEvac) {
     assert(region->is_young(), "Error");
     // age census count
     uint age = ShenandoahHeap::get_object_age_concurrent(obj);

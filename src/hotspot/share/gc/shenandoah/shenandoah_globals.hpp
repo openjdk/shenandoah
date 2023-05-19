@@ -35,6 +35,9 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
+  product(bool, GenShenCensusAtEvac, true, EXPERIMENTAL,                    \
+          "Provide heap region sampling data via jvmstat.")                 \
+                                                                            \
   product(size_t, ShenandoahRegionSize, 0, EXPERIMENTAL,                    \
           "Static heap region size. Set zero to enable automatic sizing.")  \
                                                                             \
