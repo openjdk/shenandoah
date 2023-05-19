@@ -128,11 +128,13 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_FILL);
     } else {
       log_info(gc)("No regions selected for mixed collection. "
-                   "Evacuation budget: " BYTES_FORMAT ", Lost capacity: " BYTES_FORMAT
+                   "Old evacuation budget: " BYTES_FORMAT ", Remaining evacuation budget: " BYTES_FORMAT
+                   ", Lost capacity: " BYTES_FORMAT
                    ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
-                    FORMAT_BYTES(remaining_old_evacuation_budget),
-                    FORMAT_BYTES(lost_evacuation_capacity),
-                    _next_old_collection_candidate, _last_old_collection_candidate);
+                   FORMAT_BYTES(heap->get_old_evac_reserve()),
+                   FORMAT_BYTES(remaining_old_evacuation_budget),
+                   FORMAT_BYTES(lost_evacuation_capacity),
+                   _next_old_collection_candidate, _last_old_collection_candidate);
     }
   }
 
