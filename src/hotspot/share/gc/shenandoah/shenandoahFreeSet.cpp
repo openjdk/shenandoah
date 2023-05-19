@@ -1093,7 +1093,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   size_t old_unaffiliated_regions = _heap->old_generation()->free_unaffiliated_regions();
   size_t young_capacity = _heap->young_generation()->max_capacity();
   size_t young_available = _heap->young_generation()->available();
-  size_t young_unaffiliated_regions = _heap->old_generation()->free_unaffiliated_regions();
+  size_t young_unaffiliated_regions = _heap->young_generation()->free_unaffiliated_regions();
 
 #undef KELVIN_REBUILD
 #ifdef KELVIN_REBUILD
@@ -1104,7 +1104,6 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
                      ", old_unaffiliated: " SIZE_FORMAT ", old_cset: " SIZE_FORMAT,
                      young_unaffiliated_regions, young_cset_regions, old_unaffiliated_regions, old_cset_regions);
 #endif
-
 
   old_unaffiliated_regions += old_cset_regions;
   old_available += old_cset_regions * region_size_bytes;
