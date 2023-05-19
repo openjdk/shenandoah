@@ -507,7 +507,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
-    heap->free_set()->rebuild();
+    heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
   }
   heap->set_evacuation_reserve_quantities(false);
 }
@@ -711,8 +711,14 @@ size_t ShenandoahGeneration::used_regions_size() const {
 
 size_t ShenandoahGeneration::available() const {
   size_t in_use = used() + get_humongous_waste();
-  size_t soft_capacity = max_capacity();
-  return in_use > soft_capacity ? 0 : soft_capacity - in_use;
+  size_t capacity = max_capacity();
+  size_t result = in_use > capacity ? 0 : capacity - in_use;
+#undef KELVIN_AVAILABLE
+#ifdef KELVIN_AVAILABLE
+  log_info(gc, free)("%s::available() returning " SIZE_FORMAT " as capacity: " SIZE_FORMAT " minus used: " SIZE_FORMAT,
+                     name(), result, capacity, in_use);
+#endif
+  return result;
 }
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {

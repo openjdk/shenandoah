@@ -197,7 +197,7 @@ public:
 
   void clear();
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions);
-  void rebuild();
+  void rebuild(size_t young_cset_regions, size_t old_cset_regions);
 
   void add_old_collector_free_region(ShenandoahHeapRegion* region);
 

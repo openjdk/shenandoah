@@ -383,7 +383,7 @@ jint ShenandoahHeap::initialize() {
 
     // We are initializing free set.  We ignore cset region tallies.
     _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions);
-    _free_set->rebuild();
+    _free_set->rebuild(young_cset_regions, old_cset_regions);
   }
 
   if (AlwaysPreTouch) {
@@ -588,6 +588,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_timer(new ConcurrentGCTimer()),
   _soft_ref_policy(),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
+  _old_regions_surplus(0),
+  _old_regions_deficit(0),
   _marking_context(nullptr),
   _bitmap_size(0),
   _bitmap_regions_per_slice(0),
@@ -3087,20 +3089,15 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // within partially consumed regions of memory.
   }
   // Rebuild free set based on adjusted generation sizes.
-  _free_set->rebuild();
+  _free_set->rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational()) {
     size_t old_available = old_generation()->available();
     size_t old_unaffiliated_available = old_generation()->free_unaffiliated_regions() * region_size_bytes;
     size_t old_fragmented_available;
     assert(old_available >= old_unaffiliated_available, "unaffiliated available is a subset of total available");
-    if (old_available >= old_unaffiliated_available) {
-      old_fragmented_available = old_available - old_unaffiliated_available;
-    } else {
-      // WE SHOULD NOT NEED THIS CONDITIONAL CODE, BUT KELVIN HAS NOT
-      // YET FIGURED OUT HOW THIS CONDITION IS VIOLATED.
-      old_fragmented_available = 0;
-    }
+    old_fragmented_available = old_available - old_unaffiliated_available;
+
     size_t old_capacity = old_generation()->max_capacity();
     size_t heap_capacity = capacity();
     if ((old_capacity > heap_capacity / 8) && (old_fragmented_available > old_capacity / 8)) {

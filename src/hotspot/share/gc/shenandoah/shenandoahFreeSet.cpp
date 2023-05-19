@@ -1083,10 +1083,64 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
   find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions);
 }
 
-void ShenandoahFreeSet::rebuild() {
-  size_t young_reserve, old_reserve;
-
+void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions) {
   shenandoah_assert_heaplocked();
+  size_t young_reserve, old_reserve;
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+
+  size_t old_capacity = _heap->old_generation()->max_capacity();
+  size_t old_available = _heap->old_generation()->available();
+  size_t old_unaffiliated_regions = _heap->old_generation()->free_unaffiliated_regions();
+  size_t young_capacity = _heap->young_generation()->max_capacity();
+  size_t young_available = _heap->young_generation()->available();
+  size_t young_unaffiliated_regions = _heap->old_generation()->free_unaffiliated_regions();
+
+#undef KELVIN_REBUILD
+#ifdef KELVIN_REBUILD
+  log_info(gc, free)("Rebuild free_set with old available: " SIZE_FORMAT " out of capacity: " SIZE_FORMAT
+                     ", young available: " SIZE_FORMAT " out of capacity: " SIZE_FORMAT,
+                     old_available, old_capacity, young_available, young_capacity);
+  log_info(gc, free)("  young_unaffiliated: " SIZE_FORMAT ", young_cset: " SIZE_FORMAT 
+                     ", old_unaffiliated: " SIZE_FORMAT ", old_cset: " SIZE_FORMAT,
+                     young_unaffiliated_regions, young_cset_regions, old_unaffiliated_regions, old_cset_regions);
+#endif
+
+
+  old_unaffiliated_regions += old_cset_regions;
+  old_available += old_cset_regions * region_size_bytes;
+  young_unaffiliated_regions += young_cset_regions;
+  young_available += young_cset_regions * region_size_bytes;
+
+  // Consult old-region surplus and deficit to make adjustments to current generation capacities and availability.
+  // The generation region transfers take place after we rebuild.
+  size_t old_region_surplus = _heap->get_old_region_surplus();
+  size_t old_region_deficit = _heap->get_old_region_deficit();
+
+#ifdef KELVIN_REBUILD
+  log_info(gc, free)("old_region_surplus: " SIZE_FORMAT ", old_region_deficit: " SIZE_FORMAT,
+                     old_region_surplus, old_region_deficit);
+#endif
+
+  if (old_region_surplus > 0) {
+    size_t xfer_bytes = old_region_surplus * region_size_bytes;
+    assert(old_region_surplus <= old_unaffiliated_regions, "Cannot transfer regions that are affiliated");
+    old_capacity -= xfer_bytes;
+    old_available -= xfer_bytes;
+    old_unaffiliated_regions -= old_region_surplus;
+    young_capacity += xfer_bytes;
+    young_available += xfer_bytes;
+    young_unaffiliated_regions += old_region_surplus;
+  } else if (old_region_deficit > 0) {
+    size_t xfer_bytes = old_region_deficit * region_size_bytes;
+    assert(old_region_deficit <= young_unaffiliated_regions, "Cannot transfer regions that are affiliated");
+    old_capacity += xfer_bytes;
+    old_available += xfer_bytes;
+    old_unaffiliated_regions += old_region_deficit;
+    young_capacity -= xfer_bytes;;
+    young_available -= xfer_bytes;
+    young_unaffiliated_regions -= old_region_deficit;
+  }
+
   // Evac reserve: reserve trailing space for evacuations, with regions reserved for old evacuations placed to the right
   // of regions reserved of young evacuations.
   if (!_heap->mode()->is_generational()) {
@@ -1101,17 +1155,39 @@ void ShenandoahFreeSet::rebuild() {
       // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
       young_reserve = _heap->get_young_evac_reserve();
       old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
+
+#ifdef KELVIN_REBUILD
+      log_info(gc, free)(" ... has evacuation reserves: young_reserve " SIZE_FORMAT ", promoted_reserve: " SIZE_FORMAT
+                         ", old evac reserve: " SIZE_FORMAT, young_reserve, _heap->get_promoted_reserve(),
+                         _heap->get_old_evac_reserve());
+#endif
+
+      assert(old_reserve <= old_available,
+             "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
+             _heap->get_promoted_reserve(), _heap->get_old_evac_reserve(), old_available);
     } else {
       // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
-      young_reserve = (_heap->young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
+      young_reserve = (young_capacity * ShenandoahEvacReserve) / 100;
       // The auto-sizer has already made old-gen large enough to hold all anticipated evacuations and promotions.
       // Affiliated old-gen regions are already in the OldCollector free set.  Add in the relevant number of
       // unaffiliated regions.
-      old_reserve = _heap->old_generation()->available();
+      old_reserve = old_available;
     }
   }
-  reserve_regions(young_reserve, old_reserve);
+  if (old_reserve > _free_sets.capacity_of(OldCollector)) {
+    // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector
+    // free set.  Because of this, old_available may not have enough memory to represent the intended reserve.  Adjust
+    // the reserve downward to account for this possibility. This loss is part of the reason why the original budget
+    // was adjusted with ShenandoahOldEvacWaste and ShenandoahOldPromoWaste multipliers.
+    if (old_reserve > _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes) {
+      old_reserve = _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes;
+    }
+  }
+  if (young_reserve > young_unaffiliated_regions * region_size_bytes) {
+    young_reserve = young_unaffiliated_regions * region_size_bytes;
+  }
 
+  reserve_regions(young_reserve, old_reserve);
   _free_sets.establish_alloc_bias(OldCollector);
   _free_sets.assert_bounds();
   log_status();
@@ -1123,7 +1199,31 @@ void ShenandoahFreeSet::rebuild() {
 // the collector set is at least to_reserve, and the memory available for allocations within the old collector set
 // is at least to_reserve_old.
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
-  for (size_t idx = _heap->num_regions() - 1; idx > 0; idx--) {
+
+#undef KELVIN_RESERVE
+#ifdef KELVIN_RESERVE
+  size_t old_unaffiliated = ShenandoahHeap::heap()->old_generation()->free_unaffiliated_regions();
+  log_info(gc, free)("FreeSet reserve regions(young: " SIZE_FORMAT ", old: " SIZE_FORMAT "), OldCollector capacity: " SIZE_FORMAT
+                     ", old unaffiliated regions: " SIZE_FORMAT, to_reserve, to_reserve_old,
+                     _free_sets.capacity_of(OldCollector), old_unaffiliated);
+  if (to_reserve_old > _free_sets.capacity_of(OldCollector)) {
+    size_t more_old_required = to_reserve_old - _free_sets.capacity_of(OldCollector);
+    if (more_old_required > old_unaffiliated * ShenandoahHeapRegion::region_size_bytes()) {
+      log_info(gc, free)(" old is in deficit by " SIZE_FORMAT,
+                         more_old_required - old_unaffiliated * ShenandoahHeapRegion::region_size_bytes());
+    } else {
+      log_info(gc, free)(" old has sufficient by " SIZE_FORMAT,
+                         old_unaffiliated * ShenandoahHeapRegion::region_size_bytes() - more_old_required);
+    }
+  } else {
+    log_info(gc, free)(" old has excess " SIZE_FORMAT,
+                       old_unaffiliated * ShenandoahHeapRegion::region_size_bytes() + 
+                       (_free_sets.capacity_of(OldCollector) - to_reserve_old));
+  }
+#endif
+
+  for (size_t i = _heap->num_regions(); i > 0; i--) {
+    size_t idx = i - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
     if (_free_sets.in_free_set(idx, Mutator)) {
       assert (!r->is_old(), "mutator_is_free regions should not be affiliated OLD");
@@ -1161,6 +1261,17 @@ void ShenandoahFreeSet::log_status() {
     size_t retired_young = 0;
     size_t retired_young_humongous = 0;
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+    size_t retired_young_waste = 0;
+    size_t retired_old_waste = 0;
+    size_t consumed_collector = 0;
+    size_t consumed_old_collector = 0;
+    size_t consumed_mutator = 0;
+    size_t available_old = 0;
+    size_t available_young = 0;
+    size_t available_mutator = 0;
+    size_t available_collector = 0;
+    size_t available_old_collector = 0;
+
     char buffer[BUFFER_SIZE];
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
@@ -1184,12 +1295,21 @@ void ShenandoahFreeSet::log_status() {
       }
       if (_free_sets.in_free_set(i, Mutator)) {
         assert(!r->is_old(), "Old regions should not be in mutator_free set");
-        buffer[idx] = (alloc_capacity(r) == region_size_bytes)? 'M': 'm';
+        size_t capacity = alloc_capacity(r);
+        available_mutator += capacity;
+        consumed_mutator += region_size_bytes - capacity;
+        buffer[idx] = (capacity == region_size_bytes)? 'M': 'm';
       } else if (_free_sets.in_free_set(i, Collector)) {
         assert(!r->is_old(), "Old regions should not be in collector_free set");
-        buffer[idx] = (alloc_capacity(r) == region_size_bytes)? 'C': 'c';
+        size_t capacity = alloc_capacity(r);
+        available_collector += capacity;
+        consumed_collector += region_size_bytes - capacity;
+        buffer[idx] = (capacity == region_size_bytes)? 'C': 'c';
       } else if (_free_sets.in_free_set(i, OldCollector)) {
-        buffer[idx] = (alloc_capacity(r) == region_size_bytes)? 'O': 'o';
+        size_t capacity = alloc_capacity(r);
+        available_old_collector += capacity;
+        consumed_old_collector += region_size_bytes - capacity;
+        buffer[idx] = (capacity == region_size_bytes)? 'O': 'o';
       } else if (r->is_humongous()) {
         if (r->is_old()) {
           buffer[idx] = 'H';
@@ -1201,9 +1321,11 @@ void ShenandoahFreeSet::log_status() {
       } else {
         if (r->is_old()) {
           buffer[idx] = '~';
+          retired_old_waste += alloc_capacity(r);
           retired_old += region_size_bytes;
         } else {
           buffer[idx] = '_';
+          retired_young_waste += alloc_capacity(r);
           retired_young += region_size_bytes;
         }
       }
@@ -1217,12 +1339,29 @@ void ShenandoahFreeSet::log_status() {
     log_info(gc, free)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
     size_t total_young = retired_young + retired_young_humongous;
     size_t total_old = retired_old + retired_old_humongous;
-    log_info(gc, free)("Retired young: " SIZE_FORMAT "%s (including humongous: " SIZE_FORMAT "%s), old: " SIZE_FORMAT
-                       "%s (including humongous: " SIZE_FORMAT "%s)",
+#define KELVIN_LOG_STATUS
+#ifdef KELVIN_LOG_STATUS
+    log_info(gc, free)("Retired young: " SIZE_FORMAT "%s (including regular waste: "
+                       SIZE_FORMAT "%s and humongous: " SIZE_FORMAT "%s); Retired old: " SIZE_FORMAT
+                       "%s (including regular waste: " SIZE_FORMAT "%s and humongous: " SIZE_FORMAT "%s)",
                        byte_size_in_proper_unit(total_young),             proper_unit_for_byte_size(total_young),
+                       byte_size_in_proper_unit(retired_young_waste),     proper_unit_for_byte_size(retired_young_waste),
                        byte_size_in_proper_unit(retired_young_humongous), proper_unit_for_byte_size(retired_young_humongous),
                        byte_size_in_proper_unit(total_old),               proper_unit_for_byte_size(total_old),
+                       byte_size_in_proper_unit(retired_old_waste),       proper_unit_for_byte_size(retired_old_waste),
                        byte_size_in_proper_unit(retired_old_humongous),   proper_unit_for_byte_size(retired_old_humongous));
+    log_info(gc, free)("Free set young is mutator available: " SIZE_FORMAT " + mutator consumed: " SIZE_FORMAT
+                       " + collector available: " SIZE_FORMAT " + collector consumed: " SIZE_FORMAT
+                       " + regular retired: " SIZE_FORMAT " + humongous (with waste): " SIZE_FORMAT " = " SIZE_FORMAT,
+                       available_mutator, consumed_mutator, available_collector, consumed_collector,
+                       retired_young, retired_young_humongous, 
+                       (available_mutator + consumed_mutator + available_collector + consumed_collector +
+                        retired_young + retired_young_humongous));
+    log_info(gc, free)("Free set OLD is old_collector available: " SIZE_FORMAT " + old_collector consumed: " SIZE_FORMAT
+                       " + regular retired: " SIZE_FORMAT " + humongous (with waste): " SIZE_FORMAT " = " SIZE_FORMAT,
+                       available_old_collector, consumed_old_collector, retired_old, retired_old_humongous, 
+                       (available_old_collector + consumed_old_collector + retired_old + retired_old_humongous));
+#endif
   }
 #endif
 
