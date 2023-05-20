@@ -1180,11 +1180,6 @@ void ShenandoahHeap::coalesce_and_fill_old_regions() {
 void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
 
-#define KELVIN_ADJUST_GENERATIONS
-#ifdef KELVIN_ADJUST_GENERATIONS
-  log_info(gc, free)("adjust_generation_sizes(xfer_limit: " SIZE_FORMAT ", young_cset: " SIZE_FORMAT ", old_cset: " SIZE_FORMAT
-                     ")", xfer_limit, young_cset_regions, old_cset_regions);
-#endif
   // Make sure old-generation is large enough, but no larger, than is necessary to hold mixed evacuations
   // and promotions if we anticipate either.
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -1196,11 +1191,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   bool doing_mixed = (mixed_candidates > 0);
   bool doing_promotions = promo_load > 0;
 
-#ifdef KELVIN_ADJUST_GENERATIONS
-  log_info(gc, free)(" promo_load: " SIZE_FORMAT ", young_reserve: " SIZE_FORMAT ", mixed_candidates: " SIZE_FORMAT,
-                     promo_load, young_reserve, mixed_candidates);
-#endif
-
   // round down
   size_t max_old_region_xfer = xfer_limit / region_size_bytes;
 
@@ -1211,10 +1201,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   //  OldEvacuation = TotalEvacuation*(ShenandoahOldEvacRatioPercent/100)
   //  OldEvacuation = YoungEvacuation * (ShenandoahOldEvacRatioPercent/100)/(1 - ShenandoahOldEvacRatioPercent/100)
   //  OldEvacuation = YoungEvacuation * ShenandoahOldEvacRatioPercent/(100 - ShenandoahOldEvacRatioPercent)
-
-#ifdef KELVIN_ADJUST_GENERATIONS
-  log_info(gc, free)(" max_old_region_xfer: " SIZE_FORMAT, max_old_region_xfer);
-#endif
 
   size_t reserve_for_mixed, reserve_for_promo;
   if (doing_mixed) {
@@ -1230,10 +1216,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
     reserve_for_mixed = max_evac_need + old_fragmented_available;
     if (reserve_for_mixed > max_old_reserve) {
       reserve_for_mixed = max_old_reserve;
-#ifdef KELVIN_ADJUST_GENERATIONS
-      log_info(gc, free)(" doing_mixed: max_evac_need: " SIZE_FORMAT ", old_fragmented_available: " SIZE_FORMAT
-                         ", reserve_for_mixed: " SIZE_FORMAT, max_evac_need, old_fragmented_available, reserve_for_mixed);
-#endif
     }
   } else {
     reserve_for_mixed = 0;
@@ -1243,10 +1225,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   if (doing_promotions) {
     // We're only promoting and we have a maximum bound on the amount to be promoted
     reserve_for_promo = (size_t) (promo_load * ShenandoahPromoEvacWaste);
-#ifdef KELVIN_ADJUST_GENERATIONS
-      log_info(gc, free)(" doing_promo: original reserve_for_promo: " SIZE_FORMAT ", available_for_promotions: " SIZE_FORMAT,
-                         reserve_for_promo, available_for_promotions);
-#endif
     if (reserve_for_promo > available_for_promotions) {
       reserve_for_promo = available_for_promotions;
     }
@@ -1259,10 +1237,6 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t young_available = young_generation()->available() + young_cset_regions * region_size_bytes;
   size_t old_region_deficit = 0;
   size_t old_region_surplus = 0;
-#ifdef KELVIN_ADJUST_GENERATIONS
-  log_info(gc, free)(" old_available: " SIZE_FORMAT ", young_available: " SIZE_FORMAT,
-                     old_available, young_available);
-#endif
   if (old_available >= old_reserve) {
     size_t old_excess = old_available - old_reserve;
     size_t excess_regions = old_excess / region_size_bytes;
@@ -1275,36 +1249,18 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
       // unaffiliated_old_regions > excess_regions, so we only give away the excess.
       old_region_surplus = excess_regions;
     }
-#ifdef KELVIN_ADJUST_GENERATIONS
-    log_info(gc, free)(" old_available >= old_reserve: old_excess: " SIZE_FORMAT ", excess_regions: " SIZE_FORMAT
-                       ", unaffiliated_old_regions: " SIZE_FORMAT ", old_region_surplus: " SIZE_FORMAT,
-                       old_excess, excess_regions, unaffiliated_old_regions, old_region_surplus);
-#endif
   } else {
     // We need to request transfer from YOUNG.  Ignore that this will directly impact young_generation()->max_capacity(),
     // indirectly impacting young_reserve and old_reserve.  These computations are conservative.
     size_t old_need = old_reserve - old_available;
     // Round up the number of regions needed from YOUNG
     old_region_deficit = (old_need + region_size_bytes - 1) / region_size_bytes;
-#ifdef KELVIN_ADJUST_GENERATIONS
-    log_info(gc, free)(" old_available < old_reserve: old_need: " SIZE_FORMAT ", old_region_deficit: " SIZE_FORMAT,
-                       old_need, old_region_deficit);
-#endif
   }
-
-#ifdef KELVIN_ADJUST_GENERATIONS
-  log_info(gc, free)(" old_region_deficit: " SIZE_FORMAT ", max_old_region_xfer: " SIZE_FORMAT,
-                     old_region_deficit, max_old_region_xfer);
-#endif
   if (old_region_deficit > max_old_region_xfer) {
     // If we're running short on young-gen memory, limit the xfer.  Old-gen collection activities will be curtailed
     // if the budget is smaller than desired.
     old_region_deficit = max_old_region_xfer;
   }
-#ifdef KELVIN_ADJUST_GENERATIONS
-  log_info(gc, free)(" setting old_region_surplus: " SIZE_FORMAT " and deficit: " SIZE_FORMAT,
-                     old_region_surplus, old_region_deficit);
-#endif
   set_old_region_surplus(old_region_surplus);
   set_old_region_deficit(old_region_deficit);
 }

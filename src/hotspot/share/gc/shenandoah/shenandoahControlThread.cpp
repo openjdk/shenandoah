@@ -957,18 +957,6 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
   }
 }
 
-#undef KELVIN_TLAB
-#ifdef KELVIN_TLAB
-void kelvin_breakpoint(ShenandoahAllocRequest req) {
-  if (req.type() == ShenandoahAllocRequest::_alloc_tlab) {
-    ShenandoahHeapLocker locker(ShenandoahHeap::heap()->lock());
-    ShenandoahHeap::heap()->log_heap_status("At TLAB allocation failure");
-    ShenandoahHeap::heap()->free_set()->log_status();
-  }
-}
-#endif
-
-
 void ShenandoahControlThread::handle_alloc_failure(ShenandoahAllocRequest& req) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
@@ -979,9 +967,6 @@ void ShenandoahControlThread::handle_alloc_failure(ShenandoahAllocRequest& req) 
     log_info(gc)("Failed to allocate %s, " SIZE_FORMAT "%s",
                  req.type_string(),
                  byte_size_in_proper_unit(req.size() * HeapWordSize), proper_unit_for_byte_size(req.size() * HeapWordSize));
-#ifdef KELVIN_TLAB
-    kelvin_breakpoint(req);
-#endif
     // Now that alloc failure GC is scheduled, we can abort everything else
     heap->cancel_gc(GCCause::_allocation_failure);
   }

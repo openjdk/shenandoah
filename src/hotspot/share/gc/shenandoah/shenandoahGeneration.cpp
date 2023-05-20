@@ -713,11 +713,6 @@ size_t ShenandoahGeneration::available() const {
   size_t in_use = used() + get_humongous_waste();
   size_t capacity = max_capacity();
   size_t result = in_use > capacity ? 0 : capacity - in_use;
-#undef KELVIN_AVAILABLE
-#ifdef KELVIN_AVAILABLE
-  log_info(gc, free)("%s::available() returning " SIZE_FORMAT " as capacity: " SIZE_FORMAT " minus used: " SIZE_FORMAT,
-                     name(), result, capacity, in_use);
-#endif
   return result;
 }
 
