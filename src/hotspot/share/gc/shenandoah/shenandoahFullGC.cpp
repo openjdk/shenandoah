@@ -1538,6 +1538,45 @@ void ShenandoahFullGC::phase5_epilog() {
       heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
     }
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
+
+  // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
+  // abbreviated cycle.
+  if (heap->mode()->is_generational()) {
+    bool success;
+    size_t region_xfer;
+    const char* region_destination;
+    ShenandoahYoungGeneration* young_gen = heap->young_generation();
+    ShenandoahGeneration* old_gen = heap->old_generation();
+    {
+      size_t old_region_surplus = heap->get_old_region_surplus();
+      size_t old_region_deficit = heap->get_old_region_deficit();
+      if (old_region_surplus) {
+        success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
+        region_destination = "young";
+        region_xfer = old_region_surplus;
+      } else if (old_region_deficit) {
+        success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
+        region_destination = "old";
+        region_xfer = old_region_deficit;
+        if (!success) {
+          ((ShenandoahOldHeuristics *) old_gen->heuristics())->trigger_cannot_expand();
+        }
+      } else {
+        region_destination = "none";
+        region_xfer = 0;
+        success = true;
+      }
+      heap->set_old_region_surplus(0);
+      heap->set_old_region_deficit(0);
+
+      size_t young_available = young_gen->available();
+      size_t old_available = old_gen->available();
+      log_info(gc, ergo)("After cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
+                         SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
+                         success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
+                         byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
+                         byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+    }
   }
   heap->clear_cancelled_gc(true /* clear oom handler */);
 }

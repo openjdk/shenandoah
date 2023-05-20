@@ -1095,7 +1095,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   size_t young_available = _heap->young_generation()->available();
   size_t young_unaffiliated_regions = _heap->young_generation()->free_unaffiliated_regions();
 
-#undef KELVIN_REBUILD
+#define KELVIN_REBUILD
 #ifdef KELVIN_REBUILD
   log_info(gc, free)("Rebuild free_set with old available: " SIZE_FORMAT " out of capacity: " SIZE_FORMAT
                      ", young available: " SIZE_FORMAT " out of capacity: " SIZE_FORMAT,
@@ -1122,6 +1122,9 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 
   if (old_region_surplus > 0) {
     size_t xfer_bytes = old_region_surplus * region_size_bytes;
+#ifdef KELVIN_REBUILD
+    log_info(gc, free)("old_region_surplus: " SIZE_FORMAT ", xfer_bytes: " SIZE_FORMAT, old_region_surplus, xfer_bytes);
+#endif
     assert(old_region_surplus <= old_unaffiliated_regions, "Cannot transfer regions that are affiliated");
     old_capacity -= xfer_bytes;
     old_available -= xfer_bytes;
@@ -1131,6 +1134,9 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     young_unaffiliated_regions += old_region_surplus;
   } else if (old_region_deficit > 0) {
     size_t xfer_bytes = old_region_deficit * region_size_bytes;
+#ifdef KELVIN_REBUILD
+    log_info(gc, free)("old_region_deficit: " SIZE_FORMAT ", xfer_bytes: " SIZE_FORMAT, old_region_deficit, xfer_bytes);
+#endif
     assert(old_region_deficit <= young_unaffiliated_regions, "Cannot transfer regions that are affiliated");
     old_capacity += xfer_bytes;
     old_available += xfer_bytes;
