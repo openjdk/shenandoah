@@ -235,19 +235,6 @@ jint ShenandoahHeap::initialize() {
     size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
-    const int max_age = markWord::max_age;
-    _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_age, mtGC);
-    if (!GenShenCensusAtEvac) {
-      for (int i = 0; i < max_age; i++) {
-        _global_age_table[i] = new AgeTable(false);
-        // Note that we don't now get perfdata from age_table
-      }
-      _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, _max_workers, mtGC);
-      for (uint i = 0; i < _max_workers; i++) {
-        _local_age_table[i] = new AgeTable(false);
-      }
-      _epoch = max_age - 1;  // see update_epoch()
-    }
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
@@ -570,9 +557,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _captured_old_usage(0),
   _previous_promotion(0),
   _upgraded_to_full(false),
-  _global_age_table(nullptr),
-  _local_age_table(nullptr),
-  _epoch(0),
   _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
@@ -3225,30 +3209,23 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
   }
 }
 
-// Update the epoch for the global age tables,
-// and merge local age tables into the global age table.
+// Methods related to age tables in generational mode for Young Gen
+AgeTable* ShenandoahHeap::get_local_age_table(uint worker_id) const {
+  assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
+  return _age_census->get_local_age_table(worker_id);
+}
+
+AgeTable* ShenandoahHeap::get_age_table() const {
+  assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
+  return _age_census->get_age_table();
+}
+
 void ShenandoahHeap::update_epoch() {
   assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
-  if (++_epoch == markWord::max_age) {
-    _epoch=0;
-  }
-  // Merge data from local age tables into the global age table for the epoch,
-  // clearing the local tables.
-  _global_age_table[_epoch]->clear();
-  for (uint i = 0; i < max_workers(); i++) {
-    _global_age_table[_epoch]->merge(_local_age_table[i]);
-    _local_age_table[i]->clear();
-  }
-  _global_age_table[_epoch]->print_age_table(InitialTenuringThreshold);
+  _age_census->update_epoch();
 }
 
-// Reset the epoch for the global age tables,
-// clearing all history.
 void ShenandoahHeap::reset_epoch() {
   assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
-  for (uint i = 0; i < markWord::max_age; i++) {
-    _global_age_table[i]->clear();
-  }
-  _epoch = markWord::max_age - 1;
+  _age_census->reset_epoch();
 }
-

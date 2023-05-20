@@ -34,11 +34,12 @@ private:
   size_t _bytes_completed;
   size_t _evacuations_attempted;
   size_t _bytes_attempted;
-
- public:
   AgeTable _age_table;
 
+ public:
   ShenandoahEvacuationStats();
+
+  AgeTable* age_table() { return &_age_table; }
   void begin_evacuation(size_t bytes);
   void end_evacuation(size_t bytes, uint age);
 

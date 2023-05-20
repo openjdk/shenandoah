@@ -55,7 +55,8 @@ void ShenandoahEvacuationStats::accumulate(const ShenandoahEvacuationStats* othe
   _evacuations_attempted += other->_evacuations_attempted;
   _bytes_attempted += other->_bytes_attempted;
   if (GenShenCensusAtEvac) {
-    _age_table.merge(&other->_age_table);
+    const AgeTable* t = ((ShenandoahEvacuationStats*)other)->age_table();
+    _age_table.merge(t);
   }
 }
 
@@ -138,6 +139,18 @@ ShenandoahCycleStats ShenandoahEvacuationTracker::flush_cycle_to_global() {
 
   _mutators_global.accumulate(&mutators);
   _workers_global.accumulate(&workers);
+
+  if (GenShenCensusAtEvac) {
+    // Log cumulative population stats back into the heap's global census
+    // data, and use it to compute an appropriate tenuring threshold to
+    // be used in the next cycle.
+    /* AgeCensus* census = ShenandoahHeap::heap()->age_census();
+    census->update_epoch();
+    census->merge(_mutators_global.age_table());
+    census->merge(_workers_global.age_table());
+    census->compute_tenuring_threshold();
+    */
+  }
 
   return {workers, mutators};
 }

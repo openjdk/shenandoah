@@ -31,17 +31,18 @@
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
-#include "gc/shenandoah/shenandoahAsserts.hpp"
+#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
+#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
-#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "memory/metaspace.hpp"
 #include "services/memoryManager.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -380,17 +381,7 @@ private:
 
   bool _upgraded_to_full;
 
-  // TODO: ysr: this is a rather large structure. An age table consists of slots for
-  // each age from 0 through max tenuring threshold (i.e. 15). We maintain a global
-  // table for each of the last 15 collections (we may rethink this). In addition,
-  // we maintain per worker age tables into which census for the current minor GC is
-  // tracked during marking. The scratch tables are cleared after each marking cycle,
-  // once the per-worker  data is consolidated into the appropriate table at each minor
-  // collection. So we have 16 x n entries, one for each age per worker, then we have
-  // 16 x 16 entries one for each of the last 16 minor gc's.
-  AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold
-  AgeTable** _local_age_table;       // Local scratch age tables to track object ages
-  uint _epoch;                       // Current epoch (modulo max age)
+  ShenandoahAgeCensus* _age_census;    // Age census used for adapting tenuring threshold in generational mode
 
   // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
   // hold the results of evacuating to young-gen and to old-gen.  These quantitites, stored in _promoted_reserve,
@@ -481,8 +472,8 @@ public:
   inline intptr_t get_alloc_supplement_reserve() const;
 
   // Methods related to age tables in generational mode for Young Gen
-  AgeTable* get_local_age_table(uint worker_id) const { return (AgeTable*) _local_age_table[worker_id]; }
-  AgeTable* get_age_table()                     const { return (AgeTable*) _global_age_table[_epoch];   }
+  AgeTable* get_local_age_table(uint worker_id) const;
+  AgeTable* get_age_table() const;
   void update_epoch();
   void reset_epoch();
 
