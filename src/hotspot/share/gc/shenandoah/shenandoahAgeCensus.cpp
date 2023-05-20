@@ -24,7 +24,7 @@
 
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahAgeCensus.hpp"
-#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 
 ShenandoahAgeCensus::ShenandoahAgeCensus() {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only in generational mode");
