@@ -184,7 +184,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
       //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
       //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
       //   the tenure age can be increased.
-      if (r->age() + 1 == InitialTenuringThreshold) {
+      if (heap->is_aging_cycle() && (r->age() + 1 == InitialTenuringThreshold)) {
         if (r->garbage() >= old_garbage_threshold) {
           anticipated_candidates++;
           promo_potential += r->get_live_data_bytes();
