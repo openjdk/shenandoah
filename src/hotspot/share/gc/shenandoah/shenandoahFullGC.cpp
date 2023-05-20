@@ -1539,15 +1539,15 @@ void ShenandoahFullGC::phase5_epilog() {
     }
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
 
-  // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
-  // abbreviated cycle.
-  if (heap->mode()->is_generational()) {
-    bool success;
-    size_t region_xfer;
-    const char* region_destination;
-    ShenandoahYoungGeneration* young_gen = heap->young_generation();
-    ShenandoahGeneration* old_gen = heap->old_generation();
-    {
+    // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
+    // abbreviated cycle.
+    if (heap->mode()->is_generational()) {
+      bool success;
+      size_t region_xfer;
+      const char* region_destination;
+      ShenandoahYoungGeneration* young_gen = heap->young_generation();
+      ShenandoahGeneration* old_gen = heap->old_generation();
+
       size_t old_region_surplus = heap->get_old_region_surplus();
       size_t old_region_deficit = heap->get_old_region_deficit();
       if (old_region_surplus) {
@@ -1568,7 +1568,6 @@ void ShenandoahFullGC::phase5_epilog() {
       }
       heap->set_old_region_surplus(0);
       heap->set_old_region_deficit(0);
-
       size_t young_available = young_gen->available();
       size_t old_available = old_gen->available();
       log_info(gc, ergo)("After cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
@@ -1577,6 +1576,6 @@ void ShenandoahFullGC::phase5_epilog() {
                          byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
                          byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
     }
+    heap->clear_cancelled_gc(true /* clear oom handler */);
   }
-  heap->clear_cancelled_gc(true /* clear oom handler */);
 }

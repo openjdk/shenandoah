@@ -281,13 +281,23 @@ void ShenandoahDegenGC::op_degenerated() {
         size_t old_region_surplus = heap->get_old_region_surplus();
         size_t old_region_deficit = heap->get_old_region_deficit();
         bool success;
+        size_t region_xfer;
+        const char* region_destination;
         if (old_region_surplus) {
+          region_xfer = old_region_surplus;
+          region_destination = "young";
           success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
         } else if (old_region_deficit) {
+          region_xfer = old_region_surplus;
+          region_destination = "old";
           success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
           if (!success) {
             ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_cannot_expand();
           }
+        } else {
+          region_destination = "none";
+          region_xfer = 0;
+          success = true;
         }
 
         size_t young_available = heap->young_generation()->available();
