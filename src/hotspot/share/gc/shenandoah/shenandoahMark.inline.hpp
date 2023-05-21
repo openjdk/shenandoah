@@ -107,10 +107,9 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
   }
 }
 
-inline AgeTable* ShenandoahMark::get_local_age_table(uint worker_id) const {
+inline AgeTable* ShenandoahMark::get_local_age_table(uint worker_id) {
 
-  const ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  return heap->get_local_age_table(worker_id);
+  return ShenandoahHeap::heap()->get_local_age_table(worker_id);
 }
 
 

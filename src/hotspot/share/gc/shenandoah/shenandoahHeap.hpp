@@ -472,8 +472,9 @@ public:
   inline intptr_t get_alloc_supplement_reserve() const;
 
   // Methods related to age tables in generational mode for Young Gen
-  AgeTable* get_local_age_table(uint worker_id) const;
-  AgeTable* get_age_table() const;
+  ShenandoahAgeCensus* age_census() { return _age_census; }
+  AgeTable* get_local_age_table(uint worker_id);
+  AgeTable* get_age_table();
   void update_epoch();
   void reset_epoch();
 

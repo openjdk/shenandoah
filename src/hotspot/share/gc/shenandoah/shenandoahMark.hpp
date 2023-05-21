@@ -65,7 +65,7 @@ public:
   inline ShenandoahGeneration* generation() { return _generation; };
 
 private:
-  inline AgeTable* get_local_age_table(uint worker_id) const;
+  inline AgeTable* get_local_age_table(uint worker_id);
 
 // ---------- Marking loop and tasks
 

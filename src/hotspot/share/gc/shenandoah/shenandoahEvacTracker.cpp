@@ -23,6 +23,7 @@
  */
 #include "precompiled.hpp"
 
+#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
@@ -144,12 +145,11 @@ ShenandoahCycleStats ShenandoahEvacuationTracker::flush_cycle_to_global() {
     // Log cumulative population stats back into the heap's global census
     // data, and use it to compute an appropriate tenuring threshold to
     // be used in the next cycle.
-    /* AgeCensus* census = ShenandoahHeap::heap()->age_census();
+    ShenandoahAgeCensus* census = ShenandoahHeap::heap()->age_census();
     census->update_epoch();
-    census->merge(_mutators_global.age_table());
-    census->merge(_workers_global.age_table());
+    census->ingest(_mutators_global.age_table());
+    census->ingest(_workers_global.age_table());
     census->compute_tenuring_threshold();
-    */
   }
 
   return {workers, mutators};

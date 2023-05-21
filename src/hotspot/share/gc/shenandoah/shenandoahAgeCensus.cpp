@@ -72,3 +72,7 @@ void ShenandoahAgeCensus::reset_epoch() {
   }
   _epoch = markWord::max_age - 1;
 }
+
+void ShenandoahAgeCensus::ingest(AgeTable* population_vector) { }
+void ShenandoahAgeCensus::compute_tenuring_threshold() { }
+

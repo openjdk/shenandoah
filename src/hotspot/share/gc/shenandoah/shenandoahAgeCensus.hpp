@@ -51,10 +51,23 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
 
   ShenandoahAgeCensus();
 
-  AgeTable* get_local_age_table(uint worker_id) const { return (AgeTable*) _local_age_table[worker_id]; }
-  AgeTable* get_age_table()                     const { return (AgeTable*) _global_age_table[_epoch];   }
+  // Return the local age table (population vector) for worker_id.
+  // Only used in the case of !GenShenCensusAtEvac
+  AgeTable* get_local_age_table(uint worker_id) {
+   return (AgeTable*) _local_age_table[worker_id];
+  }
+
+  // Return the global age table (population vector) for the current epoch.
+  // Where is this used?
+  AgeTable* get_age_table() {
+    return (AgeTable*) _global_age_table[_epoch];
+  }
+
   void update_epoch();
   void reset_epoch();
+
+  void ingest(AgeTable* population_vector);
+  void compute_tenuring_threshold();           // Add a strategy parameter
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHAGECENSUS_HPP
