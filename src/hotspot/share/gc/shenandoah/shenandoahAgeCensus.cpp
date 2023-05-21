@@ -22,6 +22,8 @@
  *
  */
 
+#include "precompiled.hpp"
+
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
