@@ -90,7 +90,35 @@ void ShenandoahAgeCensus::compute_tenuring_threshold() {
   if (!GenShenAdaptiveTenuring) {
     _tenuring_threshold[_epoch] = InitialTenuringThreshold;
   } else {
-    guarantee(false, "NYI");
+    _tenuring_threshold[_epoch] = compute_tenuring_threshold_work();
   }
+}
+
+uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
+  // Starting with the largest non-zero population by age cohort
+  // and working down in age of cohorts,find the lowest age such
+  // that all higher ages have a mortality rate that is below a
+  // pre-specified threshold. We consider this to be the adaptive
+  // tenuring age to be used for the next cohort.
+
+  // Current and previous epoch in ring
+  const uint cur_epoch = _epoch;
+  const uint prev_epoch = cur_epoch > 0  ? cur_epoch - 1 : markWord::max_age;
+  uint tenuring_threshold = markWord::max_age;
+
+  // Current and previous population vectors in ring
+  const AgeTable* cur_pv = _global_age_table[cur_epoch];
+  const AgeTable* prev_pv = _global_age_table[prev_epoch];
+  for (uint i = markWord::max_age; i > 0; i--) {
+    assert(i > 0, "Error");
+    // Compute mortality rate of current cohort
+    double mortality_rate = 1.0 - survival_rate(prev_pv->sizes[i-1], cur_pv->sizes[i]);
+    if (mortality_rate < GenShenTenuringMortalityRateThreshold) {
+      tenuring_threshold = i;
+      continue;
+    }
+    return tenuring_threshold;
+  }
+  return tenuring_threshold;
 }
 

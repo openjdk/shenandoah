@@ -47,6 +47,11 @@
   product(uintx, GenShenMaxTenuringThreshold, 15, EXPERIMENTAL,             \
           "Ceiling for adaptive tenuring threshold")                        \
                                                                             \
+  product(double, GenShenTenuringMortalityRateThreshold, 0.1, EXPERIMENTAL, \
+          "Cohort mortality rates below this value will be treated as "     \
+          "indicative of longevity, leading to tenuring. Used only when "   \
+          "GenShenAdaptiveTenuring is enabled")                             \
+                                                                            \
   product(size_t, ShenandoahRegionSize, 0, EXPERIMENTAL,                    \
           "Static heap region size. Set zero to enable automatic sizing.")  \
                                                                             \

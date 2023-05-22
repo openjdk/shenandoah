@@ -46,6 +46,22 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   uint *_tenuring_threshold;         // An array of the last N tenuring threshold values we
                                      // computed.
 
+  // A private work method invoked by the public compute_tenuring_threshold() method.
+  // This uses the data in the ShenandoahAgeCensus object's _global_age_table and the
+  // current _epoch to compute a new tenuring threshold, which will be remembered
+  // until the next invocation of compute_tenuring_threshold.
+  uint compute_tenuring_threshold_work();
+
+  // The fraction of prev_pop that survived in cur_pop
+  double survival_rate(size_t prev_pop, size_t cur_pop) {
+    if (prev_pop == 0) {
+      assert(cur_pop == 0, "Error: deaths not births");
+      return 0;
+    }
+    assert(prev_pop >= cur_pop, "Error: deaths not births");
+    return ((double)prev_pop)/((double)cur_pop);
+  }
+
  public:
   enum {
     MAX_COHORTS = AgeTable::table_size
