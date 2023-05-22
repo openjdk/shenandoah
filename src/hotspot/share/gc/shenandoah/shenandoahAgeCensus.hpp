@@ -56,10 +56,14 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   double survival_rate(size_t prev_pop, size_t cur_pop) {
     if (prev_pop == 0) {
       assert(cur_pop == 0, "Error: deaths not births");
-      return 0;
+      return 0.0;
     }
-    assert(prev_pop >= cur_pop, "Error: deaths not births");
-    return ((double)prev_pop)/((double)cur_pop);
+    if (prev_pop < cur_pop) {
+      // adjust for inaccurate censuses by finessing the
+      // reappearance of dark matter as normal matter.
+      return 1.0;
+    }
+    return ((double)cur_pop)/((double)prev_pop);
   }
 
  public:
@@ -72,7 +76,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // Return the local age table (population vector) for worker_id.
   // Only used in the case of !GenShenCensusAtEvac
   AgeTable* get_local_age_table(uint worker_id) {
-   return (AgeTable*) _local_age_table[worker_id];
+    return (AgeTable*) _local_age_table[worker_id];
   }
 
   // Return the global age table (population vector) for the current epoch.
