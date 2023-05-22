@@ -72,7 +72,7 @@ public:
   // Place region idx into free set which_set.  Requires that idx is currently NotFree.
   void make_free(size_t idx, ShenandoahFreeMemoryType which_set, size_t region_capacity);
 
-  // Place region idx into free set new_set.  Requires that idx is currently not NotFRee.
+  // Place region idx into free set new_set.  Requires that idx is currently not NotFree.
   void move_to_set(size_t idx, ShenandoahFreeMemoryType new_set, size_t region_capacity);
 
   // Returns the ShenandoahFreeMemoryType affiliation of region idx, or NotFree if this region is not currently free.  This does
@@ -185,6 +185,7 @@ private:
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   bool can_allocate_from(ShenandoahHeapRegion *r) const;
+  bool can_allocate_from(size_t idx) const;
   bool has_alloc_capacity(size_t idx) const;
   bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
   bool has_no_alloc_capacity(ShenandoahHeapRegion *r) const;
@@ -198,6 +199,7 @@ public:
   void clear();
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions);
   void rebuild(size_t young_cset_regions, size_t old_cset_regions);
+  void move_collector_sets_to_mutator(size_t cset_regions);
 
   void add_old_collector_free_region(ShenandoahHeapRegion* region);
 

@@ -917,8 +917,7 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
     size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
     const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    ShenandoahGeneration* old_gen = heap->old_generation();
+    ShenandoahGeneration* old_gen = old_generation();
     size_t old_capacity = old_gen->max_capacity();
     size_t old_usage = old_gen->used();
     size_t old_free_regions = old_gen->free_unaffiliated_regions();
@@ -2788,6 +2787,16 @@ private:
   template<class T>
   void do_work(uint worker_id) {
     T cl;
+    if (CONCURRENT && (worker_id == 0)) {
+      // We ask the first worker to replenish the Mutator free set by moving regions previously reserved to hold the
+      // results of evacuation.  These reserves are no longer necessary because evacuation has completed.
+      size_t cset_regions = _heap->collection_set()->count();
+      // We cannot transfer any more regions than will be reclaimed when the existing collection set is recycled, because
+      // we need the reclaimed collection set regions to replenish the collector reserves
+      _heap->free_set()->move_collector_sets_to_mutator(cset_regions);
+    }
+    // If !CONCURRENT, there's no value in expanding Mutator free set
+
     ShenandoahHeapRegion* r = _regions->next();
     // We update references for global, old, and young collections.
     assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");

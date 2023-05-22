@@ -941,6 +941,11 @@ bool ShenandoahFreeSet::can_allocate_from(ShenandoahHeapRegion *r) const {
   return r->is_empty() || (r->is_trash() && !_heap->is_concurrent_weak_root_in_progress());
 }
 
+bool ShenandoahFreeSet::can_allocate_from(size_t idx) const {
+  ShenandoahHeapRegion* r = _heap->get_region(idx);
+  return can_allocate_from(r);
+}
+
 size_t ShenandoahFreeSet::alloc_capacity(size_t idx) const {
   ShenandoahHeapRegion* r = _heap->get_region(idx);
   return alloc_capacity(r);
@@ -1070,6 +1075,68 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
     }
   }
 }
+
+// Move no more than cset_regions from the existing Collector and OldCollector free sets to the Mutator free set.
+// This is called from outside the heap lock.
+void ShenandoahFreeSet::move_collector_sets_to_mutator(size_t max_xfer_regions) {
+  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  size_t collector_empty_xfer = 0;
+  size_t collector_not_empty_xfer = 0;
+  size_t old_collector_empty_xfer = 0;
+
+  // Process empty regions within the Collector free set
+  if ((max_xfer_regions > 0) && (_free_sets.leftmost_empty(Collector) <= _free_sets.rightmost_empty(Collector))) {
+    ShenandoahHeapLocker locker(_heap->lock());
+    for (size_t idx = _free_sets.leftmost_empty(Collector);
+         (max_xfer_regions > 0) && (idx <= _free_sets.rightmost_empty(Collector)); idx++) {
+      if (_free_sets.in_free_set(idx, Collector) && can_allocate_from(idx)) {
+        _free_sets.move_to_set(idx, Mutator, region_size_bytes);
+        max_xfer_regions--;
+        collector_empty_xfer += region_size_bytes;
+      }
+    }
+  }
+
+  // Process empty regions within the OldCollector free set
+  size_t old_collector_regions = 0;
+  if ((max_xfer_regions > 0) && (_free_sets.leftmost_empty(OldCollector) <= _free_sets.rightmost_empty(OldCollector))) {
+    ShenandoahHeapLocker locker(_heap->lock());
+    for (size_t idx = _free_sets.leftmost_empty(OldCollector);
+         (max_xfer_regions > 0) && (idx <= _free_sets.rightmost_empty(OldCollector)); idx++) {
+      if (_free_sets.in_free_set(idx, OldCollector) && can_allocate_from(idx)) {
+        _free_sets.move_to_set(idx, Mutator, region_size_bytes);
+        max_xfer_regions--;
+        old_collector_empty_xfer += region_size_bytes;
+        old_collector_regions++;
+      }
+    }
+  }
+  if (old_collector_regions > 0) {
+    _heap->generation_sizer()->transfer_to_young(old_collector_regions);
+  }
+
+  // If there are any non-empty regions within Collector set, we can also move them to the Mutator free set
+  if ((max_xfer_regions > 0) && (_free_sets.leftmost(Collector) <= _free_sets.rightmost(Collector))) {
+    ShenandoahHeapLocker locker(_heap->lock());
+    for (size_t idx = _free_sets.leftmost(Collector); (max_xfer_regions > 0) && (idx <= _free_sets.rightmost(Collector)); idx++) {
+      size_t alloc_capacity = this->alloc_capacity(idx);
+      if (_free_sets.in_free_set(idx, Collector) && (alloc_capacity > 0)) {
+        _free_sets.move_to_set(idx, Mutator, alloc_capacity);
+        max_xfer_regions--;
+        collector_not_empty_xfer += alloc_capacity;
+      }
+    }
+  }
+
+  size_t collector_xfer = collector_empty_xfer + collector_not_empty_xfer;
+  size_t total_xfer = collector_xfer + old_collector_empty_xfer;
+  log_info(gc, free)("At start of update refs, moving " SIZE_FORMAT "%s to Mutator free set from Collector Reserve ("
+                     SIZE_FORMAT "%s) and from Old Collector Reserve (" SIZE_FORMAT "%s)",
+                     byte_size_in_proper_unit(total_xfer), proper_unit_for_byte_size(total_xfer),
+                     byte_size_in_proper_unit(collector_xfer), proper_unit_for_byte_size(collector_xfer),
+                     byte_size_in_proper_unit(old_collector_empty_xfer), proper_unit_for_byte_size(old_collector_empty_xfer));
+}
+
 
 // Overwrite arguments to represent the amount of memory in each generation that is about to be recycled
 void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions) {
