@@ -1605,7 +1605,7 @@ private:
         if (ShenandoahPacing) {
           _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
-      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() > InitialTenuringThreshold)) {
+      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() > _sh->age_census()->tenuring_threshold())) {
         // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
         // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
         // triggers the load-reference barrier (LRB) to copy on reference fetch.

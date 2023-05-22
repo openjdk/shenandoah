@@ -1006,7 +1006,7 @@ size_t ShenandoahHeapRegion::promote_humongous() {
   assert(heap->active_generation()->is_mark_complete(), "sanity");
   assert(is_young(), "Only young regions can be promoted");
   assert(is_humongous_start(), "Should not promote humongous continuation in isolation");
-  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
+  assert(age() >= heap->age_census()->tenuring_threshold(), "Only promote regions that are sufficiently aged");
 
   ShenandoahGeneration* old_generation = heap->old_generation();
   ShenandoahGeneration* young_generation = heap->young_generation();

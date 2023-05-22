@@ -36,7 +36,16 @@
                             constraint)                                     \
                                                                             \
   product(bool, GenShenCensusAtEvac, true, EXPERIMENTAL,                    \
-          "Provide heap region sampling data via jvmstat.")                 \
+          "Object age census at evacuation, not mearking")                  \
+                                                                            \
+  product(bool, GenShenAdaptiveTenuring, false, EXPERIMENTAL,               \
+          "Adaptive tenuring threshold")                                    \
+                                                                            \
+  product(uintx, GenShenMinTenuringThreshold, 0, EXPERIMENTAL,              \
+          "Floor for adaptive tenuring threshold")                          \
+                                                                            \
+  product(uintx, GenShenMaxTenuringThreshold, 15, EXPERIMENTAL,             \
+          "Ceiling for adaptive tenuring threshold")                        \
                                                                             \
   product(size_t, ShenandoahRegionSize, 0, EXPERIMENTAL,                    \
           "Static heap region size. Set zero to enable automatic sizing.")  \

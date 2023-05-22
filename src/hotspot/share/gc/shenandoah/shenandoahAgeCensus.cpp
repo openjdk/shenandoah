@@ -32,9 +32,12 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only in generational mode");
   const int max_age = markWord::max_age;
   _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_age, mtGC);
-  for (int i = 0; i < max_age; i++) {
-    _global_age_table[i] = new AgeTable(false);
+  _tenuring_threshold = NEW_C_HEAP_ARRAY(uint, max_age, mtGC);
+  for (int i = 0; i <= max_age; i++) {
     // Note that we don't now get perfdata from age_table
+    _global_age_table[i] = new AgeTable(false);
+    // Sentinel value
+    _tenuring_threshold[i] = max_age + 1;
   }
   if (!GenShenCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
@@ -43,15 +46,15 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
       _local_age_table[i] = new AgeTable(false);
     }
   }
-  _epoch = max_age - 1;  // see update_epoch()
-  assert(_epoch < markWord::max_age, "Error");
+  _epoch = max_age;  // see update_epoch()
+  assert(_epoch <= markWord::max_age, "Error");
 }
 
 // Update the epoch for the global age tables,
 // and merge local age tables into the global age table.
 void ShenandoahAgeCensus::update_epoch() {
-  assert(_epoch < markWord::max_age, "Error");
-  if (++_epoch == markWord::max_age) {
+  assert(_epoch <= markWord::max_age, "Error");
+  if (++_epoch > markWord::max_age) {
     _epoch=0;
   }
   // Merge data from local age tables into the global age table for the epoch,
@@ -71,14 +74,23 @@ void ShenandoahAgeCensus::update_epoch() {
 // Reset the epoch for the global age tables,
 // clearing all history.
 void ShenandoahAgeCensus::reset_epoch() {
-  assert(_epoch < markWord::max_age, "Error");
-  for (uint i = 0; i < markWord::max_age; i++) {
+  assert(_epoch <= markWord::max_age, "Error");
+  for (uint i = 0; i <= markWord::max_age; i++) {
     _global_age_table[i]->clear();
   }
-  _epoch = markWord::max_age - 1;
-  assert(_epoch < markWord::max_age, "Error");
+  _epoch = markWord::max_age;
+  assert(_epoch <= markWord::max_age, "Error");
 }
 
-void ShenandoahAgeCensus::ingest(AgeTable* population_vector) { }
-void ShenandoahAgeCensus::compute_tenuring_threshold() { }
+void ShenandoahAgeCensus::ingest(AgeTable* population_vector) {
+  _global_age_table[_epoch]->merge(population_vector);
+}
+
+void ShenandoahAgeCensus::compute_tenuring_threshold() { 
+  if (!GenShenAdaptiveTenuring) {
+    _tenuring_threshold[_epoch] = InitialTenuringThreshold;
+  } else {
+    guarantee(false, "NYI");
+  }
+}
 

@@ -532,7 +532,7 @@ public:
 
     bool promote_object = false;
     if ((_from_affiliation == ShenandoahAffiliation::YOUNG_GENERATION) &&
-        (from_region_age + object_age >= InitialTenuringThreshold)) {
+        (from_region_age + object_age >= ShenandoahHeap::heap()->age_census()->tenuring_threshold())) {
       if ((_old_to_region != nullptr) && (_old_compact_point + obj_size > _old_to_region->end())) {
         finish_old_region();
         _old_to_region = nullptr;

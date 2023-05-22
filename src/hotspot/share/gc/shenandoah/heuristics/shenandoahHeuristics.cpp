@@ -83,7 +83,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
   size_t old_consumed = 0;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= InitialTenuringThreshold)) {
+    if (in_generation(region) && !region->is_empty() && region->is_regular() && (region->age() >= heap->age_census()->tenuring_threshold())) {
       size_t promotion_need = (size_t) (region->get_live_data_bytes() * ShenandoahEvacWaste);
       if (old_consumed + promotion_need < old_available) {
         old_consumed += promotion_need;
@@ -144,7 +144,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         // This is our candidate for later consideration.
         candidates[cand_idx]._region = region;
         if (is_generational && collection_set->is_preselected(i)) {
-          // If region is preselected, we know mode()->is_generational() and region->age() >= InitialTenuringThreshold)
+          // If region is preselected, we know mode()->is_generational() and region->age() >= heap->age_census()->tenuring_threshold())
           garbage = ShenandoahHeapRegion::region_size_bytes();
         }
         candidates[cand_idx]._garbage = garbage;

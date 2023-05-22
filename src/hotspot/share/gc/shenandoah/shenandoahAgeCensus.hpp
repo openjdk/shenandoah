@@ -43,6 +43,8 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold
   AgeTable** _local_age_table;       // Local scratch age tables to track object ages
   uint _epoch;                       // Current epoch (modulo max age)
+  uint *_tenuring_threshold;         // An array of the last N tenuring threshold values we
+                                     // computed.
 
  public:
   enum {
@@ -68,6 +70,9 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
 
   void ingest(AgeTable* population_vector);
   void compute_tenuring_threshold();           // Add a strategy parameter
+
+  // Return the most recently computed tenuring threshold at previous epoch.
+  uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHAGECENSUS_HPP

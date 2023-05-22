@@ -79,7 +79,7 @@ void ShenandoahEvacuationStats::print_on(outputStream* st) {
             byte_size_in_proper_unit(abandoned_size),   proper_unit_for_byte_size(abandoned_size),
             abandoned_count);
   if (GenShenCensusAtEvac) {
-    _age_table.print_on(st, InitialTenuringThreshold);
+    _age_table.print_on(st, ShenandoahHeap::heap()->age_census()->tenuring_threshold());
   }
 }
 
@@ -111,10 +111,10 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
     }
   }
   st->print("Young regions: ");
-  young_region_ages.print_on(st, InitialTenuringThreshold);
+  young_region_ages.print_on(st, heap->age_census()->tenuring_threshold());
   st->cr();
   st->print("Old regions: ");
-  old_region_ages.print_on(st, InitialTenuringThreshold);
+  old_region_ages.print_on(st, heap->age_census()->tenuring_threshold());
 }
 
 class ShenandoahStatAggregator : public ThreadClosure {
