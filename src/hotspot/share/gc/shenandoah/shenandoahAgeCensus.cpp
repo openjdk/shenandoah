@@ -52,8 +52,8 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
 void ShenandoahAgeCensus::update_epoch() {
   assert(_epoch < markWord::max_age, "Error");
   if (++_epoch == markWord::max_age) {
-    _epoch=0; 
-  } 
+    _epoch=0;
+  }
   // Merge data from local age tables into the global age table for the epoch,
   // clearing the local tables.
   _global_age_table[_epoch]->clear();
@@ -65,7 +65,7 @@ void ShenandoahAgeCensus::update_epoch() {
     }
     _global_age_table[_epoch]->print_age_table(InitialTenuringThreshold);
   }
-} 
+}
 
 
 // Reset the epoch for the global age tables,
