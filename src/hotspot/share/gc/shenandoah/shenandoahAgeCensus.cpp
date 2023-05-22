@@ -42,35 +42,41 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
     for (uint i = 0; i < max_workers; i++) {
       _local_age_table[i] = new AgeTable(false);
     }
-    _epoch = max_age - 1;  // see update_epoch()
   }
+  _epoch = max_age - 1;  // see update_epoch()
+  assert(_epoch < markWord::max_age, "Error");
 }
 
 // Update the epoch for the global age tables,
 // and merge local age tables into the global age table.
 void ShenandoahAgeCensus::update_epoch() {
+  assert(_epoch < markWord::max_age, "Error");
   if (++_epoch == markWord::max_age) {
     _epoch=0; 
   } 
   // Merge data from local age tables into the global age table for the epoch,
   // clearing the local tables.
   _global_age_table[_epoch]->clear();
-  size_t max_workers = ShenandoahHeap::heap()->max_workers();
-  for (uint i = 0; i < max_workers; i++) {
-    _global_age_table[_epoch]->merge(_local_age_table[i]);
-    _local_age_table[i]->clear();
+  if (!GenShenCensusAtEvac) {
+    size_t max_workers = ShenandoahHeap::heap()->max_workers();
+    for (uint i = 0; i < max_workers; i++) {
+      _global_age_table[_epoch]->merge(_local_age_table[i]);
+      _local_age_table[i]->clear();
+    }
+    _global_age_table[_epoch]->print_age_table(InitialTenuringThreshold);
   }
-  _global_age_table[_epoch]->print_age_table(InitialTenuringThreshold);
 } 
 
 
 // Reset the epoch for the global age tables,
 // clearing all history.
 void ShenandoahAgeCensus::reset_epoch() {
+  assert(_epoch < markWord::max_age, "Error");
   for (uint i = 0; i < markWord::max_age; i++) {
     _global_age_table[i]->clear();
   }
   _epoch = markWord::max_age - 1;
+  assert(_epoch < markWord::max_age, "Error");
 }
 
 void ShenandoahAgeCensus::ingest(AgeTable* population_vector) { }

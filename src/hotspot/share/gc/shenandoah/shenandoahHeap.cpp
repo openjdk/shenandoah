@@ -36,6 +36,7 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/tlab_globals.hpp"
 
+#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
@@ -235,6 +236,9 @@ jint ShenandoahHeap::initialize() {
     size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
+
+    // Age census structure
+    _age_census = new ShenandoahAgeCensus();
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
@@ -557,6 +561,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _captured_old_usage(0),
   _previous_promotion(0),
   _upgraded_to_full(false),
+  _age_census(nullptr),
   _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
