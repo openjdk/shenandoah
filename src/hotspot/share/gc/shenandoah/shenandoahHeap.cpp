@@ -514,26 +514,18 @@ void ShenandoahHeap::initialize_heuristics_generations() {
   // for old would be total heap - minimum capacity of young. This means the sum of the maximum
   // allowed for old and young could exceed the total heap size. It remains the case that the
   // _actual_ capacity of young + old = total.
-  if (strcmp(ShenandoahGCMode, "generational") == 0) {
-    _generation_sizer.heap_size_changed(max_capacity());
-    size_t initial_capacity_young = _generation_sizer.max_young_size();
-    size_t max_capacity_young = _generation_sizer.max_young_size();
-    size_t initial_capacity_old = max_capacity() - max_capacity_young;
-    size_t max_capacity_old = max_capacity() - initial_capacity_young;
+  _generation_sizer.heap_size_changed(max_capacity());
+  size_t initial_capacity_young = _generation_sizer.max_young_size();
+  size_t max_capacity_young = _generation_sizer.max_young_size();
+  size_t initial_capacity_old = max_capacity() - max_capacity_young;
+  size_t max_capacity_old = max_capacity() - initial_capacity_young;
 
-    _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
-    _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-    _global_generation = new ShenandoahGlobalGeneration(true, _max_workers, max_capacity(), max_capacity());
-    _global_generation->initialize_heuristics(_gc_mode);
-    _young_generation->initialize_heuristics(_gc_mode);
-    _old_generation->initialize_heuristics(_gc_mode);
-
-  } else {
-    _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity(), max_capacity());
-    _old_generation = new ShenandoahOldGeneration(_max_workers, 0L, 0L);
-    _global_generation = new ShenandoahGlobalGeneration(false, _max_workers, max_capacity(), max_capacity());
-    _global_generation->initialize_heuristics(_gc_mode);
-  }
+  _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
+  _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
+  _global_generation = new ShenandoahGlobalGeneration(true, _max_workers, max_capacity(), max_capacity());
+  _global_generation->initialize_heuristics(_gc_mode);
+  _young_generation->initialize_heuristics(_gc_mode);
+  _old_generation->initialize_heuristics(_gc_mode);
 }
 
 #ifdef _MSC_VER
@@ -583,8 +575,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _memory_pool(nullptr),
   _young_gen_memory_pool(nullptr),
   _old_gen_memory_pool(nullptr),
-  _stw_memory_manager("Shenandoah Pauses", "end of GC pause"),
-  _cycle_memory_manager("Shenandoah Cycles", "end of GC cycle"),
+  _stw_memory_manager("Shenandoah Pauses"),
+  _cycle_memory_manager("Shenandoah Cycles"),
   _gc_timer(new ConcurrentGCTimer()),
   _soft_ref_policy(),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
@@ -831,11 +823,10 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
 #ifdef KELVIN_DEPRECATE
   // soft_max affects heuristic triggers, but has no impact on generation sizes
   if (mode()->is_generational()) {
-    _generation_sizer.heap_size_changed(_soft_max_size);
-    size_t soft_max_capacity_young = _generation_sizer.max_young_size();
-    size_t soft_max_capacity_old = _soft_max_size - soft_max_capacity_young;
-    _young_generation->set_soft_max_capacity(soft_max_capacity_young);
-    _old_generation->set_soft_max_capacity(soft_max_capacity_old);
+    size_t max_capacity_young = _generation_sizer.max_young_size();
+    size_t min_capacity_young = _generation_sizer.min_young_size();
+    size_t new_capacity_young = clamp(v, min_capacity_young, max_capacity_young);
+    _young_generation->set_soft_max_capacity(new_capacity_young);
   }
 #endif
 }
@@ -2339,7 +2330,7 @@ public:
 
     size_t max = _heap->num_regions();
     while (Atomic::load(&_index) < max) {
-      size_t cur = Atomic::fetch_and_add(&_index, stride, memory_order_relaxed);
+      size_t cur = Atomic::fetch_then_add(&_index, stride, memory_order_relaxed);
       size_t start = cur;
       size_t end = MIN2(cur + stride, max);
       if (start >= max) break;

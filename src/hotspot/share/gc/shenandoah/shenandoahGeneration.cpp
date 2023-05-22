@@ -712,8 +712,13 @@ size_t ShenandoahGeneration::used_regions_size() const {
 size_t ShenandoahGeneration::available() const {
   size_t in_use = used() + get_humongous_waste();
   size_t capacity = max_capacity();
-  size_t result = in_use > capacity ? 0 : capacity - in_use;
-  return result;
+  return in_use > capacity ? 0 : capacity - in_use;
+}
+
+size_t ShenandoahGeneration::soft_available() const {
+  size_t in_use = used() + get_humongous_waste();
+  size_t soft_capacity = soft_max_capacity();
+  return in_use > soft_capacity ? 0 : soft_capacity - in_use;
 }
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {
@@ -727,7 +732,6 @@ void ShenandoahGeneration::increase_capacity(size_t increment) {
          (_max_capacity + increment <= ShenandoahHeap::heap()->max_capacity()), "Generation cannot be larger than heap size");
   assert(increment % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   _max_capacity += increment;
-  _soft_max_capacity += increment;
 
   // This detects arithmetic wraparound on _used
   // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
@@ -747,7 +751,6 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   assert(_soft_max_capacity >= decrement, "Generation soft capacity cannot be negative");
 
   _max_capacity -= decrement;
-  _soft_max_capacity -= decrement;
 
   // This detects arithmetic wraparound on _used
   // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING

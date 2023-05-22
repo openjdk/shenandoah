@@ -1015,6 +1015,7 @@ public:
 
   void work(uint worker_id) {
     ShenandoahConcurrentWorkerSession worker_session(worker_id);
+    ShenandoahSuspendibleThreadSetJoiner sts_join;
     {
       ShenandoahEvacOOMScope oom;
       // jni_roots and weak_roots are OopStorage backed roots, concurrent iteration

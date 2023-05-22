@@ -404,15 +404,13 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
 }
 
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
-  size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
-  size_t usage = _generation->used();
-  size_t available = (capacity > usage)? capacity - usage: 0;
+  size_t available = _generation->soft_available();
   size_t allocated = _generation->bytes_allocated_since_gc_start();
 
   log_debug(gc)("should_start_gc (%s)? available: " SIZE_FORMAT ", soft_max_capacity: " SIZE_FORMAT
-                ", max_capacity: " SIZE_FORMAT ", allocated: " SIZE_FORMAT,
-                _generation->name(), available, capacity, max_capacity, allocated);
+                ", allocated: " SIZE_FORMAT,
+                _generation->name(), available, capacity, allocated);
 
   // The collector reserve may eat into what the mutator is allowed to use. Make sure we are looking
   // at what is available to the mutator when deciding whether to start a GC.
@@ -430,9 +428,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   // OLD generation is maintained to be as small as possible.  Depletion-of-free-pool triggers do not apply to old generation.
   if (!_generation->is_old()) {
-
     size_t min_threshold = min_free_threshold();
-
     if (available < min_threshold) {
       log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
                    _generation->name(),

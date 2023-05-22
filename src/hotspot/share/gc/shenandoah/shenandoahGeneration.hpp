@@ -111,6 +111,12 @@ private:
   virtual size_t used() const { return _used; }
   virtual size_t available() const;
 
+  // Returns the memory available based on the _soft_ max heap capacity (soft_max_heap - used).
+  // The soft max heap size may be adjusted lower than the max heap size to cause the trigger
+  // to believe it has less memory available than is _really_ available. Lowering the soft
+  // max heap size will cause the adaptive heuristic to run more frequent cycles.
+  size_t soft_available() const;
+
   size_t bytes_allocated_since_gc_start();
   void reset_bytes_allocated_since_gc_start();
   void increase_allocated(size_t bytes);
