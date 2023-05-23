@@ -41,10 +41,10 @@
   product(bool, GenShenAdaptiveTenuring, false, EXPERIMENTAL,               \
           "Adaptive tenuring threshold")                                    \
                                                                             \
-  product(uintx, GenShenMinTenuringThreshold, 0, EXPERIMENTAL,              \
+  product(uintx, GenShenMinTenuringThreshold, 1, EXPERIMENTAL,              \
           "Floor for adaptive tenuring threshold")                          \
                                                                             \
-  product(uintx, GenShenMaxTenuringThreshold, 15, EXPERIMENTAL,             \
+  product(uintx, GenShenMaxTenuringThreshold, 16, EXPERIMENTAL,             \
           "Ceiling for adaptive tenuring threshold")                        \
                                                                             \
   product(double, GenShenTenuringMortalityRateThreshold, 0.1, EXPERIMENTAL, \
