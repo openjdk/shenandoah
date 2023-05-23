@@ -101,8 +101,6 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   bool is_global = _generation->is_global();
   size_t capacity = heap->young_generation()->max_capacity();
 
-  uint tenuring_threshold = heap->age_census()->tenuring_threshold();
-
   // cur_young_garbage represents the amount of memory to be reclaimed from young-gen.  In the case that live objects
   // are known to be promoted out of young-gen, we count this as cur_young_garbage because this memory is reclaimed
   // from young-gen and becomes available to serve future young-gen allocation requests.
@@ -112,6 +110,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   QuickSort::sort<RegionData>(data, (int)size, compare_by_garbage, false);
 
   if (is_generational) {
+    uint tenuring_threshold = heap->age_census()->tenuring_threshold();
     if (is_global) {
       size_t max_young_cset    = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
       size_t young_cur_cset = 0;
