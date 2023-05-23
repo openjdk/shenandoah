@@ -65,7 +65,7 @@ private:
   double _most_recent_periodic_gc_time;
   double _most_recent_periodic_mutator_time;
 
-  uint _most_recent_gcid;
+  size_t _most_recent_gcid;
   uint _active_processors;
 
   bool _most_recent_is_full;
@@ -73,7 +73,7 @@ private:
   ShenandoahMmuTask* _mmu_periodic_task;
   TruncatedSeq _mmu_average;
 
-  void update_utilization(ShenandoahGeneration* generation, uint gcid, const char* msg);
+  void update_utilization(ShenandoahGeneration* generation, size_t gcid, const char* msg);
   static void fetch_cpu_times(double &gc_time, double &mutator_time);
 
 public:
@@ -90,12 +90,12 @@ public:
   // We may redundantly record degen and full in the case that a degen upgrades to full.  When this happens, we will invoke
   // both record_full() and record_degenerated() with the same value of gcid.  record_full() is called first and the log
   // reports such a cycle as a FULL cycle.
-  void record_young(ShenandoahGeneration* generation, uint gcid);
-  void record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool has_old_candidates);
-  void record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done, bool has_old_candidates);
-  void record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done);
-  void record_full(ShenandoahGeneration* generation, uint gcid);
-  void record_degenerated(ShenandoahGeneration* generation, uint gcid, bool is_old_boostrap, bool is_mixed_done);
+  void record_young(ShenandoahGeneration* generation, size_t gcid);
+  void record_bootstrap(ShenandoahGeneration* generation, size_t gcid, bool has_old_candidates);
+  void record_old_marking_increment(ShenandoahGeneration* generation, size_t gcid, bool old_marking_done, bool has_old_candidates);
+  void record_mixed(ShenandoahGeneration* generation, size_t gcid, bool is_mixed_done);
+  void record_full(ShenandoahGeneration* generation, size_t gcid);
+  void record_degenerated(ShenandoahGeneration* generation, size_t gcid, bool is_old_boostrap, bool is_mixed_done);
 
   // This is called by the periodic task timer. The interval is defined by
   // GCPauseIntervalMillis and defaults to 5 seconds. This method computes

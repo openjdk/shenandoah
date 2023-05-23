@@ -83,7 +83,7 @@ void ShenandoahMmuTracker::fetch_cpu_times(double &gc_time, double &mutator_time
   mutator_time =(process_user_time + process_system_time) - most_recent_gc_thread_time;
 }
 
-void ShenandoahMmuTracker::update_utilization(ShenandoahGeneration* generation, uint gcid, const char *msg) {
+void ShenandoahMmuTracker::update_utilization(ShenandoahGeneration* generation, size_t gcid, const char *msg) {
   double current = os::elapsedTime();
   _most_recent_gcid = gcid;
   _most_recent_is_full = false;
@@ -109,16 +109,16 @@ void ShenandoahMmuTracker::update_utilization(ShenandoahGeneration* generation, 
   }
 }
 
-void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, uint gcid) {
+void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, size_t gcid) {
   update_utilization(generation, gcid, "Concurrent Young GC");
 }
 
-void ShenandoahMmuTracker::record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool candidates_for_mixed) {
+void ShenandoahMmuTracker::record_bootstrap(ShenandoahGeneration* generation, size_t gcid, bool candidates_for_mixed) {
   // Not likely that this will represent an "ideal" GCU, but doesn't hurt to try
   update_utilization(generation, gcid, "Bootstrap Old GC");
 }
 
-void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done,
+void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* generation, size_t gcid, bool old_marking_done,
                                                         bool has_old_candidates) {
   // No special processing for old marking
   double now = os::elapsedTime();
@@ -133,12 +133,12 @@ void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* ge
                      gcu * 100, mu * 100, duration);
 }
 
-void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done) {
+void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, size_t gcid, bool is_mixed_done) {
   update_utilization(generation, gcid, "Mixed Concurrent GC");
 }
 
 void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
-                                              uint gcid, bool is_old_bootstrap, bool is_mixed_done) {
+                                              size_t gcid, bool is_old_bootstrap, bool is_mixed_done) {
   if ((gcid == _most_recent_gcid) && _most_recent_is_full) {
     // Do nothing.  This is a redundant recording for the full gc that just completed.
     // TODO: avoid making the call to record_degenerated() in the case that this degenerated upgraded to full gc.
@@ -149,7 +149,7 @@ void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
   }
 }
 
-void ShenandoahMmuTracker::record_full(ShenandoahGeneration* generation, uint gcid) {
+void ShenandoahMmuTracker::record_full(ShenandoahGeneration* generation, size_t gcid) {
   update_utilization(generation, gcid, "Full GC");
   _most_recent_is_full = true;
 }
