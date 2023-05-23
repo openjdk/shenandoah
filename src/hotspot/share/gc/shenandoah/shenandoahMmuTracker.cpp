@@ -83,16 +83,7 @@ void ShenandoahMmuTracker::fetch_cpu_times(double &gc_time, double &mutator_time
   mutator_time =(process_user_time + process_system_time) - most_recent_gc_thread_time;
 }
 
-double ShenandoahMmuTracker::process_time_seconds() {
-  double process_real_time(0.0), process_user_time(0.0), process_system_time(0.0);
-  bool valid = os::getTimesSecs(&process_real_time, &process_user_time, &process_system_time);
-  if (valid) {
-    return process_user_time + process_system_time;
-  }
-  return 0.0;
-}
-
-void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char *msg) {
+void ShenandoahMmuTracker::update_utilization(ShenandoahGeneration* generation, uint gcid, const char *msg) {
   double current = os::elapsedTime();
   _most_recent_gcid = gcid;
   _most_recent_is_full = false;
@@ -102,73 +93,65 @@ void ShenandoahMmuTracker::help_record_concurrent(ShenandoahGeneration* generati
 
     _most_recent_timestamp = current;
   } else {
-    double gc_cycle_duration = current - _most_recent_timestamp;
+    double gc_cycle_period = current - _most_recent_timestamp;
     _most_recent_timestamp = current;
 
     double gc_thread_time, mutator_thread_time;
     fetch_cpu_times(gc_thread_time, mutator_thread_time);
     double gc_time = gc_thread_time - _most_recent_gc_time;
     _most_recent_gc_time = gc_thread_time;
-    _most_recent_gcu = gc_time / (_active_processors * gc_cycle_duration);
+    _most_recent_gcu = gc_time / (_active_processors * gc_cycle_period);
     double mutator_time = mutator_thread_time - _most_recent_mutator_time;
     _most_recent_mutator_time = mutator_thread_time;
-    _most_recent_mu = mutator_time / (_active_processors * gc_cycle_duration);
-    log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% for duration %.3fs",
-                       msg, _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_duration);
+    _most_recent_mu = mutator_time / (_active_processors * gc_cycle_period);
+    log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% during period of %.3fs",
+                       msg, _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_period);
   }
 }
 
 void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, uint gcid) {
-  help_record_concurrent(generation, gcid, "Concurrent Young GC");
+  update_utilization(generation, gcid, "Concurrent Young GC");
 }
 
 void ShenandoahMmuTracker::record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool candidates_for_mixed) {
   // Not likely that this will represent an "ideal" GCU, but doesn't hurt to try
-  help_record_concurrent(generation, gcid, "Bootstrap Old GC");
-  if (candidates_for_mixed) {
-    _doing_mixed_evacuations = true;
-  }
-  // Else, there are no candidates for mixed evacuations, so we are not going to do mixed evacuations.
+  update_utilization(generation, gcid, "Bootstrap Old GC");
 }
 
 void ShenandoahMmuTracker::record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done,
                                                         bool has_old_candidates) {
   // No special processing for old marking
-  double duration = os::elapsedTime() - _most_recent_timestamp;
+  double now = os::elapsedTime();
+  double duration = now - _most_recent_timestamp;
+
   double gc_time, mutator_time;
   fetch_cpu_times(gc_time, mutator_time);
   double gcu = (gc_time - _most_recent_gc_time) / duration;
   double mu = (mutator_time - _most_recent_mutator_time) / duration;
-  if (has_old_candidates) {
-    _doing_mixed_evacuations = true;
-  }
-  log_info(gc, ergo)("At end of %s: GC Utilization: %.1f%% for duration %.3fs (which is subsumed in next concurrent gc report)",
+  log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% for duration %.3fs (totals to be subsumed in next gc report)",
                      old_marking_done? "last OLD marking increment": "OLD marking increment",
-                     _most_recent_gcu * 100, duration);
+                     gcu * 100, mu * 100, duration);
 }
 
 void ShenandoahMmuTracker::record_mixed(ShenandoahGeneration* generation, uint gcid, bool is_mixed_done) {
-  help_record_concurrent(generation, gcid, "Mixed Concurrent GC");
+  update_utilization(generation, gcid, "Mixed Concurrent GC");
 }
 
 void ShenandoahMmuTracker::record_degenerated(ShenandoahGeneration* generation,
                                               uint gcid, bool is_old_bootstrap, bool is_mixed_done) {
   if ((gcid == _most_recent_gcid) && _most_recent_is_full) {
     // Do nothing.  This is a redundant recording for the full gc that just completed.
+    // TODO: avoid making the call to record_degenerated() in the case that this degenerated upgraded to full gc.
   } else if (is_old_bootstrap) {
-    help_record_concurrent(generation, gcid, "Degenerated Bootstrap Old GC");
-    if (!is_mixed_done) {
-      _doing_mixed_evacuations = true;
-    }
+    update_utilization(generation, gcid, "Degenerated Bootstrap Old GC");
   } else {
-    help_record_concurrent(generation, gcid, "Degenerated Young GC");
+    update_utilization(generation, gcid, "Degenerated Young GC");
   }
 }
 
 void ShenandoahMmuTracker::record_full(ShenandoahGeneration* generation, uint gcid) {
-  help_record_concurrent(generation, gcid, "Full GC");
+  update_utilization(generation, gcid, "Full GC");
   _most_recent_is_full = true;
-  _doing_mixed_evacuations = false;
 }
 
 void ShenandoahMmuTracker::report() {
@@ -188,7 +171,7 @@ void ShenandoahMmuTracker::report() {
 
   double mu = mutator_delta / (_active_processors * time_delta);
   double gcu = gc_delta / (_active_processors * time_delta);
-  log_info(gc)("Periodic Sample: Average GCU = %.3f%%, Average MU = %.3f%%", gcu * 100, mu * 100);
+  log_info(gc)("Periodic Sample: GCU = %.3f%%, MU = %.3f%% during most recent %.1fs", gcu * 100, mu * 100, time_delta);
 }
 
 void ShenandoahMmuTracker::initialize() {

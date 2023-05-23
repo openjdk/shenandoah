@@ -88,6 +88,7 @@ private:
   ShenandoahSharedFlag _preemption_requested;
   ShenandoahSharedFlag _gc_requested;
   ShenandoahSharedFlag _alloc_failure_gc;
+  ShenandoahSharedFlag _humongous_alloc_failure_gc;
   ShenandoahSharedFlag _graceful_shutdown;
   ShenandoahSharedFlag _do_counters_update;
   ShenandoahSharedFlag _force_counters_update;
@@ -191,7 +192,7 @@ public:
   static const char* gc_mode_name(GCMode mode);
   void notify_control_thread();
 
-  void service_concurrent_cycle(const ShenandoahHeap* heap,
+  void service_concurrent_cycle(ShenandoahHeap* heap,
                                 ShenandoahGeneration* generation,
                                 GCCause::Cause &cause,
                                 bool do_old_gc_bootstrap);

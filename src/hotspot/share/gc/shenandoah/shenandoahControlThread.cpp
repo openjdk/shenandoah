@@ -513,32 +513,6 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(ShenandoahHeap* he
     default:
       ShouldNotReachHere();
   }
-  const char* msg;
-  if (heap->mode()->is_generational()) {
-    if (heap->cancelled_gc()) {
-      msg = (generation == YOUNG) ? "At end of Interrupted Concurrent Young GC" :
-                                    "At end of Interrupted Concurrent Bootstrap GC";
-    } else {
-      msg = (generation == YOUNG) ? "At end of Concurrent Young GC" :
-                                    "At end of Concurrent Bootstrap GC";
-      // We only record GC results if GC was successful
-      ShenandoahMmuTracker* mmu_tracker = heap->mmu_tracker();
-      if (generation == YOUNG) {
-        if (heap->collection_set()->has_old_regions()) {
-          bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
-          mmu_tracker->record_mixed(the_generation, GCId::current(), mixed_is_done);
-        } else {
-          mmu_tracker->record_young(the_generation, GCId::current());
-        }
-      } else {
-        mmu_tracker->record_bootstrap(the_generation, GCId::current(), heap->collection_set()->has_old_regions());
-      }
-    }
-  } else {
-    msg = heap->cancelled_gc() ? "At end of cancelled GC" :
-                                 "At end of GC";
-  }
-  heap->log_heap_status(msg);
 }
 
 void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap, GCCause::Cause &cause) {
@@ -597,7 +571,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
       set_gc_mode(bootstrapping_old);
       young_generation->set_old_gen_task_queues(old_generation->task_queues());
       ShenandoahGCSession session(cause, young_generation);
-      service_concurrent_cycle(heap,young_generation, cause, true);
+      service_concurrent_cycle(heap, young_generation, cause, true);
       process_phase_timings(heap);
       if (heap->cancelled_gc()) {
         // Young generation bootstrap cycle has failed. Concurrent mark for old generation
@@ -736,7 +710,7 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahGeneration* gen
   service_concurrent_cycle(heap, generation, cause, do_old_gc_bootstrap);
 }
 
-void ShenandoahControlThread::service_concurrent_cycle(const ShenandoahHeap* heap,
+void ShenandoahControlThread::service_concurrent_cycle(ShenandoahHeap* heap,
                                                        ShenandoahGeneration* generation,
                                                        GCCause::Cause& cause,
                                                        bool do_old_gc_bootstrap) {
@@ -752,6 +726,32 @@ void ShenandoahControlThread::service_concurrent_cycle(const ShenandoahHeap* hea
     // collection.  Same for global collections.
     _degen_generation = generation;
   }
+  const char* msg;
+  if (heap->mode()->is_generational()) {
+    if (heap->cancelled_gc()) {
+      msg = (generation->is_young()) ? "At end of Interrupted Concurrent Young GC" :
+                                       "At end of Interrupted Concurrent Bootstrap GC";
+    } else {
+      msg = (generation->is_young()) ? "At end of Concurrent Young GC" :
+                                       "At end of Concurrent Bootstrap GC";
+      // We only record GC results if GC was successful
+      ShenandoahMmuTracker* mmu_tracker = heap->mmu_tracker();
+      if (generation->is_young()) {
+        if (heap->collection_set()->has_old_regions()) {
+          bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
+          mmu_tracker->record_mixed(generation, get_gc_id(), mixed_is_done);
+        } else {
+          mmu_tracker->record_young(generation, get_gc_id());
+        }
+      } else {
+        mmu_tracker->record_bootstrap(generation, get_gc_id(), heap->collection_set()->has_old_regions());
+      }
+    }
+  } else {
+    msg = heap->cancelled_gc() ? "At end of cancelled GC" :
+                                 "At end of GC";
+  }
+  heap->log_heap_status(msg);
 }
 
 bool ShenandoahControlThread::check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point) {

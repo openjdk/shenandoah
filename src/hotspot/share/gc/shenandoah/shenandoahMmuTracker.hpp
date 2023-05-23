@@ -51,14 +51,16 @@ class ShenandoahMmuTask;
  */
 class ShenandoahMmuTracker {
 private:
-  // For reporting utilization during most recent GC cycle
+  // These variables hold recent snapshots of cumulative quantities that are used for calculating
+  // CPU time consumed by GC and mutator threads during each GC cycle.
   double _most_recent_timestamp;
   double _most_recent_gc_time;
   double _most_recent_gcu;
   double _most_recent_mutator_time;
   double _most_recent_mu;
 
-  // For periodic MU/GCU reports
+  // These variables hold recent snapshots of cumulative quantities that are used for reporting
+  // periodic consumption of CPU time by GC and mutator threads.
   double _most_recent_periodic_time_stamp;
   double _most_recent_periodic_gc_time;
   double _most_recent_periodic_mutator_time;
@@ -67,13 +69,11 @@ private:
   uint _active_processors;
 
   bool _most_recent_is_full;
-  bool _doing_mixed_evacuations;
 
   ShenandoahMmuTask* _mmu_periodic_task;
   TruncatedSeq _mmu_average;
 
-  void help_record_concurrent(ShenandoahGeneration* generation, uint gcid, const char* msg);
-  static double process_time_seconds();
+  void update_utilization(ShenandoahGeneration* generation, uint gcid, const char* msg);
   static void fetch_cpu_times(double &gc_time, double &mutator_time);
 
 public:
@@ -84,10 +84,12 @@ public:
   void initialize();
 
   // At completion of each GC cycle (not including interrupted cycles), we invoke one of the following to record the
-  // GC utilization during this cycle.
+  // GC utilization during this cycle.  Incremental efforts spent in an interrupted GC cycle will be accumulated into
+  // the CPU time reports for the subsequent completed [degenerated or full] GC cycle.
   //
-  // We may redundantly record degen and full, in which case the gcid will repeat.  We log these as FULL.
-  // Full gets reported first.
+  // We may redundantly record degen and full in the case that a degen upgrades to full.  When this happens, we will invoke
+  // both record_full() and record_degenerated() with the same value of gcid.  record_full() is called first and the log
+  // reports such a cycle as a FULL cycle.
   void record_young(ShenandoahGeneration* generation, uint gcid);
   void record_bootstrap(ShenandoahGeneration* generation, uint gcid, bool has_old_candidates);
   void record_old_marking_increment(ShenandoahGeneration* generation, uint gcid, bool old_marking_done, bool has_old_candidates);
