@@ -522,7 +522,7 @@ void ShenandoahHeap::initialize_heuristics_generations() {
 
   _young_generation = new ShenandoahYoungGeneration(_max_workers, max_capacity_young, initial_capacity_young);
   _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
-  _global_generation = new ShenandoahGlobalGeneration(true, _max_workers, max_capacity(), max_capacity());
+  _global_generation = new ShenandoahGlobalGeneration(_gc_mode->is_generational(), _max_workers, max_capacity(), max_capacity());
   _global_generation->initialize_heuristics(_gc_mode);
   _young_generation->initialize_heuristics(_gc_mode);
   _old_generation->initialize_heuristics(_gc_mode);
