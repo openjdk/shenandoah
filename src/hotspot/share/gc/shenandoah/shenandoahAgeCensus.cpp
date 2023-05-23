@@ -92,6 +92,9 @@ void ShenandoahAgeCensus::compute_tenuring_threshold() {
   } else {
     _tenuring_threshold[_epoch] = compute_tenuring_threshold_work();
   }
+  log_trace(gc, age)("New tenuring threshold " UINTX_FORMAT
+    "(min " UINTX_FORMAT ", max " UINTX_FORMAT")",
+    (uintx) _tenuring_threshold[_epoch], GenShenMinTenuringThreshold, GenShenMaxTenuringThreshold);
 }
 
 uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
@@ -100,25 +103,44 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
   // that all higher ages have a mortality rate that is below a
   // pre-specified threshold. We consider this to be the adaptive
   // tenuring age to be used for the next cohort.
+  // Results are clamped between user-specified mix & max guardrails,
+  // so we ignore any cohorts outside [min,max].
 
   // Current and previous epoch in ring
   const uint cur_epoch = _epoch;
   const uint prev_epoch = cur_epoch > 0  ? cur_epoch - 1 : markWord::max_age;
-  uint tenuring_threshold = markWord::max_age;
+  uint tenuring_threshold = GenShenMaxTenuringThreshold;
 
   // Current and previous population vectors in ring
   const AgeTable* cur_pv = _global_age_table[cur_epoch];
   const AgeTable* prev_pv = _global_age_table[prev_epoch];
-  for (uint i = markWord::max_age; i > 0; i--) {
+  for (uint i = GenShenMaxTenuringThreshold; i >= GenShenMinTenuringThreshold; i--) {
     assert(i > 0, "Error");
     // Compute mortality rate of current cohort
     double mortality_rate = 1.0 - survival_rate(prev_pv->sizes[i-1], cur_pv->sizes[i]);
     if (mortality_rate < GenShenTenuringMortalityRateThreshold) {
+      log_debug(gc, age)("Mortality rate of cohort " UINTX_FORMAT " is %.2f < %.2f",
+        (uintx) i, mortality_rate, GenShenTenuringMortalityRateThreshold);
       tenuring_threshold = i;
       continue;
     }
+    log_debug(gc, age)("Mortality rate of cohort " UINTX_FORMAT " is %.2f > %.2f",
+      (uintx) i, mortality_rate, GenShenTenuringMortalityRateThreshold);
     return tenuring_threshold;
   }
   return tenuring_threshold;
 }
 
+// The fraction of prev_pop that survived in cur_pop
+double ShenandoahAgeCensus::survival_rate(size_t prev_pop, size_t cur_pop) {
+  // The following also covers the case where both entries are 0
+  if (prev_pop <= cur_pop) {
+    // adjust for inaccurate censuses by finessing the
+    // reappearance of dark matter as normal matter.
+    log_debug(gc, age)("(dark matter) Cohort population increased from "
+      SIZE_FORMAT "to " SIZE_FORMAT, prev_pop, cur_pop);
+    return 1.0;
+  }
+  assert(prev_pop > 0, "Error");
+  return ((double)cur_pop)/((double)prev_pop);
+}

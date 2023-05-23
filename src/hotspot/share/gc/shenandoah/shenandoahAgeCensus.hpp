@@ -53,18 +53,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   uint compute_tenuring_threshold_work();
 
   // The fraction of prev_pop that survived in cur_pop
-  double survival_rate(size_t prev_pop, size_t cur_pop) {
-    if (prev_pop == 0) {
-      assert(cur_pop == 0, "Error: deaths not births");
-      return 0.0;
-    }
-    if (prev_pop < cur_pop) {
-      // adjust for inaccurate censuses by finessing the
-      // reappearance of dark matter as normal matter.
-      return 1.0;
-    }
-    return ((double)cur_pop)/((double)prev_pop);
-  }
+  double survival_rate(size_t prev_pop, size_t cur_pop);
 
  public:
   enum {
