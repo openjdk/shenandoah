@@ -748,7 +748,6 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
   // in place.
   assert(decrement % ShenandoahHeapRegion::region_size_bytes() == 0, "Generation capacity must be multiple of region size");
   assert(_max_capacity >= decrement, "Generation capacity cannot be negative");
-  assert(_soft_max_capacity >= decrement, "Generation soft capacity cannot be negative");
 
   _max_capacity -= decrement;
 
