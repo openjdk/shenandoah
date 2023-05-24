@@ -1117,9 +1117,9 @@ void ShenandoahFreeSet::move_collector_sets_to_mutator(size_t max_xfer_regions) 
         old_collector_regions++;
       }
     }
-  }
-  if (old_collector_regions > 0) {
-    _heap->generation_sizer()->transfer_to_young(old_collector_regions);
+    if (old_collector_regions > 0) {
+      _heap->generation_sizer()->transfer_to_young(old_collector_regions);
+    }
   }
 
   // If there are any non-empty regions within Collector set, we can also move them to the Mutator free set
