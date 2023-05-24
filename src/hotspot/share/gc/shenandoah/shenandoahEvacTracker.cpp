@@ -45,8 +45,9 @@ void ShenandoahEvacuationStats::begin_evacuation(size_t bytes) {
 void ShenandoahEvacuationStats::end_evacuation(size_t bytes, uint age) {
   ++_evacuations_completed;
   _bytes_completed += bytes;
-  if (GenShenCensusAtEvac && age > 0) {
-     _age_table.add(age, bytes >> LogBytesPerWord);
+  assert(age > 0, "Error?");
+  if (GenShenCensusAtEvac) {
+    _age_table.add(age, bytes >> LogBytesPerWord);
   }
 }
 
@@ -56,8 +57,8 @@ void ShenandoahEvacuationStats::accumulate(const ShenandoahEvacuationStats* othe
   _evacuations_attempted += other->_evacuations_attempted;
   _bytes_attempted += other->_bytes_attempted;
   if (GenShenCensusAtEvac) {
-    const AgeTable* t = ((ShenandoahEvacuationStats*)other)->age_table();
-    _age_table.merge(t);
+    // Discard const
+    _age_table.merge(((ShenandoahEvacuationStats*)other)->age_table());
   }
 }
 
@@ -110,11 +111,12 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
       }
     }
   }
+  uint tenuring_threshold = heap->age_census()->tenuring_threshold();
   st->print("Young regions: ");
-  young_region_ages.print_on(st, heap->age_census()->tenuring_threshold());
+  young_region_ages.print_on(st, tenuring_threshold);
   st->cr();
   st->print("Old regions: ");
-  old_region_ages.print_on(st, heap->age_census()->tenuring_threshold());
+  old_region_ages.print_on(st, tenuring_threshold);
 }
 
 class ShenandoahStatAggregator : public ThreadClosure {
@@ -142,13 +144,15 @@ ShenandoahCycleStats ShenandoahEvacuationTracker::flush_cycle_to_global() {
   _workers_global.accumulate(&workers);
 
   if (GenShenCensusAtEvac) {
-    // Log cumulative population stats back into the heap's global census
-    // data, and use it to compute an appropriate tenuring threshold to
-    // be used in the next cycle.
+    // Ingest population vector into the heap's global census
+    // data, and use it to compute an appropriate tenuring threshold
+    // for use in the next cycle.
     ShenandoahAgeCensus* census = ShenandoahHeap::heap()->age_census();
+    // Log data for this epoch
     census->update_epoch();
     census->ingest(_mutators_global.age_table());
     census->ingest(_workers_global.age_table());
+    // Compute tenuring threshold for next epoch
     census->compute_tenuring_threshold();
   }
 

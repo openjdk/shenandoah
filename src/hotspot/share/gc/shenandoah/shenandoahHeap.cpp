@@ -1567,6 +1567,8 @@ private:
   ShenandoahHeap* const _sh;
   ShenandoahRegionIterator *_regions;
   bool _concurrent;
+  uint _tenuring_threshold;
+
 public:
   ShenandoahGenerationalEvacuationTask(ShenandoahHeap* sh,
                                        ShenandoahRegionIterator* iterator,
@@ -1574,8 +1576,13 @@ public:
     WorkerTask("Shenandoah Evacuation"),
     _sh(sh),
     _regions(iterator),
-    _concurrent(concurrent)
-  {}
+    _concurrent(concurrent),
+    _tenuring_threshold(0)
+  {
+    if (_sh->mode()->is_generational()) {
+      _tenuring_threshold = _sh->age_census()->tenuring_threshold();
+    }
+  }
 
   void work(uint worker_id) {
     if (_concurrent) {
@@ -1605,7 +1612,7 @@ private:
         if (ShenandoahPacing) {
           _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
-      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() > _sh->age_census()->tenuring_threshold())) {
+      } else if (r->is_young() && r->is_active() && r->is_humongous_start() && (r->age() > _tenuring_threshold)) {
         // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
         // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
         // triggers the load-reference barrier (LRB) to copy on reference fetch.

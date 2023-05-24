@@ -120,6 +120,8 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   ShenandoahHeapRegion* const region = heap->get_region(region_idx);
   const size_t size = obj->size();
 
+  // TODO: Update this comment
+  //
   // Epochs and age table cursor are updated at the start of marking.
   //
   // Age table is consulted for determining the tenuring threshold for evacuation
@@ -132,7 +134,7 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   // collections, so I will hold off on this for now.
 
   if (GENERATION == YOUNG && !GenShenCensusAtEvac) {
-    assert(region->is_young(), "Error");
+    assert(region->is_young() && heap->mode()->is_generational(), "What age?");
     // age census count
     uint age = ShenandoahHeap::get_object_age_concurrent(obj);
     get_local_age_table(worker_id)->add(age, size);
