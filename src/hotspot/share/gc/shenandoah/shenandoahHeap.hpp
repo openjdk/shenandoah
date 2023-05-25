@@ -392,15 +392,6 @@ private:
   void set_gc_state_mask(uint mask, bool value);
 
 public:
-
-  void finish_fullgc() {
-    Atomic::add(&_completed_fullgc_cycles, (size_t) 1);
-  };
-
-  size_t fullgc_count() {
-    return Atomic::load(&_completed_fullgc_cycles);
-  };
-
   char gc_state() const;
   static address gc_state_addr();
 

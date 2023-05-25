@@ -100,8 +100,31 @@ static int compare_by_aged_live(AgedRegionData a, AgedRegionData b) {
   else return 0;
 }
 
+// Preselect for inclusion into the collection set regions whose age is at or above tenure age which contain more than
+// ShenandoahOldGarbageThreshold amounts of garbage.  We identify these regions by setting the appropriate entry of
+// candidate_regions_for_promotion_by_copy[] to true.  All entries are initialized to false before calling this
+// function.
+//
+// During the subsequent selection of the collection set, we give priority to these promotion set candidates.
+// Without this prioritization, we found that the aged regions tend to be ignored because they typically have
+// much less garbage and much more live data than the recently allocated "eden" regions.  When aged regions are
+// repeatedly excluded from the collection set, the amount of live memory within the young generation tends to
+// accumulate and this has the undesirable side effect of causing young-generation collections to require much more
+// CPU and wall-clock time.
+//
+// A second benefit of treating aged regions differently than other regions during collection set selection is
+// that this allows us to more accurately budget memory to hold the results of evacuation.  Memory for evacuation
+// of aged regions must be reserved in the old generations.  Memory for evacuation of all other regions must be
+// reserved in the young generation.
+//
+// A side effect performed by this function is to tally up the number of regions and the number of live bytes
+// that we plan to promote-in-place during the current GC cycle.  This information, which is stored with
+// an invocation of heap->set_promotion_in_place_potential(), feeds into subsequent decisions about when to
+// trigger the next GC and may identify special work to be done during this GC cycle if we choose to abbreviate it.
+//
 // Returns bytes of old-gen memory consumed by selected aged regions
-size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions, bool preselected_regions[]) {
+size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t num_regions,
+                                                 bool candidate_regions_for_promotion_by_copy[]) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->mode()->is_generational(), "Only in generational mode");
   ShenandoahMarkingContext* const ctx = heap->marking_context();
@@ -208,7 +231,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
       if (old_consumed + promotion_need <= old_available) {
         ShenandoahHeapRegion* region = sorted_regions[i]._region;
         old_consumed += promotion_need;
-        preselected_regions[region->index()] = true;
+        candidate_regions_for_promotion_by_copy[region->index()] = true;
       } else {
         // We rejected this promotable region from the collection set because we had no room to hold its copy.
         // Add this region to promo potential for next GC.
@@ -343,7 +366,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   heap->reserve_promotable_humongous_usage(humongous_bytes_promoted);
   heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
   heap->reserve_promotable_regular_usage(regular_regions_promoted_usage);
-
   log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
                      " regular regions, spanning a total of " SIZE_FORMAT " used bytes",
                      humongous_regions_promoted, regular_regions_promoted_in_place,
@@ -536,8 +558,8 @@ void ShenandoahHeuristics::initialize() {
   // Nothing to do by default.
 }
 
-size_t ShenandoahHeuristics::evac_slack(size_t young_regions_to_be_recycled) {
-  assert(false, "evac_slack() only implemented for young Adaptive Heuristics");
+size_t ShenandoahHeuristics::bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_recycled) {
+  assert(false, "Only implemented for young Adaptive Heuristics");
   return 0;
 }
 

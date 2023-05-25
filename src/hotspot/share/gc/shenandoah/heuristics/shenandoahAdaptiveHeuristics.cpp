@@ -328,9 +328,12 @@ static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }
 
-// Return conservative estimate of how much memory can be allocated before we need to start GC
-size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_reclaimed) {
-  assert(_generation->is_young(), "evac_slack is only meaningful for young-gen heuristic");
+// Return a conservative estimate of how much memory can be allocated before we need to start GC. The estimate is based
+// on memory that is currently available within young generation plus all of the memory that will be added to the young
+// generation at the end of the current cycle (as represented by young_regions_to_be_reclaimed) and on the anticipated
+// amount of time required to perform a GC.
+size_t ShenandoahAdaptiveHeuristics::bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_reclaimed) {
+  assert(_generation->is_young(), "Only meaningful for young-gen heuristic");
 
   size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
@@ -361,10 +364,10 @@ size_t ShenandoahAdaptiveHeuristics::evac_slack(size_t young_regions_to_be_recla
   //
   // since avg_cycle_time * avg_alloc_rate > 0, the first test is sufficient to test both conditions
   //
-  // thus, avg_evac_slack is MIN2(0,  available - avg_cycle_time * avg_alloc_rate + penalties + spike_headroom)
+  // thus, evac_slack_avg is MIN2(0,  available - avg_cycle_time * avg_alloc_rate + penalties + spike_headroom)
   //
-  // similarly, spike_evac_slack is MIN2(0, available - avg_cycle_time * rate + penalties + spike_headroom)
-  // but spike_evac_slack is only relevant if is_spiking, as defined below.
+  // similarly, evac_slack_spiking is MIN2(0, available - avg_cycle_time * rate + penalties + spike_headroom)
+  // but evac_slack_spiking is only relevant if is_spiking, as defined below.
 
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
 

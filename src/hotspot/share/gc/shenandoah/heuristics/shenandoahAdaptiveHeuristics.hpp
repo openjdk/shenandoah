@@ -71,7 +71,7 @@ public:
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
 
-  virtual size_t evac_slack(size_t young_regions_to_be_recycled);
+  virtual size_t bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_recycled);
 
  private:
   // These are used to adjust the margin of error and the spike threshold

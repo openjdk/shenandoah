@@ -167,7 +167,7 @@ public:
 
   virtual void reset_gc_learning();
 
-  virtual size_t select_aged_regions(size_t old_available, size_t num_regions, bool* preselected_regions);
+  virtual size_t select_aged_regions(size_t old_available, size_t num_regions, bool candidate_regions_for_promotion_by_copy[]);
 
   virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics);
 
@@ -180,7 +180,7 @@ public:
   virtual bool is_experimental() = 0;
   virtual void initialize();
 
-  virtual size_t evac_slack(size_t region_to_be_recycled);
+  virtual size_t bytes_of_allocation_runway_before_gc_trigger(size_t region_to_be_recycled);
 
   double elapsed_cycle_time() const;
 };

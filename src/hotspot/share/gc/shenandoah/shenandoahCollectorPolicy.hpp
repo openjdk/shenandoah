@@ -45,7 +45,7 @@ private:
   size_t _success_old_gcs;
   size_t _interrupted_old_gcs;
   size_t _success_degenerated_gcs;
-  size_t _success_full_gcs;
+  volatile size_t _success_full_gcs;
   size_t _alloc_failure_degenerated;
   size_t _alloc_failure_degenerated_upgrade_to_full;
   size_t _alloc_failure_full;
@@ -87,6 +87,8 @@ public:
   ShenandoahTracer* tracer() {return _tracer;}
 
   size_t cycle_counter() const;
+
+  size_t get_fullgc_count() const;
 
   void print_gc_stats(outputStream* out) const;
 };

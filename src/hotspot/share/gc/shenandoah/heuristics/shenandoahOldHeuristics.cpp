@@ -70,7 +70,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
   size_t old_evacuation_budget = (size_t) ((double) heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
-  size_t unfragmented_available = heap->old_generation()->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
+  size_t unfragmented_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
   size_t fragmented_available;
   size_t excess_fragmented_available;
 
@@ -79,8 +79,8 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     fragmented_available = 0;
     excess_fragmented_available = 0;
   } else {
-    assert(heap->old_generation()->available() > old_evacuation_budget, "Cannot budget more than is available");
-    fragmented_available = heap->old_generation()->available() - unfragmented_available;
+    assert(_old_generation->available() > old_evacuation_budget, "Cannot budget more than is available");
+    fragmented_available = _old_generation->available() - unfragmented_available;
     assert(fragmented_available + unfragmented_available >= old_evacuation_budget, "Budgets do not add up");
     if (fragmented_available + unfragmented_available > old_evacuation_budget) {
       excess_fragmented_available = (fragmented_available + unfragmented_available) - old_evacuation_budget;
@@ -345,7 +345,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
   }
 
-  ((ShenandoahOldGeneration*) (heap->old_generation()))->set_live_bytes_after_last_mark(live_data);
+  _old_generation->set_live_bytes_after_last_mark(live_data);
 
   // TODO: Consider not running mixed collects if we recovered some threshold percentage of memory from immediate garbage.
   // This would be similar to young and global collections shortcutting evacuation, though we'd probably want a separate
@@ -509,8 +509,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
 
   if (_cannot_expand_trigger) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
-    ShenandoahOldGeneration* old_gen = heap->old_generation();
-    size_t old_gen_capacity = old_gen->max_capacity();
+    size_t old_gen_capacity = _old_generation->max_capacity();
     size_t heap_capacity = heap->capacity();
     double percent = 100.0 * ((double) old_gen_capacity) / heap_capacity;
     log_info(gc)("Trigger (OLD): Expansion failure, current size: " SIZE_FORMAT "%s which is %.1f%% of total heap size",
@@ -520,10 +519,9 @@ bool ShenandoahOldHeuristics::should_start_gc() {
 
   if (_fragmentation_trigger) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
-    ShenandoahOldGeneration* old_gen = heap->old_generation();
-    size_t used = old_gen->used();
-    size_t used_regions_size = old_gen->used_regions_size();
-    size_t used_regions = old_gen->used_regions();
+    size_t used = _old_generation->used();
+    size_t used_regions_size = _old_generation->used_regions_size();
+    size_t used_regions = _old_generation->used_regions();
     assert(used_regions_size > used_regions, "Cannot have more used than used regions");
     size_t fragmented_free = used_regions_size - used;
     double percent = 100.0 * ((double) fragmented_free) / used_regions_size;
@@ -537,11 +535,10 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     // Growth may be falsely triggered during mixed evacuations, before the mixed-evacuation candidates have been
     // evacuated.  Before acting on a false trigger, we check to confirm the trigger condition is still satisfied.
     ShenandoahHeap* heap = ShenandoahHeap::heap();
-    ShenandoahOldGeneration* old_gen = heap->old_generation();
-    size_t current_usage = old_gen->used();
-    size_t trigger_threshold = old_gen->usage_trigger_threshold();
+    size_t current_usage = _old_generation->used();
+    size_t trigger_threshold = _old_generation->usage_trigger_threshold();
     if (current_usage > trigger_threshold) {
-      size_t live_at_previous_old = old_gen->get_live_bytes_after_last_mark();
+      size_t live_at_previous_old = _old_generation->get_live_bytes_after_last_mark();
       double percent_growth = 100.0 * ((double) current_usage - live_at_previous_old) / live_at_previous_old;
       log_info(gc)("Trigger (OLD): Old has overgrown, live at end of previous OLD marking: "
                    SIZE_FORMAT "%s, current usage: " SIZE_FORMAT "%s, percent growth: %.1f%%",

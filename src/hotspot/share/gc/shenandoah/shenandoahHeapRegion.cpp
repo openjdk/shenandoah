@@ -1052,6 +1052,8 @@ void ShenandoahHeapRegion::promote_in_place() {
   heap->card_scan()->reset_object_range(bottom(), end());
   heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
 
+  // TODO: use an existing coalesce-and-fill function rather than
+  // replicating the code here.
   HeapWord* obj_addr = bottom();
   while (obj_addr < tams) {
     oop obj = cast_to_oop(obj_addr);

@@ -1314,13 +1314,14 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     // Then, we need to make sure the allocation was retried after at least one
     // Full GC.
     size_t tries = 0;
-    size_t original_fullgc_count = fullgc_count();
+    size_t original_fullgc_count = shenandoah_policy()->get_fullgc_count();
     while (result == nullptr && _progress_last_gc.is_set()) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
-    while (result == nullptr && ((fullgc_count() == original_fullgc_count) || (tries <= ShenandoahOOMGCRetries))) {
+    while (result == nullptr &&
+           ((shenandoah_policy()->get_fullgc_count() == original_fullgc_count) || (tries <= ShenandoahOOMGCRetries))) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
@@ -3065,10 +3066,10 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
                                    young_generation()->used(), young_generation()->get_humongous_waste()),
            "Generation accounts are inaccurate");
 
-    // The computation of evac_slack is quite conservative so consider all of this available for transfer to old.
-    // Note that transfer of humongous regions does not impact available.
-    size_t evac_slack = young_generation()->heuristics()->evac_slack(young_cset_regions);
-    adjust_generation_sizes_for_next_cycle(evac_slack, young_cset_regions, old_cset_regions);
+    // The computation of bytes_of_allocation_runway_before_gc_trigger is quite conservative so consider all of this
+    // available for transfer to old. Note that transfer of humongous regions does not impact available.
+    size_t allocation_runway = young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
+    adjust_generation_sizes_for_next_cycle(allocation_runway, young_cset_regions, old_cset_regions);
 
     // Total old_available may have been expanded to hold anticipated promotions.  We trigger if the fragmented available
     // memory represents more than 16 regions worth of data.  Note that fragmentation may increase when we promote regular

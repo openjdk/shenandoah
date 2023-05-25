@@ -367,8 +367,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_heapdump_post);
     heap->post_full_gc_dump(_gc_timer);
   }
-
-  heap->finish_fullgc();
 }
 
 class ShenandoahPrepareForMarkClosure: public ShenandoahHeapRegionClosure {
