@@ -1322,14 +1322,15 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     // strategy is to try again, as long as GC makes progress.
     //
     // Then, we need to make sure the allocation was retried after at least one
-    // Full GC, which means we want to try more than ShenandoahFullGCThreshold times.
+    // Full GC.
     size_t tries = 0;
+    size_t original_fullgc_count = fullgc_count();
     while (result == nullptr && _progress_last_gc.is_set()) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
-    while (result == nullptr && tries <= ShenandoahFullGCThreshold) {
+    while (result == nullptr && ((fullgc_count() == original_fullgc_count) || (tries <= ShenandoahOOMGCRetries))) {
       tries++;
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);

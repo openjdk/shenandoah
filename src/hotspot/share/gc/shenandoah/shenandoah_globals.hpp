@@ -421,6 +421,10 @@
           "How many back-to-back Degenerated GCs should happen before "     \
           "going to a Full GC.")                                            \
                                                                             \
+  product(uintx, ShenandoahOOMGCRetries, 3, EXPERIMENTAL,                   \
+          "How many GCs should happen before we throw OutOfMemoryException "\
+          "for allocation request, including at least one Full GC.")        \
+                                                                            \
   product(bool, ShenandoahImplicitGCInvokesConcurrent, false, EXPERIMENTAL, \
           "Should internally-caused GC requests invoke concurrent cycles, " \
           "should they do the stop-the-world (Degenerated / Full GC)? "     \
