@@ -819,16 +819,6 @@ void ShenandoahHeap::set_soft_max_capacity(size_t v) {
          "Should be in bounds: " SIZE_FORMAT " <= " SIZE_FORMAT " <= " SIZE_FORMAT,
          min_capacity(), v, max_capacity());
   Atomic::store(&_soft_max_size, v);
-
-#ifdef KELVIN_DEPRECATE
-  // soft_max affects heuristic triggers, but has no impact on generation sizes
-  if (mode()->is_generational()) {
-    size_t max_capacity_young = _generation_sizer.max_young_size();
-    size_t min_capacity_young = _generation_sizer.min_young_size();
-    size_t new_capacity_young = clamp(v, min_capacity_young, max_capacity_young);
-    _young_generation->set_soft_max_capacity(new_capacity_young);
-  }
-#endif
 }
 
 size_t ShenandoahHeap::min_capacity() const {

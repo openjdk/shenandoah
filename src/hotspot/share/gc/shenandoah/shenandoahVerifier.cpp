@@ -403,29 +403,11 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
                   byte_size_in_proper_unit(stats.used()),       proper_unit_for_byte_size(stats.used()));
   }
 
-  static void validate_usage(const bool adjust_for_padding, const bool adjust_for_deferred_accounting,
+  static void validate_usage(const bool adjust_for_padding,
                              const char* label, ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     size_t generation_used = generation->used();
     size_t generation_used_regions = generation->used_regions();
-    if (adjust_for_deferred_accounting) {
-      ShenandoahGeneration* young_generation = heap->young_generation();
-      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
-      size_t humongous_bytes_promoted = heap->get_promotable_humongous_usage();
-      size_t total_regions_promoted = humongous_regions_promoted;
-      size_t bytes_promoted_in_place = 0;
-      if (total_regions_promoted > 0) {
-        bytes_promoted_in_place = humongous_bytes_promoted;
-      }
-      if (generation->is_young()) {
-        generation_used -= bytes_promoted_in_place;
-        generation_used_regions -= total_regions_promoted;
-      } else if (generation->is_old()) {
-        generation_used += bytes_promoted_in_place;
-        generation_used_regions += total_regions_promoted;
-      }
-      // else, global validation doesn't care where the promoted-in-place data is tallied.
-    }
     if (adjust_for_padding && (generation->is_young() || generation->is_global())) {
       size_t pad = ShenandoahHeap::heap()->get_pad_for_promote_in_place();
       generation_used += pad;
@@ -443,37 +425,12 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
 
     size_t generation_capacity = generation->max_capacity();
     size_t humongous_regions_promoted = 0;
-    if (adjust_for_deferred_accounting) {
-      humongous_regions_promoted = heap->get_promotable_humongous_regions();
-      size_t transferred_regions = humongous_regions_promoted;
-      if (generation->is_old()) {
-        // Promoted-in-place regions are labeled as old, but generation->max_capacity() has not yet been increased
-        generation_capacity += transferred_regions * ShenandoahHeapRegion::region_size_bytes();
-      } else if (generation->is_young()) {
-        // Promoted-in-place regions are labeled as old, but generation->max_capacity() has not yet been decreased
-        generation_capacity -= transferred_regions * ShenandoahHeapRegion::region_size_bytes();
-      }
-    }
     guarantee(stats.span() <= generation_capacity,
               "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") must not exceed current capacity (" SIZE_FORMAT "%s)",
               label, generation->name(), stats.regions(),
               byte_size_in_proper_unit(generation_capacity), proper_unit_for_byte_size(generation_capacity));
 
     size_t humongous_waste = generation->get_humongous_waste();
-    if (adjust_for_deferred_accounting) {
-      size_t promoted_humongous_bytes = heap->get_promotable_humongous_usage();
-      size_t promoted_regions_span = humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes();
-      assert(promoted_regions_span >= promoted_humongous_bytes, "sanity");
-      size_t promoted_waste = promoted_regions_span - promoted_humongous_bytes;
-      if (generation->is_old()) {
-        // Promoted-in-place regions are labeled as old, but generation->get_humongous_waste() has not yet been increased
-        humongous_waste += promoted_waste;
-      } else if (generation->is_young()) {
-        // Promoted-in-place regions are labeled as old, but generation->get_humongous_waste() has not yet been decreased
-        assert(humongous_waste >= promoted_waste, "Cannot promote in place more waste than exists in young");
-        humongous_waste -= promoted_waste;
-      }
-    }
     guarantee(stats.waste() == humongous_waste,
               "%s: generation (%s) humongous waste must be consistent: generation: " SIZE_FORMAT "%s, regions: " SIZE_FORMAT "%s",
               label, generation->name(),
@@ -928,25 +885,14 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       ShenandoahGenerationStatsClosure::log_usage(_heap->young_generation(),  cl.young);
       ShenandoahGenerationStatsClosure::log_usage(_heap->global_generation(), cl.global);
     }
-
-#ifdef KELVIN_DEPRECATE
-    // I think I can also deprecate second argument to validate_usage:
-    // that is always false
-
-    if (sizeness == _verify_size_adjusted_for_deferred_accounting) {
-      ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->old_generation(), cl.old);
-      ShenandoahGenerationStatsClosure::validate_usage(false, true, label, _heap->young_generation(), cl.young);
-      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
-    } else
-#endif
     if (sizeness == _verify_size_adjusted_for_padding) {
-      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
-      ShenandoahGenerationStatsClosure::validate_usage(true, false, label, _heap->young_generation(), cl.young);
-      ShenandoahGenerationStatsClosure::validate_usage(true, false, label, _heap->global_generation(), cl.global);
+      ShenandoahGenerationStatsClosure::validate_usage(false, label, _heap->old_generation(), cl.old);
+      ShenandoahGenerationStatsClosure::validate_usage(true, label, _heap->young_generation(), cl.young);
+      ShenandoahGenerationStatsClosure::validate_usage(true, label, _heap->global_generation(), cl.global);
     } else if (sizeness == _verify_size_exact) {
-      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->old_generation(), cl.old);
-      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->young_generation(), cl.young);
-      ShenandoahGenerationStatsClosure::validate_usage(false, false, label, _heap->global_generation(), cl.global);
+      ShenandoahGenerationStatsClosure::validate_usage(false, label, _heap->old_generation(), cl.old);
+      ShenandoahGenerationStatsClosure::validate_usage(false, label, _heap->young_generation(), cl.young);
+      ShenandoahGenerationStatsClosure::validate_usage(false, label, _heap->global_generation(), cl.global);
     }
     // else: sizeness must equal _verify_size_disable
   }
