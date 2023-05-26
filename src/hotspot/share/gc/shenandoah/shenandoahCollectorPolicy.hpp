@@ -47,7 +47,7 @@ private:
   size_t _success_degenerated_gcs;
   volatile size_t _success_full_gcs;
   size_t _alloc_failure_degenerated;
-  size_t _alloc_failure_degenerated_upgrade_to_full;
+  volatile size_t _alloc_failure_degenerated_upgrade_to_full;
   size_t _alloc_failure_full;
   size_t _explicit_concurrent;
   size_t _explicit_full;
@@ -88,7 +88,7 @@ public:
 
   size_t cycle_counter() const;
 
-  size_t get_fullgc_count() const;
+  size_t get_fullgc_count();
 
   void print_gc_stats(outputStream* out) const;
 };

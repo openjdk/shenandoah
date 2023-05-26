@@ -130,8 +130,8 @@ bool ShenandoahCollectorPolicy::is_at_shutdown() {
 
 // This may be called by mutator threads.  We declare _success_full_gcs volatile to force the value not to be cached
 // in a local register or variable by a mutator thread that is checking this value in a loop.
-size_t ShenandoahCollectorPolicy::get_fullgc_count() const {
-  return _success_full_gcs;
+size_t ShenandoahCollectorPolicy::get_fullgc_count() {
+  return _success_full_gcs + _alloc_failure_degenerated_upgrade_to_full;
 }
 
 void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {
