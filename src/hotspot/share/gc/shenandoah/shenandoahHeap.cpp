@@ -532,6 +532,7 @@ void ShenandoahHeap::initialize_heuristics_generations() {
 
     ShenandoahEvacWaste = ShenandoahGenerationalEvacWaste;
   }
+  _evac_tracker = new ShenandoahEvacuationTracker(mode()->is_generational());
 }
 
 #ifdef _MSC_VER
@@ -574,7 +575,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _pacer(nullptr),
   _verifier(nullptr),
   _phase_timings(nullptr),
-  _evac_tracker(new ShenandoahEvacuationTracker()),
+  _evac_tracker(nullptr),
   _mmu_tracker(),
   _generation_sizer(&_mmu_tracker),
   _monitoring_support(nullptr),
@@ -3222,6 +3223,12 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
 }
 
 // Methods related to age tables in generational mode for Young Gen
+ShenandoahAgeCensus* ShenandoahHeap::age_census() {
+  assert(mode()->is_generational(), "Only in generational mode");
+  assert(_age_census != nullptr, "Error: not initialized");
+  return _age_census;
+}
+
 AgeTable* ShenandoahHeap::get_local_age_table(uint worker_id) {
   assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
   return age_census()->get_local_age_table(worker_id);
