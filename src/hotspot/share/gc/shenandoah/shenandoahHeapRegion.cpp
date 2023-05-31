@@ -1003,7 +1003,7 @@ void ShenandoahHeapRegion::promote_in_place() {
   assert(heap->active_generation()->is_mark_complete(), "sanity");
   assert(is_young(), "Only young regions can be promoted");
   assert(is_regular(), "Use different service to promote humongous regions");
-  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
+  assert(age() >= heap->age_census()->tenuring_threshold(), "Only promote regions that are sufficiently aged");
 
   ShenandoahOldGeneration* old_gen = heap->old_generation();
   ShenandoahYoungGeneration* young_gen = heap->young_generation();

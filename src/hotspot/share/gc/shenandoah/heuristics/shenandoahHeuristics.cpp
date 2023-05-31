@@ -209,7 +209,7 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
       //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
       //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
       //   the tenure age can be increased.
-      if (heap->is_aging_cycle() && (r->age() + 1 == InitialTenuringThreshold)) {
+      if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
         if (r->garbage() >= old_garbage_threshold) {
           anticipated_candidates++;
           promo_potential += r->get_live_data_bytes();
@@ -352,7 +352,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         immediate_regions++;
         immediate_garbage += garbage;
       } else {
-        if (region->is_young() && region->age() >= InitialTenuringThreshold) {
+        if (region->is_young() && region->age() >= tenuring_threshold) {
           oop obj = cast_to_oop(region->bottom());
           size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
           humongous_regions_promoted += humongous_regions;

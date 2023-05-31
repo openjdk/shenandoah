@@ -66,7 +66,7 @@ void ShenandoahAgeCensus::update_epoch() {
       _global_age_table[_epoch]->merge(_local_age_table[i]);
       _local_age_table[i]->clear();
     }
-    _global_age_table[_epoch]->print_age_table(InitialTenuringThreshold);
+    _global_age_table[_epoch]->print_age_table(tenuring_threshold());
   }
 }
 
