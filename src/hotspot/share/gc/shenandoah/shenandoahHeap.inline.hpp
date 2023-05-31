@@ -461,7 +461,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
   oop copy_val = cast_to_oop(copy);
 
+  bool young_gen = false;
   if (mode()->is_generational() && target_gen == YOUNG_GENERATION && is_aging_cycle()) {
+    young_gen = true;
     ShenandoahHeap::increase_object_age(copy_val, from_region->age() + 1);
   }
 
@@ -471,7 +473,9 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
-    _evac_tracker->end_evacuation(thread, size * HeapWordSize, ShenandoahHeap::get_object_age(copy_val));
+    // If copying to the old generation, we don't care about recording
+    // object age in the census stats.
+    _evac_tracker->end_evacuation(thread, size * HeapWordSize, young_gen, young_gen ? ShenandoahHeap::get_object_age(copy_val) : 0);
     if (mode()->is_generational() && target_gen == OLD_GENERATION) {
       handle_old_evacuation(copy, size, from_region->is_young());
     }

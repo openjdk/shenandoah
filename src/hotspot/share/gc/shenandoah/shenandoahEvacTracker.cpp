@@ -43,11 +43,11 @@ void ShenandoahEvacuationStats::begin_evacuation(size_t bytes) {
   _bytes_attempted += bytes;
 }
 
-void ShenandoahEvacuationStats::end_evacuation(size_t bytes, uint age) {
+void ShenandoahEvacuationStats::end_evacuation(size_t bytes, bool young_gen, uint age) {
   ++_evacuations_completed;
   _bytes_completed += bytes;
-  if (_generational && GenShenCensusAtEvac) {
-    assert(age > 0, "Error?");
+  if (_generational && GenShenCensusAtEvac && young_gen) {
+    assert(age > 0, "Error");
     _age_table.add(age, bytes >> LogBytesPerWord);
   }
 }
@@ -167,6 +167,6 @@ void ShenandoahEvacuationTracker::begin_evacuation(Thread* thread, size_t bytes)
   ShenandoahThreadLocalData::begin_evacuation(thread, bytes);
 }
 
-void ShenandoahEvacuationTracker::end_evacuation(Thread* thread, size_t bytes, uint age) {
-  ShenandoahThreadLocalData::end_evacuation(thread, bytes, age);
+void ShenandoahEvacuationTracker::end_evacuation(Thread* thread, size_t bytes, bool young_gen, uint age) {
+  ShenandoahThreadLocalData::end_evacuation(thread, bytes, young_gen, age);
 }

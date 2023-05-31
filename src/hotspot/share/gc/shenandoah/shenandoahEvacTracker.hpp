@@ -43,7 +43,7 @@ private:
 
   AgeTable* age_table() { return &_age_table; }
   void begin_evacuation(size_t bytes);
-  void end_evacuation(size_t bytes, uint age);
+  void end_evacuation(size_t bytes, bool young_gen, uint age);
 
   void print_on(outputStream* st);
   void accumulate(const ShenandoahEvacuationStats* other);
@@ -69,7 +69,7 @@ public:
    _mutators_global(generational) {}
 
   void begin_evacuation(Thread* thread, size_t bytes);
-  void end_evacuation(Thread* thread, size_t bytes, uint age);
+  void end_evacuation(Thread* thread, size_t bytes, bool young_gen, uint age);
 
   void print_global_on(outputStream* st);
   void print_evacuations_on(outputStream* st,
