@@ -27,18 +27,26 @@
 
 #include "gc/shared/ageTable.hpp"
 
-// A class for tracking a sequence of cohort population vectors (age tables)
-// for up to C age cohorts. We track up to C historical population vectors,
-// to track temporal variation of cohort demographics. Since there are at most
-// C age cohorts, we need only track at most C snapshots to track a maximal
-// pre-promotion demographics of any object in the young generation.
-// The _global_matrix is thus a C x C matrix, with C = 16, currently, see
-// MAX_COHORTS below.
+// A class for tracking a sequence of cohort population vectors (or,
+// interchangeably, age tables) for up to C=MAX_COHORTS age cohorts, where a cohort
+// represents the set of objects allocated during a specific inter-GC epoch.
+// Epochs are demarcated by GC cycles, with those surviving a cycle aging by
+// an epoch. The census tracks the historical variation of cohort demographics
+// across N=MAX_SNAPSHOTS recent epochs. Since there are at most C age cohorts in
+// the population, we need only track at most N=C epochal snapshots to track a
+// maximal longitudinal demographics of every object's longitudinal cohort in
+// the young generation. The _global_age_table is thus, currently, a C x N (row-major)
+// matrix, with C=16, and, for now N=C=16, currently.
+// In theory, we might decide to track even longer (N=MAX_SNAPSHOTS) demographic
+// histories, but that isn't the case today. In particular, the current tenuring
+// threshold algorithm uses only 2 most recent snapshots, with the remaining
+// MAX_SNAPSHOTS-2=14 reserved for research purposes.
 //
-// In addition, we maintain per worker vectors into which census for the current
-// minor GC is tracked during marking. These are cleared after each marking cycle,
+// In addition, this class also maintains per worker population vectors into which
+// census for the current minor GC is accumulated (during marking or, optionally, during
+// evacuation). These are cleared after each marking (resectively, evacuation) cycle,
 // once the per-worker data is consolidated into the appropriate population vector
-// at each minor collection. The _local_matrix is thus C x N, for N GC workers.
+// per minor collection. The _local_age_table is thus C x N, for N GC workers.
 class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold
   AgeTable** _local_age_table;       // Local scratch age tables to track object ages
@@ -52,12 +60,13 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // until the next invocation of compute_tenuring_threshold.
   uint compute_tenuring_threshold_work();
 
-  // The fraction of prev_pop that survived in cur_pop
-  double survival_rate(size_t prev_pop, size_t cur_pop);
+  // Mortality rate of a cohort, given its previous and current population
+  double mortality_rate(size_t prev_pop, size_t cur_pop);
 
  public:
   enum {
-    MAX_COHORTS = AgeTable::table_size
+    MAX_COHORTS = AgeTable::table_size,    // = markWord::max_age
+    MAX_SNAPSHOTS = MAX_COHORTS            // May change in the future
   };
 
   ShenandoahAgeCensus();
@@ -78,10 +87,13 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   void reset_epoch();
 
   void ingest(AgeTable* population_vector);
-  void compute_tenuring_threshold();           // Add a strategy parameter
+  void compute_tenuring_threshold();           // TODO: Add a strategy parameter
 
   // Return the most recently computed tenuring threshold at previous epoch.
   uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }
+
+  // Print the age census information
+  void print();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHAGECENSUS_HPP
