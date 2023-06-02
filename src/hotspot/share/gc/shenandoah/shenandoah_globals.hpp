@@ -47,7 +47,7 @@
   product(uintx, GenShenMaxTenuringThreshold, 16, EXPERIMENTAL,             \
           "Ceiling for adaptive tenuring threshold")                        \
                                                                             \
-  product(double, GenShenTenuringMortalityRateThreshold, 0.1, EXPERIMENTAL, \
+  product(double, GenShenTenuringMortalityRateThreshold, 0.3, EXPERIMENTAL, \
           "Cohort mortality rates below this value will be treated as "     \
           "indicative of longevity, leading to tenuring. Used only when "   \
           "GenShenAdaptiveTenuring is enabled")                             \
