@@ -1275,6 +1275,7 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t word_size,
                                             size_t* actual_size) {
+  // Align requested sizes to card sized multiples
   size_t words_in_card = CardTable::card_size_in_words();
   size_t align_mask = ~(words_in_card - 1);
   min_size = (min_size + words_in_card - 1) & align_mask;
