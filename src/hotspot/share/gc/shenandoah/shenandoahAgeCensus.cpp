@@ -117,16 +117,23 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
   const AgeTable* prev_pv = _global_age_table[prev_epoch];
   for (uint i = GenShenMaxTenuringThreshold - 1; i >= MAX2((uint)GenShenMinTenuringThreshold - 1, (uint)1); i--) {
     assert(i > 0, "Error");
-    // Compute mortality rate of current cohort
-    double mr = mortality_rate(prev_pv->sizes[i-1], cur_pv->sizes[i]);
-    if (mr < GenShenTenuringMortalityRateThreshold) {
-      log_debug(gc, age)("Mortality rate of cohort " UINTX_FORMAT " is %.2f < %.2f",
-        (uintx) i, mr, GenShenTenuringMortalityRateThreshold);
-      tenuring_threshold = i + 1;
+    // Population & mortality rate of current cohort
+    const size_t cur_pop = cur_pv->sizes[i];
+    const size_t prev_pop = prev_pv->sizes[i-1];
+    const double mr = mortality_rate(prev_pop, cur_pop);
+    // We ignore any cohorts that had a very low population count, or
+    // that have a lower mortality rate than we care to age in young; these
+    // cohorts are considered eligible for tenuring when all older
+    // cohorts are.
+    if (i > 1 && (prev_pop < GenShenTenuringCohortPopulationThreshold ||
+        mr < GenShenTenuringMortalityRateThreshold)) {
+      log_trace(gc, age)("Cohort " UINTX_FORMAT " pop " SIZE_FORMAT " mr %.2f",
+        (uintx) i, cur_pop, mr);
+      tenuring_threshold = i;
       continue;
     }
-    log_debug(gc, age)("Mortality rate of cohort " UINTX_FORMAT " is %.2f > %.2f",
-      (uintx) i, mr, GenShenTenuringMortalityRateThreshold);
+    log_trace(gc, age)("Cohort " UINTX_FORMAT " pop " SIZE_FORMAT " mr %.2f",
+      (uintx) i, cur_pop, mr);
     return tenuring_threshold;
   }
   return tenuring_threshold;
@@ -140,7 +147,7 @@ double ShenandoahAgeCensus::mortality_rate(size_t prev_pop, size_t cur_pop) {
     // reappearance of dark matter as normal matter;
     // mortality rate is 0 if population remained the same
     // or increased.
-    log_debug(gc, age)("(dark matter) Cohort population "
+    log_trace(gc, age)("(dark matter) Cohort population "
       SIZE_FORMAT " to " SIZE_FORMAT, prev_pop, cur_pop);
     return 0.0;
   }
@@ -160,18 +167,18 @@ void ShenandoahAgeCensus::print() {
 
   const uint tt = tenuring_threshold();
 
-  log_trace(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
+  log_debug(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
                      (uintx)prev_epoch, (uintx)cur_epoch);
-  log_trace(gc, age)("\t\t ---- Population ---- \t\t -- Mortality -- ");
+  log_info(gc, age)("\t\t ---- Population ---- \t\t -- Mortality -- ");
   for (uint i = 1; i < MAX_COHORTS; i++) {
     const size_t prev_pop = prev_pv->sizes[i-1];  // (i-1) OK because i >= 1
     const size_t cur_pop  = cur_pv->sizes[i];
     double mr = mortality_rate(prev_pop, cur_pop);
-    log_trace(gc, age)(UINTX_FORMAT "\t\t " SIZE_FORMAT "\t\t " SIZE_FORMAT "\t\t %.2f " ,
+    log_info(gc, age)(UINTX_FORMAT "\t\t " SIZE_FORMAT "\t\t " SIZE_FORMAT "\t\t %.2f " ,
                        (uintx)i, prev_pop, cur_pop, mr);
     if (i == tt) {
       // Underline the cohort for tenuring threshold (if < MAX_COHORTS)
-      log_trace(gc, age)("----------------------------------------------------------------------------");
+      log_info(gc, age)("----------------------------------------------------------------------------");
     }
   }
 }

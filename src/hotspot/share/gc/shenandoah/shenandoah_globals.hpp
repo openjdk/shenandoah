@@ -52,6 +52,11 @@
           "indicative of longevity, leading to tenuring. Used only when "   \
           "GenShenAdaptiveTenuring is enabled")                             \
                                                                             \
+  product(size_t, GenShenTenuringCohortPopulationThreshold, 4*K, EXPERIMENTAL, \
+          "Cohorts whose population volume is below this value will be "    \
+          "ignored wrt tenuring decisions, making them eligible for "       \
+          "tenuring as soon as all older cohorts are")                      \
+                                                                            \
   product(size_t, ShenandoahRegionSize, 0, EXPERIMENTAL,                    \
           "Static heap region size. Set zero to enable automatic sizing.")  \
                                                                             \
