@@ -147,16 +147,18 @@ void ShenandoahDegenGC::op_degenerated() {
         if (_generation->is_concurrent_mark_in_progress()) {
           // We want to allow old generation marking to be punctuated by young collections
           // (even if they have degenerated). If this is a global cycle, we'd have cancelled
-          // the entire old gc before coming into this switch.
+          // the entire old gc before coming into this switch. Note that cancel_marking on
+          // the generation does NOT abandon incomplete SATB buffers as cancel_concurrent_mark does.
+          // We need to separate out the old pointers which is done below.
           _generation->cancel_marking();
         }
 
-        if (heap->is_concurrent_old_mark_in_progress()) {
-          assert(!_generation->is_global(), "Old marking should not be in progress for global collection");
-          // If old marking is in progress, the SATB barrier will be enabled. The SATB buffer
-          // may hold a mix of old and young pointers. The old pointers need to be transferred
-          // to the old generation mark queues and the young pointers are _not_ part of this
-          // snapshot, so they must be dropped here.
+        if (heap->is_concurrent_mark_in_progress()) {
+          // If either old or young marking is in progress, the SATB barrier will be enabled.
+          // The SATB buffer may hold a mix of old and young pointers. The old pointers need to be
+          // transferred to the old generation mark queues and the young pointers are NOT part
+          // of this snapshot, so they must be dropped here. It is safe to drop them here because
+          // we will rescan the roots on this safepoint.
           heap->transfer_old_pointers_from_satb();
         }
       }
