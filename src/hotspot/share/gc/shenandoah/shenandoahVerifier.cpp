@@ -597,6 +597,16 @@ public:
   }
 };
 
+class ShenandoahVerifyNoIncompleteSatbBuffers : public ThreadClosure {
+public:
+  virtual void do_thread(Thread* thread) {
+    SATBMarkQueue& queue = ShenandoahThreadLocalData::satb_mark_queue(thread);
+    if (queue.buffer() != nullptr) {
+      fatal("All SATB buffers should have been flushed during mark");
+    }
+  };
+};
+
 class ShenandoahVerifierMarkedRegionTask : public WorkerTask {
 private:
   const char* _label;
@@ -622,6 +632,9 @@ public:
           _claimed(0),
           _processed(0),
           _generation(nullptr) {
+
+    Threads::change_thread_claim_token();
+
     if (_heap->mode()->is_generational()) {
       _generation = _heap->active_generation();
       assert(_generation != nullptr, "Expected active generation in this mode.");
@@ -633,6 +646,10 @@ public:
   }
 
   virtual void work(uint worker_id) {
+
+    ShenandoahVerifyNoIncompleteSatbBuffers verify_satb;
+    Threads::possibly_parallel_threads_do(true, &verify_satb);
+
     ShenandoahVerifierStack stack;
     ShenandoahVerifyOopClosure cl(&stack, _bitmap, _ld,
                                   ShenandoahMessageBuffer("%s, Marked", _label),
