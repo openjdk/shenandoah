@@ -542,9 +542,11 @@ uint ShenandoahHeap::get_object_age(oop obj) {
 uint ShenandoahHeap::get_object_age_concurrent(oop obj) {
   // This is impossible to do unless we "freeze" ABA-type oscillations
   // With Lilliput, we can do this more easily. Until then we can just
-  // return whatever this stab-in-the-dark gets us?
+  // return whatever this stab-in-the-dark gets us. The assumption is that
+  // if the age is incorrect, there is a good chance that it is roughy uniformly
+  // distributed in the valid range.
   // guarantee(false, "NYI");
-  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
+  markWord w = obj->mark();
   return w.age();
 }
 
