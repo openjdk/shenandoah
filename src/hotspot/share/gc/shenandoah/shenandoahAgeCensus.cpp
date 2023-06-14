@@ -65,6 +65,8 @@ void ShenandoahAgeCensus::update_epoch() {
       _local_age_table[i]->clear();
     }
     _global_age_table[_epoch]->print_age_table(MAX_COHORTS);
+    
+    compute_tenuring_threshold();
   }
 }
 
@@ -80,6 +82,9 @@ void ShenandoahAgeCensus::reset_epoch() {
   assert(_epoch < MAX_SNAPSHOTS, "Error");
 }
 
+// Ingest a population vector into the global age table for
+// the current epoch, merging it with any current data already
+// present.
 void ShenandoahAgeCensus::ingest(AgeTable* population_vector) {
   _global_age_table[_epoch]->merge(population_vector);
 }
