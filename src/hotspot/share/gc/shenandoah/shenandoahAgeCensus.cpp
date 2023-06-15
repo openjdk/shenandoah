@@ -54,8 +54,13 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
   _epoch = MAX_SNAPSHOTS - 1;  // see update_epoch()
 }
 
-void ShenandoahAgeCensus::add(uint age, size_t size, uint worker_id) {
-  if (age <= markWord::max_age) {
+void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint worker_id) {
+  if (obj_age <= markWord::max_age) {
+    assert(obj_age < MAX_COHORTS && region_age < MAX_COHORTS, "Should have been tenured");
+    // Can we assert also that obj_age + region_age < MAX_COHORTS ?
+    uint age = obj_age + region_age;
+    assert(age < MAX_COHORTS, "Should have been tenured");
+    // uint age = MAX2(obj_age + region_age, (uint)(MAX_COHORTS - 1));   // clamp
     get_local_age_table(worker_id)->add(age, size);
   } else {
     // update skipped statistics
@@ -120,7 +125,7 @@ void ShenandoahAgeCensus::compute_tenuring_threshold() {
     _tenuring_threshold[_epoch] = InitialTenuringThreshold;
   } else {
     uint tt = compute_tenuring_threshold_work();
-    assert(tt <= MAX_COHORTS + 1, "Out of bounds");
+    assert(tt <= MAX_COHORTS, "Out of bounds");
     _tenuring_threshold[_epoch] = tt;
   }
   print();

@@ -70,7 +70,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
 
  public:
   enum {
-    MAX_COHORTS = AgeTable::table_size,    // = markWord::max_age
+    MAX_COHORTS = AgeTable::table_size,    // = markWord::max_age + 1
     MAX_SNAPSHOTS = MAX_COHORTS            // May change in the future
   };
 
@@ -88,8 +88,9 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
     return (AgeTable*) _global_age_table[_epoch];
   }
 
-  // Update the local age table for worker_id by size for age
-  void add(uint age, size_t size, uint worker_id);
+  // Update the local age table for worker_id by size for
+  // given obj_age and region_age
+  void add(uint obj_age, uint region_age, size_t size, uint worker_id);
   // Update the local skip table for worker_id by size
   void add_skipped(size_t size, uint worker_id);
 

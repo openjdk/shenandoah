@@ -118,11 +118,11 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   if (GENERATION == YOUNG && !GenShenCensusAtEvac) {
     assert(region->is_young() && heap->mode()->is_generational(), "Sanity");
     uint age = ShenandoahHeap::get_object_age_concurrent(obj);
-    heap->age_census()->add(age, size, worker_id);
+    heap->age_census()->add(age, region->age(), size, worker_id);
   } else if (GENERATION == GLOBAL_GEN && !GenShenCensusAtEvac && region->is_young()) {
     assert(heap->mode()->is_generational(), "Sanity");
     uint age = ShenandoahHeap::get_object_age_concurrent(obj);
-    heap->age_census()->add(age, size, worker_id);
+    heap->age_census()->add(age, region->age(), size, worker_id);
   }
 
   if (!region->is_humongous_start()) {
