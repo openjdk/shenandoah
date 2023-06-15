@@ -318,6 +318,12 @@ inline HeapWord* ShenandoahHeap::allocate_from_plab(Thread* thread, size_t size,
   return obj;
 }
 
+inline ShenandoahAgeCensus* ShenandoahHeap::age_census() const {
+  assert(mode()->is_generational(), "Only in generational mode");
+  assert(_age_census != nullptr, "Error: not initialized");
+  return _age_census;
+}
+
 inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   assert(thread == Thread::current(), "Expected thread parameter to be current thread.");
   if (ShenandoahThreadLocalData::is_oom_during_evac(thread)) {
@@ -536,17 +542,20 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
 
 uint ShenandoahHeap::get_object_age(oop obj) {
   markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
+  assert(w.age() <= markWord::max_age, "Impossible!");
   return w.age();
 }
 
 uint ShenandoahHeap::get_object_age_concurrent(oop obj) {
   // This is impossible to do unless we "freeze" ABA-type oscillations
-  // With Lilliput, we can do this more easily. Until then we can just
-  // return whatever this stab-in-the-dark gets us. The assumption is that
-  // if the age is incorrect, there is a good chance that it is roughy uniformly
-  // distributed in the valid range.
-  // guarantee(false, "NYI");
+  // With Lilliput, we can do this more easily.
   markWord w = obj->mark();
+  // We can do better for objects with inflated monitor
+  if (w.is_being_inflated() || w.has_displaced_mark_helper()) {
+    // Informs caller that we aren't able to determine the age
+    return markWord::max_age + 1; // sentinel
+  }
+  assert(w.age() <= markWord::max_age, "Impossible!");
   return w.age();
 }
 

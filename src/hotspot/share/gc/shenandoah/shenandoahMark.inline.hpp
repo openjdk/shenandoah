@@ -107,12 +107,6 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
   }
 }
 
-inline AgeTable* ShenandoahMark::get_local_age_table(uint worker_id) {
-
-  return ShenandoahHeap::heap()->get_local_age_table(worker_id);
-}
-
-
 template <ShenandoahGenerationType GENERATION>
 inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, uint worker_id) {
   const ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -124,11 +118,11 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   if (GENERATION == YOUNG && !GenShenCensusAtEvac) {
     assert(region->is_young() && heap->mode()->is_generational(), "Sanity");
     uint age = ShenandoahHeap::get_object_age_concurrent(obj);
-    get_local_age_table(worker_id)->add(age, size);
+    heap->age_census()->add(age, size, worker_id);
   } else if (GENERATION == GLOBAL_GEN && !GenShenCensusAtEvac && region->is_young()) {
     assert(heap->mode()->is_generational(), "Sanity");
     uint age = ShenandoahHeap::get_object_age_concurrent(obj);
-    get_local_age_table(worker_id)->add(age, size);
+    heap->age_census()->add(age, size, worker_id);
   }
 
   if (!region->is_humongous_start()) {

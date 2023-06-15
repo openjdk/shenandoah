@@ -30,26 +30,47 @@
 
 ShenandoahAgeCensus::ShenandoahAgeCensus() {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only in generational mode");
-  _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, MAX_SNAPSHOTS, mtGC);
-  _tenuring_threshold = NEW_C_HEAP_ARRAY(uint, MAX_SNAPSHOTS, mtGC);
+
+  _global_age_table    = NEW_C_HEAP_ARRAY(AgeTable*, MAX_SNAPSHOTS, mtGC);
+  _global_skip_table   = NEW_C_HEAP_ARRAY(size_t, MAX_SNAPSHOTS, mtGC);
+  _tenuring_threshold  = NEW_C_HEAP_ARRAY(uint, MAX_SNAPSHOTS, mtGC);
+
   for (int i = 0; i < MAX_SNAPSHOTS; i++) {
     // Note that we don't now get perfdata from age_table
     _global_age_table[i] = new AgeTable(false);
+    _global_skip_table[i] = 0;
     // Sentinel value
     _tenuring_threshold[i] = MAX_COHORTS;
   }
   if (!GenShenCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_workers, mtGC);
+    _local_skip_table = NEW_C_HEAP_ARRAY(size_t, max_workers, mtGC);
     for (uint i = 0; i < max_workers; i++) {
       _local_age_table[i] = new AgeTable(false);
+      _local_skip_table[i] = 0;
     }
   }
   _epoch = MAX_SNAPSHOTS - 1;  // see update_epoch()
 }
 
+void ShenandoahAgeCensus::add(uint age, size_t size, uint worker_id) {
+  if (age <= markWord::max_age) {
+    get_local_age_table(worker_id)->add(age, size);
+  } else {
+    // update skipped statistics
+    add_skipped(size, worker_id);
+  }
+}
+
+void ShenandoahAgeCensus::add_skipped(size_t size, uint worker_id) {
+  _local_skip_table[worker_id] += size;
+}
+  
 // Update the epoch for the global age tables,
 // and merge local age tables into the global age table.
+// If appropriate, compute the new tenuring threshold for
+// this epoch.
 void ShenandoahAgeCensus::update_epoch() {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   if (++_epoch >= MAX_SNAPSHOTS) {
@@ -58,11 +79,16 @@ void ShenandoahAgeCensus::update_epoch() {
   // Merge data from local age tables into the global age table for the epoch,
   // clearing the local tables.
   _global_age_table[_epoch]->clear();
+  _global_skip_table[_epoch] = 0;
   if (!GenShenCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     for (uint i = 0; i < max_workers; i++) {
+      // age stats
       _global_age_table[_epoch]->merge(_local_age_table[i]);
-      _local_age_table[i]->clear();
+      _local_age_table[i]->clear();   // clear for next census
+      // "skip" stats
+      _global_skip_table[_epoch] += _local_skip_table[i];
+      _local_skip_table[i] = 0;
     }
     _global_age_table[_epoch]->print_age_table(MAX_COHORTS);
     
@@ -174,6 +200,7 @@ void ShenandoahAgeCensus::print() {
 
   log_debug(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
                      (uintx)prev_epoch, (uintx)cur_epoch);
+  log_info(gc, age)("Skipped: " SIZE_FORMAT, _global_skip_table[cur_epoch]);
   log_info(gc, age)("\t\t ---- Population ---- \t\t -- Mortality -- ");
   for (uint i = 1; i < MAX_COHORTS; i++) {
     const size_t prev_pop = prev_pv->sizes[i-1];  // (i-1) OK because i >= 1

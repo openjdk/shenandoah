@@ -3440,17 +3440,6 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
 }
 
 // Methods related to age tables in generational mode for Young Gen
-ShenandoahAgeCensus* ShenandoahHeap::age_census() {
-  assert(mode()->is_generational(), "Only in generational mode");
-  assert(_age_census != nullptr, "Error: not initialized");
-  return _age_census;
-}
-
-AgeTable* ShenandoahHeap::get_local_age_table(uint worker_id) {
-  assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
-  return age_census()->get_local_age_table(worker_id);
-}
-
 AgeTable* ShenandoahHeap::get_age_table() {
   assert(mode()->is_generational() && !GenShenCensusAtEvac, "Only in generational mode with census at mark");
   return age_census()->get_age_table();

@@ -48,8 +48,12 @@
 // once the per-worker data is consolidated into the appropriate population vector
 // per minor collection. The _local_age_table is thus C x N, for N GC workers.
 class ShenandoahAgeCensus: public CHeapObj<mtGC> {
-  AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold
-  AgeTable** _local_age_table;       // Local scratch age tables to track object ages
+  AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold, one per snapshot
+  AgeTable** _local_age_table;       // Local scratch age tables to track object ages, one per worker
+
+  size_t* _global_skip_table;        // Size of objects skipped in census, one per snapshot
+  size_t* _local_skip_table;         // Local scratch table for size of objects skipped in census, one per worker
+
   uint _epoch;                       // Current epoch (modulo max age)
   uint *_tenuring_threshold;         // An array of the last N tenuring threshold values we
                                      // computed.
@@ -60,7 +64,8 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // until the next invocation of compute_tenuring_threshold.
   uint compute_tenuring_threshold_work();
 
-  // Mortality rate of a cohort, given its previous and current population
+  // Mortality rate of a cohort, given its population in 
+  // previous and current epochs
   double mortality_rate(size_t prev_pop, size_t cur_pop);
 
  public:
@@ -83,7 +88,14 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
     return (AgeTable*) _global_age_table[_epoch];
   }
 
+  // Update the local age table for worker_id by size for age
+  void add(uint age, size_t size, uint worker_id);
+  // Update the local skip table for worker_id by size
+  void add_skipped(size_t size, uint worker_id);
+
+  // Update to a new epoch, creating a slot for new census
   void update_epoch();
+  // Reset the epocj, clearing accumulated census history
   void reset_epoch();
 
   void ingest(AgeTable* population_vector);

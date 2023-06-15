@@ -485,8 +485,7 @@ public:
   inline size_t get_young_evac_reserve() const;
 
   // Methods related to age tables in generational mode for Young Gen
-  ShenandoahAgeCensus* age_census();
-  AgeTable* get_local_age_table(uint worker_id);
+  inline ShenandoahAgeCensus* age_census() const;
   AgeTable* get_age_table();
   void update_epoch();
   void reset_epoch();
@@ -890,7 +889,14 @@ public:
   size_t trash_humongous_region_at(ShenandoahHeapRegion *r);
 
   static inline void increase_object_age(oop obj, uint additional_age);
+
+  // Return the object's age (at a safepoint or when object isn't
+  // mutable by the mutator)
   static inline uint get_object_age(oop obj);
+
+  // Return the object's age, or a sentinel value when the age can't
+  // necessarily be determined because of concurrent locking by the
+  // mutator
   static inline uint get_object_age_concurrent(oop obj);
 
   void transfer_old_pointers_from_satb();
