@@ -66,7 +66,7 @@ void ShenandoahAgeCensus::add(uint age, size_t size, uint worker_id) {
 void ShenandoahAgeCensus::add_skipped(size_t size, uint worker_id) {
   _local_skip_table[worker_id] += size;
 }
-  
+
 // Update the epoch for the global age tables,
 // and merge local age tables into the global age table.
 // If appropriate, compute the new tenuring threshold for
@@ -91,7 +91,7 @@ void ShenandoahAgeCensus::update_epoch() {
       _local_skip_table[i] = 0;
     }
     _global_age_table[_epoch]->print_age_table(MAX_COHORTS);
-    
+
     compute_tenuring_threshold();
   }
 }
@@ -115,7 +115,7 @@ void ShenandoahAgeCensus::ingest(AgeTable* population_vector) {
   _global_age_table[_epoch]->merge(population_vector);
 }
 
-void ShenandoahAgeCensus::compute_tenuring_threshold() { 
+void ShenandoahAgeCensus::compute_tenuring_threshold() {
   if (!GenShenAdaptiveTenuring) {
     _tenuring_threshold[_epoch] = InitialTenuringThreshold;
   } else {

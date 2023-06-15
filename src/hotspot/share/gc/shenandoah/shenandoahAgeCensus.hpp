@@ -64,7 +64,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // until the next invocation of compute_tenuring_threshold.
   uint compute_tenuring_threshold_work();
 
-  // Mortality rate of a cohort, given its population in 
+  // Mortality rate of a cohort, given its population in
   // previous and current epochs
   double mortality_rate(size_t prev_pop, size_t cur_pop);
 
