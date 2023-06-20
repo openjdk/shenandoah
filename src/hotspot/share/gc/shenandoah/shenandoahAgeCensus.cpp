@@ -57,10 +57,14 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
 void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint worker_id) {
   if (obj_age <= markWord::max_age) {
     assert(obj_age < MAX_COHORTS && region_age < MAX_COHORTS, "Should have been tenured");
-    // Can we assert also that obj_age + region_age < MAX_COHORTS ?
-    uint age = obj_age + region_age;
-    assert(age < MAX_COHORTS, "Should have been tenured");
-    // uint age = MAX2(obj_age + region_age, (uint)(MAX_COHORTS - 1));   // clamp
+    // assert(age < MAX_COHORTS, "Should have been tenured");
+    // Region ageing is stochastic and non-monotonic; this vitiates mortality
+    // demographics in ways that might defeat our algorithms. Marking may be a
+    // time when we might be able to correct this, but we currently do not do
+    // this. Like skipped statistics in the elase arm, we may want to track the
+    // worst and average case impact of this noise to see if this may be
+    // worthwhile. JDK-<TBD>.
+    uint age = MIN2(obj_age + region_age, (uint)(MAX_COHORTS - 1));   // clamp
     get_local_age_table(worker_id)->add(age, size);
   } else {
     // update skipped statistics
