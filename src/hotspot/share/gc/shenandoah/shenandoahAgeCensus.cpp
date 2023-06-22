@@ -187,8 +187,11 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
     // cohorts are.
     if (i > 1 && (prev_pop < GenShenTenuringCohortPopulationThreshold ||
         mr < GenShenTenuringMortalityRateThreshold)) {
-      log_trace(gc, age)("Cohort " UINTX_FORMAT " pop " SIZE_FORMAT " mr %.2f",
-        (uintx) i, cur_pop, mr);
+      // Suppress printing if population is 0
+      if (cur_pop > 0) {
+        log_trace(gc, age)("Cohort " UINTX_FORMAT " pop " SIZE_FORMAT " mr %.2f",
+          (uintx) i, cur_pop, mr);
+      }
       tenuring_threshold = i;
       continue;
     }
@@ -238,8 +241,11 @@ void ShenandoahAgeCensus::print() {
     const size_t prev_pop = prev_pv->sizes[i-1];  // (i-1) OK because i >= 1
     const size_t cur_pop  = cur_pv->sizes[i];
     double mr = mortality_rate(prev_pop, cur_pop);
-    log_info(gc, age)(UINTX_FORMAT "\t\t " SIZE_FORMAT "\t\t " SIZE_FORMAT "\t\t %.2f " ,
-                       (uintx)i, prev_pop, cur_pop, mr);
+    // Suppress printing when everything is zero
+    if (prev_pop + cur_pop > 0) {
+      log_info(gc, age)(UINTX_FORMAT "\t\t " SIZE_FORMAT "\t\t " SIZE_FORMAT "\t\t %.2f " ,
+                        (uintx)i, prev_pop, cur_pop, mr);
+    }
     total += cur_pop;
     if (i == tt) {
       // Underline the cohort for tenuring threshold (if < MAX_COHORTS)
