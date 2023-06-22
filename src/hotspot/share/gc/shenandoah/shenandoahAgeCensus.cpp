@@ -187,16 +187,9 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
     // cohorts are.
     if (i > 1 && (prev_pop < GenShenTenuringCohortPopulationThreshold ||
         mr < GenShenTenuringMortalityRateThreshold)) {
-      // Suppress printing if population is 0
-      if (cur_pop > 0) {
-        log_trace(gc, age)("Cohort " UINTX_FORMAT " pop " SIZE_FORMAT " mr %.2f",
-          (uintx) i, cur_pop, mr);
-      }
       tenuring_threshold = i;
       continue;
     }
-    log_trace(gc, age)("Cohort " UINTX_FORMAT " pop " SIZE_FORMAT " mr %.2f",
-      (uintx) i, cur_pop, mr);
     return tenuring_threshold;
   }
   return tenuring_threshold;
@@ -205,12 +198,12 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
 // Mortality rate of a cohort, given its previous and current population
 double ShenandoahAgeCensus::mortality_rate(size_t prev_pop, size_t cur_pop) {
   // The following also covers the case where both entries are 0
-  if (prev_pop < cur_pop) {
+  if (prev_pop <= cur_pop) {
     // adjust for inaccurate censuses by finessing the
     // reappearance of dark matter as normal matter;
     // mortality rate is 0 if population remained the same
     // or increased.
-    if (prev_pop != 0) {
+    if (cur_pop > prev_pop) {
       log_trace(gc, age)(" (dark matter) Cohort population "
                          SIZE_FORMAT " to " SIZE_FORMAT, prev_pop, cur_pop);
     }
