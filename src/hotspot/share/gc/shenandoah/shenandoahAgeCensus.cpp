@@ -32,23 +32,23 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only in generational mode");
 
   _global_age_table    = NEW_C_HEAP_ARRAY(AgeTable*, MAX_SNAPSHOTS, mtGC);
-  _global_skip_table   = NEW_C_HEAP_ARRAY(size_t, MAX_SNAPSHOTS, mtGC);
+  CENSUS_NOISE(_global_noise        = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, MAX_SNAPSHOTS, mtGC);)
   _tenuring_threshold  = NEW_C_HEAP_ARRAY(uint, MAX_SNAPSHOTS, mtGC);
 
   for (int i = 0; i < MAX_SNAPSHOTS; i++) {
     // Note that we don't now get perfdata from age_table
     _global_age_table[i] = new AgeTable(false);
-    _global_skip_table[i] = 0;
+    CENSUS_NOISE(_global_noise[i].clear();)
     // Sentinel value
     _tenuring_threshold[i] = MAX_COHORTS;
   }
   if (!GenShenCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_workers, mtGC);
-    _local_skip_table = NEW_C_HEAP_ARRAY(size_t, max_workers, mtGC);
+    CENSUS_NOISE(_local_noise     = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, max_workers, mtGC);)
     for (uint i = 0; i < max_workers; i++) {
       _local_age_table[i] = new AgeTable(false);
-      _local_skip_table[i] = 0;
+      CENSUS_NOISE(_local_noise[i].clear();)
     }
   }
   _epoch = MAX_SNAPSHOTS - 1;  // see update_epoch()
@@ -57,24 +57,44 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
 void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint worker_id) {
   if (obj_age <= markWord::max_age) {
     assert(obj_age < MAX_COHORTS && region_age < MAX_COHORTS, "Should have been tenured");
-    // assert(age < MAX_COHORTS, "Should have been tenured");
+#ifdef SHENANDOAH_CENSUS_NOISE
     // Region ageing is stochastic and non-monotonic; this vitiates mortality
     // demographics in ways that might defeat our algorithms. Marking may be a
     // time when we might be able to correct this, but we currently do not do
-    // this. Like skipped statistics in the elase arm, we may want to track the
-    // worst and average case impact of this noise to see if this may be
-    // worthwhile. JDK-<TBD>.
-    uint age = MIN2(obj_age + region_age, (uint)(MAX_COHORTS - 1));   // clamp
+    // this. Like skipped statistics further below, we want to track the
+    // impact of this noise to see if this may be worthwhile. JDK-<TBD>.
+    uint age = obj_age;
+    if (region_age > 0) {
+      add_aged(size, worker_id);   // this tracking is coarse for now
+      age += region_age;
+      if (age >= MAX_COHORTS) {
+        age = (uint)(MAX_COHORTS - 1);  // clamp
+        add_clamped(size, worker_id);
+      }
+    }
+#else   // SHENANDOAH_CENSUS_NOISE
+    uint age = MIN2(age, (uint)(MAX_COHORTS - 1));  // clamp
+#endif  // SHENANDOAH_CENSUS_NOISE
     get_local_age_table(worker_id)->add(age, size);
   } else {
     // update skipped statistics
-    add_skipped(size, worker_id);
+    CENSUS_NOISE(add_skipped(size, worker_id);)
   }
 }
 
+#ifdef SHENANDOAH_CENSUS_NOISE
 void ShenandoahAgeCensus::add_skipped(size_t size, uint worker_id) {
-  _local_skip_table[worker_id] += size;
+  _local_noise[worker_id].skipped += size;
 }
+
+void ShenandoahAgeCensus::add_aged(size_t size, uint worker_id) {
+  _local_noise[worker_id].aged += size;
+}
+
+void ShenandoahAgeCensus::add_clamped(size_t size, uint worker_id) {
+  _local_noise[worker_id].clamped += size;
+}
+#endif // SHENANDOAH_CENSUS_NOISE
 
 // Update the epoch for the global age tables,
 // and merge local age tables into the global age table.
@@ -88,18 +108,19 @@ void ShenandoahAgeCensus::update_epoch() {
   // Merge data from local age tables into the global age table for the epoch,
   // clearing the local tables.
   _global_age_table[_epoch]->clear();
-  _global_skip_table[_epoch] = 0;
+  CENSUS_NOISE(_global_noise[_epoch].clear();)
   if (!GenShenCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     for (uint i = 0; i < max_workers; i++) {
       // age stats
       _global_age_table[_epoch]->merge(_local_age_table[i]);
       _local_age_table[i]->clear();   // clear for next census
-      // "skip" stats
-      _global_skip_table[_epoch] += _local_skip_table[i];
-      _local_skip_table[i] = 0;
+      // Merge noise stats
+      CENSUS_NOISE(_global_noise[_epoch].merge(_local_noise[i]);)
+      CENSUS_NOISE(_local_noise[i].clear();)
     }
     _global_age_table[_epoch]->print_age_table(MAX_COHORTS);
+    CENSUS_NOISE(_global_noise[_epoch].print();)
 
     compute_tenuring_threshold();
   }
@@ -108,6 +129,7 @@ void ShenandoahAgeCensus::update_epoch() {
 
 // Reset the epoch for the global age tables,
 // clearing all history.
+// TBD: do this for noise & local tables too?
 void ShenandoahAgeCensus::reset_epoch() {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   for (uint i = 0; i < MAX_SNAPSHOTS; i++) {
@@ -209,7 +231,6 @@ void ShenandoahAgeCensus::print() {
 
   log_debug(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
                      (uintx)prev_epoch, (uintx)cur_epoch);
-  log_info(gc, age)("Skipped: " SIZE_FORMAT, _global_skip_table[cur_epoch]);
   log_info(gc, age)("\t\t ---- Population ---- \t\t -- Mortality -- ");
   for (uint i = 1; i < MAX_COHORTS; i++) {
     const size_t prev_pop = prev_pv->sizes[i-1];  // (i-1) OK because i >= 1
@@ -222,4 +243,12 @@ void ShenandoahAgeCensus::print() {
       log_info(gc, age)("----------------------------------------------------------------------------");
     }
   }
+  CENSUS_NOISE(_global_noise[cur_epoch].print();)
 }
+
+#ifdef SHENANDOAH_CENSUS_NOISE
+void ShenandoahNoiseStats::print() {
+  log_info(gc, age)("Skipped volume: " SIZE_FORMAT "Aged region volume: " SIZE_FORMAT " Clamped volume: " SIZE_FORMAT,
+                    skipped, aged, clamped);
+}
+#endif // SHENANDOAH_CENSUS_NOISE

@@ -27,6 +27,42 @@
 
 #include "gc/shared/ageTable.hpp"
 
+#ifndef PRODUCT
+// Enable noise instrumentation
+#define SHENANDOAH_CENSUS_NOISE 1
+#endif  // PRODUCT
+
+#ifdef SHENANDOAH_CENSUS_NOISE
+
+#define CENSUS_NOISE(x) x
+
+struct ShenandoahNoiseStats {
+  size_t skipped;   // Volume of objects skipped
+  size_t aged;      // Volume of objects from aged regions
+  size_t clamped;   // Volume of objects whose ages were clamped
+
+  ShenandoahNoiseStats() {
+    clear();
+  }
+
+  void clear() {
+    skipped = 0;
+    aged = 0;
+    clamped = 0;
+  }
+
+  void merge(ShenandoahNoiseStats& other) {
+    skipped += other.skipped;
+    aged    += other.aged;
+    clamped += other.clamped;
+  }
+
+  void print();
+};
+#else  // SHENANDOAH_CENSUS_NOISE
+#define CENSUS_NOISE(x)
+#endif // SHENANDOAH_CENSUS_NOISE
+
 // A class for tracking a sequence of cohort population vectors (or,
 // interchangeably, age tables) for up to C=MAX_COHORTS age cohorts, where a cohort
 // represents the set of objects allocated during a specific inter-GC epoch.
@@ -51,8 +87,10 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   AgeTable** _global_age_table;      // Global age table used for adapting tenuring threshold, one per snapshot
   AgeTable** _local_age_table;       // Local scratch age tables to track object ages, one per worker
 
-  size_t* _global_skip_table;        // Size of objects skipped in census, one per snapshot
-  size_t* _local_skip_table;         // Local scratch table for size of objects skipped in census, one per worker
+#ifdef SHENANDOAH_CENSUS_NOISE
+  ShenandoahNoiseStats* _global_noise; // Noise stats, one per snapshot
+  ShenandoahNoiseStats* _local_noise;  // Local scratch table for noise stats, one per worker
+#endif // SHENANDOAH_CENSUS_NOISE
 
   uint _epoch;                       // Current epoch (modulo max age)
   uint *_tenuring_threshold;         // An array of the last N tenuring threshold values we
@@ -91,8 +129,15 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // Update the local age table for worker_id by size for
   // given obj_age and region_age
   void add(uint obj_age, uint region_age, size_t size, uint worker_id);
+
+#ifdef SHENANDOAH_CENSUS_NOISE
   // Update the local skip table for worker_id by size
   void add_skipped(size_t size, uint worker_id);
+  // Update the local aged region volume table for worker_id by size
+  void add_aged(size_t size, uint worker_id);
+  // Update the local clamped object volume table for worker_id by size
+  void add_clamped(size_t size, uint worker_id);
+#endif // SHENANDOAH_CENSUS_NOISE
 
   // Update to a new epoch, creating a slot for new census
   void update_epoch();
