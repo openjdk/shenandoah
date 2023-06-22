@@ -73,7 +73,7 @@ void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint w
       }
     }
 #else   // SHENANDOAH_CENSUS_NOISE
-    uint age = MIN2(age, (uint)(MAX_COHORTS - 1));  // clamp
+    uint age = MIN2(obj_age + region_age, (uint)(MAX_COHORTS - 1));  // clamp
 #endif  // SHENANDOAH_CENSUS_NOISE
     get_local_age_table(worker_id)->add(age, size);
   } else {
