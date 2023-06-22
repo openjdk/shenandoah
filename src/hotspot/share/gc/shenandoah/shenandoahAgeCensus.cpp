@@ -119,8 +119,6 @@ void ShenandoahAgeCensus::update_epoch() {
       CENSUS_NOISE(_global_noise[_epoch].merge(_local_noise[i]);)
       CENSUS_NOISE(_local_noise[i].clear();)
     }
-    _global_age_table[_epoch]->print_age_table(MAX_COHORTS);
-    CENSUS_NOISE(_global_noise[_epoch].print();)
 
     compute_tenuring_threshold();
   }
@@ -204,13 +202,15 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
 // Mortality rate of a cohort, given its previous and current population
 double ShenandoahAgeCensus::mortality_rate(size_t prev_pop, size_t cur_pop) {
   // The following also covers the case where both entries are 0
-  if (prev_pop <= cur_pop) {
+  if (prev_pop < cur_pop) {
     // adjust for inaccurate censuses by finessing the
     // reappearance of dark matter as normal matter;
     // mortality rate is 0 if population remained the same
     // or increased.
-    log_trace(gc, age)("(dark matter) Cohort population "
-      SIZE_FORMAT " to " SIZE_FORMAT, prev_pop, cur_pop);
+    if (prev_pop != 0) {
+      log_trace(gc, age)(" (dark matter) Cohort population "
+                         SIZE_FORMAT " to " SIZE_FORMAT, prev_pop, cur_pop);
+    }
     return 0.0;
   }
   assert(prev_pop > 0 && prev_pop > cur_pop, "Error");
@@ -229,26 +229,34 @@ void ShenandoahAgeCensus::print() {
 
   const uint tt = tenuring_threshold();
 
-  log_debug(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
+  log_trace(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
                      (uintx)prev_epoch, (uintx)cur_epoch);
   log_info(gc, age)("\t\t ---- Population ---- \t\t -- Mortality -- ");
+
+  size_t total= 0;
   for (uint i = 1; i < MAX_COHORTS; i++) {
     const size_t prev_pop = prev_pv->sizes[i-1];  // (i-1) OK because i >= 1
     const size_t cur_pop  = cur_pv->sizes[i];
     double mr = mortality_rate(prev_pop, cur_pop);
     log_info(gc, age)(UINTX_FORMAT "\t\t " SIZE_FORMAT "\t\t " SIZE_FORMAT "\t\t %.2f " ,
                        (uintx)i, prev_pop, cur_pop, mr);
+    total += cur_pop;
     if (i == tt) {
       // Underline the cohort for tenuring threshold (if < MAX_COHORTS)
       log_info(gc, age)("----------------------------------------------------------------------------");
     }
   }
-  CENSUS_NOISE(_global_noise[cur_epoch].print();)
+  CENSUS_NOISE(_global_noise[cur_epoch].print(total);)
 }
 
 #ifdef SHENANDOAH_CENSUS_NOISE
-void ShenandoahNoiseStats::print() {
-  log_info(gc, age)("Skipped volume: " SIZE_FORMAT "Aged region volume: " SIZE_FORMAT " Clamped volume: " SIZE_FORMAT,
-                    skipped, aged, clamped);
+void ShenandoahNoiseStats::print(size_t total) {
+  if (total > 0) {
+    float f_skipped = (float)skipped/(float)total;
+    float f_aged    = (float)aged/(float)total;
+    float f_clamped = (float)clamped/(float)total;
+    log_info(gc, age)("Skipped: " SIZE_FORMAT " (%.2f),  R-Aged: " SIZE_FORMAT " (%.2f), Clamped: " SIZE_FORMAT " (%.2f)",
+                    skipped, f_skipped, aged, f_aged, clamped, f_clamped);
+  }
 }
 #endif // SHENANDOAH_CENSUS_NOISE

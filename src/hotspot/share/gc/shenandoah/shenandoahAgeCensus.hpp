@@ -57,7 +57,7 @@ struct ShenandoahNoiseStats {
     clamped += other.clamped;
   }
 
-  void print();
+  void print(size_t total);
 };
 #else  // SHENANDOAH_CENSUS_NOISE
 #define CENSUS_NOISE(x)
