@@ -172,16 +172,21 @@ size_t ShenandoahHeuristics::select_aged_regions(size_t old_available, size_t nu
     }
     if (r->age() >= InitialTenuringThreshold) {
       if ((r->garbage() < old_garbage_threshold)) {
-        r->save_top_before_promote();
         HeapWord* tams = ctx->top_at_mark_start(r);
         HeapWord* original_top = r->top();
         if (tams == original_top) {
-          // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,
-          // newly allocated objects will not be parseable when promote in place tries to register them.  Furthermore, any
-          // new allocations would not necessarily be eligible for promotion.  This addresses both issues.
+          // No allocations from this region have been made during concurrent mark. It meets all the criteria
+          // for in-place-promotion. Though we only need the value of top when we fill the end of the region,
+          // we use this field to indicate that this region should be promoted in place during the evacuation
+          // phase.
+          r->save_top_before_promote();
+
           size_t remnant_size = r->free() / HeapWordSize;
           if (remnant_size > ShenandoahHeap::min_fill_size()) {
             ShenandoahHeap::fill_with_object(original_top, remnant_size);
+            // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,
+            // newly allocated objects will not be parseable when promote in place tries to register them.  Furthermore, any
+            // new allocations would not necessarily be eligible for promotion.  This addresses both issues.
             r->set_top(r->end());
             promote_in_place_pad += remnant_size * HeapWordSize;
           } else {
