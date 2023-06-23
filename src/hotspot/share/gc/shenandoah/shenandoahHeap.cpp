@@ -1718,9 +1718,11 @@ private:
           // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
           // triggers the load-reference barrier (LRB) to copy on reference fetch.
           r->promote_humongous();
-        } else if (r->is_regular() && (r->get_top_before_promote() != nullptr)
-                  && (r->garbage_before_padded_for_promote() < old_garbage_threshold)
-                  && (r->get_top_before_promote() == tams)) {
+        } else if (r->is_regular() && (r->get_top_before_promote() != nullptr)) {
+          assert(r->garbage_before_padded_for_promote() < old_garbage_threshold,
+                 "Region " SIZE_FORMAT " has too much garbage for promotion", r->index());
+          assert(r->get_top_before_promote() == tams,
+                 "Region " SIZE_FORMAT " has been used for allocations before promotion", r->index());
           // Likewise, we cannot put promote-in-place regions into the collection set because that would also trigger
           // the LRB to copy on reference fetch.
           r->promote_in_place();
