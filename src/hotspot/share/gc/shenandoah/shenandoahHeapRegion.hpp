@@ -263,6 +263,7 @@ private:
   HeapWord* volatile _update_watermark;
 
   uint _age;
+  CENSUS_NOISE(uint _youth;)   // tracks epochs of retrograde ageing (rejuvenation)
 
 public:
   ShenandoahHeapRegion(HeapWord* start, size_t index, bool committed);
@@ -460,10 +461,29 @@ public:
 
   void set_affiliation(ShenandoahAffiliation new_affiliation);
 
-  uint age()           { return _age; }
+  // Region ageing and rejuvenation
+  uint age() { return _age; }
+  uint youth() {
+    return CENSUS_NOISE(_youth)
+           NO_CENSUS_NOISE(0);
+  }
+
   void increment_age() { _age++; }
-  void decrement_age() { if (_age-- == 0) { _age = 0; } }
-  void reset_age()     { _age = 0; }
+
+  void decrement_age() {
+    if (_age-- == 0) {
+      _age = 0;
+    } else {
+      CENSUS_NOISE(_youth++;)
+    }
+  }
+
+  void reset_age() {
+    CENSUS_NOISE(_youth += _age;)
+    _age = 0;
+  }
+
+  void clear_youth() { CENSUS_NOISE(_youth = 0;) }
 
   // Register all objects.  Set all remembered set cards to dirty.
   void promote_humongous();

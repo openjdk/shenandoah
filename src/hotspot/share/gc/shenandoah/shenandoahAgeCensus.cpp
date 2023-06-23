@@ -31,9 +31,9 @@
 ShenandoahAgeCensus::ShenandoahAgeCensus() {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only in generational mode");
 
-  _global_age_table    = NEW_C_HEAP_ARRAY(AgeTable*, MAX_SNAPSHOTS, mtGC);
-  CENSUS_NOISE(_global_noise        = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, MAX_SNAPSHOTS, mtGC);)
-  _tenuring_threshold  = NEW_C_HEAP_ARRAY(uint, MAX_SNAPSHOTS, mtGC);
+  _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, MAX_SNAPSHOTS, mtGC);
+  CENSUS_NOISE(_global_noise = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, MAX_SNAPSHOTS, mtGC);)
+  _tenuring_threshold = NEW_C_HEAP_ARRAY(uint, MAX_SNAPSHOTS, mtGC);
 
   for (int i = 0; i < MAX_SNAPSHOTS; i++) {
     // Note that we don't now get perfdata from age_table
@@ -45,7 +45,7 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
   if (!GenShenCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_workers, mtGC);
-    CENSUS_NOISE(_local_noise     = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, max_workers, mtGC);)
+    CENSUS_NOISE(_local_noise = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, max_workers, mtGC);)
     for (uint i = 0; i < max_workers; i++) {
       _local_age_table[i] = new AgeTable(false);
       CENSUS_NOISE(_local_noise[i].clear();)
@@ -54,7 +54,8 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
   _epoch = MAX_SNAPSHOTS - 1;  // see update_epoch()
 }
 
-void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint worker_id) {
+CENSUS_NOISE(void ShenandoahAgeCensus::add(uint obj_age, uint region_age, uint region_youth, size_t size, uint worker_id) {)
+NO_CENSUS_NOISE(void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint worker_id) {)
   if (obj_age <= markWord::max_age) {
     assert(obj_age < MAX_COHORTS && region_age < MAX_COHORTS, "Should have been tenured");
 #ifdef SHENANDOAH_CENSUS_NOISE
@@ -71,6 +72,9 @@ void ShenandoahAgeCensus::add(uint obj_age, uint region_age, size_t size, uint w
         age = (uint)(MAX_COHORTS - 1);  // clamp
         add_clamped(size, worker_id);
       }
+    }
+    if (region_youth > 0) {   // track object volume with retrograde age
+      add_young(size, worker_id);
     }
 #else   // SHENANDOAH_CENSUS_NOISE
     uint age = MIN2(obj_age + region_age, (uint)(MAX_COHORTS - 1));  // clamp
@@ -93,6 +97,10 @@ void ShenandoahAgeCensus::add_aged(size_t size, uint worker_id) {
 
 void ShenandoahAgeCensus::add_clamped(size_t size, uint worker_id) {
   _local_noise[worker_id].clamped += size;
+}
+
+void ShenandoahAgeCensus::add_young(size_t size, uint worker_id) {
+  _local_noise[worker_id].young += size;
 }
 #endif // SHENANDOAH_CENSUS_NOISE
 
@@ -254,8 +262,10 @@ void ShenandoahNoiseStats::print(size_t total) {
     float f_skipped = (float)skipped/(float)total;
     float f_aged    = (float)aged/(float)total;
     float f_clamped = (float)clamped/(float)total;
-    log_info(gc, age)("Skipped: " SIZE_FORMAT " (%.2f),  R-Aged: " SIZE_FORMAT " (%.2f), Clamped: " SIZE_FORMAT " (%.2f)",
-                    skipped, f_skipped, aged, f_aged, clamped, f_clamped);
+    float f_young   = (float)young/(float)total;
+    log_info(gc, age)("Skipped: " SIZE_FORMAT " (%.2f),  R-Aged: " SIZE_FORMAT " (%.2f),  "
+                      "Clamped: " SIZE_FORMAT " (%.2f),  R-Young: " SIZE_FORMAT " (%.2f)",
+                      skipped, f_skipped, aged, f_aged, clamped, f_clamped, young, f_young);
   }
 }
 #endif // SHENANDOAH_CENSUS_NOISE

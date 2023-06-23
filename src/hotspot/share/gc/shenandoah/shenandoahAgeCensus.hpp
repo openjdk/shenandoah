@@ -35,11 +35,13 @@
 #ifdef SHENANDOAH_CENSUS_NOISE
 
 #define CENSUS_NOISE(x) x
+#define NO_CENSUS_NOISE(x)
 
 struct ShenandoahNoiseStats {
   size_t skipped;   // Volume of objects skipped
   size_t aged;      // Volume of objects from aged regions
   size_t clamped;   // Volume of objects whose ages were clamped
+  size_t young;     // Volume of (rejuvenated) objects of retrograde age
 
   ShenandoahNoiseStats() {
     clear();
@@ -49,18 +51,21 @@ struct ShenandoahNoiseStats {
     skipped = 0;
     aged = 0;
     clamped = 0;
+    young = 0;
   }
 
   void merge(ShenandoahNoiseStats& other) {
     skipped += other.skipped;
     aged    += other.aged;
     clamped += other.clamped;
+    young   += other.young;
   }
 
   void print(size_t total);
 };
 #else  // SHENANDOAH_CENSUS_NOISE
 #define CENSUS_NOISE(x)
+#define NO_CENSUS_NOISE(x) x
 #endif // SHENANDOAH_CENSUS_NOISE
 
 // A class for tracking a sequence of cohort population vectors (or,
@@ -127,8 +132,9 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   }
 
   // Update the local age table for worker_id by size for
-  // given obj_age and region_age
-  void add(uint obj_age, uint region_age, size_t size, uint worker_id);
+  // given obj_age, region_age, and region_youth
+  CENSUS_NOISE(void add(uint obj_age, uint region_age, uint region_youth, size_t size, uint worker_id);)
+  NO_CENSUS_NOISE(void add(uint obj_age, uint region_age, size_t size, uint worker_id);)
 
 #ifdef SHENANDOAH_CENSUS_NOISE
   // Update the local skip table for worker_id by size
@@ -137,6 +143,8 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   void add_aged(size_t size, uint worker_id);
   // Update the local clamped object volume table for worker_id by size
   void add_clamped(size_t size, uint worker_id);
+  // Update the local (rejuvenated) object volume (retrograde age) for worker_id by size
+  void add_young(size_t size, uint worker_id);
 #endif // SHENANDOAH_CENSUS_NOISE
 
   // Update to a new epoch, creating a slot for new census
