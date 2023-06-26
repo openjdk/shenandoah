@@ -23,7 +23,7 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
 #include "logging/log.hpp"
@@ -65,6 +65,6 @@ ShenandoahHeuristics* ShenandoahGenerationalMode::initialize_heuristics(Shenando
   vm_exit_during_initialization("Shenandoah Generational GC is not supported on this platform.");
 #endif
 
-  return new ShenandoahAdaptiveHeuristics(generation);
+  return new ShenandoahYoungHeuristics(generation);
 }
 
