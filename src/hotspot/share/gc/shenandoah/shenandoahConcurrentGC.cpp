@@ -127,11 +127,15 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     // Concurrent mark roots
     entry_mark_roots();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_roots)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_roots)) {
+      return false;
+    }
 
     // Continue concurrent mark
     entry_mark();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
+      return false;
+    }
   }
 
   // Complete marking under STW, and start evacuation
@@ -196,18 +200,24 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   if (heap->is_evacuation_in_progress()) {
     // Concurrently evacuate
     entry_evacuate();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) {
+      return false;
+    }
   }
 
   if (heap->has_forwarded_objects()) {
     // Perform update-refs phase.
     vmop_entry_init_updaterefs();
     entry_updaterefs();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_updaterefs)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_updaterefs)) {
+      return false;
+    }
 
     // Concurrent update thread roots
     entry_update_thread_roots();
-    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_updaterefs)) return false;
+    if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_updaterefs)) {
+      return false;
+    }
 
     vmop_entry_final_updaterefs();
 
