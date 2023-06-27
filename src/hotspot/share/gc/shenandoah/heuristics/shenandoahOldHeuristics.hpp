@@ -72,18 +72,17 @@ private:
   // How much live data must be evacuated from within the unprocessed mixed evacuation candidates?
   size_t _live_bytes_in_unprocessed_candidates;
 
-  // This can be the 'static' or 'adaptive' heuristic.
-  ShenandoahHeuristics* _trigger_heuristic;
-
   // Keep a pointer to our generation that we can use without down casting a protected member from the base class.
   ShenandoahOldGeneration* _old_generation;
 
   // Flag is set when promotion failure is detected (by gc thread), and cleared when
   // old generation collection begins (by control thread).
+  // TODO: This is set, but never read.
   volatile bool _promotion_failed;
 
   // Flags are set when promotion failure is detected (by gc thread), and cleared when
   // old generation collection begins (by control thread).  Flags are set and cleared at safepoints.
+  // TODO: These next two are never set, but read.
   bool _cannot_expand_trigger;
   bool _fragmentation_trigger;
   bool _growth_trigger;
@@ -93,7 +92,7 @@ private:
                                                      size_t free) override;
 
 public:
-  ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahHeuristics* trigger_heuristic);
+  ShenandoahOldHeuristics(ShenandoahOldGeneration* generation);
 
   virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) override;
 
@@ -104,7 +103,7 @@ public:
   bool prime_collection_set(ShenandoahCollectionSet* set);
 
   // How many old-collection candidates have not yet been processed?
-  uint unprocessed_old_collection_candidates();
+  uint unprocessed_old_collection_candidates() const;
 
   // How much live memory must be evacuated from within old-collection candidates that have not yet been processed?
   size_t unprocessed_old_collection_candidates_live_memory() const;
@@ -114,7 +113,7 @@ public:
   void decrease_unprocessed_old_collection_candidates_live_memory(size_t evacuated_live);
 
   // How many old or hidden collection candidates have not yet been processed?
-  uint last_old_collection_candidate_index();
+  uint last_old_collection_candidate_index() const;
 
   // Return the next old-collection candidate in order of decreasing amounts of garbage.  (We process most-garbage regions
   // first.)  This does not consume the candidate.  If the candidate is selected for inclusion in a collection set, then
@@ -149,37 +148,21 @@ public:
 
   void clear_triggers();
 
-  virtual void record_cycle_start() override;
+  void record_cycle_end() override;
 
-  virtual void record_cycle_end() override;
+  bool should_start_gc() override;
 
-  virtual bool should_start_gc() override;
+  void record_success_concurrent(bool abbreviated) override;
 
-  virtual bool should_degenerate_cycle() override;
+  void record_success_degenerated() override;
 
-  virtual void record_success_concurrent(bool abbreviated) override;
+  void record_success_full() override;
 
-  virtual void record_success_degenerated() override;
+  const char* name() override;
 
-  virtual void record_success_full() override;
+  bool is_diagnostic() override;
 
-  virtual void record_allocation_failure_gc() override;
-
-  virtual void record_requested_gc() override;
-
-  virtual void reset_gc_learning() override;
-
-  virtual bool can_unload_classes() override;
-
-  virtual bool can_unload_classes_normal() override;
-
-  virtual bool should_unload_classes() override;
-
-  virtual const char* name() override;
-
-  virtual bool is_diagnostic() override;
-
-  virtual bool is_experimental() override;
+  bool is_experimental() override;
 
  private:
   void slide_pinned_regions_to_front();
