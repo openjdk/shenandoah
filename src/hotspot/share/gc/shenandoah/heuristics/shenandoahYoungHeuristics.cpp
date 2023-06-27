@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
@@ -201,4 +202,50 @@ void ShenandoahYoungHeuristics::choose_global_collection_set(ShenandoahCollectio
       cset->add_region(r);
     }
   }
+}
+
+bool ShenandoahYoungHeuristics::should_start_gc() {
+  // inherited triggers have already decided to start a cycle, so no further evaluation is required
+  if (ShenandoahAdaptiveHeuristics::should_start_gc()) {
+    return true;
+  }
+
+  // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
+  // more time than traditional young-generation cycles so start them up as soon as possible.  This is a "mitigation"
+  // for the reality that old-gen and young-gen activities are not truly "concurrent".  If there is old-gen work to
+  // be done, we start up the young-gen GC threads so they can do some of this old-gen work.  As implemented, promotion
+  // gets priority over old-gen marking.
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  size_t promo_potential = heap->get_promotion_potential();
+  if (promo_potential > 0) {
+    // Detect unsigned arithmetic underflow
+    assert(promo_potential < heap->capacity(), "Sanity");
+    log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
+                 _generation->name(),
+                 byte_size_in_proper_unit(promo_potential),
+                 proper_unit_for_byte_size(promo_potential));
+    return true;
+  }
+
+  size_t promo_in_place_potential = heap->get_promotion_in_place_potential();
+  if (promo_in_place_potential > 0) {
+    // Detect unsigned arithmetic underflow
+    assert(promo_in_place_potential < heap->capacity(), "Sanity");
+    log_info(gc)("Trigger (%s): expedite promotion in place of " SIZE_FORMAT "%s",
+                 _generation->name(),
+                 byte_size_in_proper_unit(promo_in_place_potential),
+                 proper_unit_for_byte_size(promo_in_place_potential));
+    return true;
+  }
+
+  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
+  size_t mixed_candidates = old_heuristics->unprocessed_old_collection_candidates();
+  if (mixed_candidates > 0) {
+    // We need to run young GC in order to open up some free heap regions so we can finish mixed evacuations.
+    log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
+                 _generation->name(), mixed_candidates);
+    return true;
+  }
+
+  return false;
 }

@@ -407,39 +407,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       _last_trigger = SPIKE;
       return true;
     }
-
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    if (heap->mode()->is_generational()) {
-      // Get through promotions and mixed evacuations as quickly as possible.  These cycles sometimes require significantly
-      // more time than traditional young-generation cycles so start them up as soon as possible.  This is a "mitigation"
-      // for the reality that old-gen and young-gen activities are not truly "concurrent".  If there is old-gen work to
-      // be done, we start up the young-gen GC threads so they can do some of this old-gen work.  As implemented, promotion
-      // gets priority over old-gen marking.
-
-      size_t promo_potential = heap->get_promotion_potential();
-      size_t promo_in_place_potential = heap->get_promotion_in_place_potential();
-      ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) heap->old_generation()->heuristics();
-      size_t mixed_candidates = old_heuristics->unprocessed_old_collection_candidates();
-      if (promo_potential > 0) {
-        // Detect unsigned arithmetic underflow
-        assert(promo_potential < heap->capacity(), "Sanity");
-        log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
-                     _generation->name(), byte_size_in_proper_unit(promo_potential), proper_unit_for_byte_size(promo_potential));
-        return true;
-      } else if (promo_in_place_potential > 0) {
-        // Detect unsigned arithmetic underflow
-        assert(promo_in_place_potential < heap->capacity(), "Sanity");
-        log_info(gc)("Trigger (%s): expedite promotion in place of " SIZE_FORMAT "%s", _generation->name(),
-                     byte_size_in_proper_unit(promo_in_place_potential),
-                     proper_unit_for_byte_size(promo_in_place_potential));
-        return true;
-      } else if (mixed_candidates > 0) {
-        // We need to run young GC in order to open up some free heap regions so we can finish mixed evacuations.
-        log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
-                     _generation->name(), mixed_candidates);
-        return true;
-      }
-    }
   }
   return ShenandoahHeuristics::should_start_gc();
 }
