@@ -141,10 +141,6 @@ public:
     _guaranteed_gc_interval = guaranteed_gc_interval;
   }
 
-  uint degenerated_cycles_in_a_row() {
-    return _degenerated_cycles_in_a_row;
-  }
-
   virtual void record_cycle_start();
 
   virtual void record_cycle_end();

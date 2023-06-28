@@ -170,7 +170,6 @@ void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* c
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
   collection_set->set_immediate_trash(immediate_garbage);
 
-  ShenandoahGeneration* young_gen = heap->young_generation();
   bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     if (old_heuristics != nullptr) {
