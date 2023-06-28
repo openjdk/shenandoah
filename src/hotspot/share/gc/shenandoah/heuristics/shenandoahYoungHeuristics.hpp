@@ -29,13 +29,17 @@
 
 class ShenandoahYoungHeuristics : public ShenandoahAdaptiveHeuristics {
 public:
-  ShenandoahYoungHeuristics(ShenandoahGeneration* generation);
+  explicit ShenandoahYoungHeuristics(ShenandoahGeneration* generation);
+
+  void choose_collection_set(ShenandoahCollectionSet* collection_set,
+                             ShenandoahOldHeuristics* old_heuristics) override;
 
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                              RegionData* data, size_t size,
                                              size_t actual_free) override;
 
   bool should_start_gc() override;
+
 
 private:
   void choose_global_collection_set(ShenandoahCollectionSet* cset,

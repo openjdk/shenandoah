@@ -306,7 +306,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   RegionData* candidates = _region_data;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!in_generation(region)) {
+    if (!_generation->contains(region)) {
       continue;
     }
 

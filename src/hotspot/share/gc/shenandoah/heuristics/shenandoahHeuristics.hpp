@@ -127,8 +127,6 @@ protected:
 
   void adjust_penalty(intx step);
 
-  bool in_generation(ShenandoahHeapRegion* region);
-
   size_t min_free_threshold();
 
 public:
