@@ -58,7 +58,6 @@
 class ShenandoahCollectionSet;
 class ShenandoahHeapRegion;
 class ShenandoahGeneration;
-class ShenandoahOldHeuristics;
 
 class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Concurrent_Adjust   = -1; // recover from penalties
@@ -109,14 +108,6 @@ protected:
 
   static int compare_by_garbage(RegionData a, RegionData b);
 
-  // Compare by live is used to prioritize compaction of old-gen regions.  With old-gen compaction, the goal is
-  // to tightly pack long-lived objects into available regions.  In most cases, there has not been an accumulation
-  // of garbage within old-gen regions.  The more likely opportunity will be to combine multiple sparsely populated
-  // old-gen regions which may have been promoted in place into a smaller number of densely packed old-gen regions.
-  // This improves subsequent allocation efficiency and reduces the likelihood of allocation failure (including
-  // humongous allocation failure) due to fragmentation of the available old-gen allocation pool
-  static int compare_by_live(RegionData a, RegionData b);
-
   // TODO: We need to enhance this API to give visibility to accompanying old-gen evacuation effort.
   // In the case that the old-gen evacuation effort is small or zero, the young-gen heuristics
   // should feel free to dedicate increased efforts to young-gen evacuation.
@@ -159,9 +150,7 @@ public:
 
   virtual void record_requested_gc();
 
-  virtual void reset_gc_learning();
-
-  virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics);
+  virtual void choose_collection_set(ShenandoahCollectionSet* collection_set);
 
   virtual bool can_unload_classes();
   virtual bool can_unload_classes_normal();

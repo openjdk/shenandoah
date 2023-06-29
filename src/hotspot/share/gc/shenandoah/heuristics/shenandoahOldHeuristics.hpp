@@ -86,14 +86,20 @@ private:
   bool _fragmentation_trigger;
   bool _growth_trigger;
 
+  // Compare by live is used to prioritize compaction of old-gen regions.  With old-gen compaction, the goal is
+  // to tightly pack long-lived objects into available regions.  In most cases, there has not been an accumulation
+  // of garbage within old-gen regions.  The more likely opportunity will be to combine multiple sparsely populated
+  // old-gen regions which may have been promoted in place into a smaller number of densely packed old-gen regions.
+  // This improves subsequent allocation efficiency and reduces the likelihood of allocation failure (including
+  // humongous allocation failure) due to fragmentation of the available old-gen allocation pool
+  static int compare_by_live(RegionData a, RegionData b);
+
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
                                                      size_t free) override;
 
 public:
   ShenandoahOldHeuristics(ShenandoahOldGeneration* generation);
-
-  virtual void choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) override;
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();

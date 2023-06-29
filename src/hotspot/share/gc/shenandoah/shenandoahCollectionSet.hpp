@@ -101,9 +101,6 @@ public:
 
   void print_on(outputStream* out) const;
 
-  inline size_t get_immediate_trash();
-  inline void set_immediate_trash(size_t immediate_trash);
-
   // This represents total amount of work to be performed by evacuation, including evacuations to young, to old,
   // and promotions from young to old.  This equals get_young_bytes_reserved_for_evacuation() plus
   // get_old_bytes_reserved_for_evacuation().

@@ -34,10 +34,10 @@
 
 ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahGeneration* generation)
         : ShenandoahAdaptiveHeuristics(generation) {
-  assert(!_generation->is_old(), "Old GC invokes ShenandoahOldHeuristics::choose_collection_set()");
+  assert(!_generation->is_old(), "Young heuristics only accept the young generation");
 }
 
-void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
+void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
   assert(collection_set->is_empty(), "Must be empty");
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -168,15 +168,12 @@ void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* c
           byte_size_in_proper_unit(total_garbage),     proper_unit_for_byte_size(total_garbage));
 
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
-  collection_set->set_immediate_trash(immediate_garbage);
 
   bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
-    if (old_heuristics != nullptr) {
-      old_heuristics->prime_collection_set(collection_set);
-    } else {
-      // This is a global collection and does not need to prime cset
-      assert(_generation->is_global(), "Expected global collection here");
+    // Only young collections need to prime the collection set.
+    if (_generation->is_young()) {
+      heap->old_heuristics()->prime_collection_set(collection_set);
     }
 
     // Call the subclasses to add young-gen regions into the collection set.

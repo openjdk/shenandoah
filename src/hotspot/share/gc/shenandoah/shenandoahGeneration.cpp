@@ -671,13 +671,13 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
 
       // Budgeting parameters to compute_evacuation_budgets are passed by reference.
       compute_evacuation_budgets(heap, preselected_regions, collection_set, consumed_by_advance_promotion);
-      _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
+      _heuristics->choose_collection_set(collection_set);
       if (!collection_set->is_empty()) {
         // only make use of evacuation budgets when we are evacuating
         adjust_evacuation_budgets(heap, collection_set, consumed_by_advance_promotion);
       }
     } else {
-      _heuristics->choose_collection_set(collection_set, heap->old_heuristics());
+      _heuristics->choose_collection_set(collection_set);
     }
   }
 
@@ -939,8 +939,10 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
 }
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  abbreviated = abbreviated && heap->mode()->is_generational();
   heuristics()->record_success_concurrent(abbreviated);
-  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();
+  heap->shenandoah_policy()->record_success_concurrent();
 }
 
 void ShenandoahGeneration::record_success_degenerated() {

@@ -331,7 +331,7 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
         ShenandoahPhaseTimings::choose_cset :
         ShenandoahPhaseTimings::degen_gc_choose_cset);
     ShenandoahHeapLocker locker(heap->lock());
-    heuristics()->choose_collection_set(nullptr, nullptr);
+    _old_heuristics->prepare_for_old_collections();
   }
 
   {

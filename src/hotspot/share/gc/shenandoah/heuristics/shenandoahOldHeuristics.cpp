@@ -36,6 +36,15 @@
 
 uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
+// sort by increasing live (so least live comes first)
+int ShenandoahOldHeuristics::compare_by_live(RegionData a, RegionData b) {
+  if (a._u._live_data < b._u._live_data)
+    return -1;
+  else if (a._u._live_data > b._u._live_data)
+    return 1;
+  else return 0;
+}
+
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation) :
   ShenandoahHeuristics(generation),
   _first_pinned_candidate(NOT_FOUND),
@@ -280,16 +289,6 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
   // the write index to hold the next found pinned region. We are just moving it back now
   // to point to the first pinned region.
   _next_old_collection_candidate = write_index + 1;
-}
-
-// Both arguments are don't cares for old-gen collections
-void ShenandoahOldHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set,
-                                                    ShenandoahOldHeuristics* old_heuristics) {
-  assert(collection_set == nullptr, "Expect null");
-  assert(old_heuristics == nullptr, "Expect null");
-  // Old-gen doesn't actually choose a collection set to be evacuated by its own gang of worker tasks.
-  // Instead, it computes the set of regions to be evacuated by subsequent young-gen evacuation passes.
-  prepare_for_old_collections();
 }
 
 void ShenandoahOldHeuristics::prepare_for_old_collections() {

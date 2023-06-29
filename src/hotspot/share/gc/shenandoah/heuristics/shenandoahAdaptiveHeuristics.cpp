@@ -31,8 +31,6 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
-#include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "utilities/quickSort.hpp"
@@ -226,7 +224,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   double rate = _allocation_rate.sample(allocated);
   _last_trigger = OTHER;
 
-  // OLD generation is maintained to be as small as possible.  Depletion-of-free-pool triggers do not apply to old generation.
   size_t min_threshold = min_free_threshold();
   if (available < min_threshold) {
       log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)",
@@ -241,11 +238,10 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   if (_gc_times_learned < max_learn) {
       size_t init_threshold = capacity / 100 * ShenandoahInitFreeThreshold;
       if (available < init_threshold) {
-          log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free ("
-          SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
-          _generation->name(), _gc_times_learned + 1, max_learn,
-          byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
-          byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
+          log_info(gc)("Trigger (%s): Learning " SIZE_FORMAT " of " SIZE_FORMAT ". Free (" SIZE_FORMAT "%s) is below initial threshold (" SIZE_FORMAT "%s)",
+                       _generation->name(), _gc_times_learned + 1, max_learn,
+                       byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
+                       byte_size_in_proper_unit(init_threshold),      proper_unit_for_byte_size(init_threshold));
           return true;
       }
   }
@@ -281,10 +277,13 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //   1. Some space to absorb allocation spikes (ShenandoahAllocSpikeFactor)
   //   2. Accumulated penalties from Degenerated and Full GC
   size_t allocation_headroom = available;
+
   size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
   size_t penalties      = capacity / 100 * _gc_time_penalties;
-  allocation_headroom -= MIN2(allocation_headroom, penalties);
+
   allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
+  allocation_headroom -= MIN2(allocation_headroom, penalties);
+
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
   log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
@@ -297,20 +296,18 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                    byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
                    byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                    _margin_of_error_sd);
-      log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - "
-      SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
-      byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
-      byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
-      byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
-      byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
+      log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - " SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
+                         byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
+                         byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
+                         byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
+                         byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
       _last_trigger = RATE;
       return true;
   }
 
   bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
   if (is_spiking && avg_cycle_time > allocation_headroom / rate) {
-      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s)"
-                   " to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
+      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
                    _generation->name(), avg_cycle_time * 1000,
                    byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
                    byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),

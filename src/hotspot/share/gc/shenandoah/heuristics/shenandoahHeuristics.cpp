@@ -25,17 +25,11 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/gcCause.hpp"
-#include "gc/shenandoah/shenandoahAllocRequest.hpp"
-#include "gc/shenandoah/shenandoahCollectionSet.inline.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
-#include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
-#include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
@@ -46,15 +40,6 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   if (a._u._garbage > b._u._garbage)
     return -1;
   else if (a._u._garbage < b._u._garbage)
-    return 1;
-  else return 0;
-}
-
-// sort by increasing live (so least live comes first)
-int ShenandoahHeuristics::compare_by_live(RegionData a, RegionData b) {
-  if (a._u._live_data < b._u._live_data)
-    return -1;
-  else if (a._u._live_data > b._u._live_data)
     return 1;
   else return 0;
 }
@@ -87,7 +72,7 @@ ShenandoahHeuristics::~ShenandoahHeuristics() {
   FREE_C_HEAP_ARRAY(RegionGarbage, _region_data);
 }
 
-void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set, ShenandoahOldHeuristics* old_heuristics) {
+void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
   assert(collection_set->is_empty(), "Must be empty");
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -166,7 +151,6 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
           byte_size_in_proper_unit(total_garbage),     proper_unit_for_byte_size(total_garbage));
 
   size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
-  collection_set->set_immediate_trash(immediate_garbage);
 
   if (immediate_percent <= ShenandoahImmediateThreshold) {
     choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
@@ -281,10 +265,6 @@ void ShenandoahHeuristics::record_allocation_failure_gc() {
 void ShenandoahHeuristics::record_requested_gc() {
   // Assume users call System.gc() when external state changes significantly,
   // which forces us to re-learn the GC timings and allocation rates.
-  reset_gc_learning();
-}
-
-void ShenandoahHeuristics::reset_gc_learning() {
   _gc_times_learned = 0;
 }
 
@@ -321,10 +301,8 @@ double ShenandoahHeuristics::elapsed_cycle_time() const {
 }
 
 size_t ShenandoahHeuristics::min_free_threshold() {
-  assert(!_generation->is_old(), "min_free_threshold is only relevant to young GC");
-  size_t min_free_threshold = ShenandoahMinFreeThreshold;
   // Note that soft_max_capacity() / 100 * min_free_threshold is smaller than max_capacity() / 100 * min_free_threshold.
   // We want to behave conservatively here, so use max_capacity().  By returning a larger value, we cause the GC to
   // trigger when the remaining amount of free shrinks below the larger threshold.
-  return _generation->max_capacity() / 100 * min_free_threshold;
+  return _generation->max_capacity() / 100 * ShenandoahMinFreeThreshold;
 }
