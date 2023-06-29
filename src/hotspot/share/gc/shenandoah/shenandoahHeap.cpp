@@ -24,6 +24,7 @@
  *
  */
 
+#include "heuristics/shenandoahYoungHeuristics.hpp"
 #include "precompiled.hpp"
 #include "memory/allocation.hpp"
 #include "memory/universe.hpp"
@@ -684,6 +685,10 @@ void ShenandoahHeap::post_initialize() {
 
 ShenandoahOldHeuristics* ShenandoahHeap::old_heuristics() {
   return (ShenandoahOldHeuristics*) _old_generation->heuristics();
+}
+
+ShenandoahYoungHeuristics* ShenandoahHeap::young_heuristics() {
+  return (ShenandoahYoungHeuristics*) _young_generation->heuristics();
 }
 
 bool ShenandoahHeap::doing_mixed_evacuations() {
@@ -3077,7 +3082,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
 
     // The computation of bytes_of_allocation_runway_before_gc_trigger is quite conservative so consider all of this
     // available for transfer to old. Note that transfer of humongous regions does not impact available.
-    size_t allocation_runway = young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
+    size_t allocation_runway = young_heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
     adjust_generation_sizes_for_next_cycle(allocation_runway, young_cset_regions, old_cset_regions);
 
     // Total old_available may have been expanded to hold anticipated promotions.  We trigger if the fragmented available
@@ -3101,7 +3106,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t old_capacity = old_generation()->max_capacity();
     size_t heap_capacity = capacity();
     if ((old_capacity > heap_capacity / 8) && (old_fragmented_available > old_capacity / 8)) {
-      ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_is_fragmented();
+      old_heuristics()->trigger_old_is_fragmented();
     }
 
     size_t old_used = old_generation()->used() + old_generation()->get_humongous_waste();
@@ -3110,7 +3115,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     assert(old_used < ShenandoahHeap::heap()->capacity(), "Old used must be less than heap capacity");
 
     if (old_used > trigger_threshold) {
-      ((ShenandoahOldHeuristics *) old_generation()->heuristics())->trigger_old_has_grown();
+      old_heuristics()->trigger_old_has_grown();
     }
   }
 }

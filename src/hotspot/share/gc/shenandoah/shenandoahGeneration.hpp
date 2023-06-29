@@ -82,6 +82,13 @@ private:
                                  ShenandoahCollectionSet* collection_set,
                                  size_t consumed_by_advance_promotion);
 
+  // Preselect for inclusion into the collection set regions whose age is
+  // at or above tenure age which contain more than ShenandoahOldGarbageThreshold
+  // amounts of garbage.
+  virtual size_t select_aged_regions(size_t old_available,
+                                     size_t num_regions, bool
+                                     candidate_regions_for_promotion_by_copy[]);
+
  public:
   ShenandoahGeneration(ShenandoahGenerationType type,
                        uint max_workers,

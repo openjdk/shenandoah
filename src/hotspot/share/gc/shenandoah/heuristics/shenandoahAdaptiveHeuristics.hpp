@@ -71,8 +71,6 @@ public:
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
 
-  virtual size_t bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_recycled);
-
  private:
   // These are used to adjust the margin of error and the spike threshold
   // in response to GC cycle outcomes. These values are shared, but the
@@ -100,6 +98,7 @@ public:
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
 
+protected:
   ShenandoahAllocationRate _allocation_rate;
 
   // The margin of error expressed in standard deviations to add to our

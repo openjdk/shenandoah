@@ -82,7 +82,6 @@ private:
 
   // Flags are set when promotion failure is detected (by gc thread), and cleared when
   // old generation collection begins (by control thread).  Flags are set and cleared at safepoints.
-  // TODO: These next two are never set, but read.
   bool _cannot_expand_trigger;
   bool _fragmentation_trigger;
   bool _growth_trigger;

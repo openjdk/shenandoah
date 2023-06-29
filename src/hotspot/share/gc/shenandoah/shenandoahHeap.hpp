@@ -59,6 +59,7 @@ class ShenandoahYoungGeneration;
 class ShenandoahOldGeneration;
 class ShenandoahHeuristics;
 class ShenandoahOldHeuristics;
+class ShenandoahYoungHeuristics;
 class ShenandoahMarkingContext;
 class ShenandoahPhaseTimings;
 class ShenandoahHeap;
@@ -175,6 +176,7 @@ public:
   }
 
   ShenandoahOldHeuristics* old_heuristics();
+  ShenandoahYoungHeuristics* young_heuristics();
 
   bool doing_mixed_evacuations();
   bool is_old_bitmap_stable() const;

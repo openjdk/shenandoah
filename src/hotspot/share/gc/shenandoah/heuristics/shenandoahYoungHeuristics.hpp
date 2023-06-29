@@ -40,6 +40,7 @@ public:
 
   bool should_start_gc() override;
 
+  size_t bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_reclaimed);
 
 private:
   void choose_global_collection_set(ShenandoahCollectionSet* cset,
