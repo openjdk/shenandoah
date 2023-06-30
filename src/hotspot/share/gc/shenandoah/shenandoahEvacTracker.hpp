@@ -36,12 +36,13 @@ private:
   size_t _bytes_attempted;
 
   bool     _generational;
-  AgeTable _age_table;
+  AgeTable* _age_table;
 
  public:
   ShenandoahEvacuationStats(bool generational);
 
-  AgeTable* age_table() { return &_age_table; }
+  AgeTable* age_table() const;
+
   void begin_evacuation(size_t bytes);
   void end_evacuation(size_t bytes, bool young_gen, uint age);
 

@@ -34,8 +34,15 @@
 ShenandoahEvacuationStats::ShenandoahEvacuationStats(bool generational)
   : _evacuations_completed(0), _bytes_completed(0),
     _evacuations_attempted(0), _bytes_attempted(0),
-    _generational(generational),
-    _age_table(false) {
+    _generational(generational) {
+  if (generational && GenShenCensusAtEvac) {
+    _age_table = new AgeTable(false);
+  }
+}
+
+AgeTable* ShenandoahEvacuationStats::age_table() const {
+  assert(_generational && GenShenCensusAtEvac, "Don't call");
+  return _age_table;
 }
 
 void ShenandoahEvacuationStats::begin_evacuation(size_t bytes) {
@@ -48,7 +55,7 @@ void ShenandoahEvacuationStats::end_evacuation(size_t bytes, bool young_gen, uin
   _bytes_completed += bytes;
   if (_generational && GenShenCensusAtEvac && young_gen) {
     assert(age > 0, "Error");
-    _age_table.add(age, bytes >> LogBytesPerWord);
+    _age_table->add(age, bytes >> LogBytesPerWord);
   }
 }
 
@@ -58,8 +65,7 @@ void ShenandoahEvacuationStats::accumulate(const ShenandoahEvacuationStats* othe
   _evacuations_attempted += other->_evacuations_attempted;
   _bytes_attempted += other->_bytes_attempted;
   if (_generational && GenShenCensusAtEvac) {
-    // Discard const
-    _age_table.merge(((ShenandoahEvacuationStats*)other)->age_table());
+    _age_table->merge(other->age_table());
   }
 }
 
@@ -67,7 +73,7 @@ void ShenandoahEvacuationStats::reset() {
   _evacuations_completed = _evacuations_attempted = 0;
   _bytes_completed = _bytes_attempted = 0;
   if (_generational && GenShenCensusAtEvac) {
-    _age_table.clear();
+    _age_table->clear();
   }
 }
 
@@ -81,7 +87,7 @@ void ShenandoahEvacuationStats::print_on(outputStream* st) {
             byte_size_in_proper_unit(abandoned_size),   proper_unit_for_byte_size(abandoned_size),
             abandoned_count);
   if (_generational && GenShenCensusAtEvac) {
-    _age_table.print_on(st, ShenandoahHeap::heap()->age_census()->tenuring_threshold());
+    _age_table->print_on(st, ShenandoahHeap::heap()->age_census()->tenuring_threshold());
   }
 }
 
@@ -148,16 +154,12 @@ ShenandoahCycleStats ShenandoahEvacuationTracker::flush_cycle_to_global() {
   _workers_global.accumulate(&workers);
 
   if (gen_mode && GenShenCensusAtEvac) {
-    // Ingest population vector into the heap's global census
+    // Ingest population vectors into the heap's global census
     // data, and use it to compute an appropriate tenuring threshold
     // for use in the next cycle.
     ShenandoahAgeCensus* census = ShenandoahHeap::heap()->age_census();
-    // Log data for this epoch
-    census->update_epoch();
-    census->ingest(_mutators_global.age_table());
-    census->ingest(_workers_global.age_table());
-    // Compute tenuring threshold for next epoch
-    census->compute_tenuring_threshold();
+    census->prepare_for_census_update();
+    census->update_census(_mutators_global.age_table(), _workers_global.age_table());
   }
 
   return {workers, mutators};

@@ -104,11 +104,9 @@ void ShenandoahAgeCensus::add_young(size_t size, uint worker_id) {
 }
 #endif // SHENANDOAH_CENSUS_NOISE
 
-// Update the epoch for the global age tables,
-// and merge local age tables into the global age table.
-// If appropriate, compute the new tenuring threshold for
-// this epoch.
-void ShenandoahAgeCensus::update_epoch() {
+// Prepare for a new census update,
+// by preparing slots.
+void ShenandoahAgeCensus::prepare_for_census_update() {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   if (++_epoch >= MAX_SNAPSHOTS) {
     _epoch=0;
@@ -117,7 +115,18 @@ void ShenandoahAgeCensus::update_epoch() {
   // clearing the local tables.
   _global_age_table[_epoch]->clear();
   CENSUS_NOISE(_global_noise[_epoch].clear();)
+}
+
+// Update the census data from appropriate sources,
+// and compute the new tenuring threshold.
+void ShenandoahAgeCensus::update_census(AgeTable* pv1, AgeTable* pv2) {
+  // Check that we won't overwrite existing data: caller is
+  // responsible for explicitly clearing the slot via calling
+  // prepare_for_census_update().
+  assert(_global_age_table[_epoch]->is_clear(), "Dirty decks");
+  CENSUS_NOISE(assert(_global_noise[_epoch].is_clear(), "Dirty decks");)
   if (!GenShenCensusAtEvac) {
+    assert(pv1 == nullptr && pv2 == nullptr, "Error, check caller");
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     for (uint i = 0; i < max_workers; i++) {
       // age stats
@@ -127,16 +136,21 @@ void ShenandoahAgeCensus::update_epoch() {
       CENSUS_NOISE(_global_noise[_epoch].merge(_local_noise[i]);)
       CENSUS_NOISE(_local_noise[i].clear();)
     }
-
-    compute_tenuring_threshold();
+  } else {
+    // census during evac
+    assert(pv1 != nullptr && pv2 != nullptr, "Error, check caller");
+    _global_age_table[_epoch]->merge(pv1);
+    _global_age_table[_epoch]->merge(pv2);
   }
+
+  update_tenuring_threshold();
 }
 
 
 // Reset the epoch for the global age tables,
 // clearing all history.
 // TBD: do this for noise & local tables too?
-void ShenandoahAgeCensus::reset_epoch() {
+void ShenandoahAgeCensus::reset() {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   for (uint i = 0; i < MAX_SNAPSHOTS; i++) {
     _global_age_table[i]->clear();
@@ -145,18 +159,11 @@ void ShenandoahAgeCensus::reset_epoch() {
   assert(_epoch < MAX_SNAPSHOTS, "Error");
 }
 
-// Ingest a population vector into the global age table for
-// the current epoch, merging it with any current data already
-// present.
-void ShenandoahAgeCensus::ingest(AgeTable* population_vector) {
-  _global_age_table[_epoch]->merge(population_vector);
-}
-
-void ShenandoahAgeCensus::compute_tenuring_threshold() {
+void ShenandoahAgeCensus::update_tenuring_threshold() {
   if (!GenShenAdaptiveTenuring) {
     _tenuring_threshold[_epoch] = InitialTenuringThreshold;
   } else {
-    uint tt = compute_tenuring_threshold_work();
+    uint tt = compute_tenuring_threshold();
     assert(tt <= MAX_COHORTS, "Out of bounds");
     _tenuring_threshold[_epoch] = tt;
   }
@@ -166,14 +173,15 @@ void ShenandoahAgeCensus::compute_tenuring_threshold() {
     (uintx) _tenuring_threshold[_epoch], GenShenMinTenuringThreshold, GenShenMaxTenuringThreshold);
 }
 
-uint ShenandoahAgeCensus::compute_tenuring_threshold_work() {
-  // Starting with the largest non-zero population by age cohort
-  // and working down in age of cohorts,find the lowest age such
-  // that all higher ages have a mortality rate that is below a
-  // pre-specified threshold. We consider this to be the adaptive
-  // tenuring age to be used for the next cohort.
+uint ShenandoahAgeCensus::compute_tenuring_threshold() {
+  // Starting with the oldest cohort with a non-trivial population
+  // (as specified by GenShenTenuringCohortPopulationThreshold) in the
+  // previous epoch, and working down the cohorts by age, find the
+  // oldest age that has a significant mortality rate (as specified by
+  // GenShenTenuringMortalityRateThreshold). We use this as
+  // tenuring age to be used for the evacuation cycle to follow.
   // Results are clamped between user-specified mix & max guardrails,
-  // so we ignore any cohorts outside [min,max].
+  // so we ignore any cohorts outside GenShen[Min,Max]TenuringThreshold.
 
   // Current and previous epoch in ring
   const uint cur_epoch = _epoch;

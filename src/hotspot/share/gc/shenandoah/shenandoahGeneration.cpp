@@ -478,8 +478,10 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       }
 
       if (!GenShenCensusAtEvac) {
+        ShenandoahAgeCensus* census = heap->age_census();
         // Age table updates
-        heap->update_epoch();
+        census->prepare_for_census_update();
+        census->update_census();
       }
 
       // TODO: young_available can include available (between top() and end()) within each young region that is not

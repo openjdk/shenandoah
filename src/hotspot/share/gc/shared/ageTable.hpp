@@ -53,6 +53,8 @@ class AgeTable: public CHeapObj<mtGC> {
 
   // clear table
   void clear();
+  // check whether it's clear
+  bool is_clear() PRODUCT_RETURN0;
 
   // add entry
   inline void add(oop p, size_t oop_size);
@@ -62,8 +64,7 @@ class AgeTable: public CHeapObj<mtGC> {
     sizes[age] += oop_size;
   }
 
-  // Merge another age table with the current one.  Used
-  // for parallel young generation gc.
+  // Merge another age table with the current one.
   void merge(const AgeTable* subTable);
 
   // Calculate new tenuring threshold based on age information.

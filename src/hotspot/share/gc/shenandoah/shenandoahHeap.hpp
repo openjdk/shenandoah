@@ -484,11 +484,8 @@ public:
   inline size_t set_young_evac_reserve(size_t new_val);
   inline size_t get_young_evac_reserve() const;
 
-  // Methods related to age tables in generational mode for Young Gen
+  // Return the age census object for young gen (in generational mode)
   inline ShenandoahAgeCensus* age_census() const;
-  AgeTable* get_age_table();
-  void update_epoch();
-  void reset_epoch();
 
 private:
   void manage_satb_barrier(bool active);

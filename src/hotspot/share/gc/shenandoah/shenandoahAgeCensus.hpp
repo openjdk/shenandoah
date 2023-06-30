@@ -54,6 +54,12 @@ struct ShenandoahNoiseStats {
     young = 0;
   }
 
+#ifndef PRODUCT
+  bool is_clear() {
+    return (skipped + aged + clamped + young) == 0;
+  }
+#endif // !PRODUCT
+
   void merge(ShenandoahNoiseStats& other) {
     skipped += other.skipped;
     aged    += other.aged;
@@ -111,6 +117,12 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // previous and current epochs
   double mortality_rate(size_t prev_pop, size_t cur_pop);
 
+  // Update the tenuring threshold, calling
+  // compute_tenuring_threshold to calculate the new
+  // value
+  void update_tenuring_threshold();
+  uint compute_tenuring_threshold();
+
  public:
   enum {
     MAX_COHORTS = AgeTable::table_size,    // = markWord::max_age + 1
@@ -123,12 +135,6 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // Only used in the case of !GenShenCensusAtEvac
   AgeTable* get_local_age_table(uint worker_id) {
     return (AgeTable*) _local_age_table[worker_id];
-  }
-
-  // Return the global age table (population vector) for the current epoch.
-  // Where is this used?
-  AgeTable* get_age_table() {
-    return (AgeTable*) _global_age_table[_epoch];
   }
 
   // Update the local age table for worker_id by size for
@@ -148,14 +154,14 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
 #endif // SHENANDOAH_CENSUS_NOISE
 
   // Update to a new epoch, creating a slot for new census
-  void update_epoch();
+  void prepare_for_census_update();
   // Reset the epocj, clearing accumulated census history
-  void reset_epoch();
+  void reset();
 
-  void ingest(AgeTable* population_vector);
-  void compute_tenuring_threshold();           // TODO: Add a strategy parameter
+  // Update the census data, and compute the new tenuring threshold
+  void update_census(AgeTable* pv1 = nullptr, AgeTable* pv2 = nullptr);         // TODO: Add a strategy parameter
 
-  // Return the most recently computed tenuring threshold at previous epoch.
+  // Return the most recently computed tenuring threshold
   uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }
 
   // Print the age census information
