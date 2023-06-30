@@ -477,7 +477,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         preselected_regions[i] = false;
       }
 
-      if (!GenShenCensusAtEvac) {
+      if (!ShenandoahGenerationalCensusAtEvac) {
         ShenandoahAgeCensus* census = heap->age_census();
         // Age table updates
         census->prepare_for_census_update();

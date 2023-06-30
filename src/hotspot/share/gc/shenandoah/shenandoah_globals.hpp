@@ -35,27 +35,35 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
-  product(bool, GenShenCensusAtEvac, true, EXPERIMENTAL,                    \
-          "Object age census at evacuation, not mearking")                  \
+  product(bool, ShenandoahGenerationalCensusAtEvac, true, EXPERIMENTAL,     \
+          "(Generational mode only) Object age census at evacuation, "      \
+          "rather than during marking.")                                    \
                                                                             \
-  product(bool, GenShenAdaptiveTenuring, false, EXPERIMENTAL,               \
-          "Adaptive tenuring threshold")                                    \
+  product(bool, ShenandoahGenerationalAdaptiveTenuring, false, EXPERIMENTAL,\
+          "(Generational mode only) Dynamically adapt tenuring age.")       \
                                                                             \
-  product(uintx, GenShenMinTenuringThreshold, 1, EXPERIMENTAL,              \
-          "Floor for adaptive tenuring threshold")                          \
+  product(uintx, ShenandoahGenerationalMinTenuringAge, 1,EXPERIMENTAL,      \
+          "(Generational mode only) Floor for adaptive tenuring age.")      \
                                                                             \
-  product(uintx, GenShenMaxTenuringThreshold, 16, EXPERIMENTAL,             \
-          "Ceiling for adaptive tenuring threshold")                        \
+  product(uintx, ShenandoahGenerationalMaxTenuringAge, 16, EXPERIMENTAL,    \
+          "(Generational mode only) Ceiling for adaptive tenuring age.")    \
                                                                             \
-  product(double, GenShenTenuringMortalityRateThreshold, 0.3, EXPERIMENTAL, \
-          "Cohort mortality rates below this value will be treated as "     \
-          "indicative of longevity, leading to tenuring. Used only when "   \
-          "GenShenAdaptiveTenuring is enabled")                             \
+  product(double, ShenandoahGenerationalTenuringMortalityRateThreshold,     \
+                                                         0.3, EXPERIMENTAL, \
+          "(Generational mode only) Cohort mortality rates below this "     \
+          "value will be treated as indicative of longevity, leading to "   \
+          "tenuring. A lower value delays tenuring, a higher value hastens "\
+          "it. Used only when ShenandoahGenerationalhenAdaptiveTenuring is "\
+          "enabled.")                                                       \
                                                                             \
-  product(size_t, GenShenTenuringCohortPopulationThreshold, 4*K, EXPERIMENTAL, \
-          "Cohorts whose population volume is below this value will be "    \
-          "ignored wrt tenuring decisions, making them eligible for "       \
-          "tenuring as soon as all older cohorts are")                      \
+  product(size_t, ShenandoahGenerationalTenuringCohortPopulationThreshold,  \
+                                                         4*K, EXPERIMENTAL, \
+          "(Generational mode only) Cohorts whose population is lower than "\
+          "this value in the previous census are ignored wrt tenuring "     \
+          "decisions. Effectively this makes then tenurable as soon as all "\
+          "older cohorts are. Set this value to the largest cohort "        \
+          "population volume that you are comfortable ignoring when making "\
+          "tenuring decisions.")                                            \
                                                                             \
   product(size_t, ShenandoahRegionSize, 0, EXPERIMENTAL,                    \
           "Static heap region size. Set zero to enable automatic sizing.")  \

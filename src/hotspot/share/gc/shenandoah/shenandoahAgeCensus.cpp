@@ -42,7 +42,7 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
     // Sentinel value
     _tenuring_threshold[i] = MAX_COHORTS;
   }
-  if (!GenShenCensusAtEvac) {
+  if (!ShenandoahGenerationalCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_workers, mtGC);
     CENSUS_NOISE(_local_noise = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, max_workers, mtGC);)
@@ -125,7 +125,7 @@ void ShenandoahAgeCensus::update_census(AgeTable* pv1, AgeTable* pv2) {
   // prepare_for_census_update().
   assert(_global_age_table[_epoch]->is_clear(), "Dirty decks");
   CENSUS_NOISE(assert(_global_noise[_epoch].is_clear(), "Dirty decks");)
-  if (!GenShenCensusAtEvac) {
+  if (!ShenandoahGenerationalCensusAtEvac) {
     assert(pv1 == nullptr && pv2 == nullptr, "Error, check caller");
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     for (uint i = 0; i < max_workers; i++) {
@@ -160,7 +160,7 @@ void ShenandoahAgeCensus::reset() {
 }
 
 void ShenandoahAgeCensus::update_tenuring_threshold() {
-  if (!GenShenAdaptiveTenuring) {
+  if (!ShenandoahGenerationalAdaptiveTenuring) {
     _tenuring_threshold[_epoch] = InitialTenuringThreshold;
   } else {
     uint tt = compute_tenuring_threshold();
@@ -168,32 +168,31 @@ void ShenandoahAgeCensus::update_tenuring_threshold() {
     _tenuring_threshold[_epoch] = tt;
   }
   print();
-  log_trace(gc, age)("New tenuring threshold " UINTX_FORMAT
-    " (min " UINTX_FORMAT ", max " UINTX_FORMAT")",
-    (uintx) _tenuring_threshold[_epoch], GenShenMinTenuringThreshold, GenShenMaxTenuringThreshold);
+  log_trace(gc, age)("New tenuring threshold " UINTX_FORMAT " (min " UINTX_FORMAT ", max " UINTX_FORMAT")",
+    (uintx) _tenuring_threshold[_epoch], ShenandoahGenerationalMinTenuringAge, ShenandoahGenerationalMaxTenuringAge);
 }
 
 uint ShenandoahAgeCensus::compute_tenuring_threshold() {
   // Starting with the oldest cohort with a non-trivial population
-  // (as specified by GenShenTenuringCohortPopulationThreshold) in the
+  // (as specified by ShenandoahGenerationalTenuringCohortPopulationThreshold) in the
   // previous epoch, and working down the cohorts by age, find the
   // oldest age that has a significant mortality rate (as specified by
-  // GenShenTenuringMortalityRateThreshold). We use this as
+  // ShenandoahGenerationalTenuringMortalityRateThreshold). We use this as
   // tenuring age to be used for the evacuation cycle to follow.
   // Results are clamped between user-specified mix & max guardrails,
-  // so we ignore any cohorts outside GenShen[Min,Max]TenuringThreshold.
+  // so we ignore any cohorts outside ShenandoahGenerational[Min,Max]Age.
 
   // Current and previous epoch in ring
   const uint cur_epoch = _epoch;
   const uint prev_epoch = cur_epoch > 0  ? cur_epoch - 1 : markWord::max_age;
-  uint tenuring_threshold = GenShenMaxTenuringThreshold;
+  uint tenuring_threshold = ShenandoahGenerationalMaxTenuringAge;
 
   // Current and previous population vectors in ring
   const AgeTable* cur_pv = _global_age_table[cur_epoch];
   const AgeTable* prev_pv = _global_age_table[prev_epoch];
-  for (uint i = GenShenMaxTenuringThreshold - 1; i >= MAX2((uint)GenShenMinTenuringThreshold - 1, (uint)1); i--) {
-    assert(i > 0, "Error");
-    // Population & mortality rate of current cohort
+  for (uint i = ShenandoahGenerationalMaxTenuringAge - 1; i > MAX2((uint)ShenandoahGenerationalMinTenuringAge, (uint)0); i--) {
+    assert(i > 0, "Index (i-1) would underflow/wrap");
+    // Cohort of current age i
     const size_t cur_pop = cur_pv->sizes[i];
     const size_t prev_pop = prev_pv->sizes[i-1];
     const double mr = mortality_rate(prev_pop, cur_pop);
@@ -201,8 +200,9 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
     // that have a lower mortality rate than we care to age in young; these
     // cohorts are considered eligible for tenuring when all older
     // cohorts are.
-    if (i > 1 && (prev_pop < GenShenTenuringCohortPopulationThreshold ||
-        mr < GenShenTenuringMortalityRateThreshold)) {
+    // TODO: if 0 record is accurate, we wouldn't need to exclude 1 below
+    if (i > 1 && (prev_pop < ShenandoahGenerationalTenuringCohortPopulationThreshold ||
+        mr < ShenandoahGenerationalTenuringMortalityRateThreshold)) {
       tenuring_threshold = i;
       continue;
     }
