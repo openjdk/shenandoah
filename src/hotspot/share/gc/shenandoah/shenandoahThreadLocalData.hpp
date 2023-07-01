@@ -126,8 +126,12 @@ public:
     data(thread)->_evacuation_stats->begin_evacuation(bytes);
   }
 
-  static void end_evacuation(Thread* thread, size_t bytes, bool young_gen, uint age) {
-    data(thread)->_evacuation_stats->end_evacuation(bytes, young_gen, age);
+  static void end_evacuation(Thread* thread, size_t bytes) {
+    data(thread)->_evacuation_stats->end_evacuation(bytes);
+  }
+
+  static void record_age(Thread* thread, size_t bytes, uint age) {
+    data(thread)->_evacuation_stats->record_age(bytes, age);
   }
 
   static ShenandoahEvacuationStats* evacuation_stats(Thread* thread) {
