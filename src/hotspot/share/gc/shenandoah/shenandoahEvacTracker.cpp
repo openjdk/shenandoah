@@ -57,7 +57,6 @@ void ShenandoahEvacuationStats::end_evacuation(size_t bytes) {
 
 void ShenandoahEvacuationStats::record_age(size_t bytes, uint age) {
   assert(_generational && ShenandoahGenerationalCensusAtEvac, "Don't call!");
-  assert(age > 0, "Error");
   _age_table->add(age, bytes >> LogBytesPerWord);
 }
 
