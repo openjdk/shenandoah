@@ -465,7 +465,13 @@ public:
   uint age() { return _age; }
   CENSUS_NOISE(uint youth() { return _youth; })
 
-  void increment_age() { _age++; }
+  void increment_age() {
+    const uint max_age = markWord::max_age;
+    assert(_age <= max_age, "Error");
+    if (_age++ >= max_age) {
+      _age = max_age;   // clamp
+    }
+  }
 
   void reset_age() {
     CENSUS_NOISE(_youth += _age;)
