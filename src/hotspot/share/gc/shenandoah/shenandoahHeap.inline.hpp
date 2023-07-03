@@ -545,12 +545,17 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   }
 }
 
+// Return the object's age (at a safepoint or when object isn't
+// mutable by the mutator)
 uint ShenandoahHeap::get_object_age(oop obj) {
   markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
   assert(w.age() <= markWord::max_age, "Impossible!");
   return w.age();
 }
 
+// Return the object's age, or a sentinel value when the age can't
+// necessarily be determined because of concurrent locking by the
+// mutator
 uint ShenandoahHeap::get_object_age_concurrent(oop obj) {
   // This is impossible to do unless we "freeze" ABA-type oscillations
   // With Lilliput, we can do this more easily.

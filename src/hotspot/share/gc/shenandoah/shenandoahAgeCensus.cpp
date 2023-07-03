@@ -220,8 +220,9 @@ double ShenandoahAgeCensus::mortality_rate(size_t prev_pop, size_t cur_pop) {
     // mortality rate is 0 if population remained the same
     // or increased.
     if (cur_pop > prev_pop) {
-      log_trace(gc, age)(" (dark matter) Cohort population "
-                         SIZE_FORMAT " to " SIZE_FORMAT, prev_pop, cur_pop);
+      log_trace(gc, age)
+        (" (dark matter) Cohort population " SIZE_FORMAT_W(10) " to " SIZE_FORMAT_W(10),
+        prev_pop*oopSize, cur_pop*oopSize);
     }
     return 0.0;
   }
@@ -241,10 +242,6 @@ void ShenandoahAgeCensus::print() {
 
   const uint tt = tenuring_threshold();
 
-  log_trace(gc, age)("Epoch: previous: " UINTX_FORMAT ", \t current: " UINTX_FORMAT,
-                     (uintx)prev_epoch, (uintx)cur_epoch);
-  log_info(gc, age)("\t\t ---- Population ---- \t\t -- Mortality -- ");
-
   size_t total= 0;
   for (uint i = 1; i < MAX_COHORTS; i++) {
     const size_t prev_pop = prev_pv->sizes[i-1];  // (i-1) OK because i >= 1
@@ -252,8 +249,9 @@ void ShenandoahAgeCensus::print() {
     double mr = mortality_rate(prev_pop, cur_pop);
     // Suppress printing when everything is zero
     if (prev_pop + cur_pop > 0) {
-      log_info(gc, age)(UINTX_FORMAT "\t\t " SIZE_FORMAT "\t\t " SIZE_FORMAT "\t\t %.2f " ,
-                        (uintx)i, prev_pop, cur_pop, mr);
+      log_info(gc, age)
+        (" - age %3u: prev " SIZE_FORMAT_W(10) " bytes, curr " SIZE_FORMAT_W(10) " bytes, mortality %.2f ",
+         i, prev_pop*oopSize, cur_pop*oopSize, mr);
     }
     total += cur_pop;
     if (i == tt) {
@@ -271,9 +269,10 @@ void ShenandoahNoiseStats::print(size_t total) {
     float f_aged    = (float)aged/(float)total;
     float f_clamped = (float)clamped/(float)total;
     float f_young   = (float)young/(float)total;
-    log_info(gc, age)("Skipped: " SIZE_FORMAT " (%.2f),  R-Aged: " SIZE_FORMAT " (%.2f),  "
-                      "Clamped: " SIZE_FORMAT " (%.2f),  R-Young: " SIZE_FORMAT " (%.2f)",
-                      skipped, f_skipped, aged, f_aged, clamped, f_clamped, young, f_young);
+    log_info(gc, age)("Skipped: " SIZE_FORMAT_W(10) " (%.2f),  R-Aged: " SIZE_FORMAT_W(10) " (%.2f),  "
+                      "Clamped: " SIZE_FORMAT_W(10) " (%.2f),  R-Young: " SIZE_FORMAT_W(10) " (%.2f)",
+                      skipped*oopSize, f_skipped, aged*oopSize, f_aged,
+                      clamped*oopSize, f_clamped, young*oopSize, f_young);
   }
 }
 #endif // SHENANDOAH_CENSUS_NOISE
