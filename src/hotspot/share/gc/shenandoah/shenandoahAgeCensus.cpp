@@ -42,7 +42,7 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
     // Sentinel value
     _tenuring_threshold[i] = MAX_COHORTS;
   }
-  if (!ShenandoahGenerationalCensusAtEvac) {
+  if (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     _local_age_table = NEW_C_HEAP_ARRAY(AgeTable*, max_workers, mtGC);
     CENSUS_NOISE(_local_noise = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, max_workers, mtGC);)
@@ -125,7 +125,7 @@ void ShenandoahAgeCensus::update_census(AgeTable* pv1, AgeTable* pv2) {
   // prepare_for_census_update().
   assert(_global_age_table[_epoch]->is_clear(), "Dirty decks");
   CENSUS_NOISE(assert(_global_noise[_epoch].is_clear(), "Dirty decks");)
-  if (!ShenandoahGenerationalCensusAtEvac) {
+  if (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
     assert(pv1 == nullptr && pv2 == nullptr, "Error, check caller");
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
     for (uint i = 0; i < max_workers; i++) {

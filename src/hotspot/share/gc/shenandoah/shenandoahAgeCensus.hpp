@@ -132,7 +132,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   ShenandoahAgeCensus();
 
   // Return the local age table (population vector) for worker_id.
-  // Only used in the case of !ShenandoahGenerationalCensusAtEvac
+  // Only used in the case of (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac)
   AgeTable* get_local_age_table(uint worker_id) {
     return (AgeTable*) _local_age_table[worker_id];
   }

@@ -115,7 +115,7 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
   const size_t size = obj->size();
 
   // Age census for objects in the young generation
-  if (!ShenandoahGenerationalCensusAtEvac) {
+  if (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
     assert(heap->mode()->is_generational(), "Only if generational");
     if (GENERATION == YOUNG || (GENERATION == GLOBAL_GEN && region->is_young())) {
       assert(region->is_young(), "Only for young objects");
