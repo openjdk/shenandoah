@@ -36,10 +36,8 @@ ShenandoahGlobalHeuristics::ShenandoahGlobalHeuristics(ShenandoahGlobalGeneratio
 
 
 void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                      RegionData* data, size_t size,
-                                                                      size_t actual_free) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-
+                                                                       RegionData* data, size_t size,
+                                                                       size_t actual_free) {
   // The logic for cset selection in adaptive is as follows:
   //
   //   1. We cannot get cset larger than available free space. Otherwise we guarantee OOME
@@ -69,18 +67,17 @@ void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(Shenandoa
 
   size_t cur_young_garbage = add_preselected_regions_to_collection_set(cset, data, size);
 
-  choose_global_collection_set(cset, heap, data, size, actual_free, cur_young_garbage);
+  choose_global_collection_set(cset, data, size, actual_free, cur_young_garbage);
 
   log_cset_composition(cset);
 }
 
 
 void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollectionSet* cset,
-                                                             const ShenandoahHeap* heap,
-                                                             const ShenandoahHeuristics::RegionData* data,
-                                                             size_t size, size_t actual_free,
-                                                             size_t cur_young_garbage) const {
-
+                                                              const ShenandoahHeuristics::RegionData* data,
+                                                              size_t size, size_t actual_free,
+                                                              size_t cur_young_garbage) const {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   size_t capacity = heap->young_generation()->max_capacity();
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
   size_t ignore_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahIgnoreGarbageThreshold / 100;
@@ -93,10 +90,10 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
   size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
 
   log_info(gc, ergo)("Adaptive CSet Selection for GLOBAL. Max Young Evacuation: " SIZE_FORMAT
-  "%s, Max Old Evacuation: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
-          byte_size_in_proper_unit(max_young_cset), proper_unit_for_byte_size(max_young_cset),
-          byte_size_in_proper_unit(max_old_cset), proper_unit_for_byte_size(max_old_cset),
-          byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
+                     "%s, Max Old Evacuation: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
+                     byte_size_in_proper_unit(max_young_cset), proper_unit_for_byte_size(max_young_cset),
+                     byte_size_in_proper_unit(max_old_cset), proper_unit_for_byte_size(max_old_cset),
+                     byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;

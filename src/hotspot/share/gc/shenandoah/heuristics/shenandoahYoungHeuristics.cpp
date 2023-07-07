@@ -40,8 +40,6 @@ ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahYoungGeneration* 
 void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                                       RegionData* data, size_t size,
                                                                       size_t actual_free) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-
   // The logic for cset selection in adaptive is as follows:
   //
   //   1. We cannot get cset larger than available free space. Otherwise we guarantee OOME
@@ -71,15 +69,17 @@ void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(Shenandoah
 
   size_t cur_young_garbage = add_preselected_regions_to_collection_set(cset, data, size);
 
-  choose_young_collection_set(cset, heap, data, size, actual_free, cur_young_garbage);
+  choose_young_collection_set(cset, data, size, actual_free, cur_young_garbage);
 
   log_cset_composition(cset);
 }
 
-void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollectionSet* cset, const ShenandoahHeap* heap,
-                                                            const ShenandoahHeuristics::RegionData* data,
+void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollectionSet* cset,
+                                                            const RegionData* data,
                                                             size_t size, size_t actual_free,
                                                             size_t cur_young_garbage) const {
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   size_t capacity = heap->young_generation()->max_capacity();
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
@@ -172,7 +172,6 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
 // generation at the end of the current cycle (as represented by young_regions_to_be_reclaimed) and on the anticipated
 // amount of time required to perform a GC.
 size_t ShenandoahYoungHeuristics::bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_reclaimed) {
-  size_t max_capacity = _generation->max_capacity();
   size_t capacity = _generation->soft_max_capacity();
   size_t usage = _generation->used();
   size_t available = (capacity > usage)? capacity - usage: 0;
@@ -181,7 +180,6 @@ size_t ShenandoahYoungHeuristics::bytes_of_allocation_runway_before_gc_trigger(s
   size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_bytes_collected();
   size_t anticipated_available =
           available + young_regions_to_be_reclaimed * ShenandoahHeapRegion::region_size_bytes() - available_young_collected;
-  size_t allocation_headroom = anticipated_available;
   size_t spike_headroom = capacity * ShenandoahAllocSpikeFactor / 100;
   size_t penalties      = capacity * _gc_time_penalties / 100;
 

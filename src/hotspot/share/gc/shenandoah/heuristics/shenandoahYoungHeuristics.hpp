@@ -43,7 +43,6 @@ public:
 
 private:
   void choose_young_collection_set(ShenandoahCollectionSet* cset,
-                                   const ShenandoahHeap* heap,
                                    const RegionData* data,
                                    size_t size, size_t actual_free,
                                    size_t cur_young_garbage) const;
