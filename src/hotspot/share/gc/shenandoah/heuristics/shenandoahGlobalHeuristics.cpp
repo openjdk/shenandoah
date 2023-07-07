@@ -25,8 +25,10 @@
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/heuristics/shenandoahGlobalHeuristics.hpp"
-#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 
 #include "utilities/quickSort.hpp"
 
