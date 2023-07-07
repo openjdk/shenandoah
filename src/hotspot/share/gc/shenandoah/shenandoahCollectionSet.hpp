@@ -49,7 +49,6 @@ private:
   size_t                _used;
   size_t                _live;
   size_t                _region_count;
-  size_t                _immediate_trash;
 
   size_t                _young_bytes_to_evacuate;
   size_t                _young_bytes_to_promote;
