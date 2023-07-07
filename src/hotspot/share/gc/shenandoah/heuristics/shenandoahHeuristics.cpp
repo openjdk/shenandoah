@@ -45,17 +45,17 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
 }
 
 ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahHeapCharacteristics* generation) :
-  _generation(generation),
-  _region_data(nullptr),
-  _degenerated_cycles_in_a_row(0),
-  _successful_cycles_in_a_row(0),
-  _guaranteed_gc_interval(0),
-  _cycle_start(os::elapsedTime()),
-  _last_cycle_end(0),
-  _gc_times_learned(0),
-  _gc_time_penalties(0),
-  _gc_cycle_time_history(new TruncatedSeq(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor)),
-  _metaspace_oom()
+        _heap_info(generation),
+        _region_data(nullptr),
+        _degenerated_cycles_in_a_row(0),
+        _successful_cycles_in_a_row(0),
+        _guaranteed_gc_interval(0),
+        _cycle_start(os::elapsedTime()),
+        _last_cycle_end(0),
+        _gc_times_learned(0),
+        _gc_time_penalties(0),
+        _gc_cycle_time_history(new TruncatedSeq(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor)),
+        _metaspace_oom()
 {
   // No unloading during concurrent mark? Communicate that to heuristics
   if (!ClassUnloadingWithConcurrentMark) {
@@ -203,7 +203,7 @@ bool ShenandoahHeuristics::should_start_gc() {
     double last_time_ms = (os::elapsedTime() - _last_cycle_end) * 1000;
     if (last_time_ms > _guaranteed_gc_interval) {
       log_info(gc)("Trigger (%s): Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)",
-                   _generation->name(), last_time_ms, _guaranteed_gc_interval);
+                   _heap_info->name(), last_time_ms, _guaranteed_gc_interval);
       return true;
     }
   }
@@ -304,5 +304,5 @@ size_t ShenandoahHeuristics::min_free_threshold() {
   // Note that soft_max_capacity() / 100 * min_free_threshold is smaller than max_capacity() / 100 * min_free_threshold.
   // We want to behave conservatively here, so use max_capacity().  By returning a larger value, we cause the GC to
   // trigger when the remaining amount of free shrinks below the larger threshold.
-  return _generation->max_capacity() / 100 * ShenandoahMinFreeThreshold;
+  return _heap_info->max_capacity() / 100 * ShenandoahMinFreeThreshold;
 }

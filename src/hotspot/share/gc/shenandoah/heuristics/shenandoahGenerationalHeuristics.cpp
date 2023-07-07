@@ -29,7 +29,7 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 
 ShenandoahGenerationalHeuristics::ShenandoahGenerationalHeuristics(ShenandoahGeneration* generation)
-        : ShenandoahAdaptiveHeuristics(generation), _yg_generation(generation) {
+        : ShenandoahAdaptiveHeuristics(generation), _generation(generation) {
 }
 
 void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
@@ -70,7 +70,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!_yg_generation->contains(region)) {
+    if (!_generation->contains(region)) {
       continue;
     }
     size_t garbage = region->garbage();
@@ -167,7 +167,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     // Only young collections need to prime the collection set.
-    if (_yg_generation->is_young()) {
+    if (_generation->is_young()) {
       heap->old_heuristics()->prime_collection_set(collection_set);
     }
 

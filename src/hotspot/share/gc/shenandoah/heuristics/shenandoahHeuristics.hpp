@@ -75,7 +75,7 @@ protected:
     } _u;
   } RegionData;
 
-  ShenandoahHeapCharacteristics* _generation;
+  ShenandoahHeapCharacteristics* _heap_info;
 
   // Depending on generation mode, region data represents the results of the relevant
   // most recently completed marking pass:

@@ -42,9 +42,9 @@ ShenandoahStaticHeuristics::ShenandoahStaticHeuristics(ShenandoahHeapCharacteris
 ShenandoahStaticHeuristics::~ShenandoahStaticHeuristics() {}
 
 bool ShenandoahStaticHeuristics::should_start_gc() {
-  size_t max_capacity = _generation->max_capacity();
-  size_t capacity     = _generation->soft_max_capacity();
-  size_t available    = _generation->available();
+  size_t max_capacity = _heap_info->max_capacity();
+  size_t capacity     = _heap_info->soft_max_capacity();
+  size_t available    = _heap_info->available();
 
   // Make sure the code below treats available without the soft tail.
   size_t soft_tail = max_capacity - capacity;

@@ -47,9 +47,9 @@ ShenandoahCompactHeuristics::ShenandoahCompactHeuristics(ShenandoahHeapCharacter
 }
 
 bool ShenandoahCompactHeuristics::should_start_gc() {
-  size_t max_capacity = _generation->max_capacity();
-  size_t capacity     = _generation->soft_max_capacity();
-  size_t usage        = _generation->used();
+  size_t max_capacity = _heap_info->max_capacity();
+  size_t capacity     = _heap_info->soft_max_capacity();
+  size_t usage        = _heap_info->used();
   size_t available    = (capacity > usage)? capacity - usage: 0;
 
   // Make sure the code below treats available without the soft tail.
@@ -66,7 +66,7 @@ bool ShenandoahCompactHeuristics::should_start_gc() {
     return true;
   }
 
-  size_t bytes_allocated = _generation->bytes_allocated_since_gc_start();
+  size_t bytes_allocated = _heap_info->bytes_allocated_since_gc_start();
   if (bytes_allocated > threshold_bytes_allocated) {
     log_info(gc)("Trigger: Allocated since last cycle (" SIZE_FORMAT "%s) is larger than allocation threshold (" SIZE_FORMAT "%s)",
                  byte_size_in_proper_unit(bytes_allocated),           proper_unit_for_byte_size(bytes_allocated),

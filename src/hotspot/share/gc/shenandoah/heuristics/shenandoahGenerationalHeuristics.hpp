@@ -37,7 +37,7 @@ public:
 
   void choose_collection_set(ShenandoahCollectionSet* collection_set) override;
 protected:
-  ShenandoahGeneration* _yg_generation;
+  ShenandoahGeneration* _generation;
 
   size_t add_preselected_regions_to_collection_set(ShenandoahCollectionSet* cset,
                                                    const RegionData* data,
