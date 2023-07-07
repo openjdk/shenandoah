@@ -42,11 +42,16 @@
   product(bool, ShenandoahGenerationalAdaptiveTenuring, false, EXPERIMENTAL,\
           "(Generational mode only) Dynamically adapt tenuring age.")       \
                                                                             \
-  product(uintx, ShenandoahGenerationalMinTenuringAge, 1,EXPERIMENTAL,      \
+  product(uintx, ShenandoahGenerationalMinTenuringAge, 0, EXPERIMENTAL,     \
           "(Generational mode only) Floor for adaptive tenuring age.")      \
+          range(0,16)                                                       \
                                                                             \
-  product(uintx, ShenandoahGenerationalMaxTenuringAge, 16, EXPERIMENTAL,    \
-          "(Generational mode only) Ceiling for adaptive tenuring age.")    \
+  product(uintx, ShenandoahGenerationalMaxTenuringAge, 15, EXPERIMENTAL,    \
+          "(Generational mode only) Ceiling for adaptive tenuring age. "    \
+          "Setting min and max to the same value fixes the tenuring age, "  \
+          "setting both to 0 simulates Always Tenure, and setting both to " \
+          "16 simulates Never Tenure.")                                     \
+          range(0,16)                                                       \
                                                                             \
   product(double, ShenandoahGenerationalTenuringMortalityRateThreshold,     \
                                                          0.3, EXPERIMENTAL, \
