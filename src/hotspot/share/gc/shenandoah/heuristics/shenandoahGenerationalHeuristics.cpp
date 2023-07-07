@@ -61,7 +61,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
 
   // This counts number of humongous regions that we intend to promote in this cycle.
   size_t humongous_regions_promoted = 0;
-  // This counts bytes of memory used by hunongous regions to be promoted in place.
+  // This counts bytes of memory used by humongous regions to be promoted in place.
   size_t humongous_bytes_promoted = 0;
   // This counts number of regular regions that will be promoted in place.
   size_t regular_regions_promoted_in_place = 0;
@@ -250,9 +250,9 @@ size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_s
 }
 
 void ShenandoahGenerationalHeuristics::log_cset_composition(ShenandoahCollectionSet* cset) const {
-  unsigned long collected_old = cset->get_old_bytes_reserved_for_evacuation();
-  unsigned long collected_promoted = cset->get_young_bytes_to_be_promoted();
-  unsigned long collected_young = cset->get_young_bytes_reserved_for_evacuation();
+  size_t collected_old = cset->get_old_bytes_reserved_for_evacuation();
+  size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
+  size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
 
   log_info(gc, ergo)(
           "Chosen CSet evacuates young: " SIZE_FORMAT "%s (of which at least: " SIZE_FORMAT "%s are to be promoted), "
