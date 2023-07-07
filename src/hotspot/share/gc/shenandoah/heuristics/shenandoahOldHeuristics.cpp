@@ -56,9 +56,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _promotion_failed(false),
   _cannot_expand_trigger(false),
   _fragmentation_trigger(false),
-  _growth_trigger(false)
-{
-  assert(_generation->is_old(), "This service only available for old-gc heuristics");
+  _growth_trigger(false) {
 }
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
@@ -292,7 +290,6 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
 }
 
 void ShenandoahOldHeuristics::prepare_for_old_collections() {
-  assert(_generation->is_old(), "This service only available for old-gc heuristics");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   size_t cand_idx = 0;
@@ -305,7 +302,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   RegionData* candidates = _region_data;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!_generation->contains(region)) {
+    if (!_old_generation->contains(region)) {
       continue;
     }
 

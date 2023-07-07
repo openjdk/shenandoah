@@ -26,6 +26,7 @@
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahPassiveHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahPassiveMode.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/java.hpp"

@@ -55,6 +55,8 @@ private:
                                    size_t size, size_t actual_free,
                                    size_t garbage_threshold, size_t ignore_threshold,
                                    size_t capacity, size_t cur_young_garbage) const;
+
+  ShenandoahGeneration* _yg_generation;
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHYOUNGHEURISTICS_HPP

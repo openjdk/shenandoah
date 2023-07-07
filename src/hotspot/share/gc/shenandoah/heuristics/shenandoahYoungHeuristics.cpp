@@ -32,9 +32,10 @@
 
 #include "utilities/quickSort.hpp"
 
+// TODO: Can we make this take ShenandoahYoungGeneration? or do we also use this heuristic for global collections?
 ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahGeneration* generation)
-        : ShenandoahAdaptiveHeuristics(generation) {
-  assert(!_generation->is_old(), "Young heuristics only accept the young generation");
+        : ShenandoahAdaptiveHeuristics(generation), _yg_generation(generation) {
+  assert(!generation->is_old(), "Young heuristics only accept the young generation");
 }
 
 void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
@@ -76,7 +77,7 @@ void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* c
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!_generation->contains(region)) {
+    if (!_yg_generation->contains(region)) {
       continue;
     }
     size_t garbage = region->garbage();
@@ -172,7 +173,7 @@ void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* c
   bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     // Only young collections need to prime the collection set.
-    if (_generation->is_young()) {
+    if (_yg_generation->is_young()) {
       heap->old_heuristics()->prime_collection_set(collection_set);
     }
 
@@ -284,7 +285,7 @@ void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(Shenandoah
     }
   }
 
-  if (_generation->is_global()) {
+  if (_yg_generation->is_global()) {
     choose_global_collection_set(cset, heap, data, size, actual_free,
                                  garbage_threshold, ignore_threshold, capacity, cur_young_garbage);
   } else {
