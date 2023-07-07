@@ -32,8 +32,8 @@
 #include "logging/logTag.hpp"
 #include "runtime/os.hpp"
 
-ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahHeapCharacteristics* generation) :
-  ShenandoahHeuristics(generation) {
+ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahHeapCharacteristics* heap_info) :
+  ShenandoahHeuristics(heap_info) {
 
   // Do not shortcut evacuation
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahImmediateThreshold, 100);

@@ -29,7 +29,7 @@
 
 class ShenandoahCompactHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahCompactHeuristics(ShenandoahHeapCharacteristics* generation);
+  ShenandoahCompactHeuristics(ShenandoahHeapCharacteristics* heap_info);
 
   virtual bool should_start_gc();
 

@@ -52,7 +52,7 @@ class ShenandoahAllocationRate : public CHeapObj<mtGC> {
 
 class ShenandoahAdaptiveHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahAdaptiveHeuristics(ShenandoahHeapCharacteristics* generation);
+  ShenandoahAdaptiveHeuristics(ShenandoahHeapCharacteristics* heap_info);
 
   virtual ~ShenandoahAdaptiveHeuristics();
 

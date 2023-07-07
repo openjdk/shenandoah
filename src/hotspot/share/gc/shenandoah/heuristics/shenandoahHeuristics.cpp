@@ -44,8 +44,8 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   else return 0;
 }
 
-ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahHeapCharacteristics* generation) :
-        _heap_info(generation),
+ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahHeapCharacteristics* heap_info) :
+        _heap_info(heap_info),
         _region_data(nullptr),
         _degenerated_cycles_in_a_row(0),
         _successful_cycles_in_a_row(0),

@@ -55,8 +55,8 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahHeapCharacteristics* generation) :
-  ShenandoahHeuristics(generation),
+ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahHeapCharacteristics* heap_info) :
+  ShenandoahHeuristics(heap_info),
   _margin_of_error_sd(ShenandoahAdaptiveInitialConfidence),
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
   _last_trigger(OTHER),

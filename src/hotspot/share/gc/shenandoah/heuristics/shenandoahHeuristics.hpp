@@ -121,7 +121,7 @@ protected:
   size_t min_free_threshold();
 
 public:
-  ShenandoahHeuristics(ShenandoahHeapCharacteristics* generation);
+  ShenandoahHeuristics(ShenandoahHeapCharacteristics* heap_info);
   virtual ~ShenandoahHeuristics();
 
   void record_metaspace_oom()     { _metaspace_oom.set(); }

@@ -33,8 +33,8 @@
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 
-ShenandoahStaticHeuristics::ShenandoahStaticHeuristics(ShenandoahHeapCharacteristics* generation) :
-  ShenandoahHeuristics(generation) {
+ShenandoahStaticHeuristics::ShenandoahStaticHeuristics(ShenandoahHeapCharacteristics* heap_info) :
+  ShenandoahHeuristics(heap_info) {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
 }
