@@ -22,18 +22,29 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
-#define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
+#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHGENERATIONALHEURISTICS_HPP
+#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHGENERATIONALHEURISTICS_HPP
 
-#include "gc/shenandoah/mode/shenandoahMode.hpp"
 
-class ShenandoahGenerationalMode : public ShenandoahMode {
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
+
+class ShenandoahGeneration;
+
+class ShenandoahGenerationalHeuristics : public ShenandoahAdaptiveHeuristics {
+
 public:
-  virtual void initialize_flags() const;
-  virtual const char* name()     { return "Generational"; }
-  virtual bool is_diagnostic()   { return false; }
-  virtual bool is_experimental() { return true; }
-  virtual bool is_generational() { return true; }
+  explicit ShenandoahGenerationalHeuristics(ShenandoahGeneration* generation);
+
+  void choose_collection_set(ShenandoahCollectionSet* collection_set) override;
+protected:
+  ShenandoahGeneration* _yg_generation;
+
+  size_t add_preselected_regions_to_collection_set(ShenandoahCollectionSet* cset,
+                                                   const RegionData* data,
+                                                   size_t size) const;
+
+  void log_cset_composition(ShenandoahCollectionSet* cset) const;
 };
 
-#endif // SHARE_GC_SHENANDOAH_MODE_SHENANDOAHGENERATIONALMODE_HPP
+
+#endif //SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHGENERATIONALHEURISTICS_HPP

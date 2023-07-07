@@ -24,14 +24,14 @@
 #ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHYOUNGHEURISTICS_HPP
 #define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHYOUNGHEURISTICS_HPP
 
-#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
-#include "shenandoahAdaptiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahGenerationalHeuristics.hpp"
 
-class ShenandoahYoungHeuristics : public ShenandoahAdaptiveHeuristics {
+class ShenandoahYoungGeneration;
+
+class ShenandoahYoungHeuristics : public ShenandoahGenerationalHeuristics {
 public:
-  explicit ShenandoahYoungHeuristics(ShenandoahGeneration* generation);
+  explicit ShenandoahYoungHeuristics(ShenandoahYoungGeneration* generation);
 
-  void choose_collection_set(ShenandoahCollectionSet* collection_set) override;
 
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                              RegionData* data, size_t size,
@@ -42,21 +42,12 @@ public:
   size_t bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_reclaimed);
 
 private:
-  void choose_global_collection_set(ShenandoahCollectionSet* cset,
-                                    const ShenandoahHeap* heap,
-                                    const ShenandoahHeuristics::RegionData* data,
-                                    size_t size, size_t actual_free,
-                                    size_t garbage_threshold, size_t ignore_threshold,
-                                    size_t capacity, size_t cur_young_garbage) const;
-
   void choose_young_collection_set(ShenandoahCollectionSet* cset,
                                    const ShenandoahHeap* heap,
-                                   const ShenandoahHeuristics::RegionData* data,
+                                   const RegionData* data,
                                    size_t size, size_t actual_free,
-                                   size_t garbage_threshold, size_t ignore_threshold,
-                                   size_t capacity, size_t cur_young_garbage) const;
+                                   size_t cur_young_garbage) const;
 
-  ShenandoahGeneration* _yg_generation;
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHYOUNGHEURISTICS_HPP

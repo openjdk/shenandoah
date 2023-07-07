@@ -27,211 +27,19 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 
 #include "utilities/quickSort.hpp"
 
-// TODO: Can we make this take ShenandoahYoungGeneration? or do we also use this heuristic for global collections?
-ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahGeneration* generation)
-        : ShenandoahAdaptiveHeuristics(generation), _yg_generation(generation) {
+ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahYoungGeneration* generation)
+        : ShenandoahGenerationalHeuristics(generation) {
   assert(!generation->is_old(), "Young heuristics only accept the young generation");
 }
 
-void ShenandoahYoungHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
-  assert(collection_set->is_empty(), "Must be empty");
-
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-
-
-  // Check all pinned regions have updated status before choosing the collection set.
-  heap->assert_pinned_region_status();
-
-  // Step 1. Build up the region candidates we care about, rejecting losers and accepting winners right away.
-
-  size_t num_regions = heap->num_regions();
-
-  RegionData* candidates = _region_data;
-
-  size_t cand_idx = 0;
-  size_t preselected_candidates = 0;
-
-  size_t total_garbage = 0;
-
-  size_t immediate_garbage = 0;
-  size_t immediate_regions = 0;
-
-  size_t free = 0;
-  size_t free_regions = 0;
-
-  size_t old_garbage_threshold = (region_size_bytes * ShenandoahOldGarbageThreshold) / 100;
-  // This counts number of humongous regions that we intend to promote in this cycle.
-  size_t humongous_regions_promoted = 0;
-  // This counts bytes of memory used by hunongous regions to be promoted in place.
-  size_t humongous_bytes_promoted = 0;
-  // This counts number of regular regions that will be promoted in place.
-  size_t regular_regions_promoted_in_place = 0;
-  // This counts bytes of memory used by regular regions to be promoted in place.
-  size_t regular_regions_promoted_usage = 0;
-
-  for (size_t i = 0; i < num_regions; i++) {
-    ShenandoahHeapRegion* region = heap->get_region(i);
-    if (!_yg_generation->contains(region)) {
-      continue;
-    }
-    size_t garbage = region->garbage();
-    total_garbage += garbage;
-    if (region->is_empty()) {
-      free_regions++;
-      free += ShenandoahHeapRegion::region_size_bytes();
-    } else if (region->is_regular()) {
-      if (!region->has_live()) {
-        // We can recycle it right away and put it in the free set.
-        immediate_regions++;
-        immediate_garbage += garbage;
-        region->make_trash_immediate();
-      } else {
-        bool is_candidate;
-        // This is our candidate for later consideration.
-        if (collection_set->is_preselected(i)) {
-          // If !is_generational, we cannot ask if is_preselected.  If is_preselected, we know
-          //   region->age() >= InitialTenuringThreshold).
-          is_candidate = true;
-          preselected_candidates++;
-          // Set garbage value to maximum value to force this into the sorted collection set.
-          garbage = region_size_bytes;
-        } else if (region->is_young() && (region->age() >= InitialTenuringThreshold)) {
-          // Note that for GLOBAL GC, region may be OLD, and OLD regions do not qualify for pre-selection
-
-          // This region is old enough to be promoted but it was not preselected, either because its garbage is below
-          // ShenandoahOldGarbageThreshold so it will be promoted in place, or because there is not sufficient room
-          // in old gen to hold the evacuated copies of this region's live data.  In both cases, we choose not to
-          // place this region into the collection set.
-          if (region->get_top_before_promote() != nullptr) {
-            regular_regions_promoted_in_place++;
-            regular_regions_promoted_usage += region->used_before_promote();
-          }
-          is_candidate = false;
-        } else {
-          is_candidate = true;
-        }
-        if (is_candidate) {
-          candidates[cand_idx]._region = region;
-          candidates[cand_idx]._u._garbage = garbage;
-          cand_idx++;
-        }
-      }
-    } else if (region->is_humongous_start()) {
-      // Reclaim humongous regions here, and count them as the immediate garbage
-#ifdef ASSERT
-      bool reg_live = region->has_live();
-      bool bm_live = heap->complete_marking_context()->is_marked(cast_to_oop(region->bottom()));
-      assert(reg_live == bm_live,
-             "Humongous liveness and marks should agree. Region live: %s; Bitmap live: %s; Region Live Words: " SIZE_FORMAT,
-             BOOL_TO_STR(reg_live), BOOL_TO_STR(bm_live), region->get_live_data_words());
-#endif
-      if (!region->has_live()) {
-        heap->trash_humongous_region_at(region);
-
-        // Count only the start. Continuations would be counted on "trash" path
-        immediate_regions++;
-        immediate_garbage += garbage;
-      } else {
-        if (region->is_young() && region->age() >= InitialTenuringThreshold) {
-          oop obj = cast_to_oop(region->bottom());
-          size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
-          humongous_regions_promoted += humongous_regions;
-          humongous_bytes_promoted += obj->size() * HeapWordSize;
-        }
-      }
-    } else if (region->is_trash()) {
-      // Count in just trashed collection set, during coalesced CM-with-UR
-      immediate_regions++;
-      immediate_garbage += garbage;
-    }
-  }
-  heap->reserve_promotable_humongous_regions(humongous_regions_promoted);
-  heap->reserve_promotable_humongous_usage(humongous_bytes_promoted);
-  heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
-  heap->reserve_promotable_regular_usage(regular_regions_promoted_usage);
-  log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
-                     " regular regions, spanning a total of " SIZE_FORMAT " used bytes",
-                     humongous_regions_promoted, regular_regions_promoted_in_place,
-                     humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes() + regular_regions_promoted_usage);
-
-  // Step 2. Look back at garbage statistics, and decide if we want to collect anything,
-  // given the amount of immediately reclaimable garbage. If we do, figure out the collection set.
-
-  assert (immediate_garbage <= total_garbage,
-          "Cannot have more immediate garbage than total garbage: " SIZE_FORMAT "%s vs " SIZE_FORMAT "%s",
-          byte_size_in_proper_unit(immediate_garbage), proper_unit_for_byte_size(immediate_garbage),
-          byte_size_in_proper_unit(total_garbage),     proper_unit_for_byte_size(total_garbage));
-
-  size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
-
-  bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
-  if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
-    // Only young collections need to prime the collection set.
-    if (_yg_generation->is_young()) {
-      heap->old_heuristics()->prime_collection_set(collection_set);
-    }
-
-    // Call the subclasses to add young-gen regions into the collection set.
-    choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
-  } else {
-    // We are going to skip evacuation and update refs because we reclaimed
-    // sufficient amounts of immediate garbage.
-    heap->shenandoah_policy()->record_abbreviated_cycle();
-  }
-
-  if (collection_set->has_old_regions()) {
-    heap->shenandoah_policy()->record_mixed_cycle();
-  }
-
-  size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
-  size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
-  size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
-
-  log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
-                     "Immediate: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), " SIZE_FORMAT " regions, "
-                     "CSet: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), " SIZE_FORMAT " regions",
-
-                     byte_size_in_proper_unit(collectable_garbage),
-                     proper_unit_for_byte_size(collectable_garbage),
-                     collectable_garbage_percent,
-
-                     byte_size_in_proper_unit(immediate_garbage),
-                     proper_unit_for_byte_size(immediate_garbage),
-                     immediate_percent,
-                     immediate_regions,
-
-                     byte_size_in_proper_unit(collection_set->garbage()),
-                     proper_unit_for_byte_size(collection_set->garbage()),
-                     cset_percent,
-                     collection_set->count());
-
-  if (collection_set->garbage() > 0) {
-    size_t young_evac_bytes   = collection_set->get_young_bytes_reserved_for_evacuation();
-    size_t promote_evac_bytes = collection_set->get_young_bytes_to_be_promoted();
-    size_t old_evac_bytes     = collection_set->get_old_bytes_reserved_for_evacuation();
-    size_t total_evac_bytes   = young_evac_bytes + promote_evac_bytes + old_evac_bytes;
-    log_info(gc, ergo)("Evacuation Targets: YOUNG: " SIZE_FORMAT "%s, "
-                       "PROMOTE: " SIZE_FORMAT "%s, "
-                       "OLD: " SIZE_FORMAT "%s, "
-                       "TOTAL: " SIZE_FORMAT "%s",
-                       byte_size_in_proper_unit(young_evac_bytes),   proper_unit_for_byte_size(young_evac_bytes),
-                       byte_size_in_proper_unit(promote_evac_bytes), proper_unit_for_byte_size(promote_evac_bytes),
-                       byte_size_in_proper_unit(old_evac_bytes),     proper_unit_for_byte_size(old_evac_bytes),
-                       byte_size_in_proper_unit(total_evac_bytes),   proper_unit_for_byte_size(total_evac_bytes));
-  }
-}
 
 void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                                       RegionData* data, size_t size,
                                                                       size_t actual_free) {
-  size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
-  size_t ignore_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahIgnoreGarbageThreshold / 100;
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   // The logic for cset selection in adaptive is as follows:
@@ -255,62 +63,28 @@ void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(Shenandoah
   // particular, regions that have reached tenure age will be sorted into this array before younger regions that contain
   // more garbage.  This represents one of the reasons why we keep looking at regions even after we decide, for example,
   // to exclude one of the regions because it might require evacuation of too much live data.
-  // TODO: Split it in the separate methods for clarity.
-  assert(heap->mode()->is_generational(), "Heuristic is only for generational mode");
-  size_t capacity = heap->young_generation()->max_capacity();
 
-  // cur_young_garbage represents the amount of memory to be reclaimed from young-gen.  In the case that live objects
-  // are known to be promoted out of young-gen, we count this as cur_young_garbage because this memory is reclaimed
-  // from young-gen and becomes available to serve future young-gen allocation requests.
-  size_t cur_young_garbage = 0;
+
 
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int) size, compare_by_garbage, false);
 
-  for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
-    if (cset->is_preselected(r->index())) {
-      assert(r->age() >= InitialTenuringThreshold, "Preselected regions must have tenure age");
-      // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
-      // This region has been pre-selected and its impact on promotion reserve is already accounted for.
+  size_t cur_young_garbage = add_preselected_regions_to_collection_set(cset, data, size);
 
-      // r->used() is r->garbage() + r->get_live_data_bytes()
-      // Since all live data in this region is being evacuated from young-gen, it is as if this memory
-      // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
-      // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
-      // within young-gen memory.
+  choose_young_collection_set(cset, heap, data, size, actual_free, cur_young_garbage);
 
-      cur_young_garbage += r->garbage();
-      cset->add_region(r);
-    }
-  }
-
-  if (_yg_generation->is_global()) {
-    choose_global_collection_set(cset, heap, data, size, actual_free,
-                                 garbage_threshold, ignore_threshold, capacity, cur_young_garbage);
-  } else {
-    choose_young_collection_set(cset, heap, data, size, actual_free,
-                                garbage_threshold, ignore_threshold, capacity, cur_young_garbage);
-  }
-
-  size_t collected_old = cset->get_old_bytes_reserved_for_evacuation();
-  size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
-  size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
-
-  log_info(gc, ergo)(
-          "Chosen CSet evacuates young: " SIZE_FORMAT "%s (of which at least: " SIZE_FORMAT "%s are to be promoted), "
-          "old: " SIZE_FORMAT "%s",
-          byte_size_in_proper_unit(collected_young), proper_unit_for_byte_size(collected_young),
-          byte_size_in_proper_unit(collected_promoted), proper_unit_for_byte_size(collected_promoted),
-          byte_size_in_proper_unit(collected_old), proper_unit_for_byte_size(collected_old));
+  log_cset_composition(cset);
 }
 
 void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollectionSet* cset, const ShenandoahHeap* heap,
-                                                            const ShenandoahHeuristics::RegionData* data, size_t size,
-                                                            size_t actual_free,
-                                                            size_t garbage_threshold, size_t ignore_threshold,
-                                                            size_t capacity,
+                                                            const ShenandoahHeuristics::RegionData* data,
+                                                            size_t size, size_t actual_free,
                                                             size_t cur_young_garbage) const {
+
+  size_t capacity = heap->young_generation()->max_capacity();
+  size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
+  size_t ignore_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahIgnoreGarbageThreshold / 100;
+
   // This is young-gen collection or a mixed evacuation.
   // If this is mixed evacuation, the old-gen candidate regions have already been added.
   size_t max_cset = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
@@ -346,56 +120,6 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
   }
 }
 
-void ShenandoahYoungHeuristics::choose_global_collection_set(ShenandoahCollectionSet* cset,
-                                                             const ShenandoahHeap* heap,
-                                                             const ShenandoahHeuristics::RegionData* data,
-                                                             size_t size, size_t actual_free,
-                                                             size_t garbage_threshold, size_t ignore_threshold,
-                                                             size_t capacity, size_t cur_young_garbage) const {
-  size_t max_young_cset = (size_t) (heap->get_young_evac_reserve() / ShenandoahEvacWaste);
-  size_t young_cur_cset = 0;
-  size_t max_old_cset = (size_t) (heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
-  size_t old_cur_cset = 0;
-  size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_young_cset;
-  size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
-
-  log_info(gc, ergo)("Adaptive CSet Selection for GLOBAL. Max Young Evacuation: " SIZE_FORMAT
-                     "%s, Max Old Evacuation: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
-                     byte_size_in_proper_unit(max_young_cset), proper_unit_for_byte_size(max_young_cset),
-                     byte_size_in_proper_unit(max_old_cset), proper_unit_for_byte_size(max_old_cset),
-                     byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
-
-  for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
-    if (cset->is_preselected(r->index())) {
-      continue;
-    }
-    bool add_region = false;
-    if (r->is_old()) {
-      size_t new_cset = old_cur_cset + r->get_live_data_bytes();
-      if ((new_cset <= max_old_cset) && (r->garbage() > garbage_threshold)) {
-        add_region = true;
-        old_cur_cset = new_cset;
-      }
-    } else if (r->age() < InitialTenuringThreshold) {
-      size_t new_cset = young_cur_cset + r->get_live_data_bytes();
-      size_t region_garbage = r->garbage();
-      size_t new_garbage = cur_young_garbage + region_garbage;
-      bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
-      if ((new_cset <= max_young_cset) && (add_regardless || (region_garbage > garbage_threshold))) {
-        add_region = true;
-        young_cur_cset = new_cset;
-        cur_young_garbage = new_garbage;
-      }
-    }
-    // Note that we do not add aged regions if they were not pre-selected.  The reason they were not preselected
-    // is because there is not sufficient room in old-gen to hold their to-be-promoted live objects.
-
-    if (add_region) {
-      cset->add_region(r);
-    }
-  }
-}
 
 bool ShenandoahYoungHeuristics::should_start_gc() {
   // inherited triggers have already decided to start a cycle, so no further evaluation is required
