@@ -27,6 +27,7 @@
 
 #include "memory/allocation.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
@@ -37,7 +38,7 @@ class ShenandoahReferenceProcessor;
 class ShenandoahHeap;
 class ShenandoahMode;
 
-class ShenandoahGeneration : public CHeapObj<mtGC> {
+class ShenandoahGeneration : public CHeapObj<mtGC>, public ShenandoahHeapCharacteristics {
   friend class VMStructs;
 private:
   ShenandoahGenerationType const _type;
@@ -106,25 +107,23 @@ private:
 
   ShenandoahReferenceProcessor* ref_processor() { return _ref_processor; }
 
-  virtual const char* name() const = 0;
-
   virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode);
 
-  virtual size_t soft_max_capacity() const { return _soft_max_capacity; }
-  virtual size_t max_capacity() const      { return _max_capacity; }
+  size_t soft_max_capacity() const override { return _soft_max_capacity; }
+  size_t max_capacity() const override      { return _max_capacity; }
   virtual size_t used_regions() const;
   virtual size_t used_regions_size() const;
   virtual size_t free_unaffiliated_regions() const;
-  virtual size_t used() const { return _used; }
-  virtual size_t available() const;
+  size_t used() const override { return _used; }
+  size_t available() const override;
 
   // Returns the memory available based on the _soft_ max heap capacity (soft_max_heap - used).
   // The soft max heap size may be adjusted lower than the max heap size to cause the trigger
   // to believe it has less memory available than is _really_ available. Lowering the soft
   // max heap size will cause the adaptive heuristic to run more frequent cycles.
-  size_t soft_available() const;
+  size_t soft_available() const override;
 
-  size_t bytes_allocated_since_gc_start();
+  size_t bytes_allocated_since_gc_start() const override;
   void reset_bytes_allocated_since_gc_start();
   void increase_allocated(size_t bytes);
 

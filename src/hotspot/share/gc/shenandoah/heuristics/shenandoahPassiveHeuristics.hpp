@@ -29,7 +29,7 @@
 
 class ShenandoahPassiveHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahPassiveHeuristics(ShenandoahGeneration* generation)
+  ShenandoahPassiveHeuristics(ShenandoahHeapCharacteristics* generation)
     : ShenandoahHeuristics(generation) {}
 
   virtual bool should_start_gc();

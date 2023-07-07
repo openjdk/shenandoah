@@ -29,7 +29,6 @@
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
@@ -56,7 +55,7 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahGeneration* generation) :
+ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahHeapCharacteristics* generation) :
   ShenandoahHeuristics(generation),
   _margin_of_error_sd(ShenandoahAdaptiveInitialConfidence),
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
@@ -209,16 +208,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   log_debug(gc)("should_start_gc (%s)? available: " SIZE_FORMAT ", soft_max_capacity: " SIZE_FORMAT
                 ", allocated: " SIZE_FORMAT,
                 _generation->name(), available, capacity, allocated);
-
-  // The collector reserve may eat into what the mutator is allowed to use. Make sure we are looking
-  // at what is available to the mutator when deciding whether to start a GC.
-  size_t usable = ShenandoahHeap::heap()->free_set()->available();
-  if (usable < available) {
-    log_debug(gc)("Usable (" SIZE_FORMAT "%s) is less than available (" SIZE_FORMAT "%s)",
-                  byte_size_in_proper_unit(usable),    proper_unit_for_byte_size(usable),
-                  byte_size_in_proper_unit(available), proper_unit_for_byte_size(available));
-    available = usable;
-  }
 
   // Track allocation rate even if we decide to start a cycle for other reasons.
   double rate = _allocation_rate.sample(allocated);

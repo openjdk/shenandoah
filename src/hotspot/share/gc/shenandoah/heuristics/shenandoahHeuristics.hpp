@@ -28,6 +28,7 @@
 
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/globals_extension.hpp"
 
@@ -57,7 +58,6 @@
 
 class ShenandoahCollectionSet;
 class ShenandoahHeapRegion;
-class ShenandoahGeneration;
 
 class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Concurrent_Adjust   = -1; // recover from penalties
@@ -75,7 +75,7 @@ protected:
     } _u;
   } RegionData;
 
-  ShenandoahGeneration* _generation;
+  ShenandoahHeapCharacteristics* _generation;
 
   // Depending on generation mode, region data represents the results of the relevant
   // most recently completed marking pass:
@@ -121,7 +121,7 @@ protected:
   size_t min_free_threshold();
 
 public:
-  ShenandoahHeuristics(ShenandoahGeneration* generation);
+  ShenandoahHeuristics(ShenandoahHeapCharacteristics* generation);
   virtual ~ShenandoahHeuristics();
 
   void record_metaspace_oom()     { _metaspace_oom.set(); }

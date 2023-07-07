@@ -138,7 +138,7 @@ ShenandoahHeuristics* ShenandoahGeneration::initialize_heuristics(ShenandoahMode
   return _heuristics;
 }
 
-size_t ShenandoahGeneration::bytes_allocated_since_gc_start() {
+size_t ShenandoahGeneration::bytes_allocated_since_gc_start() const {
   return Atomic::load(&_bytes_allocated_since_gc_start);
 }
 
@@ -891,7 +891,17 @@ size_t ShenandoahGeneration::available() const {
 size_t ShenandoahGeneration::soft_available() const {
   size_t in_use = used() + get_humongous_waste();
   size_t soft_capacity = soft_max_capacity();
-  return in_use > soft_capacity ? 0 : soft_capacity - in_use;
+  size_t soft_available = in_use > soft_capacity ? 0 : soft_capacity - in_use;
+  // The collector reserve may eat into what the mutator is allowed to use. Make sure we are looking
+  // at what is available to the mutator when deciding whether to start a GC.
+  size_t usable = ShenandoahHeap::heap()->free_set()->available();
+  if (usable < soft_available) {
+    log_debug(gc)("Usable (" SIZE_FORMAT "%s) is less than available (" SIZE_FORMAT "%s)",
+                  byte_size_in_proper_unit(usable),    proper_unit_for_byte_size(usable),
+                  byte_size_in_proper_unit(soft_available), proper_unit_for_byte_size(soft_available));
+    soft_available = usable;
+  }
+  return soft_available;
 }
 
 void ShenandoahGeneration::increase_capacity(size_t increment) {

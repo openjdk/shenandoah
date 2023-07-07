@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2018, 2019, Red Hat, Inc. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -23,26 +22,20 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
-#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
+#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
+#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
 
-#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "utilities/globalDefinitions.hpp"
 
-class ShenandoahAggressiveHeuristics : public ShenandoahHeuristics {
+class ShenandoahHeapCharacteristics {
 public:
-  ShenandoahAggressiveHeuristics(ShenandoahHeapCharacteristics* generation);
-
-  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                     RegionData* data, size_t size,
-                                                     size_t free);
-
-  virtual bool should_start_gc();
-
-  virtual bool should_unload_classes();
-
-  virtual const char* name()     { return "Aggressive"; }
-  virtual bool is_diagnostic()   { return true; }
-  virtual bool is_experimental() { return false; }
+  virtual const char* name() const = 0;
+  virtual size_t soft_max_capacity() const = 0;
+  virtual size_t max_capacity() const = 0;
+  virtual size_t used() const = 0;
+  virtual size_t available() const = 0;
+  virtual size_t soft_available() const = 0;
+  virtual size_t bytes_allocated_since_gc_start() const = 0;
 };
 
-#endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHAGGRESSIVEHEURISTICS_HPP
+#endif //SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP

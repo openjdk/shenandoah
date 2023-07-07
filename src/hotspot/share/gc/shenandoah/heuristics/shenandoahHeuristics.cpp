@@ -26,9 +26,9 @@
 #include "precompiled.hpp"
 #include "gc/shared/gcCause.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
@@ -44,7 +44,7 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   else return 0;
 }
 
-ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahGeneration* generation) :
+ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahHeapCharacteristics* generation) :
   _generation(generation),
   _region_data(nullptr),
   _degenerated_cycles_in_a_row(0),

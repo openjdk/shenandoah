@@ -32,7 +32,7 @@
 #include "logging/logTag.hpp"
 #include "runtime/os.hpp"
 
-ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahGeneration* generation) :
+ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahHeapCharacteristics* generation) :
   ShenandoahHeuristics(generation) {
 
   // Do not shortcut evacuation
