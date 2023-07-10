@@ -480,7 +480,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // Update the global census, including the missed age 0 cohort above,
     // along with the census during marking, and compute the tenuring threshold
     census->update_census(age0_pop);
-  }    
+  }
 
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
