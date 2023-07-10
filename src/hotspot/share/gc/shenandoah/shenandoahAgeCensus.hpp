@@ -153,13 +153,13 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   void add_young(size_t size, uint worker_id);
 #endif // SHENANDOAH_CENSUS_NOISE
 
-  // Update to a new epoch, creating a slot for new census,
-  // seeding the slot for Cohort 0 with a delta that may have been
-  // otherwise missed during the regular census.
-  void prepare_for_census_update(size_t age0_pop = 0);
+  // Update to a new epoch, creating a slot for new census.
+  void prepare_for_census_update();
 
-  // Update the census data, and compute the new tenuring threshold
-  void update_census(AgeTable* pv1 = nullptr, AgeTable* pv2 = nullptr);
+  // Update the census data, and compute the new tenuring threshold.
+  // age0_pop is the population of Cohort 0 that may have been missed in
+  // the regular census.
+  void update_census(size_t age0_pop, AgeTable* pv1 = nullptr, AgeTable* pv2 = nullptr);
 
   // Return the most recently computed tenuring threshold
   uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }

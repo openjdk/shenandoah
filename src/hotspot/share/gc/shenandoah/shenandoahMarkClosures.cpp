@@ -84,8 +84,8 @@ ShenandoahUpdateCensusZeroCohortClosure::ShenandoahUpdateCensusZeroCohortClosure
   _ctx(ctx), _pop(0) {}
 
 void ShenandoahUpdateCensusZeroCohortClosure::heap_region_do(ShenandoahHeapRegion* r) {
-  assert(r->is_young(), "Young regions only");
   if (_ctx != nullptr && r->is_active()) {
+    assert(r->is_young(), "Young regions only");
     HeapWord* tams = _ctx->top_at_mark_start(r);
     HeapWord* top  = r->top();
     if (top > tams) {
