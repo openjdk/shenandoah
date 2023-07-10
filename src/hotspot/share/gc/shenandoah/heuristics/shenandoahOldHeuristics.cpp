@@ -535,7 +535,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   }
 
   // Otherwise, defer to inherited heuristic for gc trigger.
-  return ShenandoahHeuristics::should_start_gc();
+  return this->ShenandoahHeuristics::should_start_gc();
 }
 
 void ShenandoahOldHeuristics::record_success_concurrent(bool abbreviated) {
