@@ -445,6 +445,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
 void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahCollectionSet* collection_set = heap->collection_set();
+  bool is_generational = heap->mode()->is_generational();
 
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   assert(!is_old(), "Only YOUNG and GLOBAL GC perform evacuations");
@@ -464,24 +465,35 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     }
   }
 
+  // Tally the census counts and compute the adaptive tenuring threshold
+  if (is_generational && ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
+    // Objects above TAMS weren't included in the age census. Since they were all
+    // allocated in this cycle they belong in the age 0 cohort. We walk over all
+    // young regions and sum the volume of objects between TAMS and top.
+    ShenandoahUpdateCensusZeroCohortClosure age0_cl(complete_marking_context());
+    heap->young_generation()->heap_region_iterate(&age0_cl);
+
+    // Age table updates
+    ShenandoahAgeCensus* census = heap->age_census();
+    // Initialize the global census, with the correction for the zero age cohort
+    // computed above
+    census->prepare_for_census_update(age0_cl.get_pop());
+    // Update the global census with the remainder of the census data collected
+    // during marking, and compute the tenuring threshold
+    census->update_census();
+  }    
+
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
 
     collection_set->clear();
     ShenandoahHeapLocker locker(heap->lock());
-    if (heap->mode()->is_generational()) {
+    if (is_generational) {
       size_t consumed_by_advance_promotion;
       bool* preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
       for (unsigned int i = 0; i < heap->num_regions(); i++) {
         preselected_regions[i] = false;
-      }
-
-      if (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
-        ShenandoahAgeCensus* census = heap->age_census();
-        // Age table updates
-        census->prepare_for_census_update();
-        census->update_census();
       }
 
       // TODO: young_available can include available (between top() and end()) within each young region that is not

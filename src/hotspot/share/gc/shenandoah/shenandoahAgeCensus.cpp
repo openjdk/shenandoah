@@ -104,9 +104,10 @@ void ShenandoahAgeCensus::add_young(size_t size, uint worker_id) {
 }
 #endif // SHENANDOAH_CENSUS_NOISE
 
-// Prepare for a new census update,
-// by preparing slots.
-void ShenandoahAgeCensus::prepare_for_census_update() {
+// Prepare for a new census update, by preparing slots.
+// Seed cohort 0 with population that may have been missed during
+// regular census.
+void ShenandoahAgeCensus::prepare_for_census_update(size_t age0_pop) {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   if (++_epoch >= MAX_SNAPSHOTS) {
     _epoch=0;
@@ -114,6 +115,7 @@ void ShenandoahAgeCensus::prepare_for_census_update() {
   // Merge data from local age tables into the global age table for the epoch,
   // clearing the local tables.
   _global_age_table[_epoch]->clear();
+  _global_age_table[_epoch]->add((uint)0, age0_pop);
   CENSUS_NOISE(_global_noise[_epoch].clear();)
 }
 
