@@ -81,8 +81,6 @@ bool ShenandoahYoungGeneration::contains(oop obj) const {
 }
 
 ShenandoahHeuristics* ShenandoahYoungGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
-  assert(gc_mode->is_generational(), "Must use generational mode.");
-
   _heuristics = new ShenandoahYoungHeuristics(this);
   _heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedYoungGCInterval);
   confirm_heuristics_mode();
