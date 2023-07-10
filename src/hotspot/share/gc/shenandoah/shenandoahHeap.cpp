@@ -914,10 +914,6 @@ void ShenandoahHeap::handle_old_evacuation_failure() {
   }
 }
 
-void ShenandoahHeap::handle_promotion_failure() {
-  old_heuristics()->handle_promotion_failure();
-}
-
 void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
   // We squelch excessive reports to reduce noise in logs.
   const size_t MaxReportsPerEpoch = 4;

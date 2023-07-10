@@ -53,7 +53,6 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _last_old_region(0),
   _live_bytes_in_unprocessed_candidates(0),
   _old_generation(generation),
-  _promotion_failed(false),
   _cannot_expand_trigger(false),
   _fragmentation_trigger(false),
   _growth_trigger(false) {
@@ -467,10 +466,6 @@ void ShenandoahOldHeuristics::abandon_collection_candidates() {
   _last_old_region = 0;
 }
 
-void ShenandoahOldHeuristics::handle_promotion_failure() {
-  _promotion_failed = true;
-}
-
 void ShenandoahOldHeuristics::record_cycle_end() {
   clear_triggers();
 }
@@ -482,7 +477,6 @@ void ShenandoahOldHeuristics::trigger_old_has_grown() {
 
 void ShenandoahOldHeuristics::clear_triggers() {
   // Clear any triggers that were set during mixed evacuations.  Conditions may be different now that this phase has finished.
-  _promotion_failed = false;
   _cannot_expand_trigger = false;
   _fragmentation_trigger = false;
   _growth_trigger = false;

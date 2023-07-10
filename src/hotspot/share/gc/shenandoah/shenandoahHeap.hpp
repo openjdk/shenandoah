@@ -816,7 +816,6 @@ private:
   void handle_old_evacuation_failure();
 
 public:
-  void handle_promotion_failure();
   void report_promotion_failure(Thread* thread, size_t size);
 
   static address in_cset_fast_test_addr();

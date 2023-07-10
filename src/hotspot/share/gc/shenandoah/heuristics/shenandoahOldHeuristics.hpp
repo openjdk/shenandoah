@@ -75,11 +75,6 @@ private:
   // Keep a pointer to our generation that we can use without down casting a protected member from the base class.
   ShenandoahOldGeneration* _old_generation;
 
-  // Flag is set when promotion failure is detected (by gc thread), and cleared when
-  // old generation collection begins (by control thread).
-  // TODO: This is set, but never read.
-  volatile bool _promotion_failed;
-
   // Flags are set when promotion failure is detected (by gc thread), and cleared when
   // old generation collection begins (by control thread).  Flags are set and cleared at safepoints.
   bool _cannot_expand_trigger;
@@ -141,11 +136,6 @@ public:
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being
   // held by this heuristic for supplying mixed collections.
   void abandon_collection_candidates();
-
-  // Promotion failure does not currently trigger old-gen collections.  Often, promotion failures occur because
-  // old-gen is sized too small rather than because it is necessary to collect old gen.  We keep the method
-  // here in case we decide to feed this signal to sizing or triggering heuristics in the future.
-  void handle_promotion_failure();
 
   void trigger_cannot_expand() { _cannot_expand_trigger = true; };
   void trigger_old_is_fragmented() { _fragmentation_trigger = true; }
