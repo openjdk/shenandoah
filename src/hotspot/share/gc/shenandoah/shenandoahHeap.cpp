@@ -24,7 +24,6 @@
  *
  */
 
-#include "heuristics/shenandoahYoungHeuristics.hpp"
 #include "precompiled.hpp"
 #include "memory/allocation.hpp"
 #include "memory/universe.hpp"
@@ -37,6 +36,8 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/tlab_globals.hpp"
 
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
@@ -83,8 +84,6 @@
 #if INCLUDE_JFR
 #include "gc/shenandoah/shenandoahJfrSupport.hpp"
 #endif
-
-#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 
 #include "classfile/systemDictionary.hpp"
 #include "code/codeCache.hpp"
