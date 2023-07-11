@@ -25,8 +25,8 @@
 #include "precompiled.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahPassiveHeuristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
 #include "gc/shenandoah/mode/shenandoahPassiveMode.hpp"
-#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/java.hpp"
@@ -56,9 +56,9 @@ void ShenandoahPassiveMode::initialize_flags() const {
   // Final configuration checks
   // No barriers are required to run.
 }
-ShenandoahHeuristics* ShenandoahPassiveMode::initialize_heuristics(ShenandoahGeneration* generation) const {
+ShenandoahHeuristics* ShenandoahPassiveMode::initialize_heuristics(ShenandoahHeapCharacteristics* heap_info) const {
   if (ShenandoahGCHeuristics == nullptr) {
     vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option (null)");
   }
-  return new ShenandoahPassiveHeuristics(generation);
+  return new ShenandoahPassiveHeuristics(heap_info);
 }
