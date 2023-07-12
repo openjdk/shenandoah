@@ -244,6 +244,7 @@ public:
   void increase_committed(size_t bytes);
   void decrease_committed(size_t bytes);
 
+  size_t bytes_allocated_since_gc_start();
   void reset_bytes_allocated_since_gc_start();
 
   size_t min_capacity()      const;

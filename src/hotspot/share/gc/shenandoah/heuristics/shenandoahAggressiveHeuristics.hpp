@@ -30,7 +30,7 @@
 
 class ShenandoahAggressiveHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahAggressiveHeuristics(ShenandoahHeapCharacteristics* heap_info);
+  ShenandoahAggressiveHeuristics();
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                      RegionData* data, size_t size,

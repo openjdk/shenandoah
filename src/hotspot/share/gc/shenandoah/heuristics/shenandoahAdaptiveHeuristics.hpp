@@ -26,6 +26,10 @@
 #ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP
 #define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP
 
+#include "runtime/globals_extension.hpp"
+#include "memory/allocation.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapStats.hpp"
+#include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "utilities/numberSeq.hpp"
@@ -52,7 +56,7 @@ class ShenandoahAllocationRate : public CHeapObj<mtGC> {
 
 class ShenandoahAdaptiveHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahAdaptiveHeuristics(ShenandoahHeapCharacteristics* heap_info);
+  ShenandoahAdaptiveHeuristics(ShenandoahHeapStats* heap_stats);
 
   virtual ~ShenandoahAdaptiveHeuristics();
 
@@ -99,11 +103,13 @@ public:
   void adjust_spike_threshold(double amount);
 
 protected:
+  ShenandoahHeapStats* _heap_stats;
+
   ShenandoahAllocationRate _allocation_rate;
 
   // The margin of error expressed in standard deviations to add to our
   // average cycle time and allocation rate. As this value increases we
-  // tend to over estimate the rate at which mutators will deplete the
+  // tend to overestimate the rate at which mutators will deplete the
   // heap. In other words, erring on the side of caution will trigger more
   // concurrent GCs.
   double _margin_of_error_sd;
@@ -126,6 +132,8 @@ protected:
   // establishes what is 'normal' for the application and is used as a
   // source of feedback to adjust trigger parameters.
   TruncatedSeq _available;
+
+  size_t min_free_threshold();
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHADAPTIVEHEURISTICS_HPP

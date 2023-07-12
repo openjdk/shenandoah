@@ -28,12 +28,12 @@
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
-#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
 #include "utilities/quickSort.hpp"
+#include "shenandoahAdaptiveHeuristics.hpp"
 
 // sort by decreasing garbage (so most garbage comes first)
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
@@ -44,8 +44,7 @@ int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
   else return 0;
 }
 
-ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahHeapCharacteristics* heap_info) :
-        _heap_info(heap_info),
+ShenandoahHeuristics::ShenandoahHeuristics() :
         _region_data(nullptr),
         _degenerated_cycles_in_a_row(0),
         _successful_cycles_in_a_row(0),
@@ -202,8 +201,8 @@ bool ShenandoahHeuristics::should_start_gc() {
   if (_guaranteed_gc_interval > 0) {
     double last_time_ms = (os::elapsedTime() - _last_cycle_end) * 1000;
     if (last_time_ms > _guaranteed_gc_interval) {
-      log_info(gc)("Trigger (%s): Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)",
-                   _heap_info->name(), last_time_ms, _guaranteed_gc_interval);
+      log_info(gc)("Trigger: Time since last GC (%.0f ms) is larger than guaranteed interval (" UINTX_FORMAT " ms)",
+                   last_time_ms, _guaranteed_gc_interval);
       return true;
     }
   }
@@ -298,11 +297,4 @@ void ShenandoahHeuristics::initialize() {
 
 double ShenandoahHeuristics::elapsed_cycle_time() const {
   return os::elapsedTime() - _cycle_start;
-}
-
-size_t ShenandoahHeuristics::min_free_threshold() {
-  // Note that soft_max_capacity() / 100 * min_free_threshold is smaller than max_capacity() / 100 * min_free_threshold.
-  // We want to behave conservatively here, so use max_capacity().  By returning a larger value, we cause the GC to
-  // trigger when the remaining amount of free shrinks below the larger threshold.
-  return _heap_info->max_capacity() / 100 * ShenandoahMinFreeThreshold;
 }

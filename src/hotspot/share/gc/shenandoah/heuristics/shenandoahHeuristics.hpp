@@ -28,7 +28,7 @@
 
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
-#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapStats.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/globals_extension.hpp"
 
@@ -75,8 +75,6 @@ protected:
     } _u;
   } RegionData;
 
-  ShenandoahHeapCharacteristics* _heap_info;
-
   // Depending on generation mode, region data represents the results of the relevant
   // most recently completed marking pass:
   //   - in GLOBAL mode, global marking pass
@@ -118,10 +116,8 @@ protected:
 
   void adjust_penalty(intx step);
 
-  size_t min_free_threshold();
-
 public:
-  ShenandoahHeuristics(ShenandoahHeapCharacteristics* heap_info);
+  ShenandoahHeuristics();
   virtual ~ShenandoahHeuristics();
 
   void record_metaspace_oom()     { _metaspace_oom.set(); }

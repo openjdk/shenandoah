@@ -29,7 +29,7 @@
 
 class ShenandoahStaticHeuristics : public ShenandoahHeuristics {
 public:
-  ShenandoahStaticHeuristics(ShenandoahHeapCharacteristics* heap_info);
+  ShenandoahStaticHeuristics();
 
   virtual ~ShenandoahStaticHeuristics();
 

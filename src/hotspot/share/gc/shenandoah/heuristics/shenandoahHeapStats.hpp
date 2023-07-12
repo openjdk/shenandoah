@@ -27,7 +27,7 @@
 
 #include "utilities/globalDefinitions.hpp"
 
-class ShenandoahHeapCharacteristics {
+class ShenandoahHeapStats {
 public:
   virtual const char* name() const = 0;
   virtual size_t soft_max_capacity() const = 0;

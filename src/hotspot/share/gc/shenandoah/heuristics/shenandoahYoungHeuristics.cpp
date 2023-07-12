@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 
 #include "utilities/quickSort.hpp"
+#include "shenandoahAdaptiveHeuristics.hpp"
 
 ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahYoungGeneration* generation)
         : ShenandoahGenerationalHeuristics(generation) {
@@ -140,7 +141,7 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
     // Detect unsigned arithmetic underflow
     assert(promo_potential < heap->capacity(), "Sanity");
     log_info(gc)("Trigger (%s): expedite promotion of " SIZE_FORMAT "%s",
-                 _heap_info->name(),
+                 _heap_stats->name(),
                  byte_size_in_proper_unit(promo_potential),
                  proper_unit_for_byte_size(promo_potential));
     return true;
@@ -151,7 +152,7 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
     // Detect unsigned arithmetic underflow
     assert(promo_in_place_potential < heap->capacity(), "Sanity");
     log_info(gc)("Trigger (%s): expedite promotion in place of " SIZE_FORMAT "%s",
-                 _heap_info->name(),
+                 _heap_stats->name(),
                  byte_size_in_proper_unit(promo_in_place_potential),
                  proper_unit_for_byte_size(promo_in_place_potential));
     return true;
@@ -162,7 +163,7 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
   if (mixed_candidates > 0) {
     // We need to run young GC in order to open up some free heap regions so we can finish mixed evacuations.
     log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
-                 _heap_info->name(), mixed_candidates);
+                 _heap_stats->name(), mixed_candidates);
     return true;
   }
 
@@ -174,10 +175,10 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
 // generation at the end of the current cycle (as represented by young_regions_to_be_reclaimed) and on the anticipated
 // amount of time required to perform a GC.
 size_t ShenandoahYoungHeuristics::bytes_of_allocation_runway_before_gc_trigger(size_t young_regions_to_be_reclaimed) {
-  size_t capacity = _heap_info->soft_max_capacity();
-  size_t usage = _heap_info->used();
+  size_t capacity = _heap_stats->soft_max_capacity();
+  size_t usage = _heap_stats->used();
   size_t available = (capacity > usage)? capacity - usage: 0;
-  size_t allocated = _heap_info->bytes_allocated_since_gc_start();
+  size_t allocated = _heap_stats->bytes_allocated_since_gc_start();
 
   size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_bytes_collected();
   size_t anticipated_available =

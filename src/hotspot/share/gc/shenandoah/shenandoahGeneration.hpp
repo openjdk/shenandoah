@@ -27,7 +27,7 @@
 
 #include "memory/allocation.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
-#include "gc/shenandoah/heuristics/shenandoahHeapCharacteristics.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeapStats.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
@@ -38,7 +38,7 @@ class ShenandoahReferenceProcessor;
 class ShenandoahHeap;
 class ShenandoahMode;
 
-class ShenandoahGeneration : public CHeapObj<mtGC>, public ShenandoahHeapCharacteristics {
+class ShenandoahGeneration : public CHeapObj<mtGC>, public ShenandoahHeapStats {
   friend class VMStructs;
 private:
   ShenandoahGenerationType const _type;
@@ -86,9 +86,11 @@ private:
   // Preselect for inclusion into the collection set regions whose age is
   // at or above tenure age which contain more than ShenandoahOldGarbageThreshold
   // amounts of garbage.
-  virtual size_t select_aged_regions(size_t old_available,
-                                     size_t num_regions, bool
-                                     candidate_regions_for_promotion_by_copy[]);
+  size_t select_aged_regions(size_t old_available,
+                             size_t num_regions, bool
+                             candidate_regions_for_promotion_by_copy[]);
+
+  size_t available(size_t capacity) const;
 
  public:
   ShenandoahGeneration(ShenandoahGenerationType type,
