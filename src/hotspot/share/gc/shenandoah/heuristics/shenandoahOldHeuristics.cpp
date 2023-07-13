@@ -467,6 +467,7 @@ void ShenandoahOldHeuristics::abandon_collection_candidates() {
 }
 
 void ShenandoahOldHeuristics::record_cycle_end() {
+  this->ShenandoahHeuristics::record_cycle_end();
   clear_triggers();
 }
 
@@ -541,19 +542,19 @@ bool ShenandoahOldHeuristics::should_start_gc() {
 void ShenandoahOldHeuristics::record_success_concurrent(bool abbreviated) {
   // Forget any triggers that occurred while OLD GC was ongoing.  If we really need to start another, it will retrigger.
   clear_triggers();
-  ShenandoahHeuristics::record_success_concurrent(abbreviated);
+  this->ShenandoahHeuristics::record_success_concurrent(abbreviated);
 }
 
 void ShenandoahOldHeuristics::record_success_degenerated() {
   // Forget any triggers that occurred while OLD GC was ongoing.  If we really need to start another, it will retrigger.
   clear_triggers();
-  ShenandoahHeuristics::record_success_degenerated();
+  this->ShenandoahHeuristics::record_success_degenerated();
 }
 
 void ShenandoahOldHeuristics::record_success_full() {
   // Forget any triggers that occurred while OLD GC was ongoing.  If we really need to start another, it will retrigger.
   clear_triggers();
-  ShenandoahHeuristics::record_success_full();
+  this->ShenandoahHeuristics::record_success_full();
 }
 
 const char* ShenandoahOldHeuristics::name() {
