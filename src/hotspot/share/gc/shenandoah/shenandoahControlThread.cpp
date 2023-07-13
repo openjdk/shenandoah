@@ -538,20 +538,23 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
         // Coalescing threads detected the cancellation request and aborted. Stay
         // in this state so control thread may resume the coalescing work.
         assert(old_generation->state() == ShenandoahOldGeneration::FILLING, "Prepare for mark should be in progress");
-      } else {
-        // Coalescing threads completed, it is safe to transition to the bootstrapping
-        // state now.
-        old_generation->transition_to(ShenandoahOldGeneration::BOOTSTRAPPING);
+        assert(heap->cancelled_gc(), "Preparation for GC is not complete, expected cancellation");
       }
 
-      // But before bootstrapping begins, we must acknowledge any cancellation request.
+      // Before bootstrapping begins, we must acknowledge any cancellation request.
       // If the gc has not been cancelled, this does nothing. If it has been cancelled,
       // this will clear the cancellation request and exit before starting the bootstrap
-      // phase. This will allow the young GC cycle to proceed normally.
+      // phase. This will allow the young GC cycle to proceed normally. If we do not
+      // acknowledge the cancellation request, the subsequent young cycle will observe
+      // the request and essentially cancel itself.
       if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) {
         log_info(gc)("Preparation for old generation cycle was cancelled");
         return;
       }
+
+      // Coalescing threads completed and nothing was cancelled. it is safe to transition
+      // to the bootstrapping state now.
+      old_generation->transition_to(ShenandoahOldGeneration::BOOTSTRAPPING);
     }
     case ShenandoahOldGeneration::BOOTSTRAPPING: {
       // Configure the young generation's concurrent mark to put objects in
