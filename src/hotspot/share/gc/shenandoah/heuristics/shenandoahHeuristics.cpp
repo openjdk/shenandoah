@@ -33,7 +33,6 @@
 #include "logging/logTag.hpp"
 #include "runtime/globals_extension.hpp"
 #include "utilities/quickSort.hpp"
-#include "shenandoahAdaptiveHeuristics.hpp"
 
 // sort by decreasing garbage (so most garbage comes first)
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
