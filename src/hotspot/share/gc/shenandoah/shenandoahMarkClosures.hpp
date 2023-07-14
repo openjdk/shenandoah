@@ -54,6 +54,6 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion* r);
 
-  size_t get_pop() { return _pop; }
+  size_t get_population() { return _pop; }
 };
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHMARKCLOSURES_HPP

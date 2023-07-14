@@ -467,9 +467,7 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 
   oop copy_val = cast_to_oop(copy);
 
-  bool young_gen = false;
   if (mode()->is_generational() && target_gen == YOUNG_GENERATION && is_aging_cycle()) {
-    young_gen = true;
     ShenandoahHeap::increase_object_age(copy_val, from_region->age() + 1);
   }
 

@@ -35,7 +35,7 @@ private:
   size_t _evacuations_attempted;
   size_t _bytes_attempted;
 
-  bool     _generational;
+  bool      _use_age_table;
   AgeTable* _age_table;
 
  public:

@@ -472,7 +472,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // young regions and sum the volume of objects between TAMS and top.
     ShenandoahUpdateCensusZeroCohortClosure age0_cl(complete_marking_context());
     heap->young_generation()->heap_region_iterate(&age0_cl);
-    size_t age0_pop = age0_cl.get_pop();
+    size_t age0_pop = age0_cl.get_population();
 
     // Age table updates
     ShenandoahAgeCensus* census = heap->age_census();
