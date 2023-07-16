@@ -729,22 +729,22 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahHeap* heap,
   const char* msg;
   if (heap->mode()->is_generational()) {
     if (heap->cancelled_gc()) {
-      msg = (generation->is_young()) ? "At end of Interrupted Concurrent Young GC" :
-                                       "At end of Interrupted Concurrent Bootstrap GC";
+      msg = (do_old_gc_bootstrap) ? "At end of Interrupted Concurrent Bootstrap GC":
+                                    "At end of Interrupted Concurrent Young GC";
     } else {
-      msg = (generation->is_young()) ? "At end of Concurrent Young GC" :
-                                       "At end of Concurrent Bootstrap GC";
+      msg = (do_old_gc_bootstrap) ? "At end of Concurrent Bootstrap GC":
+                                    "At end of Concurrent Young GC";
       // We only record GC results if GC was successful
       ShenandoahMmuTracker* mmu_tracker = heap->mmu_tracker();
-      if (generation->is_young()) {
-        if (heap->collection_set()->has_old_regions()) {
-          bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
-          mmu_tracker->record_mixed(generation, get_gc_id(), mixed_is_done);
-        } else {
-          mmu_tracker->record_young(generation, get_gc_id());
-        }
+
+      assert(generation->is_young(), "Use service_concurrent_old_cycle() for old_generation");
+      if (heap->collection_set()->has_old_regions()) {
+	bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
+	mmu_tracker->record_mixed(generation, get_gc_id(), mixed_is_done);
+      } else if (do_old_gc_bootstrap) {
+	mmu_tracker->record_bootstrap(generation, get_gc_id(), heap->collection_set()->has_old_regions());
       } else {
-        mmu_tracker->record_bootstrap(generation, get_gc_id(), heap->collection_set()->has_old_regions());
+	mmu_tracker->record_young(generation, get_gc_id());
       }
     }
   } else {
