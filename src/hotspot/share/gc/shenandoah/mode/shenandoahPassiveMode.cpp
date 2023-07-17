@@ -56,6 +56,7 @@ void ShenandoahPassiveMode::initialize_flags() const {
   // Final configuration checks
   // No barriers are required to run.
 }
+
 ShenandoahHeuristics* ShenandoahPassiveMode::initialize_heuristics(ShenandoahHeapStats* heap_info) const {
   if (ShenandoahGCHeuristics == nullptr) {
     vm_exit_during_initialization("Unknown -XX:ShenandoahGCHeuristics option (null)");
