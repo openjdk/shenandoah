@@ -56,6 +56,7 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
       // anyway to capture any updates that happened since now.
       _ctx->capture_top_at_mark_start(r);
       r->clear_live_data();
+      r->reset_top_before_promote();
     }
   }
 

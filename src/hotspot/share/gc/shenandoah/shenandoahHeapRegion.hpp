@@ -355,6 +355,10 @@ public:
   inline void save_top_before_promote();
   inline HeapWord* get_top_before_promote() const { return _top_before_promoted; }
   inline void restore_top_before_promote();
+  inline void reset_top_before_promote() {
+    _top_before_promoted = nullptr;
+  }
+
   inline size_t garbage_before_padded_for_promote() const;
 
   // Allocation (return nullptr if full)
