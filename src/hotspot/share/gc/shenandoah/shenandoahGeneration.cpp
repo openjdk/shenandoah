@@ -486,13 +486,6 @@ inline void assert_no_in_place_promotions() {
 // that this allows us to more accurately budget memory to hold the results of evacuation.  Memory for evacuation
 // of aged regions must be reserved in the old generations.  Memory for evacuation of all other regions must be
 // reserved in the young generation.
-//
-// A side effect performed by this function is to tally up the number of regions and the number of live bytes
-// that we plan to promote-in-place during the current GC cycle.  This information, which is stored with
-// an invocation of heap->set_promotion_in_place_potential(), feeds into subsequent decisions about when to
-// trigger the next GC and may identify special work to be done during this GC cycle if we choose to abbreviate it.
-//
-// Returns bytes of old-gen memory consumed by selected aged regions
 size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t num_regions,
                                                  bool candidate_regions_for_promotion_by_copy[]) {
 
@@ -950,10 +943,8 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
 }
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  abbreviated = abbreviated && heap->mode()->is_generational();
   heuristics()->record_success_concurrent(abbreviated);
-  heap->shenandoah_policy()->record_success_concurrent();
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();
 }
 
 void ShenandoahGeneration::record_success_degenerated() {
