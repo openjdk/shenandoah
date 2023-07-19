@@ -65,8 +65,6 @@ void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(Shenandoah
   // more garbage.  This represents one of the reasons why we keep looking at regions even after we decide, for example,
   // to exclude one of the regions because it might require evacuation of too much live data.
 
-
-
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int) size, compare_by_garbage, false);
 

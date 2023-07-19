@@ -362,7 +362,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // The convention is to collect regions that have more than this amount of garbage.
   const size_t garbage_threshold = region_size_bytes * ShenandoahOldGarbageThreshold / 100;
 
-  // Englightened interpretation: collect regions that have less than this amount of live.
+  // Enlightened interpretation: collect regions that have less than this amount of live.
   const size_t live_threshold = region_size_bytes - garbage_threshold;
 
   size_t candidates_garbage = 0;

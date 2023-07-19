@@ -30,6 +30,11 @@
 
 class ShenandoahGlobalGeneration;
 
+/*
+ * This is a specialization of the generational heuristics which is aware
+ * of old and young regions and respects the configured evacuation parameters
+ * for such regions during a global collection of a generational heap.
+ */
 class ShenandoahGlobalHeuristics : public ShenandoahGenerationalHeuristics {
 public:
   ShenandoahGlobalHeuristics(ShenandoahGlobalGeneration* generation);

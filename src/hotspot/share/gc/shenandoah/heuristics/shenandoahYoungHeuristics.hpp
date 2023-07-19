@@ -28,6 +28,11 @@
 
 class ShenandoahYoungGeneration;
 
+/*
+ * This is a specialization of the generational heuristic which chooses
+ * young regions for evacuation. This heuristic also has additional triggers
+ * designed to expedite mixed collections and promotions.
+ */
 class ShenandoahYoungHeuristics : public ShenandoahGenerationalHeuristics {
 public:
   explicit ShenandoahYoungHeuristics(ShenandoahYoungGeneration* generation);

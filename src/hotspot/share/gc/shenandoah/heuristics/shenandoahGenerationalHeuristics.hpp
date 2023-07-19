@@ -30,6 +30,15 @@
 
 class ShenandoahGeneration;
 
+/*
+ * This class serves as the base class for heuristics used to trigger and
+ * choose the collection sets for young and global collections. It leans
+ * heavily on the existing functionality of ShenandoahAdaptiveHeuristics.
+ *
+ * It differs from the base class primarily in that choosing the collection
+ * set is responsible for mixed collections and in-place promotions of tenured
+ * regions.
+ */
 class ShenandoahGenerationalHeuristics : public ShenandoahAdaptiveHeuristics {
 
 public:

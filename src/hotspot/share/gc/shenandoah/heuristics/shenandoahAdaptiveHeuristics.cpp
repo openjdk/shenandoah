@@ -136,7 +136,7 @@ void ShenandoahAdaptiveHeuristics::record_cycle_start() {
 void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
   ShenandoahHeuristics::record_success_concurrent(abbreviated);
 
-  size_t available = MIN2(_heap_stats->available(), ShenandoahHeap::heap()->free_set()->available());
+  size_t available = _heap_stats->available();
 
   double z_score = 0.0;
   double available_sd = _available.sd();

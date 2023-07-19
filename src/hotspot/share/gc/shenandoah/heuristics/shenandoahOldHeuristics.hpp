@@ -32,6 +32,19 @@ class ShenandoahCollectionSet;
 class ShenandoahHeapRegion;
 class ShenandoahOldGeneration;
 
+/*
+ * This heuristic is responsible for choosing a set of candidates for inclusion
+ * in mixed collections. These candidates are chosen when marking of the old
+ * generation is complete. Note that this list of candidates may live through
+ * several mixed collections.
+ *
+ * This heuristic is also responsible for triggering old collections. It has its
+ * own collection of triggers to decide whether to start an old collection. It does
+ * _not_ use any of the functionality from the adaptive heuristics for triggers.
+ * It also does not use any of the functionality from the heuristics base classes
+ * to choose the collection set. For these reasons, it does not extend from
+ * ShenandoahGenerationalHeuristics.
+ */
 class ShenandoahOldHeuristics : public ShenandoahHeuristics {
 
 private:
