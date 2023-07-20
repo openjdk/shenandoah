@@ -227,7 +227,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   } else {
     // We chose not to evacuate because we found sufficient immediate garbage. Note that we
     // do not check for cancellation here because, at this point, the cycle is effectively
-    // complete. If the cycle has been cancelled here, the control thread will detect it at
+    // complete. If the cycle has been cancelled here, the control thread will detect it 
     // on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
