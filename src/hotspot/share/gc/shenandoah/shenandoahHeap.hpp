@@ -30,6 +30,7 @@
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
+#include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
@@ -138,7 +139,7 @@ typedef Stack<oop, mtGC>  ShenandoahScanObjectStack;
 // to encode forwarding data. See BrooksPointer for details on forwarding data encoding.
 // See ShenandoahControlThread for GC cycle structure.
 //
-class ShenandoahHeap : public CollectedHeap {
+class ShenandoahHeap : public CollectedHeap, public ShenandoahSpaceInfo {
   friend class ShenandoahAsserts;
   friend class VMStructs;
   friend class ShenandoahGCSession;
@@ -244,16 +245,20 @@ public:
   void increase_committed(size_t bytes);
   void decrease_committed(size_t bytes);
 
-  size_t bytes_allocated_since_gc_start();
+  size_t bytes_allocated_since_gc_start() const override;
   void reset_bytes_allocated_since_gc_start();
 
   size_t min_capacity()      const;
   size_t max_capacity()      const override;
-  size_t soft_max_capacity() const;
+  size_t soft_max_capacity() const override;
   size_t initial_capacity()  const;
   size_t capacity()          const override;
   size_t used()              const override;
   size_t committed()         const;
+  size_t available()         const override;
+  size_t soft_available()    const override {
+    return available();
+  }
 
   void set_soft_max_capacity(size_t v);
 
