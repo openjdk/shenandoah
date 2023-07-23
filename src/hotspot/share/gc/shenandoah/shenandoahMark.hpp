@@ -104,4 +104,3 @@ protected:
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHMARK_HPP
-
