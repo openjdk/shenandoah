@@ -62,6 +62,7 @@ size_t ShenandoahGlobalGeneration::soft_available() const {
   size_t available = this->available();
 
   // Make sure the code below treats available without the soft tail.
+  assert(max_capacity() >= soft_max_capacity(), "Max capacity must be greater than soft max capacity.");
   size_t soft_tail = max_capacity() - soft_max_capacity();
   return (available > soft_tail) ? (available - soft_tail) : 0;
 }
