@@ -104,6 +104,6 @@ size_t ShenandoahYoungGeneration::available() const {
 }
 
 size_t ShenandoahYoungGeneration::soft_available() const {
-  size_t available = this->ShenandoahGeneration::available();
+  size_t available = this->ShenandoahGeneration::soft_available();
   return MIN2(available, ShenandoahHeap::heap()->free_set()->available());
 }
