@@ -50,6 +50,8 @@ ShenandoahAgeCensus::ShenandoahAgeCensus() {
       _local_age_table[i] = new AgeTable(false);
       CENSUS_NOISE(_local_noise[i].clear();)
     }
+  } else {
+    _local_age_table = nullptr;
   }
   _epoch = MAX_SNAPSHOTS - 1;  // see update_epoch()
 }
@@ -104,14 +106,12 @@ void ShenandoahAgeCensus::add_young(size_t size, uint worker_id) {
 }
 #endif // SHENANDOAH_CENSUS_NOISE
 
-// Prepare for a new census update, by clearing appropriate slots.
+// Prepare for a new census update, by clearing appropriate global slots.
 void ShenandoahAgeCensus::prepare_for_census_update() {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   if (++_epoch >= MAX_SNAPSHOTS) {
     _epoch=0;
   }
-  // Merge data from local age tables into the global age table for the epoch,
-  // clearing the local tables.
   _global_age_table[_epoch]->clear();
   CENSUS_NOISE(_global_noise[_epoch].clear();)
 }
@@ -131,6 +131,8 @@ void ShenandoahAgeCensus::update_census(size_t age0_pop, AgeTable* pv1, AgeTable
     _global_age_table[_epoch]->add((uint)0, age0_pop);
 
     size_t max_workers = ShenandoahHeap::heap()->max_workers();
+    // Merge data from local age tables into the global age table for the epoch,
+    // clearing the local tables.
     for (uint i = 0; i < max_workers; i++) {
       // age stats
       _global_age_table[_epoch]->merge(_local_age_table[i]);
@@ -152,14 +154,57 @@ void ShenandoahAgeCensus::update_census(size_t age0_pop, AgeTable* pv1, AgeTable
 
 // Reset the epoch for the global age tables,
 // clearing all history.
-// TBD: do this for noise & local tables too?
-void ShenandoahAgeCensus::reset() {
+void ShenandoahAgeCensus::reset_global() {
   assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
   for (uint i = 0; i < MAX_SNAPSHOTS; i++) {
     _global_age_table[i]->clear();
+    CENSUS_NOISE(_global_noise[i].clear();)
   }
   _epoch = MAX_SNAPSHOTS;
   assert(_epoch < MAX_SNAPSHOTS, "Error");
+}
+
+// Reset the local age tables, clearing any partial census.
+void ShenandoahAgeCensus::reset_local() {
+  if (!ShenandoahGenerationalAdaptiveTenuring || ShenandoahGenerationalCensusAtEvac) {
+    assert(_local_age_table == nullptr, "Error");
+    return;
+  }
+  size_t max_workers = ShenandoahHeap::heap()->max_workers();
+  for (uint i = 0; i < max_workers; i++) {
+    _local_age_table[i]->clear();
+    CENSUS_NOISE(_local_noise[i].clear();)
+  }
+}
+
+// Is global census information clear?
+bool ShenandoahAgeCensus::is_clear_global() {
+  assert(_epoch < MAX_SNAPSHOTS, "Out of bounds");
+  for (uint i = 0; i < MAX_SNAPSHOTS; i++) {
+    bool clear = _global_age_table[i]->is_clear();
+    CENSUS_NOISE(clear |= _global_noise[i].is_clear();)
+    if (!clear) {
+      return false;
+    }
+  }
+  return true;
+} 
+
+// Is local census information clear?
+bool ShenandoahAgeCensus::is_clear_local() {
+  if (!ShenandoahGenerationalAdaptiveTenuring || ShenandoahGenerationalCensusAtEvac) {
+    assert(_local_age_table == nullptr, "Error");
+    return true;
+  }
+  size_t max_workers = ShenandoahHeap::heap()->max_workers();
+  for (uint i = 0; i < max_workers; i++) {
+    bool clear = _local_age_table[i]->is_clear();
+    CENSUS_NOISE(clear |= _local_noise[i].is_clear();)
+    if (!clear) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void ShenandoahAgeCensus::update_tenuring_threshold() {
