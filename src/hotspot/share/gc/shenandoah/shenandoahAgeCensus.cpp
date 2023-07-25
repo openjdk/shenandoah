@@ -188,7 +188,7 @@ bool ShenandoahAgeCensus::is_clear_global() {
     }
   }
   return true;
-} 
+}
 
 // Is local census information clear?
 bool ShenandoahAgeCensus::is_clear_local() {
