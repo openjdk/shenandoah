@@ -227,7 +227,7 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
   // oldest age that has a significant mortality rate (as specified by
   // ShenandoahGenerationalTenuringMortalityRateThreshold). We use this as
   // tenuring age to be used for the evacuation cycle to follow.
-  // Results are clamped between user-specified mix & max guardrails,
+  // Results are clamped between user-specified min & max guardrails,
   // so we ignore any cohorts outside ShenandoahGenerational[Min,Max]Age.
 
   // Current and previous epoch in ring
@@ -248,9 +248,8 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
     // that have a lower mortality rate than we care to age in young; these
     // cohorts are considered eligible for tenuring when all older
     // cohorts are.
-    // TODO: if 0 record is accurate, we wouldn't need to exclude 1 below
-    if (i > 1 && (prev_pop < ShenandoahGenerationalTenuringCohortPopulationThreshold ||
-        mr < ShenandoahGenerationalTenuringMortalityRateThreshold)) {
+    if (prev_pop < ShenandoahGenerationalTenuringCohortPopulationThreshold ||
+        mr < ShenandoahGenerationalTenuringMortalityRateThreshold) {
       tenuring_threshold = i;
       continue;
     }

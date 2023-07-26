@@ -245,8 +245,8 @@ void ShenandoahConcurrentMark::concurrent_mark() {
   for (uint flushes = 0; flushes < ShenandoahMaxSATBBufferFlushes; flushes++) {
     switch (_generation->type()) {
       case YOUNG: {
-        // We expect the local data to be clear before the start of marking,
-        // indicating that there is no partial census data.
+        // Clear any old/partial local census data before the start of marking.
+        heap->age_census()->reset_local();
         assert(heap->age_census()->is_clear_local(), "Error");
         TaskTerminator terminator(nworkers, task_queues());
         ShenandoahConcurrentMarkingTask<YOUNG> task(this, &terminator);
@@ -260,8 +260,8 @@ void ShenandoahConcurrentMark::concurrent_mark() {
         break;
       }
       case GLOBAL_GEN: {
-        // We expect the local data to be clear before the start of marking,
-        // indicating that there is no partial census data.
+        // Clear any old/partial local census data before the start of marking.
+        heap->age_census()->reset_local();
         assert(heap->age_census()->is_clear_local(), "Error");
         TaskTerminator terminator(nworkers, task_queues());
         ShenandoahConcurrentMarkingTask<GLOBAL_GEN> task(this, &terminator);
