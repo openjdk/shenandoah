@@ -164,6 +164,17 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // Return the most recently computed tenuring threshold
   uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }
 
+  // Return the tenuring threshold computed for the previous epoch
+  uint previous_tenuring_threshold() const {
+    assert(_epoch < MAX_SNAPSHOTS, "Error");
+    uint prev = _epoch - 1;
+    if (prev >= MAX_SNAPSHOTS) {
+      // _epoch is 0
+      prev = MAX_SNAPSHOTS - 1;
+    }
+    return _tenuring_threshold[prev];
+  }
+
   // Reset the epoch, clearing accumulated census history
   void reset_global();
   // Reset any partial census information

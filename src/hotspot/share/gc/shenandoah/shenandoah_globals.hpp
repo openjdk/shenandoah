@@ -42,6 +42,11 @@
   product(bool, ShenandoahGenerationalAdaptiveTenuring, false, EXPERIMENTAL,\
           "(Generational mode only) Dynamically adapt tenuring age.")       \
                                                                             \
+  product(bool, ShenandoahGenerationalCensusIgnoreOlderCohorts, false,      \
+                                                               EXPERIMENTAL,\
+          "(Generational mode only) Ignore mortality rates older than the " \
+          " oldest cohort under the tenuring age for the last cycle." )     \
+                                                                            \
   product(uintx, ShenandoahGenerationalMinTenuringAge, 0, EXPERIMENTAL,     \
           "(Generational mode only) Floor for adaptive tenuring age.")      \
           range(0,16)                                                       \
