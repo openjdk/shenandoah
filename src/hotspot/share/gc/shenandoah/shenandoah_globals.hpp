@@ -35,14 +35,14 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
-  product(bool, ShenandoahGenerationalCensusAtEvac, true, EXPERIMENTAL,     \
+  product(bool, ShenandoahGenerationalCensusAtEvac, false, EXPERIMENTAL,    \
           "(Generational mode only) Object age census at evacuation, "      \
           "rather than during marking.")                                    \
                                                                             \
-  product(bool, ShenandoahGenerationalAdaptiveTenuring, false, EXPERIMENTAL,\
+  product(bool, ShenandoahGenerationalAdaptiveTenuring, true, EXPERIMENTAL, \
           "(Generational mode only) Dynamically adapt tenuring age.")       \
                                                                             \
-  product(bool, ShenandoahGenerationalCensusIgnoreOlderCohorts, false,      \
+  product(bool, ShenandoahGenerationalCensusIgnoreOlderCohorts, true,       \
                                                                EXPERIMENTAL,\
           "(Generational mode only) Ignore mortality rates older than the " \
           " oldest cohort under the tenuring age for the last cycle." )     \
