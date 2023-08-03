@@ -188,13 +188,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_strong_roots();
   }
 
-  // Global marking has completed and we may have collected regions with no live objects.
-  // We need to fill in any unmarked objects in the old generation so that subsequent
-  // remembered set scans will not walk pointers into reclaimed memory.
-  if (heap->mode()->is_generational() && _generation->is_global()) {
-    entry_global_coalesce_and_fill();
-  }
-
   // Continue the cycle with evacuation and optional update-refs.
   // This may be skipped if there is nothing to evacuate.
   // If so, evac_in_progress would be unset by collection set preparation code.
@@ -594,21 +587,6 @@ void ShenandoahConcurrentGC::entry_cleanup_complete() {
   // This phase does not use workers, no need for setup
   heap->try_inject_alloc_failure();
   op_cleanup_complete();
-}
-
-void ShenandoahConcurrentGC::entry_global_coalesce_and_fill() {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-
-  const char* msg = "Coalescing and filling old regions in global collect";
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
-
-  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  EventMark em("%s", msg);
-  ShenandoahWorkerScope scope(heap->workers(),
-                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
-                              "concurrent coalesce and fill");
-
-  op_global_coalesce_and_fill();
 }
 
 void ShenandoahConcurrentGC::op_reset() {
@@ -1315,10 +1293,6 @@ void ShenandoahConcurrentGC::op_final_roots() {
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {
   ShenandoahHeap::heap()->free_set()->recycle_trash();
-}
-
-void ShenandoahConcurrentGC::op_global_coalesce_and_fill() {
-  ShenandoahHeap::heap()->coalesce_and_fill_old_regions();
 }
 
 bool ShenandoahConcurrentGC::check_cancellation_and_abort(ShenandoahDegenPoint point) {
