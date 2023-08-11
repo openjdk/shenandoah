@@ -448,12 +448,12 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
       assert(heap->is_concurrent_old_mark_in_progress(), "Should be marking old now.");
       break;
     case WAITING_FOR_EVAC:
-      assert(_state == MARKING, "Cannot have old collection candidates without first marking, state is '%s'", state_name(_state));
+      assert(_state == IDLE || _state == MARKING, "Cannot have old collection candidates without first marking, state is '%s'", state_name(_state));
       assert(_old_heuristics->unprocessed_old_collection_candidates() > 0, "Must have collection candidates here.");
       break;
     case WAITING_FOR_FILL:
-      assert(_state == MARKING || _state == WAITING_FOR_EVAC, "Cannot begin filling without first marking or evacuating, state is '%s'", state_name(_state));
-      assert(_old_heuristics->unprocessed_old_collection_candidates() > 0, "Cannot wait for fill without something to fill.");
+      assert(_state == IDLE || _state == MARKING || _state == WAITING_FOR_EVAC, "Cannot begin filling without first marking or evacuating, state is '%s'", state_name(_state));
+      assert(_old_heuristics->has_coalesce_and_fill_candidates(), "Cannot wait for fill without something to fill.");
       break;
     default:
       fatal("Unknown new state");

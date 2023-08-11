@@ -669,6 +669,10 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         // only make use of evacuation budgets when we are evacuating
         adjust_evacuation_budgets(heap, collection_set, consumed_by_advance_promotion);
       }
+
+      if (is_global()) {
+        heap->old_heuristics()->prepare_for_old_collections();
+      }
     } else {
       _heuristics->choose_collection_set(collection_set);
     }

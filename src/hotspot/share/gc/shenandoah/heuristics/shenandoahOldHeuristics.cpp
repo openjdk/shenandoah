@@ -397,10 +397,13 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
                byte_size_in_proper_unit(immediate_garbage),   proper_unit_for_byte_size(immediate_garbage), immediate_regions);
   size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
-  if (unprocessed_old_collection_candidates() == 0) {
-    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
-  } else {
+
+  if (unprocessed_old_collection_candidates() > 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_EVAC);
+  } else if (has_coalesce_and_fill_candidates()) {
+    _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_FILL);
+  } else {
+    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
   }
 }
 
