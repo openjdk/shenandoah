@@ -141,6 +141,7 @@ public:
   // last_old_region_index() entries, or memory may be corrupted when this function overwrites the
   // end of the array.
   unsigned int get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
+  bool has_coalesce_and_fill_candidates() { return _last_old_region > 0; }
 
   // True if there are old regions that need to be filled.
   bool has_coalesce_and_fill_candidates() const { return coalesce_and_fill_candidates_count() > 0; }
