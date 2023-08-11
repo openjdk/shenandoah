@@ -380,46 +380,48 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 // possible. It is _not_ possible to use the old generation bitmap when old marking
 // is active (bitmap is not complete). For this reason, the old regions are made
 // parseable _before_ the old generation bitmap is reset. The diagram does not depict
-// global and full collections, both of which cancel any old generation activity.
+// cancellation of old collections by global or full collections. However, it does
+// depict a transition from IDLE to WAITING_FOR_FILL, which is allowed after a global
+// cycle ends.
 //
-//                              +-----------------+
-//               +------------> |      IDLE       |
-//               |   +--------> |                 |
-//               |   |          +-----------------+
-//               |   |            |
-//               |   |            | Begin Old Mark
-//               |   |            v
-//               |   |          +-----------------+     +--------------------+
-//               |   |          |     FILLING     | <-> |      YOUNG GC      |
-//               |   |    +---> |                 |     | (RSet Uses Bitmap) |
-//               |   |    |     +-----------------+     +--------------------+
-//               |   |    |       |
-//               |   |    |       | Reset Bitmap
-//               |   |    |       v
-//               |   |    |     +-----------------+
-//               |   |    |     |    BOOTSTRAP    |
-//               |   |    |     |                 |
-//               |   |    |     +-----------------+
-//               |   |    |       |
-//               |   |    |       | Continue Marking
-//               |   |    |       v
-//               |   |    |     +-----------------+     +----------------------+
-//               |   |    |     |    MARKING      | <-> |       YOUNG GC       |
-//               |   +----|-----|                 |     | (RSet Parses Region) |
-//               |        |     +-----------------+     +----------------------+
-//               |        |       |
-//               |        |       | Has Candidates
-//               |        |       v
-//               |        |     +-----------------+
-//               |        |     |    WAITING FOR  |
-//               +--------|---- |    EVACUATIONS  |
-//                        |     +-----------------+
-//                        |       |
-//                        |       | All Candidates are Pinned
-//                        |       v
-//                        |     +-----------------+
-//                        |     |    WAITING FOR  |
-//                        +-----|    FILLING      |
+//           +----------------- +-----------------+
+//           |   +------------> |      IDLE       |
+//           |   |   +--------> |                 |
+//           |   |   |          +-----------------+
+//           |   |   |            |
+//           |   |   |            | Begin Old Mark
+//           |   |   |            v
+//           |   |   |          +-----------------+     +--------------------+
+//           |   |   |          |     FILLING     | <-> |      YOUNG GC      |
+//           |   |   |    +---> |                 |     | (RSet Uses Bitmap) |
+//           |   |   |    |     +-----------------+     +--------------------+
+//           |   |   |    |       |
+//           |   |   |    |       | Reset Bitmap
+//           |   |   |    |       v
+//           |   |   |    |     +-----------------+
+//           |   |   |    |     |    BOOTSTRAP    |
+//           |   |   |    |     |                 |
+//           |   |   |    |     +-----------------+
+//           |   |   |    |       |
+//           |   |   |    |       | Continue Marking
+//           |   |   |    |       v
+//           |   |   |    |     +-----------------+     +----------------------+
+//           |   |   |    |     |    MARKING      | <-> |       YOUNG GC       |
+//           |   |   +----|-----|                 |     | (RSet Parses Region) |
+//           |   |        |     +-----------------+     +----------------------+
+//           |   |        |       |
+//           |   |        |       | Has Candidates
+//           |   |        |       v
+//           |   |        |     +-----------------+
+//           |   |        |     |    WAITING FOR  |
+//           |   +--------|---> |    EVACUATIONS  |
+//           |            |     +-----------------+
+//           |            |       |
+//           |            |       | All Candidates are Pinned
+//           |            |       v
+//           |            |     +-----------------+
+//           |            +---- |    WAITING FOR  |
+//           +----------------> |    FILLING      |
 //                              +-----------------+
 //
 void ShenandoahOldGeneration::validate_transition(State new_state) {
@@ -428,8 +430,7 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
     case IDLE:
       // GC cancellation can send us back to IDLE from any state.
       assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become idle during old mark.");
-      assert(!heap->mode()->is_generational() ||
-             (_old_heuristics->unprocessed_old_collection_candidates() == 0), "Cannot become idle with collection candidates");
+      assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot become idle with collection candidates");
       assert(!heap->is_prepare_for_old_mark_in_progress(), "Cannot become idle while making old generation parseable.");
       assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become idle when setup for bootstrapping.");
       break;

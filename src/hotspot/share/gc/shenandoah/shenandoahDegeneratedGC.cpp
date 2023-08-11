@@ -96,13 +96,6 @@ void ShenandoahDegenGC::op_degenerated() {
 
 #ifdef ASSERT
   if (heap->mode()->is_generational()) {
-    if (_generation->is_global()) {
-      // We can only get to a degenerated global cycle _after_ a concurrent global cycle
-      // has been cancelled. In which case, we expect the concurrent global cycle to have
-      // cancelled the old gc already.
-      assert(!heap->is_old_gc_active(), "Old GC should not be active during global cycle");
-    }
-
     if (!heap->is_concurrent_old_mark_in_progress()) {
       // If we are not marking the old generation, there should be nothing in the old mark queues
       assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty");

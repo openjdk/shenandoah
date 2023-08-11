@@ -389,14 +389,15 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   size_t collectable_garbage = immediate_garbage + candidates_garbage;
   size_t old_candidates = _last_old_collection_candidate;
+  size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
+  set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
+
   log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s "
                "consolidated with free: " SIZE_FORMAT "%s, over " SIZE_FORMAT " regions, "
                "Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
                byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
                byte_size_in_proper_unit(unfragmented),        proper_unit_for_byte_size(unfragmented), old_candidates,
                byte_size_in_proper_unit(immediate_garbage),   proper_unit_for_byte_size(immediate_garbage), immediate_regions);
-  size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
-  set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
 
   if (unprocessed_old_collection_candidates() > 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_EVAC);

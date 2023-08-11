@@ -145,7 +145,8 @@ public:
   // last_old_region_index() entries, or memory may be corrupted when this function overwrites the
   // end of the array.
   unsigned int get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer);
-  bool has_coalesce_and_fill_candidates() { return _last_old_region > 0; }
+  bool has_coalesce_and_fill_candidates() const { return _last_old_region > 0; }
+  size_t coalesce_and_fill_candidates() const { return _last_old_region; }
 
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being
   // held by this heuristic for supplying mixed collections.
