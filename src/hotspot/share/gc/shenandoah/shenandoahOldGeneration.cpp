@@ -382,9 +382,10 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 // parseable _before_ the old generation bitmap is reset. The diagram does not depict
 // cancellation of old collections by global or full collections. However, it does
 // depict a transition from IDLE to WAITING_FOR_FILL, which is allowed after a global
-// cycle ends.
+// cycle ends. Also note that a global collection will cause any evacuation or fill
+// candidates to be abandoned, returning the old generation to the idle state.
 //
-//           +----------------- +-----------------+
+//           +----------------> +-----------------+
 //           |   +------------> |      IDLE       |
 //           |   |   +--------> |                 |
 //           |   |   |          +-----------------+

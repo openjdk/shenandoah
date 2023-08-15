@@ -96,9 +96,20 @@ void ShenandoahDegenGC::op_degenerated() {
 
 #ifdef ASSERT
   if (heap->mode()->is_generational()) {
+    ShenandoahOldGeneration* old_generation = heap->old_generation();
     if (!heap->is_concurrent_old_mark_in_progress()) {
       // If we are not marking the old generation, there should be nothing in the old mark queues
-      assert(heap->old_generation()->task_queues()->is_empty(), "Old gen task queues should be empty");
+      assert(old_generation->task_queues()->is_empty(), "Old gen task queues should be empty");
+    }
+
+    if (_generation->is_global()) {
+      // If we are in a global cycle, the old generation should not be marking. It is, however,
+      // allowed to be holding regions for evacuation or coalescing.
+      ShenandoahOldGeneration::State state = old_generation->state();
+      assert(state == ShenandoahOldGeneration::IDLE
+             || state == ShenandoahOldGeneration::WAITING_FOR_EVAC
+             || state == ShenandoahOldGeneration::WAITING_FOR_FILL,
+             "Old generation cannot be in state: %s", old_generation->state_name());
     }
   }
 #endif
@@ -287,7 +298,7 @@ void ShenandoahDegenGC::op_degenerated() {
           region_destination = "old";
           success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
           if (!success) {
-            ((ShenandoahOldHeuristics *) heap->old_generation()->heuristics())->trigger_cannot_expand();
+            heap->old_heuristics()->trigger_cannot_expand();
           }
         } else {
           region_destination = "none";
