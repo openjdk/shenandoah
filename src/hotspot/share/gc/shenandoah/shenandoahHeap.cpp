@@ -319,9 +319,18 @@ jint ShenandoahHeap::initialize() {
   }
 
   // Reserve aux bitmap for use in object_iterate(). We don't commit it here.
-  ReservedSpace aux_bitmap(_bitmap_size, bitmap_page_size);
+  size_t aux_bitmap_page_size = bitmap_page_size;
+#ifdef LINUX
+  // In THP "advise" mode, we refrain from advising the system to use large pages
+  // since we know these commits will be short lived, and there is no reason to trash
+  // the THP area with this bitmap.
+  if (UseTransparentHugePages) {
+    aux_bitmap_page_size = os::vm_page_size();
+  }
+#endif
+  ReservedSpace aux_bitmap(_bitmap_size, aux_bitmap_page_size);
   os::trace_page_sizes_for_requested_size("Aux Bitmap",
-                                          bitmap_size_orig, bitmap_page_size,
+                                          bitmap_size_orig, aux_bitmap_page_size,
                                           aux_bitmap.base(),
                                           aux_bitmap.size(), aux_bitmap.page_size());
   MemTracker::record_virtual_memory_type(aux_bitmap.base(), mtGC);
@@ -2657,11 +2666,6 @@ address ShenandoahHeap::in_cset_fast_test_addr() {
 
 address ShenandoahHeap::gc_state_addr() {
   return (address) ShenandoahHeap::heap()->_gc_state.addr_of();
-}
-
-size_t ShenandoahHeap::bytes_allocated_since_gc_start() {
-  assert(!mode()->is_generational(), "This is used for heuristics that are not compatible with generational mode");
-  return global_generation()->bytes_allocated_since_gc_start();
 }
 
 void ShenandoahHeap::reset_bytes_allocated_since_gc_start() {
