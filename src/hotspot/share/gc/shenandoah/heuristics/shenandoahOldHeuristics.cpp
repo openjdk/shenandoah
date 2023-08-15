@@ -451,10 +451,6 @@ void ShenandoahOldHeuristics::consume_old_collection_candidate() {
   _next_old_collection_candidate++;
 }
 
-uint ShenandoahOldHeuristics::last_old_region_index() const {
-  return _last_old_region;
-}
-
 unsigned int ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(ShenandoahHeapRegion** buffer) {
   uint end = _last_old_region;
   uint index = _next_old_collection_candidate;
