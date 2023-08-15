@@ -765,9 +765,12 @@ public:
 
   static bool verify_gc_state(char actual, char expected) {
     // Old generation marking is allowed in all states.
-    // TODO: This actually accepts more than just OLD_MARKING.
-    // TODO: Also, only accept OLD_MARKING in generational mode.
-    return (actual == expected) || (actual & ShenandoahHeap::OLD_MARKING);
+    if (ShenandoahHeap::heap()->mode()->is_generational()) {
+      return ((actual & ~ShenandoahHeap::OLD_MARKING) == expected);
+    } else {
+      assert(actual & ShenandoahHeap::OLD_MARKING == 0, "Should not mark old in non-generational mode");
+      return (actual == expected);
+    }
   }
 };
 

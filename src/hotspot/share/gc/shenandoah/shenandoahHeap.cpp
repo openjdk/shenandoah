@@ -2455,9 +2455,9 @@ void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   if (has_forwarded_objects()) {
-    set_gc_state_mask(YOUNG_MARKING | UPDATEREFS, in_progress);
+    set_gc_state_mask(MARKING | YOUNG_MARKING | UPDATEREFS, in_progress);
   } else {
-    set_gc_state_mask(YOUNG_MARKING, in_progress);
+    set_gc_state_mask(MARKING | YOUNG_MARKING, in_progress);
   }
 
   manage_satb_barrier(in_progress);
@@ -2465,9 +2465,9 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
 
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
   if (has_forwarded_objects()) {
-    set_gc_state_mask(OLD_MARKING | UPDATEREFS, in_progress);
+    set_gc_state_mask(MARKING | OLD_MARKING | UPDATEREFS, in_progress);
   } else {
-    set_gc_state_mask(OLD_MARKING, in_progress);
+    set_gc_state_mask(MARKING | OLD_MARKING, in_progress);
   }
 
   manage_satb_barrier(in_progress);
