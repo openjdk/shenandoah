@@ -766,9 +766,9 @@ public:
   static bool verify_gc_state(char actual, char expected) {
     // Old generation marking is allowed in all states.
     if (ShenandoahHeap::heap()->mode()->is_generational()) {
-      return ((actual & ~ShenandoahHeap::OLD_MARKING) == expected);
+      return ((actual & ~(ShenandoahHeap::OLD_MARKING | ShenandoahHeap::MARKING)) == expected);
     } else {
-      assert(actual & ShenandoahHeap::OLD_MARKING == 0, "Should not mark old in non-generational mode");
+      assert((actual & ShenandoahHeap::OLD_MARKING) == 0, "Should not mark old in non-generational mode");
       return (actual == expected);
     }
   }

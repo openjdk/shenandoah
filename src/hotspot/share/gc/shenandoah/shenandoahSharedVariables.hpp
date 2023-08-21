@@ -121,14 +121,15 @@ typedef struct ShenandoahSharedBitmap {
     ShenandoahSharedValue mask_val = (ShenandoahSharedValue) mask;
     while (true) {
       ShenandoahSharedValue ov = Atomic::load_acquire(&value);
-      if ((ov & mask_val) != 0) {
+      // We require all bits of mask_val to be set
+      if ((ov & mask_val) == mask_val) {
         // already set
         return;
       }
 
       ShenandoahSharedValue nv = ov | mask_val;
       if (Atomic::cmpxchg(&value, ov, nv) == ov) {
-        // successfully set
+        // successfully set: if value returned from cmpxchg equals ov, then nv has overwritten value.
         return;
       }
     }
