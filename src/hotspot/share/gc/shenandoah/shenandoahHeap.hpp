@@ -314,7 +314,8 @@ public:
     // Heap has forwarded objects: needs LRB barriers.
     HAS_FORWARDED_BITPOS   = 0,
 
-    // Young or OLD regions are under marking: needs SATB barriers.
+    // Heap is under marking: needs SATB barriers.
+    // For generational mode, it means either young or old marking, or both.
     MARKING_BITPOS    = 1,
 
     // Heap is under evacuation: needs LRB barriers. (Set together with HAS_FORWARDED)
