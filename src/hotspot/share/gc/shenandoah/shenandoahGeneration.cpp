@@ -852,7 +852,7 @@ size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
 
 size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
   shenandoah_assert_heaplocked_or_fullgc_safepoint();
-  assert(_affiliated_region_count > delta, "Affiliated region count cannot be negative");
+  assert(_affiliated_region_count >= delta, "Affiliated region count cannot be negative");
 
   _affiliated_region_count -= delta;
   // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
