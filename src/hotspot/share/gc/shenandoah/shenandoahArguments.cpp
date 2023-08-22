@@ -136,6 +136,10 @@ void ShenandoahArguments::initialize() {
     }
   }
 #ifdef ASSERT
+  if (ShenandoahIUBarrier) {
+    assert(!ShenandoahHeap::heap()->mode()->is_generational(), "Generational mode does not support IU barrier");
+  }
+
   // C2 barrier verification is only reliable when all default barriers are enabled
   if (ShenandoahVerifyOptoBarriers &&
           (!FLAG_IS_DEFAULT(ShenandoahSATBBarrier)            ||

@@ -2457,6 +2457,7 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   assert(!has_forwarded_objects(), "Young marking is not concurrent with evacuation");
   if (!in_progress && is_concurrent_old_mark_in_progress()) {
     assert(mode()->is_generational(), "Only generational GC has old marking");
+    assert(_gc_state.is_set(MARKING), "concurrent_old_marking_in_progress implies MARKING");
     // If old-marking is in progress when we turn off YOUNG_MARKING, leave MARKING (and OLD_MARKING) on
     set_gc_state_mask(YOUNG_MARKING, in_progress);
   } else {
@@ -2468,6 +2469,7 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
   if (!in_progress && is_concurrent_young_mark_in_progress()) {
     // If young-marking is in progress when we turn off OLD_MARKING, leave MARKING (and YOUNG_MARKING) on
+    assert(_gc_state.is_set(MARKING), "concurrent_young_marking_in_progress implies MARKING");
     set_gc_state_mask(OLD_MARKING, in_progress);
   } else {
     set_gc_state_mask(MARKING | OLD_MARKING, in_progress);

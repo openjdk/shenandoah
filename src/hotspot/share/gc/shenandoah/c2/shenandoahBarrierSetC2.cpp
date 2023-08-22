@@ -941,7 +941,6 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
     Node* gc_state    = phase->transform_later(new LoadBNode(ctrl, mem, gc_state_addr, gc_state_adr_type, TypeInt::BYTE, MemNode::unordered));
     int flags = ShenandoahHeap::HAS_FORWARDED;
     if (ShenandoahIUBarrier) {
-      assert(!ShenandoahHeap::heap()->mode()->is_generational(), "Generational mode does not support IU barrier");
       flags |= ShenandoahHeap::MARKING;
     }
     Node* stable_and  = phase->transform_later(new AndINode(gc_state, phase->igvn().intcon(flags)));
