@@ -697,8 +697,8 @@ inline bool ShenandoahHeap::is_full_gc_in_progress() const {
 inline bool ShenandoahHeap::is_full_gc_move_in_progress() const {
   return _full_gc_move_in_progress.is_set();
 }
-
-inline bool ShenandoahHeap::is_update_refs_in_progress() const {
+	
+	inline bool ShenandoahHeap::is_update_refs_in_progress() const {
   return _gc_state.is_set(UPDATEREFS);
 }
 
