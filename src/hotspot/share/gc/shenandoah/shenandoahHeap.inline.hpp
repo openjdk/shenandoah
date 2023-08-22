@@ -661,8 +661,8 @@ inline bool ShenandoahHeap::is_idle() const {
   // if MARKING set, then either YOUNG_MARKING or OLD_MARKING is also set
   // if MARKING unset, both YOUNG_MARKING and OLD_MARKING are unset
   assert((_gc_state.is_unset(MARKING) && _gc_state.is_unset(YOUNG_MARKING) && _gc_state.is_unset(OLD_MARKING)) ||
-	 (_gc_state.is_set(MARKING) && (_gc_state.is_set(YOUNG_MARKING) || _gc_state.is_set(OLD_MARKING))),
-	 "Inconsistent gc marking state");
+         (_gc_state.is_set(MARKING) && (_gc_state.is_set(YOUNG_MARKING) || _gc_state.is_set(OLD_MARKING))),
+         "Inconsistent gc marking state");
   return _gc_state.is_unset(MARKING | EVACUATION | UPDATEREFS);
 }
 

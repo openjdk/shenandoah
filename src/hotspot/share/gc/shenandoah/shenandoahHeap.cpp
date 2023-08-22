@@ -2469,8 +2469,8 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
   // if has_forarded_objects(), then we expect UPDATEREFS or EVACUATION bit of _gc_state to be set
   assert((has_forwarded_objects() && (_gc_state.is_set(UPDATEREFS) || _gc_state.is_set(EVACUATION))) ||
-	 (!has_forwarded_objects() && (_gc_state.is_unset(UPDATEREFS) && _gc_state.is_uset(EVACUATION))),
-	 "has_forwarded_objects() implies UPDATE_REFS or EVACUATION");
+         (!has_forwarded_objects() && (_gc_state.is_unset(UPDATEREFS) && _gc_state.is_uset(EVACUATION))),
+         "has_forwarded_objects() implies UPDATE_REFS or EVACUATION");
   if (!in_progress && is_concurrent_young_mark_in_progress()) {
     // If young-marking is in progress when we turn off OLD_MARKING, leave MARKING (and YOUNG_MARKING) on
     assert(_gc_state.is_set(MARKING), "concurrent_young_marking_in_progress implies MARKING");
