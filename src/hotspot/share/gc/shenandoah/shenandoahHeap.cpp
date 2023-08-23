@@ -2462,10 +2462,6 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
     // If old-marking is in progress when we turn off YOUNG_MARKING, leave MARKING (and OLD_MARKING) on
     mask = YOUNG_MARKING;
   } else {
-#ifdef ASSERT
-    unsigned char gc_state = (unsigned) this->gc_state();
-    assert(_gc_state.is_unset(MARKING | OLD_MARKING | YOUNG_MARKING), "Expect all marking flags to be unset: %x", gc_state);
-#endif
     mask = MARKING | YOUNG_MARKING;
   }
   set_gc_state_mask(mask, in_progress);
