@@ -157,10 +157,18 @@ typedef struct ShenandoahSharedBitmap {
     Atomic::release_store_fence(&value, (ShenandoahSharedValue)0);
   }
 
+  // Returns true iff any bit set in mask is set in this.value.
   bool is_set(uint mask) const {
     return !is_unset(mask);
   }
 
+  // Returns true iff all bits set in mask are set in this.value.
+  bool is_set_exactly(uint mask) const {
+    assert (mask < (sizeof(ShenandoahSharedValue) * CHAR_MAX), "sanity");
+    return (Atomic::load_acquire(&value) & (ShenandoahSharedValue) mask) == mask;
+  }
+
+  // Returns true iff all bits set in mask are unset in this.value.
   bool is_unset(uint mask) const {
     assert (mask < (sizeof(ShenandoahSharedValue) * CHAR_MAX), "sanity");
     return (Atomic::load_acquire(&value) & (ShenandoahSharedValue) mask) == 0;

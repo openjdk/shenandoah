@@ -832,13 +832,10 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
     if (enabled) {
       char actual = _heap->gc_state();
-
-      // if MARKING set, then either YOUNG_MARKING or OLD_MARKING is also set
-      // if MARKING unset, both YOUNG_MARKING and OLD_MARKING are unset
-      assert((((actual & ShenandoahHeap::MARKING) == 0) &&
-              ((actual & (ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING)) == 0)) ||
-             ((actual & ShenandoahHeap::MARKING) && (actual & (ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING))),
-             "Inconsistent gc marking state: %x", actual);
+      
+      bool is_marking = (actual & ShenandoahHeap::MARKING)? 1: 0;
+      bool is_marking_young_or_old = (actual & (ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING))? 1: 0;
+      assert(is_marking == is_marking_young_or_old, "MARKING iff (YOUNG_MARKING or OLD_MARKING), gc_state is: %x", actual);
 
       // Old generation marking is allowed in all states.
       if (!VerifyThreadGCState::verify_gc_state(actual, expected)) {
@@ -848,8 +845,6 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
       VerifyThreadGCState vtgcs(label, expected);
       Threads::java_threads_do(&vtgcs);
     }
-
-
   }
 
   // Deactivate barriers temporarily: Verifier wants plain heap accesses

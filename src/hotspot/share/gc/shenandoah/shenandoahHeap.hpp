@@ -417,7 +417,6 @@ public:
   void set_prepare_for_old_mark_in_progress(bool cond);
   void set_aging_cycle(bool cond);
 
-
   inline bool is_stable() const;
   inline bool is_idle() const;
   inline bool has_evacuation_reserve_quantities() const;

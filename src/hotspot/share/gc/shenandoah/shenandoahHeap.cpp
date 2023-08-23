@@ -2454,23 +2454,28 @@ void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
 }
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
+  uint mask;
   assert(!has_forwarded_objects(), "Young marking is not concurrent with evacuation");
   if (!in_progress && is_concurrent_old_mark_in_progress()) {
     assert(mode()->is_generational(), "Only generational GC has old marking");
     assert(_gc_state.is_set(MARKING), "concurrent_old_marking_in_progress implies MARKING");
     // If old-marking is in progress when we turn off YOUNG_MARKING, leave MARKING (and OLD_MARKING) on
-    set_gc_state_mask(YOUNG_MARKING, in_progress);
+    mask = YOUNG_MARKING;
   } else {
-    set_gc_state_mask(MARKING | YOUNG_MARKING, in_progress);
+    assert(_gc_state.is_unset(MARKING | OLD_MARKING | young_marking), "Expect all marking flags to be unset: %x", _gc_state);
+    mask = MARKING | YOUNG_MARKING;
   }
+  set_gc_mask(mask, in_progress);
   manage_satb_barrier(in_progress);
 }
 
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
+#ifdef ASSERT
   // has_forwarded_objects() iff UPDATEREFS or EVACUATION
-  assert((has_forwarded_objects() && (_gc_state.is_set(UPDATEREFS) || _gc_state.is_set(EVACUATION))) ||
-         (!has_forwarded_objects() && (_gc_state.is_unset(UPDATEREFS) && _gc_state.is_unset(EVACUATION))),
-         "has_forwarded_objects() implies UPDATE_REFS or EVACUATION");
+  bool has_forwarded = has_forwarded_objects()? 1: 0;
+  bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION)? 1: 0;
+  assert (has_forwarded_objects == updating_or_evacuating, "Has forwarded objects iff updating or evacuating");
+#endif
   if (!in_progress && is_concurrent_young_mark_in_progress()) {
     // If young-marking is in progress when we turn off OLD_MARKING, leave MARKING (and YOUNG_MARKING) on
     assert(_gc_state.is_set(MARKING), "concurrent_young_marking_in_progress implies MARKING");

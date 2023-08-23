@@ -136,10 +136,6 @@ void ShenandoahArguments::initialize() {
     }
   }
 #ifdef ASSERT
-  if (ShenandoahIUBarrier) {
-    assert(!ShenandoahHeap::heap()->mode()->is_generational(), "Generational mode does not support IU barrier");
-  }
-
   // C2 barrier verification is only reliable when all default barriers are enabled
   if (ShenandoahVerifyOptoBarriers &&
           (!FLAG_IS_DEFAULT(ShenandoahSATBBarrier)            ||
@@ -155,6 +151,10 @@ void ShenandoahArguments::initialize() {
   guarantee(!ShenandoahVerifyOptoBarriers, "Should be disabled");
 #endif // ASSERT
 #endif // COMPILER2
+
+  if (ShenandoahIUBarrier) {
+    assert(strcmp(ShenandoahGCMode, "generational"), "Generational mode does not support IU barrier");
+  }
 
   // Record more information about previous cycles for improved debugging pleasure
   if (FLAG_IS_DEFAULT(LogEventsBufferEntries)) {
