@@ -2462,10 +2462,13 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
     // If old-marking is in progress when we turn off YOUNG_MARKING, leave MARKING (and OLD_MARKING) on
     mask = YOUNG_MARKING;
   } else {
-    assert(_gc_state.is_unset(MARKING | OLD_MARKING | young_marking), "Expect all marking flags to be unset: %x", _gc_state);
+#ifdef ASSERT
+    unsigned char gc_state = (unsigned) this->gc_state();
+    assert(_gc_state.is_unset(MARKING | OLD_MARKING | YOUNG_MARKING), "Expect all marking flags to be unset: %x", gc_state);
+#endif
     mask = MARKING | YOUNG_MARKING;
   }
-  set_gc_mask(mask, in_progress);
+  set_gc_state_mask(mask, in_progress);
   manage_satb_barrier(in_progress);
 }
 
@@ -2474,7 +2477,7 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
   // has_forwarded_objects() iff UPDATEREFS or EVACUATION
   bool has_forwarded = has_forwarded_objects()? 1: 0;
   bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION)? 1: 0;
-  assert (has_forwarded_objects == updating_or_evacuating, "Has forwarded objects iff updating or evacuating");
+  assert (has_forwarded == updating_or_evacuating, "Has forwarded objects iff updating or evacuating");
 #endif
   if (!in_progress && is_concurrent_young_mark_in_progress()) {
     // If young-marking is in progress when we turn off OLD_MARKING, leave MARKING (and YOUNG_MARKING) on

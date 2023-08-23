@@ -165,7 +165,8 @@ typedef struct ShenandoahSharedBitmap {
   // Returns true iff all bits set in mask are set in this.value.
   bool is_set_exactly(uint mask) const {
     assert (mask < (sizeof(ShenandoahSharedValue) * CHAR_MAX), "sanity");
-    return (Atomic::load_acquire(&value) & (ShenandoahSharedValue) mask) == mask;
+    uint uvalue = Atomic::load_acquire(&value);
+    return (uvalue & mask) == mask;
   }
 
   // Returns true iff all bits set in mask are unset in this.value.
