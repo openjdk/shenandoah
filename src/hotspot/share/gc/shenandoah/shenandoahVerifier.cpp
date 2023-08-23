@@ -835,10 +835,10 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
 
       // if MARKING set, then either YOUNG_MARKING or OLD_MARKING is also set
       // if MARKING unset, both YOUNG_MARKING and OLD_MARKING are unset
-      assert(((actual & ShenandoahHeap::MARKING == 0) &&
-              (actual & (ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING) == 0)) ||
+      assert((((actual & ShenandoahHeap::MARKING) == 0) &&
+              ((actual & (ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING)) == 0)) ||
              ((actual & ShenandoahHeap::MARKING) && (actual & (ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING))),
-             "Inconsistent gc marking state");
+             "Inconsistent gc marking state: %x", actual);
 
       // Old generation marking is allowed in all states.
       if (!VerifyThreadGCState::verify_gc_state(actual, expected)) {
