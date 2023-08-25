@@ -1015,11 +1015,11 @@ void ShenandoahHeapRegion::promote_in_place() {
   ShenandoahYoungGeneration* young_gen = heap->young_generation();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
-  assert(top() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
+  assert(get_top_before_promote() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
 
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   heap->card_scan()->reset_object_range(bottom(), end());
-  heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
+  heap->card_scan()->mark_range_as_dirty(bottom(), get_top_before_promote() - bottom());
 
   // TODO: use an existing coalesce-and-fill function rather than
   // replicating the code here.
