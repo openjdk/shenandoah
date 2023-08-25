@@ -1017,12 +1017,17 @@ void ShenandoahHeapRegion::promote_in_place() {
 
   assert(get_top_before_promote() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
 
-  // Since this region may have served previously as OLD, it may hold obsolete object range info.
+  // Rebuild the remembered set information and mark the entire range as DIRTY.  We do NOT scan the content of this
+  // range to determine which cards need to be DIRTY.  That would force us to scan the region twice, once now, and
+  // once during the subsequent remembered set scan.  Instead, we blindly (conservatively) mark everything as DIRTY
+  // now and then sort out the CLEAN pages during the next remembered set scan.
+  //
+  // Rebuilding the remembered set consists of clearing all object registrations (reset_object_range()) here,
+  // then registering every live object and every coalesced range of free objects in the loop that follows.
   heap->card_scan()->reset_object_range(bottom(), end());
   heap->card_scan()->mark_range_as_dirty(bottom(), get_top_before_promote() - bottom());
 
-  // TODO: use an existing coalesce-and-fill function rather than
-  // replicating the code here.
+  // TODO: use an existing coalesce-and-fill function rather than replicating the code here.
   HeapWord* obj_addr = bottom();
   while (obj_addr < tams) {
     oop obj = cast_to_oop(obj_addr);
