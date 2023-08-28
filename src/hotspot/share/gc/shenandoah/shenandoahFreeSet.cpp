@@ -1010,11 +1010,11 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   size_t region_capacity = alloc_capacity(r);
   _free_sets.move_to_set(idx, OldCollector, region_capacity);
   _free_sets.assert_bounds();
-
   _heap->augment_old_evac_reserve(region_capacity);
   bool transferred = _heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
-    log_info(gc, free)("Flipped region " SIZE_FORMAT " to old reserve, but did not transfer capacity.", idx);
+    log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
+    _heap->generation_sizer()->force_transfer_to_old(1);
   }
   // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
   // to recycle trash before attempting to allocate anything in the region.
