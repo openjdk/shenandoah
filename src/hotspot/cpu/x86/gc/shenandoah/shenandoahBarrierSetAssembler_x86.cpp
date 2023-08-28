@@ -123,7 +123,6 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
 
   if (is_reference_type(type)) {
     if (ShenandoahCardBarrier) {
-      assert(ShenandoahHeap::heap()->mode()->is_generational(), "Error");
       bool checkcast = (decorators & ARRAYCOPY_CHECKCAST) != 0;
       bool disjoint = (decorators & ARRAYCOPY_DISJOINT) != 0;
       bool obj_int = type == T_OBJECT LP64_ONLY(&& UseCompressedOops);
@@ -210,17 +209,12 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
 void ShenandoahBarrierSetAssembler::arraycopy_epilogue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                        Register src, Register dst, Register count) {
 
-  if (!ShenandoahCardBarrier) {
-    return;
-  }
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Error");
+  if (ShenandoahCardBarrier && is_reference_type(type)) {
+    bool checkcast = (decorators & ARRAYCOPY_CHECKCAST) != 0;
+    bool disjoint = (decorators & ARRAYCOPY_DISJOINT) != 0;
+    bool obj_int = type == T_OBJECT LP64_ONLY(&& UseCompressedOops);
+    Register tmp = rax;
 
-  bool checkcast = (decorators & ARRAYCOPY_CHECKCAST) != 0;
-  bool disjoint = (decorators & ARRAYCOPY_DISJOINT) != 0;
-  bool obj_int = type == T_OBJECT LP64_ONLY(&& UseCompressedOops);
-  Register tmp = rax;
-
-  if (is_reference_type(type)) {
 #ifdef _LP64
     if (!checkcast) {
       if (!obj_int) {
@@ -652,7 +646,7 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
 }
 
 void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Don't call");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   // Does a store check for the oop in register obj. The content of
   // register obj is destroyed afterwards.
@@ -947,7 +941,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
 void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                                      Register addr, Register count,
                                                                      Register tmp) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Not needed");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = bs->card_table();

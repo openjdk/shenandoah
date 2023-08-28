@@ -385,9 +385,7 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
 }
 
 void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register obj) {
-  // This will need to be changed if we ever use a card-marking post-barrier w/a non-generational
-  // Shenandoah in the future.
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only use case for Shenandoah today");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   __ lsr(obj, obj, CardTable::card_shift());
 
@@ -631,9 +629,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
 
 void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                                      Register start, Register count, Register scratch, RegSet saved_regs) {
-  // This will need to be changed if we ever use a card-marking post-barrier w/a non-generational
-  // Shenandoah in the future.
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only use case for Shenandoah today");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   Label L_loop, L_done;
   const Register end = count;

@@ -305,7 +305,7 @@ void ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) 
 }
 
 void ShenandoahBarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_val) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Not needed");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   DecoratorSet decorators = access.decorators();
   LIRGenerator* gen = access.gen();

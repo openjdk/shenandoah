@@ -472,7 +472,7 @@ void ShenandoahBarrierSetC2::post_barrier(GraphKit* kit,
                                           Node* val,
                                           BasicType bt,
                                           bool use_precise) const {
-  assert(ShenandoahCardBarrier && ShenandoahHeap::heap()->mode()->is_generational(), "Not needed");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   // No store check needed if we're storing a null.
   if (val != nullptr && val->is_Con()) {
@@ -1019,8 +1019,7 @@ void ShenandoahBarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node*
   if (is_shenandoah_wb_pre_call(node)) {
     shenandoah_eliminate_wb_pre(node, &macro->igvn());
   }
-  if (node->Opcode() == Op_CastP2X && ShenandoahCardBarrier) {
-    assert(ShenandoahHeap::heap()->mode()->is_generational(), "Not needed");
+  if (ShenandoahCardBarrier && node->Opcode() == Op_CastP2X) {
     Node* shift = node->unique_out();
     Node* addp = shift->unique_out();
     for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {

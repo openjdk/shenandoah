@@ -597,7 +597,7 @@ void ShenandoahBarrierSetAssembler::load_at(
 }
 
 void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register base, RegisterOrConstant ind_or_offs, Register tmp) {
-  assert(ShenandoahCardBarrier && ShenandoahHeap::heap()->mode()->is_generational(), "Error");)
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   ShenandoahBarrierSet* ctbs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = ctbs->card_table();
@@ -793,7 +793,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler *masm, Register b
 
 void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                                      Register addr, Register count, Register preserve) {
-  assert(ShenandoahCardBarrier && ShenandoahHeap::heap()->mode()->is_generational(), "Error");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = bs->card_table();
