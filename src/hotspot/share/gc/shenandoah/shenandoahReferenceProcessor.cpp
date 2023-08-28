@@ -364,6 +364,9 @@ bool ShenandoahReferenceProcessor::discover(oop reference, ReferenceType type, u
   }
 
   // Add reference to discovered list
+  // Each worker thread has a private copy of refproc_data, which includes a private discovered list.  This means
+  // there's no risk that a different worker thread will try to manipulate my discovered list head while I'm making
+  // reference the head of my discovered list.
   ShenandoahRefProcThreadLocal& refproc_data = _ref_proc_thread_locals[worker_id];
   oop discovered_head = refproc_data.discovered_list_head<T>();
   if (discovered_head == nullptr) {
@@ -372,6 +375,21 @@ bool ShenandoahReferenceProcessor::discover(oop reference, ReferenceType type, u
     discovered_head = reference;
   }
   if (reference_cas_discovered<T>(reference, discovered_head)) {
+    // We successfully set this reference object's next pointer to discovered_head.  This marks reference as discovered.
+    // If reference_cas_discovered fails, that means some other worker thread took credit for discovery of this reference,
+    // and that other thread will place reference on its discovered list, so I can ignore reference.
+
+    // In case we have created an interesting pointer, mark the remembered set card as dirty.
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    if (heap->mode()->is_generational()) {
+      
+      T* addr = reinterpret_cast<T*>(java_lang_ref_Reference::discovered_addr_raw(reference));
+      if (heap->is_in_old(addr) && heap->is_in_young(discovered_head)) {
+        heap->mark_card_as_dirty(addr);
+      }
+    }
+
+    // Make the discovered_list_head point to reference.
     refproc_data.set_discovered_list_head<T>(reference);
     assert(refproc_data.discovered_list_head<T>() == reference, "reference must be new discovered head");
     log_trace(gc, ref)("Discovered Reference: " PTR_FORMAT " (%s)", p2i(reference), reference_type_name(type));
