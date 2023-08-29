@@ -26,6 +26,7 @@
 #ifndef SHARE_GC_SHENANDOAH_MODE_SHENANDOAHMODE_HPP
 #define SHARE_GC_SHENANDOAH_MODE_SHENANDOAHMODE_HPP
 
+#include "gc/shared/gc_globals.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/java.hpp"
 #include "utilities/formatBuffer.hpp"
@@ -51,6 +52,9 @@ class ShenandoahHeuristics;
 
 class ShenandoahMode : public CHeapObj<mtGC> {
 public:
+  ShenandoahMode() {
+    SHENANDOAH_CHECK_FLAG_UNSET(ShenandoahCardBarrier);
+  }
   virtual void initialize_flags() const = 0;
   virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahSpaceInfo* space_info) const;
   virtual const char* name() = 0;
