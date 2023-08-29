@@ -36,6 +36,11 @@ void ShenandoahGenerationalMode::initialize_flags() const {
   vm_exit_during_initialization("Shenandoah Generational GC is not supported on this platform.");
 #endif
 
+  // Exit if the user has asked ShenandoahCardBarrier to be disabled
+  if (!FLAG_IS_DEFAULT(ShenandoahCardBarrier)) {
+    SHENANDOAH_CHECK_FLAG_SET(ShenandoahCardBarrier);
+  }
+
   // Enable card-marking post-write barrier for tracking old to young pointers
   FLAG_SET_DEFAULT(ShenandoahCardBarrier, true);
 

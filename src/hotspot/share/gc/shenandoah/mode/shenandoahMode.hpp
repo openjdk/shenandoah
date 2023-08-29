@@ -52,9 +52,6 @@ class ShenandoahHeuristics;
 
 class ShenandoahMode : public CHeapObj<mtGC> {
 public:
-  ShenandoahMode() {
-    SHENANDOAH_CHECK_FLAG_UNSET(ShenandoahCardBarrier);
-  }
   virtual void initialize_flags() const = 0;
   virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahSpaceInfo* space_info) const;
   virtual const char* name() = 0;
