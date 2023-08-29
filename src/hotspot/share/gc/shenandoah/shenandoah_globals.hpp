@@ -519,7 +519,8 @@
           "Turn on/off I-U barriers barriers in Shenandoah")                \
                                                                             \
   product(bool, ShenandoahCardBarrier, false, DIAGNOSTIC,                   \
-          "Turn on/off card-marking post-write barrier in Shenandoah")      \
+          "Turn on/off card-marking post-write barrier in Shenandoah: "     \
+          " true when ShenandoahGCMode is generational, false otherwise")   \
                                                                             \
   product(bool, ShenandoahCASBarrier, true, DIAGNOSTIC,                     \
           "Turn on/off CAS barriers in Shenandoah")                         \
