@@ -382,7 +382,6 @@ bool ShenandoahReferenceProcessor::discover(oop reference, ReferenceType type, u
     // In case we have created an interesting pointer, mark the remembered set card as dirty.
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     if (heap->mode()->is_generational()) {
-      
       T* addr = reinterpret_cast<T*>(java_lang_ref_Reference::discovered_addr_raw(reference));
       if (heap->is_in_old(addr) && heap->is_in_young(discovered_head)) {
         heap->mark_card_as_dirty(addr);
