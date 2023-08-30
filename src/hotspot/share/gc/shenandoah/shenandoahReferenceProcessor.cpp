@@ -381,7 +381,7 @@ bool ShenandoahReferenceProcessor::discover(oop reference, ReferenceType type, u
 
     // In case we have created an interesting pointer, mark the remembered set card as dirty.
     ShenandoahHeap* heap = ShenandoahHeap::heap();
-    if (heap->mode()->is_generational()) {
+    if (ShenandoahCardBarrier) {
       T* addr = reinterpret_cast<T*>(java_lang_ref_Reference::discovered_addr_raw(reference));
       if (heap->is_in_old(addr) && heap->is_in_young(discovered_head)) {
         heap->mark_card_as_dirty(addr);
@@ -581,7 +581,7 @@ void ShenandoahReferenceProcessor::enqueue_references_locked() {
     *reinterpret_cast<oop*>(_pending_list_tail) = former_head_of_global_list;
   }
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational()) {
+  if (ShenandoahCardBarrier) {
     if (heap->is_in_old(_pending_list_tail) && heap->is_in_young(former_head_of_global_list)) {
       heap->mark_card_as_dirty(_pending_list_tail);
     }
