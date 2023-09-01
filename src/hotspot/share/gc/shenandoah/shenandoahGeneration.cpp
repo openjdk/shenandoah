@@ -394,6 +394,17 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   // and promotion reserves.  Try shrinking OLD now in case that gives us a bit more runway for mutator allocations during
   // evac and update phases.
   size_t old_consumed = old_evacuated_committed + young_advance_promoted_reserve_used;
+
+  if (old_available < old_consumed) {
+    // This can happen due to round-off errors when adding the results of truncated integer arithmetic.
+    // We've already truncated old_evacuated_committed.  Truncate young_advance_promoted_reserve_used here.
+    assert(young_advance_promoted_reserve_used <= (33 * (old_available - old_evacuated_committed)) / 32,
+           "Round-off errors should be less than 3.125%%, committed: " SIZE_FORMAT ", reserved: " SIZE_FORMAT,
+           young_advance_promoted_reserve_used, old_available - old_evacuated_committed);
+    young_advance_promoted_reserve_used = old_available - old_evacuated_committed;
+    old_consumed = old_evacuated_committed + young_advance_promoted_reserve_used;
+  }
+
   assert(old_available >= old_consumed, "Cannot consume (" SIZE_FORMAT ") more than is available (" SIZE_FORMAT ")",
          old_consumed, old_available);
   size_t excess_old = old_available - old_consumed;
