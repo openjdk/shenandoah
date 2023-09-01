@@ -63,7 +63,8 @@ template <typename T>
 static void card_mark_barrier(T* field, oop value) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->is_in_or_null(value), "Should be in heap");
-  if (heap->mode()->is_generational() && heap->is_in_old(field) && heap->is_in_young(value)) {
+  assert(ShenandoahCardBarrier, "Card-mark barrier should be on");
+  if (heap->is_in_old(field) && heap->is_in_young(value)) {
     // For Shenandoah, each generation collects all the _referents_ that belong to the
     // collected generation. We can end up with discovered lists that contain a mixture
     // of old and young _references_. These references are linked together through the
@@ -81,13 +82,17 @@ static void set_oop_field(T* field, oop value);
 template <>
 void set_oop_field<oop>(oop* field, oop value) {
   *field = value;
-  card_mark_barrier(field, value);
+  if (ShenandoahCardBarrier) {
+    card_mark_barrier(field, value);
+  }
 }
 
 template <>
 void set_oop_field<narrowOop>(narrowOop* field, oop value) {
   *field = CompressedOops::encode(value);
-  card_mark_barrier(field, value);
+  if (ShenandoahCardBarrier) {
+    card_mark_barrier(field, value);
+  }
 }
 
 static oop lrb(oop obj) {
@@ -383,9 +388,7 @@ bool ShenandoahReferenceProcessor::discover(oop reference, ReferenceType type, u
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     if (ShenandoahCardBarrier) {
       T* addr = reinterpret_cast<T*>(java_lang_ref_Reference::discovered_addr_raw(reference));
-      if (heap->is_in_old(addr) && heap->is_in_young(discovered_head)) {
-        heap->mark_card_as_dirty(addr);
-      }
+      card_mark_barrier(addr, discovered_head);
     }
 
     // Make the discovered_list_head point to reference.
