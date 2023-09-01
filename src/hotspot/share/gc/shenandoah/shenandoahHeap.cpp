@@ -487,9 +487,13 @@ jint ShenandoahHeap::initialize() {
   _control_thread = new ShenandoahControlThread();
   _regulator_thread = new ShenandoahRegulatorThread(_control_thread);
 
-  ShenandoahInitLogger::print();
+  print_init_logger();
 
   return JNI_OK;
+}
+
+void ShenandoahHeap::print_init_logger() const {
+  ShenandoahInitLogger::print();
 }
 
 size_t ShenandoahHeap::max_size_for(ShenandoahGeneration* generation) const {
