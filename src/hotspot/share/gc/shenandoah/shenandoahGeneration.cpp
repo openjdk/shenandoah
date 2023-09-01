@@ -298,6 +298,13 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // do not add to the update-refs burden of GC.
 
   size_t old_promo_reserve;
+
+#define KELVIN_NOISE
+#ifdef KELVIN_NOISE
+  log_info(gc)("ShenandoahGeneration::compute_evacuation_budgets(), type is: %d, name: %s", type(),
+               shenandoah_generation_name(type()));
+#endif
+
   if (is_global()) {
     // Global GC is typically triggered by user invocation of System.gc(), and typically indicates that there is lots
     // of garbage to be reclaimed because we are starting a new phase of execution.  Marking for global GC may take
@@ -309,6 +316,10 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     // have relatively high memory utilization.  We still call select_aged_regions() because this will prepare for
     // promotions in place, if relevant.
     old_promo_reserve = 0;
+
+#ifdef KELVIN_NOISE
+    log_info(gc)("ShenandoahGeneration::compute_evacuation_budgets() sets old_promo_reserve to zero");
+#endif
 
     // Dedicate all available old memory to old_evacuation reserve.  This may be small, because old-gen is only
     // expanded based on an existing mixed evacuation workload at the end of the previous GC cycle.  We'll expand
@@ -335,16 +346,19 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     size_t delta = old_evacuation_reserve - old_free_unfragmented;
     old_evacuation_reserve -= delta;
 
-    // Let promo consume fragments of old-gen memory.
-    old_promo_reserve += delta;
+    // Let promo consume fragments of old-gen memory if not global
+    if (!is_global()) {
+      old_promo_reserve += delta;
+    }
   }
   collection_set->establish_preselected(preselected_regions);
   consumed_by_advance_promotion = select_aged_regions(old_promo_reserve, num_regions, preselected_regions);
   assert(consumed_by_advance_promotion <= maximum_old_evacuation_reserve, "Cannot promote more than available old-gen memory");
-  if (consumed_by_advance_promotion < old_promo_reserve) {
-    // If we're in a global collection, this memory can be used for old evacuations
-    old_evacuation_reserve += old_promo_reserve - consumed_by_advance_promotion;
-  }
+
+  // Note that unused old_promo_reserve might not be entirely consumed_by_advance_promotion.  Do not transfer this
+  // to old_evacuation_reserve because this memory is likely very fragmented, and we do not want to increase the likelihood
+  // of old evacuatino failure.
+
   heap->set_young_evac_reserve(young_evacuation_reserve);
   heap->set_old_evac_reserve(old_evacuation_reserve);
   heap->set_promoted_reserve(consumed_by_advance_promotion);
@@ -624,6 +638,11 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
         ShenandoahHeapRegion* region = sorted_regions[i]._region;
         old_consumed += promotion_need;
         candidate_regions_for_promotion_by_copy[region->index()] = true;
+#define KELVIN_NOISE
+#ifdef KELVIN_NOISE
+        log_info(gc)("Preselecting region " SIZE_FORMAT ", promotion_need: " SIZE_FORMAT ", old_available: " SIZE_FORMAT
+                     ", is_old: %d", region->index(), promotion_need, old_available, is_old());
+#endif
       } else {
         // We rejected this promotable region from the collection set because we had no room to hold its copy.
         // Add this region to promo potential for next GC.
