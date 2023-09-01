@@ -298,13 +298,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // do not add to the update-refs burden of GC.
 
   size_t old_promo_reserve;
-
-#define KELVIN_NOISE
-#ifdef KELVIN_NOISE
-  log_info(gc)("ShenandoahGeneration::compute_evacuation_budgets(), type is: %d, name: %s", type(),
-               shenandoah_generation_name(type()));
-#endif
-
   if (is_global()) {
     // Global GC is typically triggered by user invocation of System.gc(), and typically indicates that there is lots
     // of garbage to be reclaimed because we are starting a new phase of execution.  Marking for global GC may take
@@ -316,10 +309,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     // have relatively high memory utilization.  We still call select_aged_regions() because this will prepare for
     // promotions in place, if relevant.
     old_promo_reserve = 0;
-
-#ifdef KELVIN_NOISE
-    log_info(gc)("ShenandoahGeneration::compute_evacuation_budgets() sets old_promo_reserve to zero");
-#endif
 
     // Dedicate all available old memory to old_evacuation reserve.  This may be small, because old-gen is only
     // expanded based on an existing mixed evacuation workload at the end of the previous GC cycle.  We'll expand
@@ -638,11 +627,6 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
         ShenandoahHeapRegion* region = sorted_regions[i]._region;
         old_consumed += promotion_need;
         candidate_regions_for_promotion_by_copy[region->index()] = true;
-#define KELVIN_NOISE
-#ifdef KELVIN_NOISE
-        log_info(gc)("Preselecting region " SIZE_FORMAT ", promotion_need: " SIZE_FORMAT ", old_available: " SIZE_FORMAT
-                     ", is_old: %d", region->index(), promotion_need, old_available, is_old());
-#endif
       } else {
         // We rejected this promotable region from the collection set because we had no room to hold its copy.
         // Add this region to promo potential for next GC.
