@@ -125,7 +125,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;
     if (cset->is_preselected(r->index())) {
-      assert(false, "There should be no preselected regions during GLOBAL GC");
+      fatal("There should be no preselected regions during GLOBAL GC");
       continue;
     }
     bool add_region = false;
@@ -143,7 +143,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
         old_cur_cset = new_cset;
       }
     } else {
-      // r->is_young() && (r->age() < tenuring_threshold)
+      assert(r->is_young() && (r->age() < tenuring_threshold), "DeMorgan\'s law");
       size_t new_cset = young_cur_cset + r->get_live_data_bytes();
       size_t region_garbage = r->garbage();
       size_t new_garbage = cur_young_garbage + region_garbage;
