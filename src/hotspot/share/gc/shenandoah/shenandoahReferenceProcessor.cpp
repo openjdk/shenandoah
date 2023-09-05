@@ -579,15 +579,9 @@ void ShenandoahReferenceProcessor::enqueue_references_locked() {
 
   oop former_head_of_global_list = Universe::swap_reference_pending_list(_pending_list);
   if (UseCompressedOops) {
-    *reinterpret_cast<narrowOop*>(_pending_list_tail) = CompressedOops::encode(former_head_of_global_list);
+    set_oop_field<narrowOop>(reinterpret_cast<narrowOop*>(_pending_list_tail), former_head_of_global_list);
   } else {
-    *reinterpret_cast<oop*>(_pending_list_tail) = former_head_of_global_list;
-  }
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (ShenandoahCardBarrier) {
-    if (heap->is_in_old(_pending_list_tail) && heap->is_in_young(former_head_of_global_list)) {
-      heap->mark_card_as_dirty(_pending_list_tail);
-    }
+    set_oop_field<oop>(reinterpret_cast<oop*>(_pending_list_tail), former_head_of_global_list);
   }
 }
 
