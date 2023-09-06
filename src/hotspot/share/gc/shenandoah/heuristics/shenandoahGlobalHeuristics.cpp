@@ -94,8 +94,8 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
   // Figure out how many unaffiliated young regions are dedicated to mutator and to evacuator.  Allow the young
   // collector's unaffiliated regions to be transferred to old-gen if old-gen has more easily reclaimed garbage
   // than young-gen.  At the end of this cycle, any excess regions remaining in old-gen will be transferred back
-  // to young.  Do not transfer the mutator's unaffiliated regions to transfer to old-gen.  Those most remain
-  // available to the mutator as it needs to be able to consume this memory during the concurrent GC time.
+  // to young.  Do not transfer the mutator's unaffiliated regions to to old-gen.  Those must remain available
+  // to the mutator as it needs to be able to consume this memory during concurrent GC.
 
   size_t unaffiliated_young_regions = heap->young_generation()->free_unaffiliated_regions();
   size_t unaffiliated_young_memory = unaffiliated_young_regions * region_size_bytes;
