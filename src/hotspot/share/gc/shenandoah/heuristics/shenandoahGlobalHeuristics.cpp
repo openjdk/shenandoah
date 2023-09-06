@@ -143,7 +143,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
         old_cur_cset = new_cset;
       }
     } else {
-      assert(r->is_young() && (r->age() < tenuring_threshold), "DeMorgan\'s law");
+      assert(r->is_young() && (r->age() < tenuring_threshold), "DeMorgan's law (assuming r->is_affiliated)");
       size_t new_cset = young_cur_cset + r->get_live_data_bytes();
       size_t region_garbage = r->garbage();
       size_t new_garbage = cur_young_garbage + region_garbage;
