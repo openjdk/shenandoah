@@ -298,7 +298,23 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // do not add to the update-refs burden of GC.
 
   size_t old_promo_reserve;
-  if (old_heuristics->unprocessed_old_collection_candidates() > 0) {
+  if (is_global()) {
+    // Global GC is typically triggered by user invocation of System.gc(), and typically indicates that there is lots
+    // of garbage to be reclaimed because we are starting a new phase of execution.  Marking for global GC may take
+    // significantly longer than typical young marking because we must mark through all old objects.  To expedite
+    // evacuation and update-refs, we give emphasis to reclaiming garbage first, wherever that garbage is found.
+    // Global GC will adjust generation sizes to accommodate the collection set it chooses.
+
+    // Set old_promo_reserve to enforce that no regions are preselected for promotion.  Such regions typically
+    // have relatively high memory utilization.  We still call select_aged_regions() because this will prepare for
+    // promotions in place, if relevant.
+    old_promo_reserve = 0;
+
+    // Dedicate all available old memory to old_evacuation reserve.  This may be small, because old-gen is only
+    // expanded based on an existing mixed evacuation workload at the end of the previous GC cycle.  We'll expand
+    // the budget for evacuation of old during GLOBAL cset selection.
+    old_evacuation_reserve = maximum_old_evacuation_reserve;
+  } else if (old_heuristics->unprocessed_old_collection_candidates() > 0) {
     // We reserved all old-gen memory at end of previous GC to hold anticipated evacuations to old-gen.  If this is
     // mixed evacuation, reserve all of this memory for compaction of old-gen and do not promote.  Prioritize compaction
     // over promotion in order to defragment OLD so that it will be better prepared to efficiently receive promoted memory.
@@ -319,21 +335,25 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
     size_t delta = old_evacuation_reserve - old_free_unfragmented;
     old_evacuation_reserve -= delta;
 
-    // Let promo consume fragments of old-gen memory.
-    old_promo_reserve += delta;
+    // Let promo consume fragments of old-gen memory if not global
+    if (!is_global()) {
+      old_promo_reserve += delta;
+    }
   }
   collection_set->establish_preselected(preselected_regions);
   consumed_by_advance_promotion = select_aged_regions(old_promo_reserve, num_regions, preselected_regions);
   assert(consumed_by_advance_promotion <= maximum_old_evacuation_reserve, "Cannot promote more than available old-gen memory");
-  if (consumed_by_advance_promotion < old_promo_reserve) {
-    // If we're in a global collection, this memory can be used for old evacuations
-    old_evacuation_reserve += old_promo_reserve - consumed_by_advance_promotion;
-  }
+
+  // Note that unused old_promo_reserve might not be entirely consumed_by_advance_promotion.  Do not transfer this
+  // to old_evacuation_reserve because this memory is likely very fragmented, and we do not want to increase the likelihood
+  // of old evacuatino failure.
+
   heap->set_young_evac_reserve(young_evacuation_reserve);
   heap->set_old_evac_reserve(old_evacuation_reserve);
   heap->set_promoted_reserve(consumed_by_advance_promotion);
 
-  // There is no need to expand OLD because all memory used here was set aside at end of previous GC
+  // There is no need to expand OLD because all memory used here was set aside at end of previous GC, except in the
+  // case of a GLOBAL gc.  During choose_collection_set() of GLOBAL, old will be expanded on demand.
 }
 
 // Having chosen the collection set, adjust the budgets for generational mode based on its composition.  Note
@@ -394,7 +414,19 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   // and promotion reserves.  Try shrinking OLD now in case that gives us a bit more runway for mutator allocations during
   // evac and update phases.
   size_t old_consumed = old_evacuated_committed + young_advance_promoted_reserve_used;
-  assert(old_available >= old_consumed, "Cannot consume more than is available");
+
+  if (old_available < old_consumed) {
+    // This can happen due to round-off errors when adding the results of truncated integer arithmetic.
+    // We've already truncated old_evacuated_committed.  Truncate young_advance_promoted_reserve_used here.
+    assert(young_advance_promoted_reserve_used <= (33 * (old_available - old_evacuated_committed)) / 32,
+           "Round-off errors should be less than 3.125%%, committed: " SIZE_FORMAT ", reserved: " SIZE_FORMAT,
+           young_advance_promoted_reserve_used, old_available - old_evacuated_committed);
+    young_advance_promoted_reserve_used = old_available - old_evacuated_committed;
+    old_consumed = old_evacuated_committed + young_advance_promoted_reserve_used;
+  }
+
+  assert(old_available >= old_consumed, "Cannot consume (" SIZE_FORMAT ") more than is available (" SIZE_FORMAT ")",
+         old_consumed, old_available);
   size_t excess_old = old_available - old_consumed;
   size_t unaffiliated_old_regions = old_generation->free_unaffiliated_regions();
   size_t unaffiliated_old = unaffiliated_old_regions * region_size_bytes;
@@ -495,6 +527,9 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->mode()->is_generational(), "Only in generational mode");
   ShenandoahMarkingContext* const ctx = heap->marking_context();
+
+  const uint tenuring_threshold = heap->age_census()->tenuring_threshold();
+
   size_t old_consumed = 0;
   size_t promo_potential = 0;
   size_t anticipated_promote_in_place_live = 0;
@@ -519,7 +554,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
     if (r->is_empty() || !r->has_live() || !r->is_young() || !r->is_regular()) {
       continue;
     }
-    if (r->age() >= InitialTenuringThreshold) {
+    if (r->age() >= tenuring_threshold) {
       if ((r->garbage() < old_garbage_threshold)) {
         HeapWord* tams = ctx->top_at_mark_start(r);
         HeapWord* original_top = r->top();
@@ -579,7 +614,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
       //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
       //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
       //   the tenure age can be increased.
-      if (heap->is_aging_cycle() && (r->age() + 1 == InitialTenuringThreshold)) {
+      if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
         if (r->garbage() >= old_garbage_threshold) {
           anticipated_candidates++;
           promo_potential += r->get_live_data_bytes();
@@ -596,6 +631,8 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
   // Sort in increasing order according to live data bytes.  Note that candidates represents the number of regions
   // that qualify to be promoted by evacuation.
   if (candidates > 0) {
+    size_t selected_regions = 0;
+    size_t selected_live = 0;
     QuickSort::sort<AgedRegionData>(sorted_regions, candidates, compare_by_aged_live, false);
     for (size_t i = 0; i < candidates; i++) {
       size_t region_live_data = sorted_regions[i]._live_data;
@@ -604,6 +641,8 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
         ShenandoahHeapRegion* region = sorted_regions[i]._region;
         old_consumed += promotion_need;
         candidate_regions_for_promotion_by_copy[region->index()] = true;
+        selected_regions++;
+        selected_live += region_live_data;
       } else {
         // We rejected this promotable region from the collection set because we had no room to hold its copy.
         // Add this region to promo potential for next GC.
@@ -612,6 +651,9 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
       // We keep going even if one region is excluded from selection because we need to accumulate all eligible
       // regions that are not preselected into promo_potential
     }
+    log_info(gc)("Preselected " SIZE_FORMAT " regions containing " SIZE_FORMAT " live bytes,"
+                 " consuming: " SIZE_FORMAT " of budgeted: " SIZE_FORMAT,
+                 selected_regions, selected_live, old_consumed, old_available);
   }
   heap->set_pad_for_promote_in_place(promote_in_place_pad);
   heap->set_promotion_potential(promo_potential);
@@ -622,6 +664,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
 void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahCollectionSet* collection_set = heap->collection_set();
+  bool is_generational = heap->mode()->is_generational();
 
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   assert(!is_old(), "Only YOUNG and GLOBAL GC perform evacuations");
@@ -641,13 +684,30 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     }
   }
 
+  // Tally the census counts and compute the adaptive tenuring threshold
+  if (is_generational && ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
+    // Objects above TAMS weren't included in the age census. Since they were all
+    // allocated in this cycle they belong in the age 0 cohort. We walk over all
+    // young regions and sum the volume of objects between TAMS and top.
+    ShenandoahUpdateCensusZeroCohortClosure age0_cl(complete_marking_context());
+    heap->young_generation()->heap_region_iterate(&age0_cl);
+    size_t age0_pop = age0_cl.get_population();
+
+    // Age table updates
+    ShenandoahAgeCensus* census = heap->age_census();
+    census->prepare_for_census_update();
+    // Update the global census, including the missed age 0 cohort above,
+    // along with the census during marking, and compute the tenuring threshold
+    census->update_census(age0_pop);
+  }
+
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::choose_cset :
                             ShenandoahPhaseTimings::degen_gc_choose_cset);
 
     collection_set->clear();
     ShenandoahHeapLocker locker(heap->lock());
-    if (heap->mode()->is_generational()) {
+    if (is_generational) {
       size_t consumed_by_advance_promotion;
       bool* preselected_regions = (bool*) alloca(heap->num_regions() * sizeof(bool));
       for (unsigned int i = 0; i < heap->num_regions(); i++) {
@@ -756,7 +816,6 @@ ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
   _type(type),
   _task_queues(new ShenandoahObjToScanQueueSet(max_workers)),
   _ref_processor(new ShenandoahReferenceProcessor(MAX2(max_workers, 1U))),
-  _collection_thread_time_s(0.0),
   _affiliated_region_count(0), _humongous_waste(0), _used(0), _bytes_allocated_since_gc_start(0),
   _max_capacity(max_capacity), _soft_max_capacity(soft_max_capacity),
   _heuristics(nullptr) {
@@ -832,7 +891,7 @@ size_t ShenandoahGeneration::increase_affiliated_region_count(size_t delta) {
 
 size_t ShenandoahGeneration::decrease_affiliated_region_count(size_t delta) {
   shenandoah_assert_heaplocked_or_fullgc_safepoint();
-  assert(_affiliated_region_count > delta, "Affiliated region count cannot be negative");
+  assert(_affiliated_region_count >= delta, "Affiliated region count cannot be negative");
 
   _affiliated_region_count -= delta;
   // TODO: REMOVE IS_GLOBAL() QUALIFIER AFTER WE FIX GLOBAL AFFILIATED REGION ACCOUNTING
@@ -958,15 +1017,3 @@ void ShenandoahGeneration::record_success_degenerated() {
   heuristics()->record_success_degenerated();
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_degenerated();
 }
-
-void ShenandoahGeneration::add_collection_time(double time_seconds) {
-  shenandoah_assert_control_or_vm_thread();
-  _collection_thread_time_s += time_seconds;
-}
-
-double ShenandoahGeneration::reset_collection_time() {
-  double t = _collection_thread_time_s;
-  _collection_thread_time_s = 0.0;
-  return t;
-}
-

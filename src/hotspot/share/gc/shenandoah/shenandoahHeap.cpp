@@ -36,6 +36,7 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/tlab_globals.hpp"
 
+#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
@@ -239,6 +240,9 @@ jint ShenandoahHeap::initialize() {
     size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
     rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
     _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
+
+    // Age census structure
+    _age_census = new ShenandoahAgeCensus();
   }
 
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
@@ -560,8 +564,11 @@ void ShenandoahHeap::initialize_heuristics_generations() {
   _old_generation = new ShenandoahOldGeneration(_max_workers, max_capacity_old, initial_capacity_old);
   _global_generation = new ShenandoahGlobalGeneration(_gc_mode->is_generational(), _max_workers, max_capacity(), max_capacity());
   _global_generation->initialize_heuristics(_gc_mode);
-  _young_generation->initialize_heuristics(_gc_mode);
-  _old_generation->initialize_heuristics(_gc_mode);
+  if (mode()->is_generational()) {
+    _young_generation->initialize_heuristics(_gc_mode);
+    _old_generation->initialize_heuristics(_gc_mode);
+  }
+  _evac_tracker = new ShenandoahEvacuationTracker(mode()->is_generational());
 }
 
 #ifdef _MSC_VER
@@ -592,6 +599,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _captured_old_usage(0),
   _previous_promotion(0),
   _upgraded_to_full(false),
+  _age_census(nullptr),
   _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
@@ -604,7 +612,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _pacer(nullptr),
   _verifier(nullptr),
   _phase_timings(nullptr),
-  _evac_tracker(new ShenandoahEvacuationTracker()),
+  _evac_tracker(nullptr),
   _mmu_tracker(),
   _generation_sizer(&_mmu_tracker),
   _monitoring_support(nullptr),
@@ -1682,6 +1690,8 @@ private:
   ShenandoahHeap* const _sh;
   ShenandoahRegionIterator *_regions;
   bool _concurrent;
+  uint _tenuring_threshold;
+
 public:
   ShenandoahGenerationalEvacuationTask(ShenandoahHeap* sh,
                                        ShenandoahRegionIterator* iterator,
@@ -1689,8 +1699,13 @@ public:
     WorkerTask("Shenandoah Evacuation"),
     _sh(sh),
     _regions(iterator),
-    _concurrent(concurrent)
-  {}
+    _concurrent(concurrent),
+    _tenuring_threshold(0)
+  {
+    if (_sh->mode()->is_generational()) {
+      _tenuring_threshold = _sh->age_census()->tenuring_threshold();
+    }
+  }
 
   void work(uint worker_id) {
     if (_concurrent) {
@@ -1725,7 +1740,7 @@ private:
         if (ShenandoahPacing) {
           _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
-      } else if (r->is_young() && r->is_active() && (r->age() >= InitialTenuringThreshold)) {
+      } else if (r->is_young() && r->is_active() && (r->age() >= _tenuring_threshold)) {
         HeapWord* tams = ctx->top_at_mark_start(r);
         if (r->is_humongous_start()) {
           // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
@@ -2431,22 +2446,34 @@ void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
 }
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
-  if (has_forwarded_objects()) {
-    set_gc_state_mask(YOUNG_MARKING | UPDATEREFS, in_progress);
+  uint mask;
+  assert(!has_forwarded_objects(), "Young marking is not concurrent with evacuation");
+  if (!in_progress && is_concurrent_old_mark_in_progress()) {
+    assert(mode()->is_generational(), "Only generational GC has old marking");
+    assert(_gc_state.is_set(MARKING), "concurrent_old_marking_in_progress implies MARKING");
+    // If old-marking is in progress when we turn off YOUNG_MARKING, leave MARKING (and OLD_MARKING) on
+    mask = YOUNG_MARKING;
   } else {
-    set_gc_state_mask(YOUNG_MARKING, in_progress);
+    mask = MARKING | YOUNG_MARKING;
   }
-
+  set_gc_state_mask(mask, in_progress);
   manage_satb_barrier(in_progress);
 }
 
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
-  if (has_forwarded_objects()) {
-    set_gc_state_mask(OLD_MARKING | UPDATEREFS, in_progress);
-  } else {
+#ifdef ASSERT
+  // has_forwarded_objects() iff UPDATEREFS or EVACUATION
+  bool has_forwarded = has_forwarded_objects()? 1: 0;
+  bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION)? 1: 0;
+  assert (has_forwarded == updating_or_evacuating, "Has forwarded objects iff updating or evacuating");
+#endif
+  if (!in_progress && is_concurrent_young_mark_in_progress()) {
+    // If young-marking is in progress when we turn off OLD_MARKING, leave MARKING (and YOUNG_MARKING) on
+    assert(_gc_state.is_set(MARKING), "concurrent_young_marking_in_progress implies MARKING");
     set_gc_state_mask(OLD_MARKING, in_progress);
+  } else {
+    set_gc_state_mask(MARKING | OLD_MARKING, in_progress);
   }
-
   manage_satb_barrier(in_progress);
 }
 
@@ -3124,7 +3151,9 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t old_used = old_generation()->used() + old_generation()->get_humongous_waste();
     size_t trigger_threshold = old_generation()->usage_trigger_threshold();
     // Detects unsigned arithmetic underflow
-    assert(old_used < ShenandoahHeap::heap()->capacity(), "Old used must be less than heap capacity");
+    assert(old_used <= capacity(),
+           "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
+           old_generation()->used(), old_generation()->get_humongous_waste(), capacity());
 
     if (old_used > trigger_threshold) {
       old_heuristics()->trigger_old_has_grown();
@@ -3445,4 +3474,3 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
     global_generation()->log_status(msg);
   }
 }
-

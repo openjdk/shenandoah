@@ -27,21 +27,24 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
 
+#include "gc/shared/ageTable.hpp"
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
+#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
+#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
-#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "memory/metaspace.hpp"
 #include "services/memoryManager.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -314,8 +317,9 @@ public:
     // Heap has forwarded objects: needs LRB barriers.
     HAS_FORWARDED_BITPOS   = 0,
 
-    // Young regions are under marking: needs SATB barriers.
-    YOUNG_MARKING_BITPOS    = 1,
+    // Heap is under marking: needs SATB barriers.
+    // For generational mode, it means either young or old marking, or both.
+    MARKING_BITPOS    = 1,
 
     // Heap is under evacuation: needs LRB barriers. (Set together with HAS_FORWARDED)
     EVACUATION_BITPOS = 2,
@@ -326,17 +330,21 @@ public:
     // Heap is under weak-reference/roots processing: needs weak-LRB barriers.
     WEAK_ROOTS_BITPOS  = 4,
 
-    // Old regions are under marking, still need SATB barriers.
-    OLD_MARKING_BITPOS = 5
+    // Young regions are under marking, need SATB barriers.
+    YOUNG_MARKING_BITPOS = 5,
+
+    // Old regions are under marking, need SATB barriers.
+    OLD_MARKING_BITPOS = 6
   };
 
   enum GCState {
     STABLE        = 0,
     HAS_FORWARDED = 1 << HAS_FORWARDED_BITPOS,
-    YOUNG_MARKING = 1 << YOUNG_MARKING_BITPOS,
+    MARKING       = 1 << MARKING_BITPOS,
     EVACUATION    = 1 << EVACUATION_BITPOS,
     UPDATEREFS    = 1 << UPDATEREFS_BITPOS,
     WEAK_ROOTS    = 1 << WEAK_ROOTS_BITPOS,
+    YOUNG_MARKING = 1 << YOUNG_MARKING_BITPOS,
     OLD_MARKING   = 1 << OLD_MARKING_BITPOS
   };
 
@@ -377,6 +385,8 @@ private:
 
   bool _upgraded_to_full;
 
+  ShenandoahAgeCensus* _age_census;    // Age census used for adapting tenuring threshold in generational mode
+
   // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
   // hold the results of evacuating to young-gen and to old-gen.  These quantitites, stored in _promoted_reserve,
   // _old_evac_reserve, and _young_evac_reserve, are consulted prior to rebuilding the free set (ShenandoahFreeSet)
@@ -411,7 +421,6 @@ public:
   void set_concurrent_weak_root_in_progress(bool cond);
   void set_prepare_for_old_mark_in_progress(bool cond);
   void set_aging_cycle(bool cond);
-
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -482,6 +491,9 @@ public:
   // Returns previous value
   inline size_t set_young_evac_reserve(size_t new_val);
   inline size_t get_young_evac_reserve() const;
+
+  // Return the age census object for young gen (in generational mode)
+  inline ShenandoahAgeCensus* age_census() const;
 
 private:
   void manage_satb_barrier(bool active);
@@ -881,7 +893,15 @@ public:
   size_t trash_humongous_region_at(ShenandoahHeapRegion *r);
 
   static inline void increase_object_age(oop obj, uint additional_age);
+
+  // Return the object's age (at a safepoint or when object isn't
+  // mutable by the mutator)
   static inline uint get_object_age(oop obj);
+
+  // Return the object's age, or a sentinel value when the age can't
+  // necessarily be determined because of concurrent locking by the
+  // mutator
+  static inline uint get_object_age_concurrent(oop obj);
 
   void transfer_old_pointers_from_satb();
 

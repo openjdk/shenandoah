@@ -81,7 +81,11 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _live_data(0),
   _critical_pins(0),
   _update_watermark(start),
-  _age(0) {
+  _age(0)
+#ifdef SHENANDOAH_CENSUS_NOISE
+  , _youth(0)
+#endif // SHENANDOAH_CENSUS_NOISE
+  {
 
   assert(Universe::on_page_boundary(_bottom) && Universe::on_page_boundary(_end),
          "invalid space boundaries");
@@ -322,6 +326,7 @@ void ShenandoahHeapRegion::make_trash_immediate() {
 void ShenandoahHeapRegion::make_empty() {
   shenandoah_assert_heaplocked();
   reset_age();
+  CENSUS_NOISE(clear_youth();)
   switch (_state) {
     case _trash:
       set_state(_empty_committed);
@@ -1004,11 +1009,45 @@ void ShenandoahHeapRegion::promote_in_place() {
   assert(heap->active_generation()->is_mark_complete(), "sanity");
   assert(is_young(), "Only young regions can be promoted");
   assert(is_regular(), "Use different service to promote humongous regions");
-  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
+  assert(age() >= heap->age_census()->tenuring_threshold(), "Only promote regions that are sufficiently aged");
 
   ShenandoahOldGeneration* old_gen = heap->old_generation();
   ShenandoahYoungGeneration* young_gen = heap->young_generation();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+
+  assert(get_top_before_promote() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
+
+  // Rebuild the remembered set information and mark the entire range as DIRTY.  We do NOT scan the content of this
+  // range to determine which cards need to be DIRTY.  That would force us to scan the region twice, once now, and
+  // once during the subsequent remembered set scan.  Instead, we blindly (conservatively) mark everything as DIRTY
+  // now and then sort out the CLEAN pages during the next remembered set scan.
+  //
+  // Rebuilding the remembered set consists of clearing all object registrations (reset_object_range()) here,
+  // then registering every live object and every coalesced range of free objects in the loop that follows.
+  heap->card_scan()->reset_object_range(bottom(), end());
+  heap->card_scan()->mark_range_as_dirty(bottom(), get_top_before_promote() - bottom());
+
+  // TODO: use an existing coalesce-and-fill function rather than replicating the code here.
+  HeapWord* obj_addr = bottom();
+  while (obj_addr < tams) {
+    oop obj = cast_to_oop(obj_addr);
+    if (marking_context->is_marked(obj)) {
+      assert(obj->klass() != NULL, "klass should not be NULL");
+      // This thread is responsible for registering all objects in this region.  No need for lock.
+      heap->card_scan()->register_object_without_lock(obj_addr);
+      obj_addr += obj->size();
+    } else {
+      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
+      assert(next_marked_obj <= tams, "next marked object cannot exceed tams");
+      size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
+      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+      heap->card_scan()->register_object_without_lock(obj_addr);
+      obj_addr = next_marked_obj;
+    }
+  }
+  // We do not need to scan above TAMS because restored top equals tams
+  assert(obj_addr == tams, "Expect loop to terminate when obj_addr equals tams");
 
   {
     ShenandoahHeapLocker locker(heap->lock());
@@ -1046,36 +1085,6 @@ void ShenandoahHeapRegion::promote_in_place() {
     // add_old_collector_free_region() increases promoted_reserve() if available space exceeds PLAB::min_size()
     heap->free_set()->add_old_collector_free_region(this);
   }
-
-  assert(top() == tams, "Cannot promote regions in place if top has advanced beyond TAMS");
-
-  // Since this region may have served previously as OLD, it may hold obsolete object range info.
-  heap->card_scan()->reset_object_range(bottom(), end());
-  heap->card_scan()->mark_range_as_dirty(bottom(), top() - bottom());
-
-  // TODO: use an existing coalesce-and-fill function rather than
-  // replicating the code here.
-  HeapWord* obj_addr = bottom();
-  while (obj_addr < tams) {
-    oop obj = cast_to_oop(obj_addr);
-    if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != NULL, "klass should not be NULL");
-      // This thread is responsible for registering all objects in this region.  No need for lock.
-      heap->card_scan()->register_object_without_lock(obj_addr);
-      obj_addr += obj->size();
-    } else {
-      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, tams);
-      assert(next_marked_obj <= tams, "next marked object cannot exceed tams");
-      size_t fill_size = next_marked_obj - obj_addr;
-      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
-      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-      heap->card_scan()->register_object_without_lock(obj_addr);
-      obj_addr = next_marked_obj;
-    }
-  }
-
-  // We do not need to scan above TAMS because top equals tams
-  assert(obj_addr == tams, "Expect loop to terminate when obj_addr equals tams");
 }
 
 void ShenandoahHeapRegion::promote_humongous() {
@@ -1084,7 +1093,7 @@ void ShenandoahHeapRegion::promote_humongous() {
   assert(heap->active_generation()->is_mark_complete(), "sanity");
   assert(is_young(), "Only young regions can be promoted");
   assert(is_humongous_start(), "Should not promote humongous continuation in isolation");
-  assert(age() >= InitialTenuringThreshold, "Only promote regions that are sufficiently aged");
+  assert(age() >= heap->age_census()->tenuring_threshold(), "Only promote regions that are sufficiently aged");
 
   ShenandoahGeneration* old_generation = heap->old_generation();
   ShenandoahGeneration* young_generation = heap->young_generation();

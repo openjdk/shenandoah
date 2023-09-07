@@ -130,7 +130,7 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler *masm, Dec
   // for the garbage collector.
   const int required_states = ShenandoahSATBBarrier && dest_uninitialized
                               ? ShenandoahHeap::HAS_FORWARDED
-                              : ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING;
+                              : ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::MARKING;
 
   __ andi_(R11_tmp, R11_tmp, required_states);
   __ beq(CCR0, skip_prologue);
@@ -190,7 +190,7 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler *masm, Dec
 void ShenandoahBarrierSetAssembler::arraycopy_epilogue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                                        Register dst, Register count,
                                                        Register preserve) {
-  if (is_reference_type(type)) {
+  if (ShenandoahCardBarrier && is_reference_type(type)) {
     __ block_comment("arraycopy_epilogue (shenandoahgc) {");
     gen_write_ref_array_post_barrier(masm, decorators, dst, count, preserve);
     __ block_comment("} arraycopy_epilogue (shenandoahgc)");
@@ -230,7 +230,7 @@ void ShenandoahBarrierSetAssembler::satb_write_barrier_impl(MacroAssembler *masm
   // Check whether marking is active.
   __ lbz(tmp1, in_bytes(ShenandoahThreadLocalData::gc_state_offset()), R16_thread);
 
-  __ andi_(tmp1, tmp1, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
+  __ andi_(tmp1, tmp1, ShenandoahHeap::MARKING);
   __ beq(CCR0, skip_barrier);
 
   /* ==== Determine the reference's previous value ==== */
@@ -597,9 +597,7 @@ void ShenandoahBarrierSetAssembler::load_at(
 }
 
 void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register base, RegisterOrConstant ind_or_offs, Register tmp) {
-  if (!ShenandoahHeap::heap()->mode()->is_generational()) {
-    return;
-  }
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   ShenandoahBarrierSet* ctbs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = ctbs->card_table();
@@ -641,7 +639,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler *masm, DecoratorSet 
                                 preservation_level);
 
   // No need for post barrier if storing NULL
-  if (is_reference_type(type) && val != noreg) {
+  if (ShenandoahCardBarrier && is_reference_type(type) && val != noreg) {
     store_check(masm, base, ind_or_offs, tmp1);
   }
 }
@@ -795,9 +793,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler *masm, Register b
 
 void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                                      Register addr, Register count, Register preserve) {
-  if (!ShenandoahHeap::heap()->mode()->is_generational()) {
-    return;
-  }
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   CardTable* ct = bs->card_table();
@@ -964,7 +960,7 @@ void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAss
   // another check is required as a safepoint might have been reached in the meantime (JDK-8140588).
   __ lbz(R12_tmp2, in_bytes(ShenandoahThreadLocalData::gc_state_offset()), R16_thread);
 
-  __ andi_(R12_tmp2, R12_tmp2, ShenandoahHeap::YOUNG_MARKING | ShenandoahHeap::OLD_MARKING);
+  __ andi_(R12_tmp2, R12_tmp2, ShenandoahHeap::MARKING);
   __ beq(CCR0, skip_barrier);
 
   /* ==== Add previous value directly to thread-local SATB mark queue ==== */

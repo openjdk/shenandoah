@@ -413,6 +413,16 @@ void ShenandoahFullGC::phase1_mark_heap() {
   ShenandoahSTWMark mark(heap->global_generation(), true /*full_gc*/);
   mark.mark();
   heap->parallel_cleaning(true /* full_gc */);
+
+  size_t live_bytes_in_old = 0;
+  for (size_t i = 0; i < heap->num_regions(); i++) {
+    ShenandoahHeapRegion* r = heap->get_region(i);
+    if (r->is_old()) {
+      live_bytes_in_old += r->get_live_data_bytes();
+    }
+  }
+  log_info(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));
+  heap->old_generation()->set_live_bytes_after_last_mark(live_bytes_in_old);
 }
 
 class ShenandoahPrepareForCompactionTask : public WorkerTask {
@@ -446,6 +456,7 @@ class ShenandoahPrepareForGenerationalCompactionObjectClosure : public ObjectClo
 private:
   PreservedMarks*          const _preserved_marks;
   ShenandoahHeap*          const _heap;
+  uint                           _tenuring_threshold;
 
   // _empty_regions is a thread-local list of heap regions that have been completely emptied by this worker thread's
   // compaction efforts.  The worker thread that drives these efforts adds compacted regions to this list if the
@@ -467,6 +478,7 @@ public:
                                                           ShenandoahHeapRegion* young_to_region, uint worker_id) :
       _preserved_marks(preserved_marks),
       _heap(ShenandoahHeap::heap()),
+      _tenuring_threshold(0),
       _empty_regions(empty_regions),
       _empty_regions_pos(0),
       _old_to_region(old_to_region),
@@ -474,7 +486,11 @@ public:
       _from_region(nullptr),
       _old_compact_point((old_to_region != nullptr)? old_to_region->bottom(): nullptr),
       _young_compact_point((young_to_region != nullptr)? young_to_region->bottom(): nullptr),
-      _worker_id(worker_id) {}
+      _worker_id(worker_id) {
+    if (_heap->mode()->is_generational()) {
+      _tenuring_threshold = _heap->age_census()->tenuring_threshold();
+    }
+  }
 
   void set_from_region(ShenandoahHeapRegion* from_region) {
     _from_region = from_region;
@@ -539,7 +555,7 @@ public:
 
     bool promote_object = false;
     if ((_from_affiliation == ShenandoahAffiliation::YOUNG_GENERATION) &&
-        (from_region_age + object_age >= InitialTenuringThreshold)) {
+        (from_region_age + object_age >= _tenuring_threshold)) {
       if ((_old_to_region != nullptr) && (_old_compact_point + obj_size > _old_to_region->end())) {
         finish_old_region();
         _old_to_region = nullptr;
@@ -1519,7 +1535,7 @@ void ShenandoahFullGC::phase5_epilog() {
         heap->generation_sizer()->transfer_to_young(excess_old_regions);
       } else if (old_capacity < old_usage) {
         size_t old_regions_deficit = (old_usage - old_capacity) / ShenandoahHeapRegion::region_size_bytes();
-        heap->generation_sizer()->transfer_to_old(old_regions_deficit);
+        heap->generation_sizer()->force_transfer_to_old(old_regions_deficit);
       }
 
       log_info(gc)("FullGC done: young usage: " SIZE_FORMAT "%s, old usage: " SIZE_FORMAT "%s",
