@@ -179,6 +179,7 @@ public:
     _gc_generation = generation;
   }
 
+  ShenandoahHeuristics* heuristics();
   ShenandoahOldHeuristics* old_heuristics();
   ShenandoahYoungHeuristics* young_heuristics();
 

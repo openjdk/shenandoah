@@ -730,6 +730,9 @@ void ShenandoahHeap::post_initialize() {
   JFR_ONLY(ShenandoahJFRSupport::register_jfr_type_serializers());
 }
 
+ShenandoahHeuristics* ShenandoahHeap::heuristics() {
+  return _global_generation->heuristics();
+}
 
 ShenandoahOldHeuristics* ShenandoahHeap::old_heuristics() {
   return (ShenandoahOldHeuristics*) _old_generation->heuristics();

@@ -24,7 +24,6 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahInitLogger.hpp"
@@ -52,5 +51,5 @@ void ShenandoahInitLogger::print_gc_specific() {
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   log_info(gc, init)("Mode: %s", heap->mode()->name());
-  log_info(gc, init)("Heuristics: %s", heap->global_generation()->heuristics()->name());
+  log_info(gc, init)("Heuristics: %s", heap->heuristics()->name());
 }
