@@ -187,7 +187,7 @@ inline void ShenandoahBarrierSet::keep_alive_if_weak(DecoratorSet decorators, oo
 
 template <DecoratorSet decorators, typename T>
 inline void ShenandoahBarrierSet::write_ref_field_post(T* field) {
-  assert(ShenandoahCardBarrier, "Error");
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
   volatile CardTable::CardValue* byte = card_table()->byte_for(field);
   *byte = CardTable::dirty_card_val();
 }
