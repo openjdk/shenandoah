@@ -53,7 +53,7 @@ ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap, MemRegion heap_
   _satb_mark_queue_buffer_allocator("SATB Buffer Allocator", ShenandoahSATBBufferSize),
   _satb_mark_queue_set(&_satb_mark_queue_buffer_allocator)
 {
-  if (heap->mode()->is_generational()) {
+  if (ShenandoahCardBarrier) {
     _card_table = new ShenandoahCardTable(heap_region);
     _card_table->initialize();
   }
