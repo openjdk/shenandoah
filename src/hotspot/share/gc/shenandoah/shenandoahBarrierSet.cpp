@@ -158,9 +158,7 @@ void ShenandoahBarrierSet::clone_barrier_runtime(oop src) {
 }
 
 void ShenandoahBarrierSet::write_ref_array(HeapWord* start, size_t count) {
-  if (!_heap->mode()->is_generational()) {
-    return;
-  }
+  assert(ShenandoahCardBarrier, "Did you mean to enable ShenandoahCardBarrier?");
 
   HeapWord* end = (HeapWord*)((char*) start + (count * heapOopSize));
   // In the case of compressed oops, start and end may potentially be misaligned;

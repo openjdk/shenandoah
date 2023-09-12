@@ -376,7 +376,9 @@ bool ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_arraycopy
   ShenandoahBarrierSet* bs = ShenandoahBarrierSet::barrier_set();
   bs->arraycopy_barrier(src, dst, length);
   bool result = Raw::oop_arraycopy_in_heap(src_obj, src_offset_in_bytes, src_raw, dst_obj, dst_offset_in_bytes, dst_raw, length);
-  bs->write_ref_array((HeapWord*) dst, length);
+  if (ShenandoahCardBarrier) {
+    bs->write_ref_array((HeapWord*) dst, length);
+  }
   return result;
 }
 
