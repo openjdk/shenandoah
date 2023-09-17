@@ -85,12 +85,6 @@ private:
   // at or above tenure age and which contain more than ShenandoahOldGarbageThreshold
   // amounts of garbage.
   //
-  // A side effect performed by this function is to tally up the number of regions and
-  // the number of live bytes that we plan to promote-in-place during the current GC cycle.
-  // This information, which is stored with an invocation of heap->set_promotion_in_place_potential(),
-  // feeds into subsequent decisions about when to trigger the next GC and may identify
-  // special work to be done during this GC cycle if we choose to abbreviate it.
-  //
   // Returns bytes of old-gen memory consumed by selected aged regions
   size_t select_aged_regions(size_t old_available,
                              size_t num_regions, bool
@@ -124,6 +118,7 @@ private:
   virtual size_t free_unaffiliated_regions() const;
   size_t used() const override { return _used; }
   size_t available() const override;
+  size_t available_with_reserve() const;
 
   // Returns the memory available based on the _soft_ max heap capacity (soft_max_heap - used).
   // The soft max heap size may be adjusted lower than the max heap size to cause the trigger

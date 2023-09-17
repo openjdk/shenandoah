@@ -275,11 +275,9 @@ void ShenandoahDegenGC::op_degenerated() {
         assert(!heap->cancelled_gc(), "STW reference update can not OOM");
       }
 
-      if (ClassUnloading) {
-         // Disarm nmethods that armed in concurrent cycle.
-         // In above case, update roots should disarm them
-         ShenandoahCodeRoots::disarm_nmethods();
-      }
+      // Disarm nmethods that armed in concurrent cycle.
+      // In above case, update roots should disarm them
+      ShenandoahCodeRoots::disarm_nmethods();
 
       if (heap->mode()->is_generational() && heap->is_concurrent_old_mark_in_progress()) {
         // When the SATB barrier is left on to support concurrent old gen mark, it may pick up writes to
