@@ -489,69 +489,69 @@ void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount)
 
 size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double avg_cycle_time) {
   double current_rate;  
+  double *x_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
+  double *y_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
+  double x_sum = 0.0;
+  double y_sum = 0.0;
 
-#ifdef KELVIN_TRACE
+#undef KELVIN_TRACE_CONSUMPTION
+#ifdef KELVIN_TRACE_CONSUMPTION
   log_info(gc)("accelerated_consumption(), num_samples: %u", _num_samples);
   for (uint i = 0; i < _num_samples; i++) {
     uint index = (_first_sample_index + i) % SAMPLE_SIZE;
     log_info(gc)("sample[%d]: %.3f @ time %.3f", i, _rate_samples[index], _rate_timestamps[index]);
   }
 #endif
-  if (_num_samples < SAMPLE_SIZE) {
-    acceleration = 0.0;
-    size_t sum_of_rates = 0;
-    for (uint i = 0; i < _num_samples; i++) {
-      uint index = (_first_sample_index + i) % SAMPLE_SIZE;
-      sum_of_rates += _rate_samples[index];
+
+  for (uint i = 0; i < _num_samples; i++) {
+    uint index = (_first_sample_index + i) % SAMPLE_SIZE;
+    x_array[i] = _rate_timestamps[index];
+    x_sum += x_array[i];
+    y_array[i] = _rate_samples[index];
+    y_sum += y_array[i];
+  }
+  bool spikes_increasing = true;
+  for (uint i = 1; i < _num_samples; i++) {
+    if (y_array[i] <= y_array[i-1]) {
+      spikes_increasing = false;
+      break;
     }
-    current_rate = sum_of_rates / _num_samples;
+  }    
+  if (!spikes_increasing || (_num_samples < SAMPLE_SIZE)) {
+    acceleration = 0.0;
+    current_rate = y_sum / _num_samples;
   } else {
-    double *x_array = (double *) alloca(SAMPLE_SIZE * sizeof(double*));
-    double *y_array = (double *) alloca(SAMPLE_SIZE * sizeof(double*));
-    double *xy_array = (double *) alloca(SAMPLE_SIZE * sizeof(double*));
-    double *x2_array = (double *) alloca(SAMPLE_SIZE * sizeof(double*));
-    double x_sum = 0.0;
-    double y_sum = 0.0;
+    double *xy_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
+    double *x2_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
     double xy_sum = 0.0;
     double x2_sum = 0.0;
     for (uint i = 0; i < SAMPLE_SIZE; i++) {
-      uint index = (_first_sample_index + i) % SAMPLE_SIZE;
-      x_array[index] = _rate_timestamps[index];
-      x_sum += x_array[index];
-      y_array[index] = _rate_samples[index];
-      y_sum += y_array[index];
-      xy_array[index] = x_array[index] * y_array[index];
-      xy_sum += xy_array[index];
-      x2_array[index] = x_array[index] * x_array[index];
-      x2_sum += x2_array[index];
+      xy_array[i] = x_array[i] * y_array[i];
+      xy_sum += xy_array[i];
+      x2_array[i] = x_array[i] * x_array[i];
+      x2_sum += x2_array[i];
     }
-    bool spikes_increasing = true;
-    for (uint i = 1; i < SAMPLE_SIZE; i++) {
-      if (y_array[i] <= y_array[i-1]) {
-        spikes_increasing = false;
-        break;
-      }
+    // Find the best-fit least-squares linear representation of rate vs time
+    double m;                 /* slope */
+    double b;                 /* y-intercept */
+    m = (SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SAMPLE_SIZE * x2_sum - x_sum * x_sum);
+    b = (y_sum - m * x_sum) / SAMPLE_SIZE;
+    acceleration = m;
+    current_rate = m * x_array[SAMPLE_SIZE - 1] + b;
+#ifdef KELVIN_TRACE_CONSUMPTION
+    log_info(gc)("Best-fit line has m %.3f, b: %.3f", m, b);
+    for (uint i = 0; i < SAMPLE_SIZE; i++) {
+      log_info(gc)("sample[%d] timestamp: %12.3f, predicted rate: %12.3f", i, x_array[i], m * x_array[i] + b);
     }
-    if (!spikes_increasing) {
-      // Use the average spike value over the non-increasing spikes as the predictive rate
-      acceleration = 0.0;
-      current_rate = y_sum / SAMPLE_SIZE;
-    } else {
-      // Find the best-fit least-squares linear representation of rate vs time
-      double m;                 /* slope */
-      double b;                 /* y-intercept */
-      m = (SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SAMPLE_SIZE * x2_sum - x_sum * x_sum);
-      b = (y_sum - m * x_sum) / SAMPLE_SIZE;
-
-      acceleration = m;
-      current_rate = m * x_array[SAMPLE_SIZE - 1] + b;
-    }
+#endif
   }
+
   double time_delta = _allocation_rate.interval() + avg_cycle_time;
   size_t bytes_to_be_consumed = (size_t) (current_rate * time_delta + 0.5 * acceleration * time_delta * time_delta);
-#ifdef KELVIN_TRACE
-  log_info(gc)("accelerated_consumption() acceleration: %0.3f, current_rate: %0.3f, time_delta: %0.3f returning " SIZE_FORMAT,
-               acceleration, current_rate, time_delta, bytes_to_be_consumed);
+#ifdef KELVIN_TRACE_CONSUMPTION
+  log_info(gc)("accelerated_consumption() acceleration: %0.3f, current_rate: %0.3f, time_delta: %0.3f returning " SIZE_FORMAT "%s",
+               acceleration, current_rate, time_delta,
+               byte_size_in_proper_unit(bytes_to_be_consumed), proper_unit_for_byte_size(bytes_to_be_consumed));
 #endif
   return bytes_to_be_consumed;
 }
