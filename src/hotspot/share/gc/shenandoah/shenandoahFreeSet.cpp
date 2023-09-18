@@ -82,6 +82,13 @@ void ShenandoahSetsOfFree::clear_all() {
 
 void ShenandoahSetsOfFree::increase_used(ShenandoahFreeMemoryType which_set, size_t bytes) {
   assert (which_set > NotFree && which_set < NumFreeSets, "Set must correspond to a valid freeset");
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+  if (which_set == Mutator) {
+    log_info(gc, free)("Mutator CON$UME$: " SIZE_FORMAT ", remaining available: " SIZE_FORMAT,
+                       bytes, _capacity_of[Mutator] - _used_by[Mutator]);
+  }
+#endif
   _used_by[which_set] += bytes;
   assert (_used_by[which_set] <= _capacity_of[which_set],
           "Must not use (" SIZE_FORMAT ") more than capacity (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,

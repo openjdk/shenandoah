@@ -23,6 +23,8 @@
  */
 #include "precompiled.hpp"
 
+#undef KELVIN_TRACE
+
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "gc/shenandoah/shenandoahControlThread.hpp"
@@ -30,6 +32,9 @@
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
+#ifdef KELVIN_TRACE
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
+#endif
 #include "logging/log.hpp"
 
 static ShenandoahHeuristics* get_heuristics(ShenandoahGeneration* nullable) {
@@ -64,9 +69,18 @@ void ShenandoahRegulatorThread::run_service() {
   log_info(gc)("%s: Done.", name());
 }
 
+#ifdef KELVIN_TRACE
+static double _most_recent_timestamp;
+static double _next_sleep_interval;
+#endif
+
 void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
   assert(_young_heuristics != nullptr, "Need young heuristics.");
   assert(_old_heuristics != nullptr, "Need old heuristics.");
+#ifdef KELVIN_TRACE
+  ShenandoahAdaptiveHeuristics* adaptive_heuristics =
+         (ShenandoahAdaptiveHeuristics*)ShenandoahHeap::heap()->young_heuristics();
+#endif
 
   while (!should_terminate()) {
     ShenandoahControlThread::GCMode mode = _control_thread->gc_mode();
@@ -76,6 +90,9 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
+#ifdef KELVIN_TRACE
+        adaptive_heuristics->timestamp_for_sample(_most_recent_timestamp, _next_sleep_interval);
+#endif
         if (start_old_cycle()) {
           log_info(gc)("Heuristics request for old collection accepted");
         } else if (start_young_cycle()) {
@@ -83,6 +100,9 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
         }
       }
     } else if (mode == ShenandoahControlThread::servicing_old) {
+#ifdef KELVIN_TRACE
+      adaptive_heuristics->timestamp_for_sample(_most_recent_timestamp, _next_sleep_interval);
+#endif
       if (start_young_cycle()) {
         log_info(gc)("Heuristics request to interrupt old for young collection accepted");
       }
@@ -128,13 +148,18 @@ void ShenandoahRegulatorThread::regulator_sleep() {
   // we exit sooner, to let heuristics re-evaluate new conditions. If we are at idle,
   // back off exponentially.
   double current = os::elapsedTime();
-
+#ifdef KELVIN_TRACE
+  _most_recent_timestamp = current;
+#endif
   if (_heap_changed.try_unset()) {
     _sleep = ShenandoahControlIntervalMin;
   } else if ((current - _last_sleep_adjust_time) * 1000 > ShenandoahControlIntervalAdjustPeriod){
     _sleep = MIN2<int>(ShenandoahControlIntervalMax, MAX2(1, _sleep * 2));
     _last_sleep_adjust_time = current;
   }
+#ifdef KELVIN_TRACE
+  _next_sleep_interval = _sleep;
+#endif
 
   os::naked_short_sleep(_sleep);
 }

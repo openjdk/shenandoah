@@ -43,6 +43,12 @@ class ShenandoahAllocationRate : public CHeapObj<mtGC> {
 
   double upper_bound(double sds) const;
   bool is_spiking(double rate, double threshold) const;
+  double interval() const {
+    return _interval_sec;
+  }
+  double last_sample_time() const {
+    return _last_sample_time;
+  }
  private:
 
   double instantaneous_rate(double time, size_t allocated) const;
@@ -81,7 +87,10 @@ public:
   void record_success_full();
 
   virtual bool should_start_gc();
-
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+  void timestamp_for_sample(double timestamp, double interval);
+#endif
   virtual const char* name()     { return "Adaptive"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
@@ -99,7 +108,10 @@ public:
   const static double LOWEST_EXPECTED_AVAILABLE_AT_END;
   const static double HIGHEST_EXPECTED_AVAILABLE_AT_END;
 
+  const static size_t SAMPLE_SIZE;
+
   friend class ShenandoahAllocationRate;
+
 
   // Used to record the last trigger that signaled to start a GC.
   // This itself is used to decide whether or not to adjust the margin of
@@ -112,6 +124,8 @@ public:
   void adjust_last_trigger_parameters(double amount);
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
+
+  size_t accelerated_consumption(double& acceleration, double avg_cycle_time);
 
 protected:
   ShenandoahAllocationRate _allocation_rate;
@@ -141,6 +155,12 @@ protected:
   // establishes what is 'normal' for the application and is used as a
   // source of feedback to adjust trigger parameters.
   TruncatedSeq _available;
+
+  // Keep track of SAMPLE_SIZE most recent spike allocation rate measurements
+  uint _first_sample_index;
+  uint _num_samples;
+  double* const _rate_samples;
+  double* const _rate_timestamps;
 
   size_t min_free_threshold();
 };
