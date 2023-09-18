@@ -420,15 +420,19 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     }
 
     double acceleration;
-    size_t consumption = accelerated_consumption(acceleration, avg_cycle_time);
+    double current_alloc_rate;
+    size_t consumption = accelerated_consumption(acceleration, current_alloc_rate, avg_cycle_time);
     if (consumption > allocation_headroom) {
       size_t size_t_acceleration = (size_t) acceleration;
-      log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above consumption (" SIZE_FORMAT "%s"
-                   ") at acceleration rate (" SIZE_FORMAT "%s/s/s) for free headroom (" SIZE_FORMAT "%s)",
-                   _space_info->name(), avg_cycle_time * 1000,
+      size_t size_t_alloc_rate = (size_t) current_alloc_rate;
+      log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s exceeds free headroom (" SIZE_FORMAT "%s) at "
+                   "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for average GC time (%.2f ms)",
+                   _space_info->name(), 
                    byte_size_in_proper_unit(consumption), proper_unit_for_byte_size(consumption),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
                    byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
-                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
+                   avg_cycle_time * 1000);
 
       _num_samples = 0;
       _first_sample_index = 0;
@@ -487,8 +491,7 @@ void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount)
   }
 }
 
-size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double avg_cycle_time) {
-  double current_rate;  
+size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double& current_rate, double avg_cycle_time) {
   double *x_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
   double *y_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
   double x_sum = 0.0;
@@ -516,7 +519,7 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
       spikes_increasing = false;
       break;
     }
-  }    
+  }
   if (!spikes_increasing || (_num_samples < SAMPLE_SIZE)) {
     acceleration = 0.0;
     current_rate = y_sum / _num_samples;

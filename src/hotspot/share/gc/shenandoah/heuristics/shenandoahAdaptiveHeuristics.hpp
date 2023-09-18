@@ -125,7 +125,7 @@ public:
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
 
-  size_t accelerated_consumption(double& acceleration, double avg_cycle_time);
+  size_t accelerated_consumption(double& acceleration, double& current_rate, double avg_cycle_time);
 
 protected:
   ShenandoahAllocationRate _allocation_rate;
