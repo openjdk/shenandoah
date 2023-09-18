@@ -257,10 +257,12 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   size_t maximum_young_evacuation_reserve = (young_generation->max_capacity() * ShenandoahEvacReserve) / 100;
   size_t young_evacuation_reserve = maximum_young_evacuation_reserve;
   size_t excess_young;
-  if (young_generation->available() > young_evacuation_reserve) {
-    excess_young = young_generation->available() - young_evacuation_reserve;
+
+  size_t total_young_available = young_generation->available_with_reserve();
+  if (total_young_available > young_evacuation_reserve) {
+    excess_young = total_young_available - young_evacuation_reserve;
   } else {
-    young_evacuation_reserve = young_generation->available();
+    young_evacuation_reserve = total_young_available;
     excess_young = 0;
   }
   size_t unaffiliated_young = young_generation->free_unaffiliated_regions() * region_size_bytes;
@@ -274,6 +276,8 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // excess_young is available to be transferred to OLD.  Assume that OLD will not request any more than had
   // already been set aside for its promotion and evacuation needs at the end of previous GC.  No need to
   // hold back memory for allocation runway.
+
+  // TODO: excess_young is unused.  Did we want to add it old_promo_reserve and/or old_evacuation_reserve?
 
   ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
 
@@ -406,7 +410,8 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   size_t young_evacuated = collection_set->get_young_bytes_reserved_for_evacuation();
   size_t young_evacuated_reserve_used = (size_t) (ShenandoahEvacWaste * young_evacuated);
 
-  assert(young_evacuated_reserve_used <= young_generation->available(), "Cannot evacuate more than is available in young");
+  size_t total_young_available = young_generation->available_with_reserve();
+  assert(young_evacuated_reserve_used <= total_young_available, "Cannot evacuate more than is available in young");
   heap->set_young_evac_reserve(young_evacuated_reserve_used);
 
   size_t old_available = old_generation->available();
@@ -532,9 +537,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
 
   size_t old_consumed = 0;
   size_t promo_potential = 0;
-  size_t anticipated_promote_in_place_live = 0;
 
-  heap->clear_promotion_in_place_potential();
   heap->clear_promotion_potential();
   size_t candidates = 0;
   size_t candidates_live = 0;
@@ -621,7 +624,6 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
         }
         else {
           anticipated_promote_in_place_regions++;
-          anticipated_promote_in_place_live += r->get_live_data_bytes();
         }
       }
     }
@@ -657,7 +659,6 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
   }
   heap->set_pad_for_promote_in_place(promote_in_place_pad);
   heap->set_promotion_potential(promo_potential);
-  heap->set_promotion_in_place_potential(anticipated_promote_in_place_live);
   return old_consumed;
 }
 
@@ -952,6 +953,11 @@ size_t ShenandoahGeneration::used_regions_size() const {
 }
 
 size_t ShenandoahGeneration::available() const {
+  return available(max_capacity());
+}
+
+// For ShenandoahYoungGeneration, Include the young available that may have been reserved for the Collector.
+size_t ShenandoahGeneration::available_with_reserve() const {
   return available(max_capacity());
 }
 
