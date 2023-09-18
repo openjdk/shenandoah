@@ -427,7 +427,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       size_t size_t_alloc_rate = (size_t) current_alloc_rate;
       log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s exceeds free headroom (" SIZE_FORMAT "%s) at "
                    "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for average GC time (%.2f ms)",
-                   _space_info->name(), 
+                   _space_info->name(),
                    byte_size_in_proper_unit(consumption), proper_unit_for_byte_size(consumption),
                    byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                    byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
