@@ -190,6 +190,10 @@ void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
     // a concurrent cycle are an order of magnitude smaller than the adjustments
     // made for a degenerated or full GC cycle (which themselves were also
     // chosen empirically).
+#define KELVIN_SEE_STATS
+#ifdef KELVIN_SEE_STATS
+    log_info(gc)("kelvin adjusts last trigger with arg: %.5f", z_score / -100);
+#endif
     adjust_last_trigger_parameters(z_score / -100);
   }
 }
@@ -425,7 +429,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     if (consumption > allocation_headroom) {
       size_t size_t_acceleration = (size_t) acceleration;
       size_t size_t_alloc_rate = (size_t) current_alloc_rate;
-      log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s exceeds free headroom (" SIZE_FORMAT "%s) at "
+      log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
                    "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for average GC time (%.2f ms)",
                    _space_info->name(),
                    byte_size_in_proper_unit(consumption), proper_unit_for_byte_size(consumption),
@@ -437,8 +441,9 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       _num_samples = 0;
       _first_sample_index = 0;
 
-      // Count this as a SPIKE trigger for purposes of adjusting spike detection thresholds
-      _last_trigger = SPIKE;
+      // Count this as an OTHER trigger: we do NOT want to adjust spike threshold or margin of error since
+      //  acceleration of allocation rate is intended to be relatively rare.
+      _last_trigger = OTHER;
       return true;
     }
   }
