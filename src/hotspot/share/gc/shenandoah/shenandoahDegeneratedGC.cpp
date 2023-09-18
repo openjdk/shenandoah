@@ -281,7 +281,7 @@ void ShenandoahDegenGC::op_degenerated() {
 
       if (heap->mode()->is_generational() && heap->is_concurrent_old_mark_in_progress()) {
         // This is still necessary for degenerated cycles because the degeneration point may occur
-        // after final of the young generation. See ShenandoahConcurrentGC::op_final_updaterefs for
+        // after final mark of the young generation. See ShenandoahConcurrentGC::op_final_updaterefs for
         // a more detailed explanation.
         heap->transfer_old_pointers_from_satb();
       }
