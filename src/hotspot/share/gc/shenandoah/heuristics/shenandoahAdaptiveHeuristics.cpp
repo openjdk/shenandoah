@@ -407,7 +407,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   // Though larger sample size would improve quality of predictor, it would delay our trigger response as well.  A
   // SAMPLE_SIZE of 2 might work, but that would be more vulnerable to noise.
 
-  if (rate > 0) {
+  if (rate > 0.0) {
     // We just collected a new spike allocation rate sample
 
     uint new_sample_index = (_first_sample_index + _num_samples) % SAMPLE_SIZE;
@@ -423,28 +423,29 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
       _num_samples++;
     }
 
-    double acceleration;
-    double current_alloc_rate;
-    size_t consumption = accelerated_consumption(acceleration, current_alloc_rate, avg_cycle_time);
-    if (consumption > allocation_headroom) {
-      size_t size_t_acceleration = (size_t) acceleration;
-      size_t size_t_alloc_rate = (size_t) current_alloc_rate;
-      log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
-                   "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for average GC time (%.2f ms)",
-                   _space_info->name(),
-                   byte_size_in_proper_unit(consumption), proper_unit_for_byte_size(consumption),
-                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                   byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
-                   byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
-                   avg_cycle_time * 1000);
+    if (is_spiking) {
+      double acceleration;
+      double current_alloc_rate;
+      size_t consumption = accelerated_consumption(acceleration, current_alloc_rate, avg_cycle_time);
+      if (consumption > allocation_headroom) {
+        size_t size_t_acceleration = (size_t) acceleration;
+        size_t size_t_alloc_rate = (size_t) current_alloc_rate;
+        log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
+                     "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for average GC time (%.2f ms)",
+                     _space_info->name(),
+                     byte_size_in_proper_unit(consumption), proper_unit_for_byte_size(consumption),
+                     byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                     byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
+                     byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
+                     avg_cycle_time * 1000);
+        _num_samples = 0;
+        _first_sample_index = 0;
 
-      _num_samples = 0;
-      _first_sample_index = 0;
-
-      // Count this as an OTHER trigger: we do NOT want to adjust spike threshold or margin of error since
-      //  acceleration of allocation rate is intended to be relatively rare.
-      _last_trigger = OTHER;
-      return true;
+        // Count this as an OTHER trigger: we do NOT want to adjust spike threshold or margin of error since
+        //  acceleration of allocation rate is intended to be relatively rare.
+        _last_trigger = OTHER;
+        return true;
+      }
     }
   }
 
@@ -477,7 +478,13 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     return false;
   }
 #endif
-  return ShenandoahHeuristics::should_start_gc();
+  if (ShenandoahHeuristics::should_start_gc()) {
+    _num_samples = 0;
+    _first_sample_index = 0;
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount) {
