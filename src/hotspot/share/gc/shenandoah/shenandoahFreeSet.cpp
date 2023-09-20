@@ -713,6 +713,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   if (!r->is_affiliated()) {
     ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
     r->set_affiliation(req.affiliation());
+    r->clear_top_before_promote();
     if (r->is_old()) {
       // Any OLD region allocated during concurrent coalesce-and-fill does not need to be coalesced and filled because
       // all objects allocated within this region are above TAMS (and thus are implicitly marked).  In case this is an

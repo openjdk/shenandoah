@@ -603,10 +603,16 @@ private:
 public:
   ShenandoahInitMarkUpdateRegionStateClosure() : _ctx(ShenandoahHeap::heap()->marking_context()) {}
 
+  // This iterator visits young-regions only at init_mark for young.  Visits young and old at init_mark for bootstrap old
+  // or global GC.
   void heap_region_do(ShenandoahHeapRegion* r) {
     assert(!r->has_live(), "Region " SIZE_FORMAT " should have no live data", r->index());
     // TODO: Isolate this generational shenandoah code from single-generation code
     if (ShenandoahHeap::heap()->mode()->is_generational()) {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+      log_info(gc)("Clearing top_before_promte for region " SIZE_FORMAT, r->index());
+#endif
       r->clear_top_before_promote();
     }
     if (r->is_active()) {

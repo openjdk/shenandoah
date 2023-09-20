@@ -92,6 +92,8 @@ private:
 
   size_t available(size_t capacity) const;
 
+  inline void assert_no_in_place_promotions();
+
  public:
   ShenandoahGeneration(ShenandoahGenerationType type,
                        uint max_workers,

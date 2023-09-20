@@ -494,7 +494,7 @@ static int compare_by_aged_live(AgedRegionData a, AgedRegionData b) {
   else return 0;
 }
 
-inline void assert_no_in_place_promotions() {
+inline void ShenandoahGeneration::assert_no_in_place_promotions() {
 #ifdef ASSERT
   class ShenandoahNoInPlacePromotions : public ShenandoahHeapRegionClosure {
   public:
@@ -503,7 +503,8 @@ inline void assert_no_in_place_promotions() {
              "Region " SIZE_FORMAT " should not be ready for in-place promotion", r->index());
     }
   } cl;
-  ShenandoahHeap::heap()->heap_region_iterate(&cl);
+  // Iterate only over the regions that belong to this generation.
+  heap_region_iterate(&cl);
 #endif
 }
 
