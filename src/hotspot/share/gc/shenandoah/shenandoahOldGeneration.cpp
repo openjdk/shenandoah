@@ -84,6 +84,13 @@ public:
     for (size_t i = 0; i < size; ++i) {
       oop *p = (oop *) &buffer[i];
       ShenandoahHeapRegion* region = _heap->heap_region_containing(*p);
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+      log_info(gc)("ShenProcessOldSATB::do_buffer(" PTR_FORMAT "), size: " SIZE_FORMAT ", i: " SIZE_FORMAT " oop: " PTR_FORMAT ", region: " SIZE_FORMAT,
+                   p2i(buffer), size, i, p2i(*p), region->index());
+#endif
+      assert(region->get_top_before_promote() == nullptr,
+             "References to regions promoted in place should be filtered from buffer");
       if (region->is_old() && region->is_active()) {
           ShenandoahMark::mark_through_ref<oop, OLD>(p, _queue, nullptr, _mark_context, false);
       } else {
@@ -119,11 +126,18 @@ public:
   void work(uint worker_id) {
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahSATBMarkQueueSet &satb_queues = ShenandoahBarrierSet::satb_mark_queue_set();
+#undef KELVIN_TRACE
+#ifdef KELVIN_TRACE
+    log_info(gc)("ShenPurgeSATBTask::work(%u) flushing satb queues from all threads", worker_id);
+#endif
     ShenandoahFlushAllSATB flusher(satb_queues);
     Threads::possibly_parallel_threads_do(true /* is_par */, &flusher);
 
     ShenandoahObjToScanQueue* mark_queue = _mark_queues->queue(worker_id);
     ShenandoahProcessOldSATB processor(mark_queue);
+#ifdef KELVIN_TRACE
+    log_info(gc)("ShenPurgeSATBTask::work(%u) is applying ShenProcessOldSATB closure to all satb_queues", worker_id);
+#endif
     while (satb_queues.apply_closure_to_completed_buffer(&processor)) {}
 
     Atomic::add(&_trashed_oops, processor.trashed_oops());
@@ -301,7 +315,9 @@ void ShenandoahOldGeneration::transfer_pointers_from_satb() {
   log_info(gc)("Transfer SATB buffers");
   uint nworkers = heap->workers()->active_workers();
   StrongRootsScope scope(nworkers);
-
+#ifdef KELVIN_TRACE
+  log_info(gc)("ShenOldGen::transfer_pointers_from_satb() with %u workers", nworkers);
+#endif
   ShenandoahPurgeSATBTask purge_satb_task(task_queues());
   heap->workers()->run_task(&purge_satb_task);
 }

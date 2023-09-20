@@ -45,7 +45,31 @@ public:
   // Return true if entry should be filtered out (removed), false if
   // it should be retained.
   bool operator()(const void* entry) const {
-    return !_heap->requires_marking(entry);
+#undef KELVIN_SCRUTINY
+#ifdef KELVIN_SCRUTINY
+    bool result = !_heap->requires_marking(entry);
+    log_info(gc)("ShenSATBMarkQueueFilterFn::filter_out function looking at entry: " PTR_FORMAT ", returning %s",
+                 p2i(entry), result? "true": "false");
+    return result;
+#endif
+    // We filter out all references to regions that are to be promoted in place.  At the time we select a region for promotion
+    // in place (final mark), the region has been entirely marked and no further changes to the marking state are allowed.
+    // After the region is promoted in place (concurrently, during evacuation), there may be new allocations above TAMS.
+    // Since these reside above TAMS, they are implicitly marked and do not need to be marked again by SATB.
+    //
+    // Purging promote-in-place regions is more than a performance optimization.  It is essential for correct operation.
+    // The processing of Reference objects may overwrite references to dead objects residing in a promoted-in-place region
+    // with nullptr, and the SATB write barrier may in certain cases cause the reference to the dead object to be placed
+    // in to the SATB buffer.  This is a complication that occurs only when old-gen marking is concurrently active while
+    // evacuating and updating references during a young-gen collection.
+    //
+    // TOOD: isolate this genshen code from single-generation code.
+    if (_heap->mode()->is_generational()) {
+      return (_heap->is_in(entry) && _heap->heap_region_containing(entry)->get_top_before_promote() != nullptr) || 
+        !_heap->requires_marking(entry);
+    } else {
+      return !_heap->requires_marking(entry);
+    }
   }
 };
 

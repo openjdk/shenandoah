@@ -251,6 +251,9 @@ inline void ShenandoahHeapRegion::save_top_before_promote() {
 
 inline void ShenandoahHeapRegion::restore_top_before_promote() {
   _top = _top_before_promoted;
+}
+
+inline void ShenandoahHeapRegion::clear_top_before_promote() {
   _top_before_promoted = nullptr;
  }
 

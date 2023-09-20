@@ -605,6 +605,10 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion* r) {
     assert(!r->has_live(), "Region " SIZE_FORMAT " should have no live data", r->index());
+    // TODO: Isolate this generational shenandoah code from single-generation code
+    if (ShenandoahHeap::heap()->mode()->is_generational()) {
+      r->clear_top_before_promote();
+    }
     if (r->is_active()) {
       // Check if region needs updating its TAMS. We have updated it already during concurrent
       // reset, so it is very likely we don't need to do another write here.  Since most regions

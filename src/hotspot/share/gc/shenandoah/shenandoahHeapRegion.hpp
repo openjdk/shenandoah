@@ -353,6 +353,7 @@ public:
     return _index;
   }
 
+  inline void clear_top_before_promote();
   inline void save_top_before_promote();
   inline HeapWord* get_top_before_promote() const { return _top_before_promoted; }
   inline void restore_top_before_promote();
