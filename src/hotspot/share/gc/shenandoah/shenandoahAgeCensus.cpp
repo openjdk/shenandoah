@@ -237,16 +237,19 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
   // Current and previous population vectors in ring
   const AgeTable* cur_pv = _global_age_table[cur_epoch];
   const AgeTable* prev_pv = _global_age_table[prev_epoch];
-  uint upper_bound = ShenandoahGenerationalMaxTenuringAge - 1;
+  uint upper_bound = ShenandoahGenerationalMaxTenuringAge;
   const uint prev_tt = previous_tenuring_threshold();
   if (ShenandoahGenerationalCensusIgnoreOlderCohorts && prev_tt > 0) {
      // We stay below the computed tenuring threshold for the last cycle plus 1,
      // ignoring the mortality rates of any older cohorts.
      upper_bound = MIN2(upper_bound, prev_tt + 1);
+     upper_bound = MIN2(upper_bound, markWord::max_age);
   }
+  const uint lower_bound = MAX2((uint)ShenandoahGenerationalMinTenuringAge, (uint)1);
   uint tenuring_threshold = upper_bound;
-  for (uint i = upper_bound; i > MAX2((uint)ShenandoahGenerationalMinTenuringAge, (uint)0); i--) {
+  for (uint i = upper_bound; i >= lower_bound; i--) {
     assert(i > 0, "Index (i-1) would underflow/wrap");
+    assert(i < markWord::max_age, "Index i would overflow");
     // Cohort of current age i
     const size_t cur_pop = cur_pv->sizes[i];
     const size_t prev_pop = prev_pv->sizes[i-1];
