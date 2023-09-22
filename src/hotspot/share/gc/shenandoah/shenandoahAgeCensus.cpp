@@ -249,7 +249,7 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
   uint tenuring_threshold = upper_bound;
   for (uint i = upper_bound; i >= lower_bound; i--) {
     assert(i > 0, "Index (i-1) would underflow/wrap");
-    assert(i < markWord::max_age, "Index i would overflow");
+    assert(i <= markWord::max_age, "Index i would overflow");
     // Cohort of current age i
     const size_t cur_pop = cur_pv->sizes[i];
     const size_t prev_pop = prev_pv->sizes[i-1];
