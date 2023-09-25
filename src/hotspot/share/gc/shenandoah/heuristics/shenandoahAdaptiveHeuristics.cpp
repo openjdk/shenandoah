@@ -60,7 +60,12 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-const size_t ShenandoahAdaptiveHeuristics::SAMPLE_SIZE = 3;
+const size_t ShenandoahAdaptiveHeuristics::SPIKE_ACCELERATION_SAMPLE_SIZE = 3;
+
+// Separately, we keep track of the average gc time.  We track the most recent GC_TIME_SAMPLE_SIZE GC times in order to
+// detect changing trends in the time required to perform GC.  If the number of samples is too large, we will not be as
+// responsive to change trends, as the best-fit line will look more like an average.
+const size_t ShenandoahAdaptiveHeuristics::GC_TIME_SAMPLE_SIZE = 4;
 
 ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* space_info) :
   ShenandoahHeuristics(space_info),
@@ -68,14 +73,31 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
   _last_trigger(OTHER),
   _available(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor),
-  _first_sample_index(0),
-  _num_samples(0),
-  _rate_samples(NEW_C_HEAP_ARRAY(double, SAMPLE_SIZE, mtGC)),
-  _rate_timestamps(NEW_C_HEAP_ARRAY(double, SAMPLE_SIZE, mtGC)) { }
+  _gc_time_first_sample_index(0),
+  _gc_time_num_samples(0),
+  _gc_time_timestamps(NEW_C_HEAP_ARRAY(double, GC_TIME_SAMPLE_SIZE, mtGC)),
+  _gc_time_samples(NEW_C_HEAP_ARRAY(double, GC_TIME_SAMPLE_SIZE, mtGC)),
+  _gc_time_xy(NEW_C_HEAP_ARRAY(double, GC_TIME_SAMPLE_SIZE, mtGC)),
+  _gc_time_xx(NEW_C_HEAP_ARRAY(double, GC_TIME_SAMPLE_SIZE, mtGC)),
+  _gc_time_sum_of_timestamps(0),
+  _gc_time_sum_of_samples(0),
+  _gc_time_sum_of_xy(0),
+  _gc_time_sum_of_xx(0),
+  _gc_time_m(0.0),
+  _gc_time_b(0.0),
+  _gc_time_sd(0.0),
+  _spike_acceleration_first_sample_index(0),
+  _spike_acceleration_num_samples(0),
+  _spike_acceleration_rate_samples(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)),
+  _spike_acceleration_rate_timestamps(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)) { }
 
 ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {
-  FREE_C_HEAP_ARRAY(double, _rate_samples);
-  FREE_C_HEAP_ARRAY(double, _rate_timestamps);
+  FREE_C_HEAP_ARRAY(double, _spike_acceleration_rate_samples);
+  FREE_C_HEAP_ARRAY(double, _spike_acceleration_rate_timestamps);
+  FREE_C_HEAP_ARRAY(double, _gc_time_timestamps);
+  FREE_C_HEAP_ARRAY(double, _gc_time_samples);
+  FREE_C_HEAP_ARRAY(double, _gc_time_xy);
+  FREE_C_HEAP_ARRAY(double, _gc_time_xx);
 }
 
 void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
@@ -141,8 +163,97 @@ void ShenandoahAdaptiveHeuristics::record_cycle_start() {
   _allocation_rate.allocation_counter_reset();
 }
 
+#undef KELVIN_NEW_CODE
+void ShenandoahAdaptiveHeuristics::add_gc_time(double timestamp, double gc_time) {
+
+  // Update best-fit linear predictor of GC time
+  uint index = (_gc_time_first_sample_index + _gc_time_num_samples) % GC_TIME_SAMPLE_SIZE;
+  if (_gc_time_num_samples == GC_TIME_SAMPLE_SIZE) {
+    _gc_time_sum_of_timestamps -= _gc_time_timestamps[index];
+    _gc_time_sum_of_samples -= _gc_time_samples[index];
+    _gc_time_sum_of_xy -= _gc_time_xy[index];
+    _gc_time_sum_of_xx -= _gc_time_xx[index];
+  }
+  _gc_time_timestamps[index] = timestamp;
+  _gc_time_samples[index] = gc_time;
+  _gc_time_xy[index] = timestamp * gc_time;
+  _gc_time_xx[index] = timestamp * timestamp;
+
+  _gc_time_sum_of_timestamps += _gc_time_timestamps[index];
+  _gc_time_sum_of_samples += _gc_time_samples[index];
+  _gc_time_sum_of_xy += _gc_time_xy[index];
+  _gc_time_sum_of_xx += _gc_time_xx[index];
+
+  if (_gc_time_num_samples < GC_TIME_SAMPLE_SIZE) {
+    _gc_time_num_samples++;
+  } else {
+    _gc_time_first_sample_index = (_gc_time_first_sample_index + 1) % GC_TIME_SAMPLE_SIZE;
+  }
+
+  if (_gc_time_num_samples == 1) {
+    // The predictor is constant (horizontal line)
+    _gc_time_m = 0;
+    _gc_time_b = gc_time;
+    _gc_time_sd = 0.0;
+  } else if (_gc_time_num_samples == 2) {
+    // Two points define a line
+    double delta_y = gc_time - _gc_time_samples[_gc_time_first_sample_index];
+    double delta_x = timestamp - _gc_time_timestamps[_gc_time_first_sample_index];
+
+    _gc_time_m = delta_y / delta_x;
+
+#ifdef KELVIN_NEW_CODE
+    log_info(gc)("For 2 samples with first index: %u: delta_y is %.3f = %.3f - %.3f, delta_x is %.3f = %.3f - %.3f",
+                 _gc_time_first_sample_index,
+                 delta_y, timestamp, _gc_time_timestamps[_gc_time_first_sample_index],
+                 delta_x, gc_time, _gc_time_samples[_gc_time_first_sample_index]);
+#endif
+    // y = mx + b
+    // so b = y0 - mx0
+    _gc_time_b = gc_time - _gc_time_m * timestamp;
+    _gc_time_sd = 0.0;
+  } else {
+    _gc_time_m = ((_gc_time_num_samples * _gc_time_sum_of_xy - _gc_time_sum_of_timestamps * _gc_time_sum_of_samples) /
+                  (_gc_time_num_samples * _gc_time_sum_of_xx - _gc_time_sum_of_timestamps * _gc_time_sum_of_timestamps));
+    _gc_time_b = (_gc_time_sum_of_samples - _gc_time_m * _gc_time_sum_of_timestamps) / _gc_time_num_samples;
+#ifdef KELVIN_NEW_CODE
+    log_info(gc)("num_samples: %u, sum_of_xy: %.3f, sum of timestamps: %.3f, sum_of_samples: %.3f, sum_of_xx: %.3f",
+                 _gc_time_num_samples, _gc_time_sum_of_xy, _gc_time_sum_of_timestamps,
+                 _gc_time_sum_of_samples, _gc_time_sum_of_xx);
+    log_info(gc)("%14s%14s%14s%14s", "actual x", "actual y", "predict y", "deviation");
+#endif
+
+    double sum_of_squared_deviations = 0.0;
+    for (size_t i = 0; i < _gc_time_num_samples; i++) {
+      uint index = (_gc_time_first_sample_index + i) % GC_TIME_SAMPLE_SIZE;
+      double x = _gc_time_timestamps[index];
+      double predicted_y = _gc_time_m * x + _gc_time_b;
+      double deviation = predicted_y - _gc_time_samples[index];
+
+#ifdef KELVIN_NEW_CODE
+      log_info(gc)("%14.3f%14.3f%14.3f%14.3f", x, _gc_time_samples[index], predicted_y, deviation);
+#endif
+      sum_of_squared_deviations = deviation * deviation;
+    }
+    _gc_time_sd = sqrt(sum_of_squared_deviations / _gc_time_num_samples);
+  }
+#ifdef KELVIN_NEW_CODE
+  log_info(gc)("@ %.3f, add gc_time[%u]: %.3f, new slope: %.3f, new y-intercept: %.3f, _gc_time_sd: %.3f",
+               timestamp, _gc_time_num_samples, gc_time, _gc_time_m, _gc_time_b, _gc_time_sd);
+#endif
+}
+
+double ShenandoahAdaptiveHeuristics::predict_gc_time(double timestamp_at_start) {
+  double result = _gc_time_m * timestamp_at_start + _gc_time_b + _gc_time_sd * _margin_of_error_sd;;
+  return result;
+}
+
 void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
   ShenandoahHeuristics::record_success_concurrent(abbreviated);
+
+  if (!abbreviated) {
+    add_gc_time(_cycle_start, elapsed_cycle_time());
+  }
 
   size_t available = _space_info->available();
 
@@ -190,10 +301,6 @@ void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
     // a concurrent cycle are an order of magnitude smaller than the adjustments
     // made for a degenerated or full GC cycle (which themselves were also
     // chosen empirically).
-#define KELVIN_SEE_STATS
-#ifdef KELVIN_SEE_STATS
-    log_info(gc)("kelvin adjusts last trigger with arg: %.5f", z_score / -100);
-#endif
     adjust_last_trigger_parameters(z_score / -100);
   }
 }
@@ -218,8 +325,8 @@ static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }
 
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
+#undef KELVIN_TRACE_INFRA
+#ifdef KELVIN_TRACE_INFRA
 
 static double _history_timestamp;
 static double _history_interval;
@@ -234,6 +341,7 @@ void ShenandoahAdaptiveHeuristics::timestamp_for_sample(double timestamp, double
 static size_t _history_oldest = 0;
 static size_t _history_count = 0;
 static double _historic_avg_cycle_time[HISTORY_SIZE];
+static double _historic_predicted_cycle_time[HISTORY_SIZE];
 static double _historic_avg_alloc_rate[HISTORY_SIZE];
 static double _historic_spike_alloc_rate[HISTORY_SIZE];
 static double _historic_spike_threshold[HISTORY_SIZE];
@@ -242,6 +350,7 @@ static double _historic_interval[HISTORY_SIZE];
 static unsigned long _historic_headroom[HISTORY_SIZE];
 static unsigned long _historic_allocated[HISTORY_SIZE];
 static unsigned long _historic_available[HISTORY_SIZE];
+static unsigned long _historic_accelerated_consumption[HISTORY_SIZE];
 static ShenandoahAllocationRate _historic_rates[HISTORY_SIZE];
 // _last_sample_time, _last_sample_value, _interval_sec
 #endif
@@ -311,22 +420,37 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //   1. Some space to absorb allocation spikes (ShenandoahAllocSpikeFactor)
   //   2. Accumulated penalties from Degenerated and Full GC
   size_t allocation_headroom = available;
-
   size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
   size_t penalties      = capacity / 100 * _gc_time_penalties;
 
   allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
   allocation_headroom -= MIN2(allocation_headroom, penalties);
+#undef KELVIN_NOISE
+#ifdef KELVIN_NOISE
+  log_info(gc)("available: " SIZE_FORMAT ", spike_headroom: " SIZE_FORMAT ", penalties: " SIZE_FORMAT " becomes allocation_headroom: " SIZE_FORMAT,
+               available, spike_headroom, penalties, allocation_headroom);
+#endif
 
+  double now =  _allocation_rate.last_sample_time();
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
+  double predicted_gc_time = predict_gc_time(now);
+  double planned_gc_time;
+  bool planned_gc_time_is_average;
+  if (predicted_gc_time > avg_cycle_time) {
+    planned_gc_time = predicted_gc_time;
+    planned_gc_time_is_average = false;
+  } else {
+    planned_gc_time = avg_cycle_time;
+    planned_gc_time_is_average = true;
+  }
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
-  log_debug(gc)("%s: average GC time: %.2f ms, allocation rate: %.0f %s/s",
-                _space_info->name(),
-          avg_cycle_time * 1000, byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
-  if (avg_cycle_time > allocation_headroom / avg_alloc_rate) {
-    log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s)"
+  log_debug(gc)("%s: average GC time: %.2f ms, predicted GC time: %.2f ms, allocation rate: %.0f %s/s",
+                _space_info->name(), avg_cycle_time * 1000, predicted_gc_time * 1000,
+                byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate));
+  if (planned_gc_time > allocation_headroom / avg_alloc_rate) {
+    log_info(gc)("Trigger (%s): Planned %s GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s)"
                  " to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
-                 _space_info->name(), avg_cycle_time * 1000,
+                 _space_info->name(), planned_gc_time_is_average? "(from average)": "(by linear prediction)", planned_gc_time * 1000, 
                  byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                  _margin_of_error_sd);
@@ -336,6 +460,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                        byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
                        byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
     _last_trigger = RATE;
+#undef KELVIN_TRACE
 #ifdef KELVIN_TRACE
     _history_count = 0;
     _history_oldest = 0;
@@ -344,21 +469,24 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   }
 
   bool is_spiking = _allocation_rate.is_spiking(rate, _spike_threshold_sd);
-  if (is_spiking && avg_cycle_time > allocation_headroom / rate) {
-    log_info(gc)("Trigger (%s): Average GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s) to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
-                 _space_info->name(), avg_cycle_time * 1000,
+  if (is_spiking && planned_gc_time > allocation_headroom / rate) {
+    log_info(gc)("Trigger (%s): Planned %s GC time (%.2f ms) is above the time for instantaneous allocation rate (%.0f %sB/s)"
+                 " to deplete free headroom (" SIZE_FORMAT "%s) (spike threshold = %.2f)",
+                 _space_info->name(), planned_gc_time_is_average? "(from average)": "(by linear prediction)", planned_gc_time * 1000,
                  byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                  _spike_threshold_sd);
 #ifdef KELVIN_TRACE
     log_info(gc)("Prehistory for instantaneous trigger at time %0.3f", _history_timestamp);
-    log_info(gc)("%10s:%9s%16s%18s%18s%16s%12s%12s%12s", "time_stamp", "interval", "avg_cycle_time", "avg_alloc_rate", "spike_alloc_rate", "spike_threshold", "headroom", "allocated", "available");
+    log_info(gc)("%10s:%9s%16s%18s%18s%16s%12s%12s%12s%16s%16s", "time_stamp", "interval", "avg_cycle_time", "avg_alloc_rate", "spike_alloc_rate", "spike_threshold", "headroom", "allocated", "available", "predicted_cycle", "accel_consumption");
     for (uint i = 0; i < _history_count; i++) {
       uint index = _history_oldest + i;
       if (index >= HISTORY_SIZE) index = 0;
-      log_info(gc)("%10.3f:%9.3f%16.3f%18.3f%18.3f%16.3f%12lu%12lu%12lu", _historic_timestamp[index], _historic_interval[index],
+      log_info(gc)("%10.3f:%9.3f%16.3f%18.3f%18.3f%16.3f%12lu%12lu%12lu%16.3f%16lu",
+                   _historic_timestamp[index], _historic_interval[index],
                    _historic_avg_cycle_time[index], _historic_avg_alloc_rate[index], _historic_spike_alloc_rate[index],
-                   _historic_spike_threshold[index], _historic_headroom[index], _historic_allocated[index], _historic_available[index]);
+                   _historic_spike_threshold[index], _historic_headroom[index], _historic_allocated[index],
+                   _historic_available[index], _historic_predicted_cycle_time[index], _historic_accelerated_consumption[index]);
     }
     log_info(gc)("%10.3f:%9.3f%16.3f%18.3f%18.3f%16.3f%12lu%12lu%12lu",
                  _history_timestamp, _history_interval, avg_cycle_time * 1000, avg_alloc_rate, rate,
@@ -405,47 +533,53 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //  7. if Consumption exceeds headroom, trigger now
 
   // Though larger sample size would improve quality of predictor, it would delay our trigger response as well.  A
-  // SAMPLE_SIZE of 2 might work, but that would be more vulnerable to noise.
+  // SPIKE_ACCELERATION_SAMPLE_SIZE of 2 might work, but that would be more vulnerable to noise.
 
+  size_t consumption_accelerated = 0;
   if (rate > 0.0) {
     // We just collected a new spike allocation rate sample
 
-    uint new_sample_index = (_first_sample_index + _num_samples) % SAMPLE_SIZE;
+    uint new_sample_index = (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % SPIKE_ACCELERATION_SAMPLE_SIZE;
 
-    _rate_samples[new_sample_index] = rate;
-    _rate_timestamps[new_sample_index] = _allocation_rate.last_sample_time();
-    if (_num_samples == SAMPLE_SIZE) {
-      _first_sample_index++;
-      if (_first_sample_index == SAMPLE_SIZE) {
-        _first_sample_index = 0;
+    _spike_acceleration_rate_samples[new_sample_index] = rate;
+    _spike_acceleration_rate_timestamps[new_sample_index] = now;
+    if (_spike_acceleration_num_samples == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+      _spike_acceleration_first_sample_index++;
+      if (_spike_acceleration_first_sample_index == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+        _spike_acceleration_first_sample_index = 0;
       }
     } else {
-      _num_samples++;
+      _spike_acceleration_num_samples++;
     }
 
-    if (is_spiking) {
-      double acceleration;
-      double current_alloc_rate;
-      size_t consumption = accelerated_consumption(acceleration, current_alloc_rate, avg_cycle_time);
-      if (consumption > allocation_headroom) {
-        size_t size_t_acceleration = (size_t) acceleration;
-        size_t size_t_alloc_rate = (size_t) current_alloc_rate;
-        log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
-                     "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for average GC time (%.2f ms)",
-                     _space_info->name(),
-                     byte_size_in_proper_unit(consumption), proper_unit_for_byte_size(consumption),
-                     byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                     byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
-                     byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
-                     avg_cycle_time * 1000);
-        _num_samples = 0;
-        _first_sample_index = 0;
+    // Do not require that the last sample is_spiking.  That makes us behave too conservatively.
+    double acceleration;
+    double current_alloc_rate;
+#undef KELVIN_TRACE_CONSUMPTION
+#ifdef KELVIN_TRACE_CONSUMPTION
+    consumption_accelerated = accelerated_consumption(acceleration, current_alloc_rate, planned_gc_time,
+                                                      available, spike_headroom, penalties, allocation_headroom);
+#else
+    consumption_accelerated = accelerated_consumption(acceleration, current_alloc_rate, planned_gc_time);
+#endif
+    if (consumption_accelerated > allocation_headroom) {
+      size_t size_t_acceleration = (size_t) acceleration;
+      size_t size_t_alloc_rate = (size_t) current_alloc_rate;
+      log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
+                   "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for planned %s GC time (%.2f ms)",
+                   _space_info->name(),
+                   byte_size_in_proper_unit(consumption_accelerated), proper_unit_for_byte_size(consumption_accelerated),
+                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                   byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
+                   byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
+                   planned_gc_time_is_average? "(from average)": "(by linear prediction)", planned_gc_time * 1000);
+      _spike_acceleration_num_samples = 0;
+      _spike_acceleration_first_sample_index = 0;
 
-        // Count this as an OTHER trigger: we do NOT want to adjust spike threshold or margin of error since
-        //  acceleration of allocation rate is intended to be relatively rare.
-        _last_trigger = OTHER;
-        return true;
-      }
+      // Count this as a form of RATE trigger for purposes of adjusting heuristic triggering configuration because this
+      // trigger is influenced more by margin_of_error_sd than by spike_threshold_sd.
+      _last_trigger = RATE;
+      return true;
     }
   }
 
@@ -457,6 +591,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   } else {
     size_t _history_index = (_history_oldest + _history_count) % HISTORY_SIZE;
     _historic_avg_cycle_time[_history_index] = avg_cycle_time * 1000;
+    _historic_predicted_cycle_time[_history_index] = predicted_gc_time * 1000;
     _historic_avg_alloc_rate[_history_index] = avg_alloc_rate;
     _historic_spike_alloc_rate[_history_index] = rate;
     _historic_spike_threshold[_history_index] = _spike_threshold_sd;
@@ -465,6 +600,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     _historic_headroom[_history_index] = (unsigned long) allocation_headroom;
     _historic_allocated[_history_index] = (unsigned long) allocated;
     _historic_available[_history_index] = (unsigned long) available;
+    _historic_accelerated_consumption[_history_index] = (unsigned long) consumption_accelerated;
     if (_history_count < HISTORY_SIZE) {
       // no wrap around, so no need to adjust _history_oldest
       _history_count++;
@@ -479,8 +615,8 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   }
 #endif
   if (ShenandoahHeuristics::should_start_gc()) {
-    _num_samples = 0;
-    _first_sample_index = 0;
+    _spike_acceleration_num_samples = 0;
+    _spike_acceleration_first_sample_index = 0;
     return true;
   } else {
     return false;
@@ -503,44 +639,48 @@ void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount)
   }
 }
 
-size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double& current_rate, double avg_cycle_time) {
-  double *x_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
-  double *y_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
+// This is only called if a new rate sample has been gathered (e.g. ten times per second).
+// There is no adjustment for standard deviation of the accelerated rate prediction.
+#ifdef KELVIN_TRACE_CONSUMPTION
+size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time,
+                                                             size_t available, size_t spike_headroom, size_t penalties, size_t headroom) const
+#else
+size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const
+#endif                                                             
+{
+  double *x_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
+  double *y_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
   double x_sum = 0.0;
   double y_sum = 0.0;
+  double y_max = 0.0;
 
-#undef KELVIN_TRACE_CONSUMPTION
-#ifdef KELVIN_TRACE_CONSUMPTION
-  log_info(gc)("accelerated_consumption(), num_samples: %u", _num_samples);
-  for (uint i = 0; i < _num_samples; i++) {
-    uint index = (_first_sample_index + i) % SAMPLE_SIZE;
-    log_info(gc)("sample[%d]: %.3f @ time %.3f", i, _rate_samples[index], _rate_timestamps[index]);
-  }
-#endif
-
-  for (uint i = 0; i < _num_samples; i++) {
-    uint index = (_first_sample_index + i) % SAMPLE_SIZE;
-    x_array[i] = _rate_timestamps[index];
+  for (uint i = 0; i < _spike_acceleration_num_samples; i++) {
+    uint index = (_spike_acceleration_first_sample_index + i) % SPIKE_ACCELERATION_SAMPLE_SIZE;
+    x_array[i] = _spike_acceleration_rate_timestamps[index];
     x_sum += x_array[i];
-    y_array[i] = _rate_samples[index];
+    y_array[i] = _spike_acceleration_rate_samples[index];
+    if (y_array[i] > y_max) {
+      y_max = y_array[i];
+    }
     y_sum += y_array[i];
   }
   bool spikes_increasing = true;
-  for (uint i = 1; i < _num_samples; i++) {
+  for (uint i = 1; i < _spike_acceleration_num_samples; i++) {
     if (y_array[i] <= y_array[i-1]) {
       spikes_increasing = false;
       break;
     }
   }
-  if (!spikes_increasing || (_num_samples < SAMPLE_SIZE)) {
+  if (!spikes_increasing || (_spike_acceleration_num_samples < SPIKE_ACCELERATION_SAMPLE_SIZE)) {
+    // bytes allocated per second.  Use the max among collected samples.
+    current_rate = y_max;
     acceleration = 0.0;
-    current_rate = y_sum / _num_samples;
   } else {
-    double *xy_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
-    double *x2_array = (double *) alloca(SAMPLE_SIZE * sizeof(double));
+    double *xy_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
+    double *x2_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
     double xy_sum = 0.0;
     double x2_sum = 0.0;
-    for (uint i = 0; i < SAMPLE_SIZE; i++) {
+    for (uint i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
       xy_array[i] = x_array[i] * y_array[i];
       xy_sum += xy_array[i];
       x2_array[i] = x_array[i] * x_array[i];
@@ -549,35 +689,52 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
     // Find the best-fit least-squares linear representation of rate vs time
     double m;                 /* slope */
     double b;                 /* y-intercept */
-    m = (SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SAMPLE_SIZE * x2_sum - x_sum * x_sum);
-    b = (y_sum - m * x_sum) / SAMPLE_SIZE;
+    m = (SPIKE_ACCELERATION_SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SPIKE_ACCELERATION_SAMPLE_SIZE * x2_sum - x_sum * x_sum);
+    b = (y_sum - m * x_sum) / SPIKE_ACCELERATION_SAMPLE_SIZE;
     acceleration = m;
-    current_rate = m * x_array[SAMPLE_SIZE - 1] + b;
+    current_rate = m * x_array[SPIKE_ACCELERATION_SAMPLE_SIZE - 1] + b;
 #ifdef KELVIN_TRACE_CONSUMPTION
     log_info(gc)("Best-fit line has m %.3f, b: %.3f", m, b);
-    for (uint i = 0; i < SAMPLE_SIZE; i++) {
-      log_info(gc)("sample[%d] timestamp: %12.3f, predicted rate: %12.3f", i, x_array[i], m * x_array[i] + b);
+    log_info(gc)("%8s%16s%16s%16s", "sample", "timestamp", "predicted rate", "actual rate");
+    for (uint i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
+      log_info(gc)("%8d%16.3f%16.3f%16.3f", i, x_array[i], m * x_array[i] + b, y_array[i]);
     }
 #endif
   }
 
-  double time_delta = _allocation_rate.interval() + avg_cycle_time;
+  double time_delta = _allocation_rate.interval() + predicted_cycle_time;
   size_t bytes_to_be_consumed = (size_t) (current_rate * time_delta + 0.5 * acceleration * time_delta * time_delta);
 #ifdef KELVIN_TRACE_CONSUMPTION
-  log_info(gc)("accelerated_consumption() acceleration: %0.3f, current_rate: %0.3f, time_delta: %0.3f returning " SIZE_FORMAT "%s",
-               acceleration, current_rate, time_delta,
-               byte_size_in_proper_unit(bytes_to_be_consumed), proper_unit_for_byte_size(bytes_to_be_consumed));
+  if (acceleration > 0.0) {
+    log_info(gc)("Consume " SIZE_FORMAT "%s after %.3fs vs. headroom " SIZE_FORMAT "%s=" SIZE_FORMAT "%s-(" SIZE_FORMAT "%s+" SIZE_FORMAT "%s)",
+                 byte_size_in_proper_unit(bytes_to_be_consumed), proper_unit_for_byte_size(bytes_to_be_consumed),
+                 time_delta,
+                 byte_size_in_proper_unit(headroom), proper_unit_for_byte_size(headroom),
+                 byte_size_in_proper_unit(available), proper_unit_for_byte_size(available),
+                 byte_size_in_proper_unit(spike_headroom), proper_unit_for_byte_size(spike_headroom),
+                 byte_size_in_proper_unit(penalties), proper_unit_for_byte_size(penalties));
+  }
 #endif
   return bytes_to_be_consumed;
 }
 
+#undef KELVIN_DEBUG_SPIKE_THRESHOLD
+
 void ShenandoahAdaptiveHeuristics::adjust_margin_of_error(double amount) {
   _margin_of_error_sd = saturate(_margin_of_error_sd + amount, MINIMUM_CONFIDENCE, MAXIMUM_CONFIDENCE);
+#ifdef KELVIN_DEBUG_SPIKE_THRESHOLD
+  // I want to see what causes us to increase margin of error, and what causes us to shrink it.
+  log_info(gc)("KELVIN adjusts margin of error sd to %.2f", _margin_of_error_sd);
+#endif
   log_debug(gc, ergo)("Margin of error now %.2f", _margin_of_error_sd);
 }
 
 void ShenandoahAdaptiveHeuristics::adjust_spike_threshold(double amount) {
   _spike_threshold_sd = saturate(_spike_threshold_sd - amount, MINIMUM_CONFIDENCE, MAXIMUM_CONFIDENCE);
+#ifdef KELVIN_DEBUG_SPIKE_THRESHOLD
+  // I want to see what causes us to increase the threshold, and what causes us to shrink it.
+  log_info(gc)("KELVIN adjusts spike threshold to %.2f", _spike_threshold_sd);
+#endif
   log_debug(gc, ergo)("Spike threshold now: %.2f", _spike_threshold_sd);
 }
 
@@ -634,8 +791,8 @@ bool ShenandoahAllocationRate::is_spiking(double rate, double threshold) const {
   if (sd > 0) {
     // There is a small chance that that rate has already been sampled, but it seems not to matter in practice.
     // z_score reports how close this measure is to the average.  A value between -1 and 1 means we are within 1
-    // standard deviation.  A value between -3 and +3 meands we are within 3 standard deviations.  In our use
-    // case, we only care if the spike is above the mean.
+    // standard deviation.  A value between -3 and +3 means we are within 3 standard deviations.  We care only if
+    //  the spike is above the mean.
     double z_score = (rate - _rate.avg()) / sd;
     if (z_score > threshold) {
       return true;

@@ -69,6 +69,7 @@ void ShenandoahRegulatorThread::run_service() {
   log_info(gc)("%s: Done.", name());
 }
 
+#undef KELVIN_TRACE
 #ifdef KELVIN_TRACE
 static double _most_recent_timestamp;
 static double _next_sleep_interval;
@@ -87,6 +88,9 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
     if (mode == ShenandoahControlThread::none) {
       if (should_unload_classes()) {
         if (_control_thread->request_concurrent_gc(ShenandoahControlThread::select_global_generation())) {
+#ifdef KELVIN_TRACE
+          log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
+#endif
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
@@ -94,8 +98,14 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
         adaptive_heuristics->timestamp_for_sample(_most_recent_timestamp, _next_sleep_interval);
 #endif
         if (start_old_cycle()) {
+#ifdef KELVIN_TRACE
+          log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
+#endif
           log_info(gc)("Heuristics request for old collection accepted");
         } else if (start_young_cycle()) {
+#ifdef KELVIN_TRACE
+          log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
+#endif
           log_info(gc)("Heuristics request for young collection accepted");
         }
       }
@@ -104,6 +114,9 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
       adaptive_heuristics->timestamp_for_sample(_most_recent_timestamp, _next_sleep_interval);
 #endif
       if (start_young_cycle()) {
+#ifdef KELVIN_TRACE
+        log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
+#endif
         log_info(gc)("Heuristics request to interrupt old for young collection accepted");
       }
     }

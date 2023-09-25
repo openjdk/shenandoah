@@ -87,8 +87,8 @@ public:
   void record_success_full();
 
   virtual bool should_start_gc();
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
+#undef KELVIN_TRACE_HEADER
+#ifdef KELVIN_TRACE_HEADER
   void timestamp_for_sample(double timestamp, double interval);
 #endif
   virtual const char* name()     { return "Adaptive"; }
@@ -108,10 +108,10 @@ public:
   const static double LOWEST_EXPECTED_AVAILABLE_AT_END;
   const static double HIGHEST_EXPECTED_AVAILABLE_AT_END;
 
-  const static size_t SAMPLE_SIZE;
+  const static size_t SPIKE_ACCELERATION_SAMPLE_SIZE;
+  const static size_t GC_TIME_SAMPLE_SIZE;
 
   friend class ShenandoahAllocationRate;
-
 
   // Used to record the last trigger that signaled to start a GC.
   // This itself is used to decide whether or not to adjust the margin of
@@ -125,8 +125,13 @@ public:
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
 
-  size_t accelerated_consumption(double& acceleration, double& current_rate, double avg_cycle_time);
-
+#undef KELVIN_TRACE_CONSUMPTION_X
+#ifdef KELVIN_TRACE_CONSUMPTION_X
+        size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time,
+                                       size_t available, size_t spike_headroom, size_t penalties, size_t headroom) const;
+#else
+  size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const;
+#endif
 protected:
   ShenandoahAllocationRate _allocation_rate;
 
@@ -142,7 +147,7 @@ protected:
   // rate exceeds this threshold, a GC cycle is started. As this value
   // decreases the sensitivity to allocation spikes increases. In other
   // words, lowering the spike threshold will tend to increase the number
-  // of concurrent GCs.
+  // of concurrent GCs because more scenarios will be seen as spiking.
   double _spike_threshold_sd;
 
   // Remember which trigger is responsible for the last GC cycle. When the
@@ -156,11 +161,30 @@ protected:
   // source of feedback to adjust trigger parameters.
   TruncatedSeq _available;
 
-  // Keep track of SAMPLE_SIZE most recent spike allocation rate measurements
-  uint _first_sample_index;
-  uint _num_samples;
-  double* const _rate_samples;
-  double* const _rate_timestamps;
+  // Keep track of GC_TIME_SAMPLE_SIZE most recent concurrent GC cycle times
+  uint _gc_time_first_sample_index;
+  uint _gc_time_num_samples;
+  double* const _gc_time_timestamps;
+  double* const _gc_time_samples;
+  double* const _gc_time_xy;    // timestamp * sample
+  double* const _gc_time_xx;    // timestamp squared
+  double _gc_time_sum_of_timestamps;
+  double _gc_time_sum_of_samples;
+  double _gc_time_sum_of_xy;
+  double _gc_time_sum_of_xx;
+
+  double _gc_time_m;            // slope
+  double _gc_time_b;            // y-intercept
+  double _gc_time_sd;           // sd on deviance from prediction
+
+  void add_gc_time(double timestamp_at_start, double duration);
+  double predict_gc_time(double timestamp_at_start);
+
+  // Keep track of SPIKE_ACCELERATION_SAMPLE_SIZE most recent spike allocation rate measurements
+  uint _spike_acceleration_first_sample_index;
+  uint _spike_acceleration_num_samples;
+  double* const _spike_acceleration_rate_samples;
+  double* const _spike_acceleration_rate_timestamps;
 
   size_t min_free_threshold();
 };
