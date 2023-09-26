@@ -65,7 +65,7 @@ public:
     //
     // TOOD: isolate this genshen code from single-generation code.
     if (_heap->mode()->is_generational()) {
-      return (_heap->is_in(entry) && _heap->heap_region_containing(entry)->get_top_before_promote() != nullptr) || 
+      return (_heap->is_in(entry) && _heap->heap_region_containing(entry)->get_top_before_promote() != nullptr) ||
         !_heap->requires_marking(entry);
     } else {
       return !_heap->requires_marking(entry);
