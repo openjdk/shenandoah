@@ -1327,6 +1327,10 @@ public:
   void heap_region_do(ShenandoahHeapRegion* r) {
     assert (!r->is_cset(), "cset regions should have been demoted already");
 
+    if (_is_generational) {
+      r->clear_top_before_promote();
+    }
+
     // Need to reset the complete-top-at-mark-start pointer here because
     // the complete marking bitmap is no longer valid. This ensures
     // size-based iteration in marked_object_iterate().
