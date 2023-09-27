@@ -160,6 +160,11 @@ void ShenandoahControlThread::run_service() {
         policy->record_alloc_failure_to_degenerated(degen_point);
         set_gc_mode(stw_degenerated);
       } else {
+#define KELVIN_FULL
+#ifdef KELVIN_FULL
+        log_info(gc)("Going to full because old_gen_evacuation_failed is %s, should_degen_is %s\n",
+                     old_gen_evacuation_failed? "true": "false", heuristics->should_degenerate_cycle()? "true": "false");
+#endif
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_full();
         generation = select_global_generation();
@@ -896,6 +901,10 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
 }
 
 bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType generation) {
+#define KELVIN_CONTROL
+#ifdef KELVIN_CONTROL
+  log_info(gc)("request_concurrent_gc(%s)", shenandoah_generation_name(generation));
+#endif
   if (_preemption_requested.is_set() || _gc_requested.is_set() || ShenandoahHeap::heap()->cancelled_gc()) {
     // Ignore subsequent requests from the heuristics
     return false;
@@ -907,6 +916,9 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     notify_control_thread();
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     ml.wait();
+#ifdef KELVIN_CONTROL
+    log_info(gc)("request_concurrent_gc() returns true after waiting on _regulator_lock for _mode == none");
+#endif
     return true;
   }
 
@@ -920,8 +932,14 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
 
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     ml.wait();
+#ifdef KELVIN_CONTROL
+    log_info(gc)("request_concurrent_gc() returns true after waiting on _regulator_lock for preempting old mark");
+#endif
     return true;
   }
+#ifdef KELVIN_CONTROL
+  log_info(gc)("request_concurrent_gc() returns false because not ready to service request");
+#endif
 
   return false;
 }

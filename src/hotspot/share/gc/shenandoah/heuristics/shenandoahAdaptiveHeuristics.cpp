@@ -109,7 +109,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   //
   //   1. We cannot get cset larger than available free space. Otherwise we guarantee OOME
   //      during evacuation, and thus guarantee full GC. In practice, we also want to let
-  //      application to allocate something. This is why we limit CSet to some fraction of
+  //      application allocate during concurrent GC. This is why we limit CSet to some fraction of
   //      available space. In non-overloaded heap, max_cset would contain all plausible candidates
   //      over garbage threshold.
   //
@@ -140,6 +140,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   size_t cur_cset = 0;
   size_t cur_garbage = 0;
 
+  // Regions are sorted in terms of decreasing garbage
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;
 
@@ -147,6 +148,18 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
     size_t new_garbage = cur_garbage + r->garbage();
 
     if (new_cset > max_cset) {
+      // TODO: This region has too much live data, so cannot be included in CSET.  It is still possible that some
+      // other region that has less garbage would also have less live data (i.e. total usage is smaller) and so could
+      // still be included in the CSET.  Change this to continue.
+
+#define KELVIN_PUZZLE
+#ifdef KELVIN_PUZZLE
+      if (cur_cset * 8 < max_cset * 7) {
+        // we're less than 7/8 of evac capacity.  why stop early?
+        log_info(gc)("KELVIN: abandoning cset search after " SIZE_FORMAT " of " SIZE_FORMAT " regions.  Last region live: " SIZE_FORMAT,
+                     idx + 1, size, r->get_live_data_bytes());
+      }
+#endif
       break;
     }
 
@@ -156,6 +169,10 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       cur_garbage = new_garbage;
     }
   }
+#ifdef KELVIN_PUZZLE
+  log_info(gc)("CSET constructed from " SIZE_FORMAT " candidates is full at " SIZE_FORMAT " of budgeted: " SIZE_FORMAT
+               ",  garbage: " SIZE_FORMAT, size, cur_cset, max_cset, cur_garbage);
+#endif
 }
 
 void ShenandoahAdaptiveHeuristics::record_cycle_start() {
