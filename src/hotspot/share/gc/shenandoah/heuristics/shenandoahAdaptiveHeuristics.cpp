@@ -152,7 +152,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
       // other region that has less garbage would also have less live data (i.e. total usage is smaller) and so could
       // still be included in the CSET.  Change this to continue.
 
-#define KELVIN_PUZZLE
+#undef KELVIN_PUZZLE
 #ifdef KELVIN_PUZZLE
       if (cur_cset * 8 < max_cset * 7) {
         // we're less than 7/8 of evac capacity.  why stop early?
