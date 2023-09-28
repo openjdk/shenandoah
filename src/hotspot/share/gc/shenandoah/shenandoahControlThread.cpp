@@ -902,23 +902,28 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
   }
 
   if (_mode == none) {
+    // Need to acquire regulator_lock to prevent the notified control thread from from notifying the _regulator_lock
+    // before the regulator thread has reached ml.wait().
+    MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
+
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     notify_control_thread();
-    MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     ml.wait();
     return true;
   }
 
   if (preempt_old_marking(generation)) {
+    // Need to acquire regulator_lock to prevent the notified control thread from from notifying the _regulator_lock
+    // before the regulator thread has reached ml.wait().
+    MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
+
     log_info(gc)("Preempting old generation mark to allow %s GC", shenandoah_generation_name(generation));
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     _preemption_requested.set();
     ShenandoahHeap::heap()->cancel_gc(GCCause::_shenandoah_concurrent_gc);
     notify_control_thread();
-
-    MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     ml.wait();
     return true;
   }
