@@ -906,12 +906,15 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     _requested_generation = generation;
     notify_control_thread();
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
-    ml.wait();
+    while (_mode == none) {
+      ml.wait();
+    }
     return true;
   }
 
   if (preempt_old_marking(generation)) {
     log_info(gc)("Preempting old generation mark to allow %s GC", shenandoah_generation_name(generation));
+    assert(_mode == servicing_old, "Cannot preempt old if old cycle isn't running.");
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     _preemption_requested.set();
@@ -919,7 +922,9 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     notify_control_thread();
 
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
-    ml.wait();
+    while (_mode == servicing_old) {
+      ml.wait();
+    }
     return true;
   }
 
