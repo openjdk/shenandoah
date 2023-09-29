@@ -48,6 +48,7 @@
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "logging/log.hpp"
 #include "memory/iterator.hpp"
 #include "memory/metaspaceUtils.hpp"
 #include "memory/metaspaceStats.hpp"
@@ -908,7 +909,10 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
 
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     while (_mode == none) {
-      ml.wait();
+      bool timeout = ml.wait(5);
+      if (LogTarget(Debug, gc, thread)::is_enabled() && timeout) {
+        log_debug(gc, thread)("Regulator thread timed out waiting for cycle to start");
+      }
     }
     return true;
   }
@@ -924,7 +928,10 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
 
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     while (_mode == servicing_old) {
-      ml.wait();
+      bool timeout = ml.wait(5);
+      if (LogTarget(Debug, gc, thread)::is_enabled() && timeout) {
+        log_debug(gc, thread)("Regulator thread timed out waiting to preempt old cycle");
+      }
     }
     return true;
   }
