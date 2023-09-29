@@ -905,6 +905,7 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     notify_control_thread();
+
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     while (_mode == none) {
       ml.wait();

@@ -137,11 +137,11 @@ void ShenandoahRegulatorThread::regulator_sleep() {
   }
 
   os::naked_short_sleep(_sleep);
-  if (LogTarget(Info, gc, thread)::is_enabled()) {
+  if (LogTarget(Debug, gc, thread)::is_enabled()) {
     double elapsed = os::elapsedTime() - current;
     double hiccup = elapsed - double(_sleep);
     if (hiccup > 0.0) {
-      log_info(gc, thread)("Regulator hiccup time: %.3fs", hiccup);
+      log_debug(gc, thread)("Regulator hiccup time: %.3fs", hiccup);
     }
   }
 }
@@ -157,10 +157,10 @@ bool ShenandoahRegulatorThread::start_old_cycle() {
 bool ShenandoahRegulatorThread::request_concurrent_gc(ShenandoahGenerationType generation) {
   double now = os::elapsedTime();
   bool accepted = _control_thread->request_concurrent_gc(generation);
-  if (LogTarget(Info, gc, thread)::is_enabled() && accepted) {
+  if (LogTarget(Debug, gc, thread)::is_enabled() && accepted) {
     double wait_time = os::elapsedTime() - now;
     if (wait_time > 0) {
-      log_info(gc, thread)("Regulator waited %.3fs for control thread to acknowledge request.", wait_time);
+      log_debug(gc, thread)("Regulator waited %.3fs for control thread to acknowledge request.", wait_time);
     }
   }
   return accepted;
