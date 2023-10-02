@@ -109,6 +109,10 @@ void ShenandoahMmuTracker::update_utilization(ShenandoahGeneration* generation, 
   }
 }
 
+double ShenandoahMmuTracker::end_time_for_most_recently_completed_cycle() {
+  return _most_recent_timestamp;
+}
+
 void ShenandoahMmuTracker::record_young(ShenandoahGeneration* generation, size_t gcid) {
   update_utilization(generation, gcid, "Concurrent Young GC");
 }

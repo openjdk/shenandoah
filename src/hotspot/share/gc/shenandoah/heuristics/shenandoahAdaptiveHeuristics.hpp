@@ -82,6 +82,7 @@ public:
                                                      size_t actual_free);
 
   void record_cycle_start();
+  void record_degenerated_cycle_start(bool out_of_cycle);
   void record_success_concurrent(bool abbreviated);
   void record_success_degenerated();
   void record_success_full();
@@ -110,6 +111,7 @@ public:
 
   const static size_t SPIKE_ACCELERATION_SAMPLE_SIZE;
   const static size_t GC_TIME_SAMPLE_SIZE;
+  const static size_t HISTORICAL_PERIOD_SAMPLE_SIZE;
 
   friend class ShenandoahAllocationRate;
 
@@ -127,8 +129,8 @@ public:
 
 #undef KELVIN_TRACE_CONSUMPTION_X
 #ifdef KELVIN_TRACE_CONSUMPTION_X
-        size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time,
-                                       size_t available, size_t spike_headroom, size_t penalties, size_t headroom) const;
+  size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time,
+                                 size_t available, size_t spike_headroom, size_t penalties, size_t headroom) const;
 #else
   size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const;
 #endif
@@ -178,7 +180,29 @@ protected:
   double _gc_time_sd;           // sd on deviance from prediction
 
   void add_gc_time(double timestamp_at_start, double duration);
+  void add_degenerated_gc_time(double timestamp_at_start, double duration);
   double predict_gc_time(double timestamp_at_start);
+
+  // Keep track of recent history of GC periods which succeeded in concurrent mode, excluding degen and full cycles
+  double* _gc_period_histories;
+  uint _gc_period_first_index;
+  uint _gc_period_num_samples;
+  double _gc_periods_sum;
+  double _gc_period_sd;
+  double _gc_period_end_of_cycle_before_concurrent;
+
+  void add_gc_period(double new_period);
+  double gc_period_mean();
+  double gc_period_sd();
+
+  // This is valid only if we have started a concurrent GC cycle
+  double end_of_previous_gc_period() {
+    return _gc_period_end_of_cycle_before_concurrent;
+  }
+
+  void set_end_of_previous_gc_period(double time_stamp) {
+    _gc_period_end_of_cycle_before_concurrent = time_stamp;
+  }
 
   // Keep track of SPIKE_ACCELERATION_SAMPLE_SIZE most recent spike allocation rate measurements
   uint _spike_acceleration_first_sample_index;

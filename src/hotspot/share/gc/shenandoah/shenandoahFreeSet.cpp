@@ -545,7 +545,8 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_tlab:
     case ShenandoahAllocRequest::_alloc_shared: {
       // Try to allocate in the mutator view
-      for (size_t idx = _free_sets.leftmost(Mutator); idx <= _free_sets.rightmost(Mutator); idx++) {
+      // Allocate within mutator free from high memory to low so as to preserve low memory for humongous allocations
+      for (size_t idx = _free_sets.rightmost(Mutator); idx >= _free_sets.leftmost(Mutator); idx--) {
         ShenandoahHeapRegion* r = _heap->get_region(idx);
         if (_free_sets.in_free_set(idx, Mutator) && (allow_new_region || r->is_affiliated())) {
           // try_allocate_in() increases used if the allocation is successful.
@@ -1316,7 +1317,8 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
-#ifdef ASSERT
+// KELVIN COMMENTED
+// #ifdef ASSERT
   // Dump of the FreeSet details is only enabled if assertions are enabled
   {
 #define BUFFER_SIZE 80
@@ -1404,7 +1406,7 @@ void ShenandoahFreeSet::log_status() {
     size_t total_young = retired_young + retired_young_humongous;
     size_t total_old = retired_old + retired_old_humongous;
   }
-#endif
+// #endif
 
   LogTarget(Info, gc, free) lt;
   if (lt.is_enabled()) {

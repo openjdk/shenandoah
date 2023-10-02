@@ -102,6 +102,7 @@ protected:
 
   size_t _guaranteed_gc_interval;
 
+  double _precursor_cycle_start;
   double _cycle_start;
   double _last_cycle_end;
 
@@ -138,6 +139,8 @@ public:
 
   virtual void record_cycle_start();
 
+  virtual void record_degenerated_cycle_start(bool out_of_cycle);
+
   virtual void record_cycle_end();
 
   virtual bool should_start_gc();
@@ -166,6 +169,7 @@ public:
   virtual void initialize();
 
   double elapsed_cycle_time() const;
+  double elapsed_degenerated_cycle_time() const;
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEURISTICS_HPP

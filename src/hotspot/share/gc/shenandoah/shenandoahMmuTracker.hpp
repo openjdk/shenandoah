@@ -102,6 +102,9 @@ public:
   // GCPauseIntervalMillis and defaults to 5 seconds. This method computes
   // the MMU over the elapsed interval and records it in a running average.
   void report();
+
+  // When did the most recently completed GC cycle end?
+  double end_time_for_most_recently_completed_cycle();
 };
 
 class ShenandoahGenerationSizer {

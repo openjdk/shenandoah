@@ -77,6 +77,44 @@ ShenandoahGCSession::~ShenandoahGCSession() {
 
 }
 
+
+ShenandoahDegeneratedGCSession::ShenandoahDegeneratedGCSession(
+        GCCause::Cause cause, ShenandoahGeneration* generation, bool out_of_cycle) :
+  _heap(ShenandoahHeap::heap()),
+  _generation(generation),
+  _timer(_heap->gc_timer()),
+  _tracer(_heap->tracer()) {
+  assert(!ShenandoahGCPhase::is_current_phase_valid(), "No current GC phase");
+
+  _heap->on_degenerated_cycle_start(cause, _generation, out_of_cycle);
+
+  _timer->register_gc_start();
+  _tracer->report_gc_start(cause, _timer->gc_start());
+  _heap->trace_heap_before_gc(_tracer);
+
+  _trace_cycle.initialize(_heap->cycle_memory_manager(), cause,
+          "end of GC cycle",
+          /* allMemoryPoolsAffected */    true,
+          /* recordGCBeginTime = */       true,
+          /* recordPreGCUsage = */        true,
+          /* recordPeakUsage = */         true,
+          /* recordPostGCUsage = */       true,
+          /* recordAccumulatedGCTime = */ true,
+          /* recordGCEndTime = */         true,
+          /* countCollection = */         true
+  );
+}
+
+ShenandoahDegeneratedGCSession::~ShenandoahDegeneratedGCSession() {
+  _heap->on_cycle_end(_generation);
+  _timer->register_gc_end();
+  _heap->trace_heap_after_gc(_tracer);
+  _tracer->report_gc_reference_stats(_generation->ref_processor()->reference_process_stats());
+  _tracer->report_gc_end(_timer->gc_end(), _timer->time_partitions());
+  assert(!ShenandoahGCPhase::is_current_phase_valid(), "No current GC phase");
+
+}
+
 ShenandoahGCPauseMark::ShenandoahGCPauseMark(uint gc_id, const char* notification_message, SvcGCMarker::reason_type type) :
   _heap(ShenandoahHeap::heap()), _gc_id_mark(gc_id), _svc_gc_mark(type), _is_gc_active_mark() {
   _trace_pause.initialize(_heap->stw_memory_manager(), _heap->gc_cause(),

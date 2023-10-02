@@ -591,6 +591,7 @@ public:
   ShenandoahEvacuationTracker* evac_tracker()    const { return  _evac_tracker;     }
 
   void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation);
+  void on_degenerated_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation, bool out_of_cycle);
   void on_cycle_end(ShenandoahGeneration* generation);
 
   ShenandoahVerifier*        verifier();

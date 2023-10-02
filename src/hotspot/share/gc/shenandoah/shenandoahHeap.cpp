@@ -2044,6 +2044,14 @@ void ShenandoahHeap::print_tracing_info() const {
   }
 }
 
+void ShenandoahHeap::on_degenerated_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation, bool out_of_cycle) {
+  set_gc_cause(cause);
+  set_gc_generation(generation);
+
+  shenandoah_policy()->record_cycle_start();
+  generation->heuristics()->record_degenerated_cycle_start(out_of_cycle);
+}
+
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
   set_gc_cause(cause);
   set_gc_generation(generation);

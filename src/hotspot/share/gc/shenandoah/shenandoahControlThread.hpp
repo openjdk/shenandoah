@@ -119,11 +119,16 @@ private:
   void service_uncommit(double shrink_before, size_t shrink_until);
 
   // Return true if setting the flag which indicates allocation failure succeeds.
-  bool try_set_alloc_failure_gc();
+  bool try_set_alloc_failure_gc(bool is_humongous);
+
   // Notify threads waiting for GC to complete.
   void notify_alloc_failure_waiters();
+
   // True if allocation failure flag has been set.
   bool is_alloc_failure_gc();
+
+  // True if humongous allocation failure flag has been set.
+  bool is_humongous_alloc_failure_gc();
 
   void reset_gc_id();
   void update_gc_id();

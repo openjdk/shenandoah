@@ -72,6 +72,19 @@ public:
   ~ShenandoahGCSession();
 };
 
+class ShenandoahDegeneratedGCSession : public StackObj {
+private:
+  ShenandoahHeap* const _heap;
+  ShenandoahGeneration* const _generation;
+  GCTimer*  const _timer;
+  GCTracer* const _tracer;
+
+  TraceMemoryManagerStats _trace_cycle;
+public:
+  ShenandoahDegeneratedGCSession(GCCause::Cause cause, ShenandoahGeneration* generation, bool out_of_cycle);
+  ~ShenandoahDegeneratedGCSession();
+};
+
 /*
  * ShenandoahGCPhaseTiming tracks Shenandoah specific timing information
  * of a GC phase

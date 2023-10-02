@@ -77,7 +77,8 @@ static double _next_sleep_interval;
 void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
   assert(_young_heuristics != nullptr, "Need young heuristics.");
   assert(_old_heuristics != nullptr, "Need old heuristics.");
-#ifdef KELVIN_TRACE
+#undef KELVIN_EXTERNAL_TRACE
+#ifdef KELVIN_EXTERNAL_TRACE
   ShenandoahAdaptiveHeuristics* adaptive_heuristics =
          (ShenandoahAdaptiveHeuristics*)ShenandoahHeap::heap()->young_heuristics();
 #endif

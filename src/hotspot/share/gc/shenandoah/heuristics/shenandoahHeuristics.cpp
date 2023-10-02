@@ -49,7 +49,8 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahSpaceInfo* space_info) :
   _degenerated_cycles_in_a_row(0),
   _successful_cycles_in_a_row(0),
   _guaranteed_gc_interval(0),
-  _cycle_start(os::elapsedTime()),
+  _precursor_cycle_start(os::elapsedTime()),
+  _cycle_start(_precursor_cycle_start),
   _last_cycle_end(0),
   _gc_times_learned(0),
   _gc_time_penalties(0),
@@ -182,6 +183,15 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
                      collection_set->count());
 }
 
+void ShenandoahHeuristics::record_degenerated_cycle_start(bool out_of_cycle) {
+  if (out_of_cycle) {
+    _precursor_cycle_start = _cycle_start = os::elapsedTime();
+  } else {
+    _precursor_cycle_start = _cycle_start;
+    _cycle_start = os::elapsedTime();
+  }
+}
+
 void ShenandoahHeuristics::record_cycle_start() {
   _cycle_start = os::elapsedTime();
 }
@@ -302,4 +312,9 @@ void ShenandoahHeuristics::initialize() {
 
 double ShenandoahHeuristics::elapsed_cycle_time() const {
   return os::elapsedTime() - _cycle_start;
+}
+
+// Includes the time spent in abandoned concurrent GC cycle that pr
+double ShenandoahHeuristics::elapsed_degenerated_cycle_time() const {
+  return os::elapsedTime() - _precursor_cycle_start;
 }
