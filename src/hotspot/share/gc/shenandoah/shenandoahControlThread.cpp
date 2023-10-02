@@ -1100,8 +1100,8 @@ const char* ShenandoahControlThread::gc_mode_name(ShenandoahControlThread::GCMod
 void ShenandoahControlThread::set_gc_mode(ShenandoahControlThread::GCMode new_mode) {
   if (_mode != new_mode) {
     log_info(gc)("Transition from: %s to: %s", gc_mode_name(_mode), gc_mode_name(new_mode));
-    _mode = new_mode;
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
+    _mode = new_mode;
     ml.notify_all();
   }
 }
