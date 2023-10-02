@@ -261,7 +261,7 @@ void ShenandoahControlThread::run_service() {
       heap->soft_ref_policy()->set_should_clear_all_soft_refs(true);
     }
 
-    bool gc_requested = (_mode != none);
+    bool gc_requested = (gc_mode() != none);
     assert (!gc_requested || cause != GCCause::_last_gc_cause, "GC cause should be set");
 
     if (gc_requested) {
@@ -285,7 +285,7 @@ void ShenandoahControlThread::run_service() {
       bool was_aging_cycle = heap->is_aging_cycle();
       heap->set_aging_cycle(false);
 
-      switch (_mode) {
+      switch (gc_mode()) {
         case concurrent_normal: {
           // At this point:
           //  if (generation == YOUNG), this is a normal YOUNG cycle
@@ -902,24 +902,21 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     return false;
   }
 
-  if (_mode == none) {
+  if (gc_mode() == none) {
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     notify_control_thread();
 
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
-    while (_mode == none) {
-      bool timeout = ml.wait(5);
-      if (LogTarget(Debug, gc, thread)::is_enabled() && timeout) {
-        log_debug(gc, thread)("Regulator thread timed out waiting for cycle to start");
-      }
+    while (gc_mode() == none) {
+      ml.wait();
     }
     return true;
   }
 
   if (preempt_old_marking(generation)) {
     log_info(gc)("Preempting old generation mark to allow %s GC", shenandoah_generation_name(generation));
-    assert(_mode == servicing_old, "Cannot preempt old if old cycle isn't running.");
+    assert(gc_mode() == servicing_old, "Expected to be servicing old, but was: %s.", gc_mode_name(gc_mode()));
     _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
     _requested_generation = generation;
     _preemption_requested.set();
@@ -927,11 +924,8 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     notify_control_thread();
 
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
-    while (_mode == servicing_old) {
-      bool timeout = ml.wait(5);
-      if (LogTarget(Debug, gc, thread)::is_enabled() && timeout) {
-        log_debug(gc, thread)("Regulator thread timed out waiting to preempt old cycle");
-      }
+    while (gc_mode() == servicing_old) {
+      ml.wait();
     }
     return true;
   }
