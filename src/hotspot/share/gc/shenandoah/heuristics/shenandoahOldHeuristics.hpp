@@ -102,6 +102,8 @@ private:
   // humongous allocation failure) due to fragmentation of the available old-gen allocation pool
   static int compare_by_live(RegionData a, RegionData b);
 
+  static int compare_by_index(RegionData a, RegionData b);
+
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
                                                      size_t free) override;

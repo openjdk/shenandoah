@@ -45,6 +45,16 @@ int ShenandoahOldHeuristics::compare_by_live(RegionData a, RegionData b) {
   else return 0;
 }
 
+// sort by increasing index
+int ShenandoahOldHeuristics::compare_by_index(RegionData a, RegionData b) {
+  if (a._region->index() < b._region->index()) {
+    return -1;
+  } else {
+    assert(a._region->index() > b._region->index(), "Regions should not be duplicated in soredt array");
+    return 1;
+  }
+}
+
 ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation) :
   ShenandoahHeuristics(generation),
   _first_pinned_candidate(NOT_FOUND),
@@ -385,6 +395,47 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     unfragmented += region_free;
   }
 
+  size_t defrag_count = 0;
+  if (cand_idx > _last_old_collection_candidate) {
+
+    // Sort the regions that were initially rejected from the collection set in order of index.
+    QuickSort::sort<RegionData>(candidates + _last_old_collection_candidate, cand_idx - _last_old_collection_candidate,
+                                compare_by_index, false);
+
+    size_t first_unselected_old_region = candidates[_last_old_collection_candidate]._region->index();
+    size_t last_unselected_old_region = candidates[cand_idx - 1]._region->index();
+    size_t span_of_uncollected_regions = 1 + last_unselected_old_region - first_unselected_old_region;
+    size_t total_uncollected_old_regions = cand_idx - _last_old_collection_candidate;
+
+    if (total_uncollected_old_regions * 5 / 4 < span_of_uncollected_regions) {
+      // If one fifth of the range spanned by unselected old regular regions is not old,
+      // then old is too fragmented and we will pack it tighter, a little bit at a time.
+      // We repack it to make room for humongous object allocations at the low end of memory.
+      // (In other words, if the range of regions spanned by old-gen uncollected candidates is 80%
+      //  consumed by old-gen collection candidates, this is considered tightly packed and we will not
+      //  invest further defragmentation efforts.  However, if this range of regions is less than 80%
+      //  consumed by old-gen regions, we'll try to move some of these regions higher within the heap
+      //  so as to make more contiguous space available at the low-end of the heap to satisfy future
+      //  humongous allocation requests.)
+
+      // Add up to 1/8 of old regions into the mixed evac candidate set in order to defragment heap to better support
+      // humongous allocations
+      const int MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS = 8;
+      size_t max_extra_evac = cand_idx / MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS;
+      for (size_t i = _last_old_collection_candidate; (defrag_count < max_extra_evac) && (i < cand_idx); i++) {
+        ShenandoahHeapRegion* r = candidates[i]._region;
+        assert (r->is_regular(), "Only regular regions are in the candidate set");
+        size_t region_garbage = candidates[i]._region->garbage();
+        size_t region_free = candidates[i]._region->free();
+        candidates_garbage += region_garbage;
+        unfragmented += region_free;
+        defrag_count++;
+        // In case this is the last iteration, set _last_old_collection_candidates;
+        _last_old_collection_candidate = i + 1;
+      }
+    }
+  }
+
   // Note that we do not coalesce and fill occupied humongous regions
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   size_t collectable_garbage = immediate_garbage + candidates_garbage;
@@ -393,10 +444,11 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
 
   log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s "
-               "consolidated with free: " SIZE_FORMAT "%s, over " SIZE_FORMAT " regions, "
-               "Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
+               "consolidated with free: " SIZE_FORMAT "%s, over " SIZE_FORMAT " regions (humongous defragmentation: "
+               SIZE_FORMAT " regions), Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
                byte_size_in_proper_unit(collectable_garbage), proper_unit_for_byte_size(collectable_garbage),
-               byte_size_in_proper_unit(unfragmented),        proper_unit_for_byte_size(unfragmented), old_candidates,
+               byte_size_in_proper_unit(unfragmented),        proper_unit_for_byte_size(unfragmented),
+               old_candidates, defrag_count,
                byte_size_in_proper_unit(immediate_garbage),   proper_unit_for_byte_size(immediate_garbage), immediate_regions);
 
   if (unprocessed_old_collection_candidates() > 0) {
