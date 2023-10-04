@@ -126,7 +126,7 @@ private:
   void recalculate_min_max_young_length(size_t heap_region_count);
 
 public:
-  explicit ShenandoahGenerationSizer();
+  ShenandoahGenerationSizer();
 
   // Calculate the maximum length of the young gen given the number of regions
   // depending on the sizing algorithm.
