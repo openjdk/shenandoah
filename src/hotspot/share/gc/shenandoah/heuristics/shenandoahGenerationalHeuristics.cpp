@@ -151,9 +151,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     }
   }
   heap->reserve_promotable_humongous_regions(humongous_regions_promoted);
-  heap->reserve_promotable_humongous_usage(humongous_bytes_promoted);
   heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
-  heap->reserve_promotable_regular_usage(regular_regions_promoted_usage);
   log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
                      " regular regions, spanning a total of " SIZE_FORMAT " used bytes",
                      humongous_regions_promoted, regular_regions_promoted_in_place,
