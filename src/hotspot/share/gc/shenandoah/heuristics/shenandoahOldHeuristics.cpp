@@ -45,10 +45,17 @@ int ShenandoahOldHeuristics::compare_by_live(RegionData a, RegionData b) {
   else return 0;
 }
 
+#define KELVIN_DEBUG
+
 // sort by increasing index
 int ShenandoahOldHeuristics::compare_by_index(RegionData a, RegionData b) {
   if (a._region->index() < b._region->index()) {
     return -1;
+#ifdef KELVIN_DEBUG
+  } else if (a._region->index() == b._region->index()) {
+    log_info(gc)("KELVIN Not expecting to compare the same entry at entry: " SIZE_FORMAT, a._region->index());
+    return 0;
+#endif
   } else {
     assert(a._region->index() > b._region->index(), "Regions should not be duplicated in soredt array");
     return 1;
@@ -298,6 +305,17 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
   _next_old_collection_candidate = write_index + 1;
 }
 
+#ifdef KELVIN_DEBUG
+void ShenandoahOldHeuristics::dump_candidates(const char* label, void* arg, size_t size) {
+  RegionData* candidates = (RegionData*) arg;
+  log_info(gc)("Candidates array %s", label);
+  for (size_t i = 0; i < size; i++) {
+    log_info(gc)(SIZE_FORMAT ": index: " SIZE_FORMAT ", live_data: " SIZE_FORMAT,
+                 i, candidates[i]._region->index(), candidates[i]._u._live_data);
+  }
+}
+#endif
+
 void ShenandoahOldHeuristics::prepare_for_old_collections() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
@@ -360,7 +378,17 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // Some regular regions may have been promoted in place with no garbage but also with very little live data.  When we "compact"
   // old-gen, we want to pack these underutilized regions together so we can have more unaffiliated (unfragmented) free regions
   // in old-gen.
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN prepare_for_old_collections(), sorting " SIZE_FORMAT " elements by live", cand_idx);
+  dump_candidates("Before sort:", (void*) candidates, cand_idx);
+#endif
+
   QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_live, false);
+
+#ifdef KELVIN_DEBUG
+  dump_candidates("After sort:", (void*) candidates, cand_idx);
+#endif
 
   // Any old-gen region that contains (ShenandoahOldGarbageThreshold (default value 25)% garbage or more is to be
   // added to the list of candidates for subsequent mixed evacuations.
@@ -395,12 +423,29 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     unfragmented += region_free;
   }
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN prepare_for_old_collections(), selected %u regions to be evacuated",
+               _last_old_collection_candidate);
+#endif
+
   size_t defrag_count = 0;
   if (cand_idx > _last_old_collection_candidate) {
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN looking to defrag humongous, sorting " SIZE_FORMAT " regions starting at offset %u",
+               cand_idx - _last_old_collection_candidate,
+               _last_old_collection_candidate);
+  dump_candidates("Before sort:", (void*)candidates, cand_idx);
+#endif
+
 
     // Sort the regions that were initially rejected from the collection set in order of index.
     QuickSort::sort<RegionData>(candidates + _last_old_collection_candidate, cand_idx - _last_old_collection_candidate,
                                 compare_by_index, false);
+
+#ifdef KELVIN_DEBUG
+    dump_candidates("After sort:", (void*) candidates, cand_idx);
+#endif
 
     size_t first_unselected_old_region = candidates[_last_old_collection_candidate]._region->index();
     size_t last_unselected_old_region = candidates[cand_idx - 1]._region->index();
