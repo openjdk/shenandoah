@@ -1361,7 +1361,6 @@ void ShenandoahFreeSet::log_status() {
   dump_region_map = true;
 #endif
   if (dump_region_map) {
-  {
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
