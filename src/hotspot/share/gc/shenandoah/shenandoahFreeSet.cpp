@@ -82,13 +82,6 @@ void ShenandoahSetsOfFree::clear_all() {
 
 void ShenandoahSetsOfFree::increase_used(ShenandoahFreeMemoryType which_set, size_t bytes) {
   assert (which_set > NotFree && which_set < NumFreeSets, "Set must correspond to a valid freeset");
-#undef KELVIN_TRACE
-#ifdef KELVIN_TRACE
-  if (which_set == Mutator) {
-    log_info(gc, free)("Mutator CON$UME$: " SIZE_FORMAT ", remaining available: " SIZE_FORMAT,
-                       bytes, _capacity_of[Mutator] - _used_by[Mutator]);
-  }
-#endif
   _used_by[which_set] += bytes;
   assert (_used_by[which_set] <= _capacity_of[which_set],
           "Must not use (" SIZE_FORMAT ") more than capacity (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
@@ -463,6 +456,30 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
   return nullptr;
 }
 
+// Returns _max if there are no regular old regions
+size_t ShenandoahFreeSet::first_old_region() {
+  // if there are no OldCollector regions, leftmost equals max
+  for (size_t i  = 0; i < _free_sets.leftmost(OldCollector); i++) {
+    ShenandoahHeapRegion* r = _heap->get_region(i);
+    if (r->is_old() && r->is_regular()) {
+      return i;
+    }
+  }
+  return _free_sets.leftmost(OldCollector); // which may equal max
+}
+
+// Returns 0 if there are no regular old regions
+size_t ShenandoahFreeSet::last_old_region() {
+  // if there are no OldCollector regions, leftmost equals max
+  for (size_t i = _free_sets.max() - 1; i > _free_sets.rightmost(OldCollector); i--) {
+    ShenandoahHeapRegion* r = _heap->get_region(i);
+    if (r->is_old() && r->is_regular()) {
+      return i;
+    }
+  }
+  return _free_sets.rightmost(OldCollector); // which may equal 0
+}
+
 void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
   size_t idx = region->index();
@@ -546,14 +563,22 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_shared: {
       // Try to allocate in the mutator view
       // Allocate within mutator free from high memory to low so as to preserve low memory for humongous allocations
-      for (size_t idx = _free_sets.rightmost(Mutator); idx >= _free_sets.leftmost(Mutator); idx--) {
-        ShenandoahHeapRegion* r = _heap->get_region(idx);
-        if (_free_sets.in_free_set(idx, Mutator) && (allow_new_region || r->is_affiliated())) {
-          // try_allocate_in() increases used if the allocation is successful.
-          HeapWord* result;
-          size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab)? req.min_size(): req.size();
-          if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
-            return result;
+
+      // Some of this code to be replaced with improve-humongous-allocation code
+      if (_free_sets.leftmost(Mutator) < _free_sets.rightmost(Mutator)) {
+        // Otherwise, this free set is empty
+
+        // Use signed integer index.  Otherwise, loop will never terminate.
+        int leftmost = (int) _free_sets.leftmost(Mutator);
+        for (int idx = (int) _free_sets.rightmost(Mutator); idx >= leftmost; idx--) {
+          ShenandoahHeapRegion* r = _heap->get_region(idx);
+          if (_free_sets.in_free_set(idx, Mutator) && (allow_new_region || r->is_affiliated())) {
+            // try_allocate_in() increases used if the allocation is successful.
+            HeapWord* result;
+            size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab)? req.min_size(): req.size();
+            if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
+              return result;
+            }
           }
         }
       }
@@ -1056,8 +1081,12 @@ void ShenandoahFreeSet::clear_internal() {
 // move some of the mutator regions into the collector set or old_collector set with the intent of packing
 // old_collector memory into the highest (rightmost) addresses of the heap and the collector memory into the
 // next highest addresses of the heap, with mutator memory consuming the lowest addresses of the heap.
-void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions) {
-
+void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
+                                                         size_t &first_old_region, size_t &last_old_region,
+                                                         size_t &old_region_count) {
+  first_old_region = _heap->num_regions();
+  last_old_region = 0;
+  old_region_count = 0;
   old_cset_regions = 0;
   young_cset_regions = 0;
   for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
@@ -1070,6 +1099,12 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
         assert(region->is_young(), "Trashed region should be old or young");
         young_cset_regions++;
       }
+    } else if (region->is_old() && region->is_regular()) {
+      old_region_count++;
+      if (first_old_region > idx) {
+        first_old_region = idx;
+      }
+      last_old_region = idx;
     }
     if (region->is_alloc_allowed() || region->is_trash()) {
       assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
@@ -1158,7 +1193,8 @@ void ShenandoahFreeSet::move_collector_sets_to_mutator(size_t max_xfer_regions) 
 
 
 // Overwrite arguments to represent the amount of memory in each generation that is about to be recycled
-void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions) {
+void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions,
+                                           size_t &first_old_region, size_t &last_old_region, size_t &old_region_count) {
   shenandoah_assert_heaplocked();
   // This resets all state information, removing all regions from all sets.
   clear();
@@ -1166,7 +1202,7 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
 
   // This places regions that have alloc_capacity into the old_collector set if they identify as is_old() or the
   // mutator set otherwise.
-  find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions);
+  find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
 }
 
 void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions) {
@@ -1262,9 +1298,11 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 // the collector set is at least to_reserve, and the memory available for allocations within the old collector set
 // is at least to_reserve_old.
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
+
   for (size_t i = _heap->num_regions(); i > 0; i--) {
     size_t idx = i - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
+
     if (!_free_sets.in_free_set(idx, Mutator)) {
       continue;
     }
@@ -1277,7 +1315,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     bool move_to_young = _free_sets.capacity_of(Collector) < to_reserve;
 
     if (!move_to_old && !move_to_young) {
-      // We've satisfied both to_reserve and to_reserved_old
+      // We've satisfied both to_reserve and to_reserved_old.  No need to process remaining regions.
       break;
     }
 
@@ -1317,10 +1355,11 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
-// KELVIN COMMENTED
-// #ifdef ASSERT
-  // Dump of the FreeSet details is only enabled if assertions are enabled
-  {
+  bool dump_region_map = ShenandoahGenerationalLogFreeMap;
+#ifdef ASSERT
+  dump_region_map = true;
+#endif
+  if (dump_region_map) {
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
@@ -1406,7 +1445,6 @@ void ShenandoahFreeSet::log_status() {
     size_t total_young = retired_young + retired_young_humongous;
     size_t total_old = retired_old + retired_old_humongous;
   }
-// #endif
 
   LogTarget(Info, gc, free) lt;
   if (lt.is_enabled()) {

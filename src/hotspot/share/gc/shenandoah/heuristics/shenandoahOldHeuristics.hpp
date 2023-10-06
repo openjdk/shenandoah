@@ -94,6 +94,11 @@ private:
   bool _fragmentation_trigger;
   bool _growth_trigger;
 
+  // Motivation for a fragmentation_trigger
+  double _fragmentation_density;
+  size_t _fragmentation_first_old_region;
+  size_t _fragmentation_last_old_region;
+
   // Compare by live is used to prioritize compaction of old-gen regions.  With old-gen compaction, the goal is
   // to tightly pack long-lived objects into available regions.  In most cases, there has not been an accumulation
   // of garbage within old-gen regions.  The more likely opportunity will be to combine multiple sparsely populated
@@ -155,8 +160,19 @@ public:
   void abandon_collection_candidates();
 
   void trigger_cannot_expand() { _cannot_expand_trigger = true; };
-  void trigger_old_is_fragmented() { _fragmentation_trigger = true; }
-  void trigger_old_has_grown();
+  void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
+    _fragmentation_trigger = true;
+    _fragmentation_density = density;
+    _fragmentation_first_old_region = first_old_index;
+    _fragmentation_last_old_region = last_old_index;
+  }
+  void trigger_old_has_grown() { _growth_trigger = true; }
+
+  void fragmentation_trigger_reason(double &density, size_t &first_index, size_t &last_index) {
+    density = _fragmentation_density;
+    first_index = _fragmentation_first_old_region;
+    last_index = _fragmentation_last_old_region;
+  }
 
   void clear_triggers();
 

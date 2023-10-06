@@ -136,6 +136,9 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
   // gets priority over old-gen marking.
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
+  // Note: When we expedite young gc, we starve old gc.
+  // TODO: Do not repeatedly expedite promotion if progress on promotion is blocked.  Would be better to
+  // allow old-gen to run, so that we don't have to block progress on promotion.
   size_t promo_expedite_threshold = (heap->young_generation()->max_capacity() * ShenandoahEvacReserve) / 512;
   size_t promo_potential = heap->get_promotion_potential();
   if (promo_potential > promo_expedite_threshold) {

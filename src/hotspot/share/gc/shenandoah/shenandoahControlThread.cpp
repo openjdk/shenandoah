@@ -168,7 +168,7 @@ void ShenandoahControlThread::run_service() {
         // A compacting degen can move young regions around without doing full old-gen mark (relying upon the
         // remembered set scan), so it might be faster than a full gc.
         //
-        // Longer term, think about how to defragment humongous memory concurrently. 
+        // Longer term, think about how to defragment humongous memory concurrently.
 
 #undef KELVIN_FULL
 #ifdef KELVIN_FULL
