@@ -546,14 +546,20 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_shared: {
       // Try to allocate in the mutator view
       // Allocate within mutator free from high memory to low so as to preserve low memory for humongous allocations
-      for (size_t idx = _free_sets.rightmost(Mutator); idx >= _free_sets.leftmost(Mutator); idx--) {
-        ShenandoahHeapRegion* r = _heap->get_region(idx);
-        if (_free_sets.in_free_set(idx, Mutator) && (allow_new_region || r->is_affiliated())) {
-          // try_allocate_in() increases used if the allocation is successful.
-          HeapWord* result;
-          size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab)? req.min_size(): req.size();
-          if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
-            return result;
+      if (_free_sets.leftmost(Mutator) < _free_sets.rightmost(Mutator)) {
+        // otherwise, free set is empty
+
+        // Use integer index.  Otherwise, loop will never terminate.
+        int leftmost = (int) _free_sets.leftmost(Mutator);
+        for (int idx = (int) _free_sets.rightmost(Mutator); idx >= leftmost; idx--) {
+          ShenandoahHeapRegion* r = _heap->get_region(idx);
+          if (_free_sets.in_free_set(idx, Mutator) && (allow_new_region || r->is_affiliated())) {
+            // try_allocate_in() increases used if the allocation is successful.
+            HeapWord* result;
+            size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab)? req.min_size(): req.size();
+            if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
+              return result;
+            }
           }
         }
       }
