@@ -35,6 +35,24 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
+  product(uintx, ShenandoahGenerationalHumongousReserve, 16, EXPERIMENTAL,  \
+          "(Generational mode only) What percent of the heap should be "    \
+          "reserved for humongous objects if possible.  Old-generation "    \
+          "collections will endeavor to evacuate old-gen regions within "   \
+          "this reserved area even if these regions do not contain high "   \
+          "percentage of garbage.  Setting a larger value will cause "      \
+          "more frequent old-gen collections.  A smaller value will "       \
+          "increase the likelihood that humongous object allocations "      \
+          "fail, which will result in stop-the-world full GCs.")            \
+          range(0,100)                                                      \
+                                                                            \
+  product(bool, ShenandoahGenerationalLogFreeMap, false, EXPERIMENTAL,      \
+          "(Generational mode only) If GC logging is enabled, display "     \
+          "a map of region usage each time the free set is rebuilt. "       \
+          "This map helps identify issues with humongous memory "           \
+          "fragmentation and helps visualize old-gen and young-gen "        \
+          "status.  This memory map is always displayed in debug builds")   \
+                                                                            \
   product(bool, ShenandoahGenerationalCensusAtEvac, false, EXPERIMENTAL,    \
           "(Generational mode only) Object age census at evacuation, "      \
           "rather than during marking.")                                    \
