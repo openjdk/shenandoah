@@ -139,16 +139,16 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
         //         cycles_until_forced_old = 20;  // because we just got 20 ms of execution time, we can delay longer before forced
         //       }
 
-        if (start_young_cycle()) {
-#ifdef KELVIN_TRACE
-          log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
-#endif
-          log_info(gc)("Heuristics request for young collection accepted");
-        } else if (start_old_cycle()) {
+        if (start_old_cycle()) {
 #ifdef KELVIN_TRACE
           log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
 #endif
           log_info(gc)("Heuristics request for old collection accepted");
+        } else if (start_young_cycle()) {
+#ifdef KELVIN_TRACE
+          log_info(gc)("Acceptance after sleeping %.3f following timestamp %.3f", _next_sleep_interval, _most_recent_timestamp);
+#endif
+          log_info(gc)("Heuristics request for young collection accepted");
         }
       }
     } else if (mode == ShenandoahControlThread::servicing_old) {

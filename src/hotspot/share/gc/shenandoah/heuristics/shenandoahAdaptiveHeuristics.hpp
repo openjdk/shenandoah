@@ -183,27 +183,6 @@ protected:
   void add_degenerated_gc_time(double timestamp_at_start, double duration);
   double predict_gc_time(double timestamp_at_start);
 
-  // Keep track of recent history of GC periods which succeeded in concurrent mode, excluding degen and full cycles
-  double* _gc_period_histories;
-  uint _gc_period_first_index;
-  uint _gc_period_num_samples;
-  double _gc_periods_sum;
-  double _gc_period_sd;
-  double _gc_period_end_of_cycle_before_concurrent;
-
-  void add_gc_period(double new_period);
-  double gc_period_mean();
-  double gc_period_sd();
-
-  // This is valid only if we have started a concurrent GC cycle
-  double end_of_previous_gc_period() {
-    return _gc_period_end_of_cycle_before_concurrent;
-  }
-
-  void set_end_of_previous_gc_period(double time_stamp) {
-    _gc_period_end_of_cycle_before_concurrent = time_stamp;
-  }
-
   // Keep track of SPIKE_ACCELERATION_SAMPLE_SIZE most recent spike allocation rate measurements
   uint _spike_acceleration_first_sample_index;
   uint _spike_acceleration_num_samples;

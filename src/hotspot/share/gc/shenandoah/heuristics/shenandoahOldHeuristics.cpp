@@ -26,6 +26,7 @@
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
+#include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -407,32 +408,25 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     size_t span_of_uncollected_regions = 1 + last_unselected_old_region - first_unselected_old_region;
     size_t total_uncollected_old_regions = cand_idx - _last_old_collection_candidate;
 
-    if (total_uncollected_old_regions * 5 / 4 < span_of_uncollected_regions) {
-      // If one fifth of the range spanned by unselected old regular regions is not old,
-      // then old is too fragmented and we will pack it tighter, a little bit at a time.
-      // We repack it to make room for humongous object allocations at the low end of memory.
-      // (In other words, if the range of regions spanned by old-gen uncollected candidates is 80%
-      //  consumed by old-gen collection candidates, this is considered tightly packed and we will not
-      //  invest further defragmentation efforts.  However, if this range of regions is less than 80%
-      //  consumed by old-gen regions, we'll try to move some of these regions higher within the heap
-      //  so as to make more contiguous space available at the low-end of the heap to satisfy future
-      // humongous allocation requests.
+    // Add no more than 1/8 of the existing old-gen regions to the set of mixed evacuation candidates.
+    const int MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS = 8;
+    size_t bound_on_additional_regions = cand_idx / MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS;
 
-      // Add up to 1/8 of old regions into the mixed evac candidate set in order to defragment heap to better support
-      // humongous allocations
-      const int MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS = 8;
-      size_t max_extra_evac = cand_idx / MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS;
-      for (size_t i = _last_old_collection_candidate; (defrag_count < max_extra_evac) && (i < cand_idx); i++) {
-        ShenandoahHeapRegion* r = candidates[i]._region;
-        assert (r->is_regular(), "Only regular regions are in the candidate set");
-        size_t region_garbage = candidates[i]._region->garbage();
-        size_t region_free = candidates[i]._region->free();
-        candidates_garbage += region_garbage;
-        unfragmented += region_free;
-        defrag_count++;
-        // In case this is the last iteration, set _last_old_collection_candidates;
-        _last_old_collection_candidate = i + 1;
-      }
+    // The heuristic old_is_fragmented trigger may be seeking to achieve up to 7/8 density.  Allow ourselves to overshoot
+    // that target (at 15/16) so we will not have to do another defragmenting old collection right away.
+    while ((total_uncollected_old_regions < 15 * span_of_uncollected_regions / 16) && (bound_on_additional_regions > 0)) {
+      ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate]._region;
+      assert (r->is_regular(), "Only regular regions are in the candidate set");
+      size_t region_garbage = candidates[_last_old_collection_candidate]._region->garbage();
+      size_t region_free = r->free();
+      candidates_garbage += region_garbage;
+      unfragmented += region_free;
+      bound_on_additional_regions--;
+      _last_old_collection_candidate++;
+
+      // We now have one fewer uncollected regions, and our uncollected span shrinks because we have removed its first region.
+      total_uncollected_old_regions--;
+      span_of_uncollected_regions = 1 + last_unselected_old_region - candidates[_last_old_collection_candidate]._region->index();
     }
   }
 
@@ -442,7 +436,6 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t old_candidates = _last_old_collection_candidate;
   size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
-
 
   log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s "
                "consolidated with free: " SIZE_FORMAT "%s, over " SIZE_FORMAT " regions (humongous defragmentation: "
@@ -524,11 +517,6 @@ void ShenandoahOldHeuristics::record_cycle_end() {
   clear_triggers();
 }
 
-void ShenandoahOldHeuristics::trigger_old_has_grown() {
-  _growth_trigger = true;
-}
-
-
 void ShenandoahOldHeuristics::clear_triggers() {
   // Clear any triggers that were set during mixed evacuations.  Conditions may be different now that this phase has finished.
   _cannot_expand_trigger = false;
@@ -557,15 +545,36 @@ bool ShenandoahOldHeuristics::should_start_gc() {
 
   if (_fragmentation_trigger) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
+    const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+
     size_t used = _old_generation->used();
     size_t used_regions_size = _old_generation->used_regions_size();
+
+    // used_regions includes humongous regions
     size_t used_regions = _old_generation->used_regions();
     assert(used_regions_size > used_regions, "Cannot have more used than used regions");
+
+    size_t first_active_region = heap->free_set()->first_old_region();
+    size_t last_active_region = heap->free_set()->last_old_region();
+    size_t span_of_active_regions = (last_active_region > first_active_region)? last_active_region + 1 - first_active_region: 0;
+
+    size_t first_old_region, last_old_region;
+    double density;
+    fragmentation_trigger_reason(density, first_old_region, last_old_region);
+    size_t span_of_old_regions = (last_old_region > first_old_region)? last_old_region + 1 - first_old_region: 0;
+
     size_t fragmented_free = used_regions_size - used;
-    double percent = percent_of(fragmented_free, used_regions_size);
+
+    // New active regions may have came into play following the trigger.
+    size_t first_region = MIN2(first_active_region, first_old_region);
+    size_t last_region = MAX2(last_active_region, last_old_region);
+
     log_info(gc)("Trigger (OLD): Old has become fragmented: "
-                 SIZE_FORMAT "%s available bytes spread between " SIZE_FORMAT " regions (%.1f%% free)",
-                 byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free), used_regions, percent);
+                 SIZE_FORMAT "%s available bytes spread between range spanned from "
+                 SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT
+                 "), density at time of trigger: %.1f%%",
+                 byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free),
+                 first_region, last_region, (last_region + 1 - first_region), density * 100);
     return true;
   }
 
