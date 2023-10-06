@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2016, 2019, Red Hat, Inc. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
@@ -96,6 +97,8 @@ public:
   inline size_t rightmost(ShenandoahFreeMemoryType which_set) const;
   size_t leftmost_empty(ShenandoahFreeMemoryType which_set);
   size_t rightmost_empty(ShenandoahFreeMemoryType which_set);
+
+  inline bool is_empty(ShenandoahFreeMemoryType which_set) const;
 
   inline void increase_used(ShenandoahFreeMemoryType which_set, size_t bytes);
 
