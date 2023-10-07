@@ -43,7 +43,7 @@
           "percentage of garbage.  Setting a larger value will cause "      \
           "more frequent old-gen collections.  A smaller value will "       \
           "increase the likelihood that humongous object allocations "      \
-          "fail, which will result in stop-the-world full GCs.")            \
+          "fail, resulting in stop-the-world full GCs.")                    \
           range(0,100)                                                      \
                                                                             \
   product(bool, ShenandoahGenerationalLogFreeMap, false, EXPERIMENTAL,      \

@@ -195,10 +195,6 @@ public:
  private:
   void slide_pinned_regions_to_front();
   bool all_candidates_are_pinned();
-#define KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  void dump_candidates(const char* label, void* candidates, size_t size);
-#endif
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHOLDHEURISTICS_HPP

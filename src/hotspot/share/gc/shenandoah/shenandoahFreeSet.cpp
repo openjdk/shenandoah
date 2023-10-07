@@ -223,8 +223,6 @@ inline bool ShenandoahSetsOfFree::is_empty(ShenandoahFreeMemoryType which_set) c
   return (leftmost(which_set) > rightmost(which_set));
 }
 
-
-
 size_t ShenandoahSetsOfFree::leftmost_empty(ShenandoahFreeMemoryType which_set) {
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   for (size_t idx = _leftmosts_empty[which_set]; idx < _max; idx++) {

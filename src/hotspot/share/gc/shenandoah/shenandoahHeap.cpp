@@ -3137,11 +3137,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
 
   if (mode()->is_generational()) {
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
-
-    // Candidate new comamnd-line configuration option.  The percent of heap that we strive to maintain as defragmented
-    // for purpose of allocating humongous objects.
-    const int ShenandoahGenerationalHumongousReserve = 16;
-
     size_t allowed_old_gen_span = num_regions() - (ShenandoahGenerationalHumongousReserve * num_regions() / 100);
 
     // Tolerate lower density if total span is small.  Here's the implementation:
