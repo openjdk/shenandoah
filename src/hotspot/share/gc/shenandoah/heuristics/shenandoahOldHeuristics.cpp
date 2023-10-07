@@ -50,9 +50,11 @@ int ShenandoahOldHeuristics::compare_by_live(RegionData a, RegionData b) {
 int ShenandoahOldHeuristics::compare_by_index(RegionData a, RegionData b) {
   if (a._region->index() < b._region->index()) {
     return -1;
-  } else {
-    assert(a._region->index() > b._region->index(), "Regions should not be duplicated in soredt array");
+  } else if (a._region->index() > b._region->index()) {
     return 1;
+  } else {
+    // Compare to self may happen during quicksort search for pivot value
+    return 0;
   }
 }
 
