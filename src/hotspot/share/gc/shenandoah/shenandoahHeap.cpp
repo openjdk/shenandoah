@@ -3156,7 +3156,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
     size_t old_bytes_spanned = old_region_span * region_size_bytes;
     double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
-    
+
     uint eighths = 8;
     bool triggered = false;
     for (uint i = 0; i < 5; i++) {
