@@ -416,14 +416,15 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
     // The heuristic old_is_fragmented trigger may be seeking to achieve up to 7/8 density.  Allow ourselves to overshoot
     // that target (at 15/16) so we will not have to do another defragmenting old collection right away.
-    while ((total_uncollected_old_regions < 15 * span_of_uncollected_regions / 16) && (bound_on_additional_regions > 0)) {
+    while ((total_uncollected_old_regions < 15 * span_of_uncollected_regions / 16) &&
+           (defrag_count < bound_on_additional_regions)) {
       ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate]._region;
       assert (r->is_regular(), "Only regular regions are in the candidate set");
       size_t region_garbage = candidates[_last_old_collection_candidate]._region->garbage();
       size_t region_free = r->free();
       candidates_garbage += region_garbage;
       unfragmented += region_free;
-      bound_on_additional_regions--;
+      defrag_count++;
       _last_old_collection_candidate++;
 
       // We now have one fewer uncollected regions, and our uncollected span shrinks because we have removed its first region.
