@@ -115,6 +115,10 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // compute_tenuring_threshold to calculate the new
   // value
   void update_tenuring_threshold();
+
+  // This uses the data in the ShenandoahAgeCensus object's _global_age_table and the
+  // current _epoch to compute a new tenuring threshold, which will be remembered
+  // until the next invocation of compute_tenuring_threshold.
   uint compute_tenuring_threshold();
 
  public:
