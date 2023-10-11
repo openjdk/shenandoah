@@ -2423,9 +2423,9 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
 #ifdef ASSERT
   // has_forwarded_objects() iff UPDATEREFS or EVACUATION
-  bool has_forwarded = has_forwarded_objects()? 1: 0;
-  bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION)? 1: 0;
-  bool evacuating = gc_state.is_set(EVACUATION)? 1: 0;
+  bool has_forwarded = has_forwarded_objects();
+  bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION);
+  bool evacuating = _gc_state.is_set(EVACUATION);
   assert ((has_forwarded == updating_or_evacuating) || (evacuating && !has_forwarded && collection_set()->is_empty()),
           "Updating or evacuating iff has forwarded object, or evacuation phase is promoting in place without forwarding");
 #endif
