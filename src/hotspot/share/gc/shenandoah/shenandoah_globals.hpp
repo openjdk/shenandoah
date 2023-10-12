@@ -35,7 +35,7 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
-  product(uintx, ShenandoahGenerationalHumongousReserve, 16, EXPERIMENTAL,  \
+  product(uintx, ShenandoahGenerationalHumongousReserve, 0, EXPERIMENTAL,   \
           "(Generational mode only) What percent of the heap should be "    \
           "reserved for humongous objects if possible.  Old-generation "    \
           "collections will endeavor to evacuate old-gen regions within "   \
