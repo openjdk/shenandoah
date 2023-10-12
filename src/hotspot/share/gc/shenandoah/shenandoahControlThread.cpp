@@ -775,6 +775,7 @@ bool ShenandoahControlThread::check_cancellation_or_degen(ShenandoahGC::Shenando
 
   if (is_alloc_failure_gc()) {
     _degen_point = point;
+    _preemption_requested.unset();
     return true;
   }
 
