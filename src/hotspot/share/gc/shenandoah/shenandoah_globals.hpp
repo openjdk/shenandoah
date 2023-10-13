@@ -35,6 +35,24 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
+  product(uintx, ShenandoahGenerationalIgnoreOldGrowthBelowPercentage,      \
+          5, EXPERIMENTAL,                                                  \
+          "(Generational mode only) If the total usage of the old "         \
+          "generation is smaller than this percent, we do not trigger "     \
+          "old gen collections even if old has grown, except when "         \
+          "ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles "        \
+          "consecutive cycles have been completed following the "           \
+          "preceding old-gen collection.")                                  \
+          range(0,100)                                                      \
+                                                                            \
+  product(uintx, ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles,   \
+          50, EXPERIMENTAL,                                                 \
+          "(Generational mode only) Even if the usage of old generation "   \
+          "is below ShenandoahGenerationalIgnoreOldGrowthBelowPercentage, " \
+          "trigger an old-generation mark if old has grown and this "       \
+          "many young-gen consecutive young-gen collections have been "     \
+          "completed following the preceding old-gen collection.")          \
+                                                                            \
   product(bool, ShenandoahGenerationalCensusAtEvac, false, EXPERIMENTAL,    \
           "(Generational mode only) Object age census at evacuation, "      \
           "rather than during marking.")                                    \
