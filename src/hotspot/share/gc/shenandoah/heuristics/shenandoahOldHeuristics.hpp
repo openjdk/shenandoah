@@ -160,7 +160,8 @@ public:
   void abandon_collection_candidates();
 
   void trigger_cannot_expand() { _cannot_expand_trigger = true; };
-  void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
+
+  inline void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
     _fragmentation_trigger = true;
     _fragmentation_density = density;
     _fragmentation_first_old_region = first_old_index;
@@ -168,7 +169,7 @@ public:
   }
   void trigger_old_has_grown() { _growth_trigger = true; }
 
-  void fragmentation_trigger_reason(double &density, size_t &first_index, size_t &last_index) {
+  inline void fragmentation_trigger_reason(double &density, size_t &first_index, size_t &last_index) {
     density = _fragmentation_density;
     first_index = _fragmentation_first_old_region;
     last_index = _fragmentation_last_old_region;
