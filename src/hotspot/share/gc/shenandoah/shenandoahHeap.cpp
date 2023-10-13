@@ -3113,6 +3113,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   size_t young_cset_regions, old_cset_regions;
   size_t first_old_region, last_old_region, old_region_count;
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
+  assert((last_old_region + 1 - first_old_region) * region_size_bytes >= old_generation()->used_regions_size(), "sanity");
 
   if (mode()->is_generational()) {
     assert(verify_generation_usage(true, old_generation()->used_regions(),
@@ -3160,14 +3161,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
 
     uint eighths = 8;
-    bool triggered = false;
     for (uint i = 0; i < 5; i++) {
       size_t span_threshold = eighths * allowed_old_gen_span / 8;
       eighths--;
       double density_threshold = eighths / 8.0;
       if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
         old_heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-        triggered = true;
         break;
       }
     }

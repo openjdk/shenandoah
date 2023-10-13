@@ -461,30 +461,6 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
   return nullptr;
 }
 
-// Returns _max if there are no regular old regions
-size_t ShenandoahFreeSet::first_old_region() {
-  // if there are no OldCollector regions, leftmost equals max
-  for (size_t i  = 0; i < _free_sets.leftmost(OldCollector); i++) {
-    ShenandoahHeapRegion* r = _heap->get_region(i);
-    if (r->is_old() && r->is_regular()) {
-      return i;
-    }
-  }
-  return _free_sets.leftmost(OldCollector); // which may equal max
-}
-
-// Returns 0 if there are no regular old regions
-size_t ShenandoahFreeSet::last_old_region() {
-  // if there are no OldCollector regions, leftmost equals max
-  for (size_t i = _free_sets.max() - 1; i > _free_sets.rightmost(OldCollector); i--) {
-    ShenandoahHeapRegion* r = _heap->get_region(i);
-    if (r->is_old() && r->is_regular()) {
-      return i;
-    }
-  }
-  return _free_sets.rightmost(OldCollector); // which may equal 0
-}
-
 void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
   size_t idx = region->index();

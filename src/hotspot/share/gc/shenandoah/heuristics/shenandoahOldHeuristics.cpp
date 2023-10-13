@@ -401,7 +401,18 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
   size_t defrag_count = 0;
   if (cand_idx > _last_old_collection_candidate) {
-    // Sort the regions that were initially rejected from the collection set in order of index.
+    // Above, we have added into the set of mixed-evacuation candidates all old-gen regions for which the live memory
+    // that they contain is below a particular old-garbage threshold.  Regions that were not selected for the collection
+    // set hold enough live memory that it is not considered efficient (by "garbage-first standards") to compact these
+    // at the current time.
+    //
+    // However, if any of these regions that were rejected from the collection set reside within areas of memory that
+    // might interfere with future humongous allocation requests, we will prioritize them for evacuation at this time.
+    // Humongous allocations target the bottom of the heap.  We want old-gen regions to congregate at the top of the
+    // heap.
+    //
+    // Sort the regions that were initially rejected from the collection set in order of index.  This allows us to
+    // focus our attention on the regions that have low index value (i.e. the old-gen regions at the bottom of the heap).
     QuickSort::sort<RegionData>(candidates + _last_old_collection_candidate, cand_idx - _last_old_collection_candidate,
                                 compare_by_index, false);
 
@@ -557,27 +568,17 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     size_t used_regions = _old_generation->used_regions();
     assert(used_regions_size > used_regions, "Cannot have more used than used regions");
 
-    size_t first_active_region = heap->free_set()->first_old_region();
-    size_t last_active_region = heap->free_set()->last_old_region();
-    size_t span_of_active_regions = (last_active_region > first_active_region)? last_active_region + 1 - first_active_region: 0;
-
     size_t first_old_region, last_old_region;
     double density;
     fragmentation_trigger_reason(density, first_old_region, last_old_region);
-    size_t span_of_old_regions = (last_old_region > first_old_region)? last_old_region + 1 - first_old_region: 0;
-
+    size_t span_of_old_regions = (last_old_region >= first_old_region)? last_old_region + 1 - first_old_region: 0;
     size_t fragmented_free = used_regions_size - used;
-
-    // New active regions may have came into play following the trigger.
-    size_t first_region = MIN2(first_active_region, first_old_region);
-    size_t last_region = MAX2(last_active_region, last_old_region);
 
     log_info(gc)("Trigger (OLD): Old has become fragmented: "
                  SIZE_FORMAT "%s available bytes spread between range spanned from "
-                 SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT
-                 "), density at time of trigger: %.1f%%",
+                 SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT "), densityr: %.1f%%",
                  byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free),
-                 first_region, last_region, (last_region + 1 - first_region), density * 100);
+                 first_old_region, last_old_region, span_of_old_regions, density * 100);
     return true;
   }
 

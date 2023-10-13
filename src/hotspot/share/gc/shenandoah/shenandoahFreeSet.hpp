@@ -218,10 +218,6 @@ public:
     return capacity() - used();
   }
 
-  // index of first and regular old regions
-  size_t first_old_region();
-  size_t last_old_region();
-
   HeapWord* allocate(ShenandoahAllocRequest& req, bool& in_new_region);
   size_t unsafe_peek_free() const;
 
