@@ -35,6 +35,15 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
+  product(double, ShenandoahGenerationalMinOldGenGrowthPercent,             \
+          12.5, EXPERIMENTAL,                                               \
+          "(Generational mode only) If the usage within old generation "    \
+          "has grown by at least this percent of its live memory size "     \
+          "at completion of the most recent old-generation marking "        \
+          "effort, heuristics may trigger the start of a new old-gen "      \
+          "collection.")                                                    \
+          range(0.0,100.0)                                                  \
+                                                                            \
   product(uintx, ShenandoahGenerationalIgnoreOldGrowthBelowPercentage,      \
           5, EXPERIMENTAL,                                                  \
           "(Generational mode only) If the total usage of the old "         \
