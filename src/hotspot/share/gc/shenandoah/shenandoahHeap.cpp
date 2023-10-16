@@ -3348,8 +3348,8 @@ void ShenandoahGenerationRegionClosure<YOUNG>::heap_region_do(ShenandoahHeapRegi
 
 template<>
 void ShenandoahGenerationRegionClosure<OLD>::heap_region_do(ShenandoahHeapRegion* region) {
-  // Visit old and free regions
-  if (!region->is_young()) {
+  // Visit old regions
+  if (region->is_old()) {
     _cl->heap_region_do(region);
   }
 }
