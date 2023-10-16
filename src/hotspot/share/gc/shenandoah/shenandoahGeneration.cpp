@@ -111,7 +111,7 @@ class ShenandoahSquirrelAwayCardTable: public ShenandoahHeapRegionClosure {
     _scanner(_heap->card_scan()) {}
 
   void heap_region_do(ShenandoahHeapRegion* region) {
-    assert(r->is_old(), "Don't waste time doing this for non-old regions");
+    assert(region->is_old(), "Don't waste time doing this for non-old regions");
     _scanner->reset_remset(region->bottom(), ShenandoahHeapRegion::region_size_words());
   }
 
