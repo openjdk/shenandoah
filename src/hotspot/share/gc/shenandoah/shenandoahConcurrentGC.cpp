@@ -171,6 +171,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   entry_cleanup_early();
 
   {
+    // TODO: Not sure there is value in logging free-set status right here
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
