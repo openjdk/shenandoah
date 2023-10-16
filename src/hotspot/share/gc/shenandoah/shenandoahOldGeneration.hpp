@@ -108,7 +108,7 @@ private:
   static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                //   3.125%
 
   size_t _live_bytes_after_last_mark;
-  
+
   // How much growth in usage before we trigger old collection, per FRACTIONAL_DENOMINATOR (65_536)
   size_t _growth_before_compaction;
   const size_t _min_growth_before_compaction;                                               // Default is 12.5%
