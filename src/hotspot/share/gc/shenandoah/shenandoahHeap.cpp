@@ -3075,9 +3075,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   size_t young_cset_regions, old_cset_regions;
   size_t first_old_region, last_old_region, old_region_count;
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
-  assert((last_old_region + 1 - first_old_region >= old_region_count) &&
-         get_region(first_old_region)->is_old() && get_region(last_old_region)->is_old(), "sanity: old_region_count: " SIZE_FORMAT
-         ", first_old_region: " SIZE_FORMAT ", last_old_region: " SIZE_FORMAT,
+  // If there are no old regions, first_old_region will be greater than last_old_region
+  assert((first_old_region > last_old_region) ||
+         ((last_old_region + 1 - first_old_region >= old_region_count) &&
+          get_region(first_old_region)->is_old() && get_region(last_old_region)->is_old()),
+         "sanity: old_region_count: " SIZE_FORMAT ", first_old_region: " SIZE_FORMAT ", last_old_region: " SIZE_FORMAT,
          old_region_count, first_old_region, last_old_region);
 
   if (mode()->is_generational()) {
