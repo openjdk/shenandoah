@@ -35,8 +35,7 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
-  product(double, ShenandoahGenerationalMinOldGenGrowthPercent,             \
-          12.5, EXPERIMENTAL,                                               \
+  product(double, ShenandoahMinOldGenGrowthPercent,12.5, EXPERIMENTAL,      \
           "(Generational mode only) If the usage within old generation "    \
           "has grown by at least this percent of its live memory size "     \
           "at completion of the most recent old-generation marking "        \
@@ -44,8 +43,7 @@
           "collection.")                                                    \
           range(0.0,100.0)                                                  \
                                                                             \
-  product(uintx, ShenandoahGenerationalIgnoreOldGrowthBelowPercentage,      \
-          5, EXPERIMENTAL,                                                  \
+  product(uintx, ShenandoahIgnoreOldGrowthBelowPercentage,5, EXPERIMENTAL,  \
           "(Generational mode only) If the total usage of the old "         \
           "generation is smaller than this percent, we do not trigger "     \
           "old gen collections even if old has grown, except when "         \
@@ -54,10 +52,10 @@
           "preceding old-gen collection.")                                  \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles,   \
+  product(uintx, ShenandoahDoNotIgnoreGrowthAfterYoungCycles,               \
           50, EXPERIMENTAL,                                                 \
           "(Generational mode only) Even if the usage of old generation "   \
-          "is below ShenandoahGenerationalIgnoreOldGrowthBelowPercentage, " \
+          "is below ShenandoahIgnoreOldGrowthBelowPercentage, "             \
           "trigger an old-generation mark if old has grown and this "       \
           "many consecutive young-gen collections have been "               \
           "completed following the preceding old-gen collection.")          \

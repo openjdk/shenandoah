@@ -105,7 +105,7 @@ private:
   // old-gen memory.  The first old-collection trigger will occur when old-gen occupies 50% more than this initial
   // approximation of the old-gen memory requirement, in other words when old-gen usage is 150% of 3.125%, which
   // is 4.6875% of the total heap size.
-  static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 32;                //   3.125%
+  static const uint16_t INITIAL_LIVE_FRACTION = FRACTIONAL_DENOMINATOR / 16;                //   6.25%
 
   size_t _live_bytes_after_last_mark;
 

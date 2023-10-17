@@ -523,14 +523,14 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     size_t trigger_threshold = _old_generation->usage_trigger_threshold();
     size_t heap_size = heap->capacity();
     size_t consecutive_young_cycles;
-    if ((current_usage < ShenandoahGenerationalIgnoreOldGrowthBelowPercentage * heap_size / 100) &&
+    if ((current_usage < ShenandoahIgnoreOldGrowthBelowPercentage * heap_size / 100) &&
         ((consecutive_young_cycles = heap->control_thread()->consecutive_young_collections())
-         < ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles)) {
+         < ShenandoahDoNotIgnoreGrowthAfterYoungCycles)) {
       log_info(gc)("Ignoring Trigger (OLD): Old has overgrown: usage (" SIZE_FORMAT "%s) is below threshold (" SIZE_FORMAT
                    "%s) after " SIZE_FORMAT " consecutive completed young GCs",
                    byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage),
-                   byte_size_in_proper_unit(ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles),
-                   proper_unit_for_byte_size(ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles),
+                   byte_size_in_proper_unit(ShenandoahDoNotIgnoreGrowthAfterYoungCycles),
+                   proper_unit_for_byte_size(ShenandoahDoNotIgnoreGrowthAfterYoungCycles),
                    consecutive_young_cycles);
       _growth_trigger = false;
     } else if (current_usage > trigger_threshold) {
