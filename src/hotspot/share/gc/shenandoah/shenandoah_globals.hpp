@@ -59,7 +59,7 @@
           "(Generational mode only) Even if the usage of old generation "   \
           "is below ShenandoahGenerationalIgnoreOldGrowthBelowPercentage, " \
           "trigger an old-generation mark if old has grown and this "       \
-          "many young-gen consecutive young-gen collections have been "     \
+          "many consecutive young-gen collections have been "               \
           "completed following the preceding old-gen collection.")          \
                                                                             \
   product(bool, ShenandoahGenerationalCensusAtEvac, false, EXPERIMENTAL,    \
