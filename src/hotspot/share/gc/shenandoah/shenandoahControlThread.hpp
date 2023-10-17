@@ -103,8 +103,6 @@ private:
   shenandoah_padding(2);
   volatile GCMode _mode;
   shenandoah_padding(3);
-  volatile size_t _consecutive_young;
-  shenandoah_padding(4);
 
   // Returns true if the cycle has been cancelled or degenerated.
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
@@ -174,8 +172,6 @@ public:
   void start();
   void prepare_for_graceful_shutdown();
   bool in_graceful_shutdown();
-
-  inline size_t consecutive_young_collections() { return _consecutive_young; };
 
   void service_concurrent_normal_cycle(ShenandoahHeap* heap,
                                        const ShenandoahGenerationType generation,

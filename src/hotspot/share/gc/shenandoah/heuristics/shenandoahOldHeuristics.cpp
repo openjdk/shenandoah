@@ -26,6 +26,7 @@
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -524,7 +525,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     size_t heap_size = heap->capacity();
     size_t consecutive_young_cycles;
     if ((current_usage < ShenandoahIgnoreOldGrowthBelowPercentage * heap_size / 100) &&
-        ((consecutive_young_cycles = heap->control_thread()->consecutive_young_collections())
+        ((consecutive_young_cycles = heap->shenandoah_policy()->consecutive_young_gc_count())
          < ShenandoahDoNotIgnoreGrowthAfterYoungCycles)) {
       log_info(gc)("Ignoring Trigger (OLD): Old has overgrown: usage (" SIZE_FORMAT "%s) is below threshold (" SIZE_FORMAT
                    "%s) after " SIZE_FORMAT " consecutive completed young GCs",

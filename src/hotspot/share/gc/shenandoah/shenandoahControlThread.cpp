@@ -70,7 +70,6 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _mode(none) {
   set_name("Shenandoah Control Thread");
   reset_gc_id();
-  _consecutive_young = 0;
   create_and_start();
   _periodic_task.enroll();
   if (ShenandoahPacing) {
@@ -621,7 +620,6 @@ bool ShenandoahControlThread::resume_concurrent_old_cycle(ShenandoahGeneration* 
   // is allowed to cancel a GC.
   ShenandoahOldGC gc(generation, _allow_old_preemption);
   if (gc.collect(cause)) {
-    _consecutive_young = 0;
     generation->record_success_concurrent(false);
   }
 
@@ -715,11 +713,6 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahHeap* heap,
   ShenandoahConcurrentGC gc(generation, do_old_gc_bootstrap);
   if (gc.collect(cause)) {
     // Cycle is complete
-    if (generation->is_young()) {
-      _consecutive_young++;
-    } else {
-      _consecutive_young = 0;
-    }
     generation->record_success_concurrent(gc.abbreviated());
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
@@ -816,7 +809,6 @@ void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
   ShenandoahFullGC gc;
   gc.collect(cause);
 
-  _consecutive_young = 0;
   heap->global_generation()->heuristics()->record_success_full();
   heap->shenandoah_policy()->record_success_full();
 }
@@ -844,13 +836,8 @@ bool ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
     }
   }
 
-  if (_degen_generation->is_young()) {
-    _consecutive_young++;
-  } else {
-    _consecutive_young = 0;
-  }
   _degen_generation->heuristics()->record_success_degenerated();
-  heap->shenandoah_policy()->record_success_degenerated();
+  heap->shenandoah_policy()->record_success_degenerated(_degen_generation->is_young());
   return !gc.upgraded_to_full();
 }
 
