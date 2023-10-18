@@ -43,7 +43,7 @@
           "collection.")                                                    \
           range(0.0,100.0)                                                  \
                                                                             \
-  product(uintx, ShenandoahIgnoreOldGrowthBelowPercentage,5, EXPERIMENTAL,  \
+  product(uintx, ShenandoahIgnoreOldGrowthBelowPercentage,10, EXPERIMENTAL, \
           "(Generational mode only) If the total usage of the old "         \
           "generation is smaller than this percent, we do not trigger "     \
           "old gen collections even if old has grown, except when "         \
