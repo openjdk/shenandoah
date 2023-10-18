@@ -52,6 +52,7 @@
 #include "runtime/atomic.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/prefetch.inline.hpp"
+#include "runtime/objectMonitor.inline.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/globalDefinitions.hpp"
 
@@ -537,32 +538,36 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
 }
 
 void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
-  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
-  w = w.set_age(MIN2(markWord::max_age, w.age() + additional_age));
-  if (obj->has_displaced_mark()) {
-    obj->set_displaced_mark(w);
-  } else {
+  // This operates on new copy of an object. This means that the object's mark-word
+  // is thread-local and therefore safe to access. However, when the mark is
+  // displaced (i.e. stack-locked or monitor-locked), then it must be considered
+  //a shared memory location. It can/ be accessed by other threads.
+  // In particular, a competing evacuating/ thread can succeed to install its copy
+  // as the forwardee and continue to unlock the object, at which point 'our'
+  // write to the foreign stack-location would potentially over-write random
+  // information on that stack. Writing to a monitor is less problematic,
+  // but still not safe: while the ObjectMonitor would not randomly disappear,
+  // the other thread would also write to the same displaced header location,
+  // possibly leading to increase the age twice.
+  // For all these reasons, we take the conservative approach and not attempt
+  // to increase the age when the header is displaced.
+  markWord w = obj->mark();
+  if (!w.has_displaced_mark_helper()) {
+    w = w.set_age(MIN2(markWord::max_age, w.age() + additional_age));
     obj->set_mark(w);
   }
-}
-
-// Return the object's age (at a safepoint or when object isn't
-// mutable by the mutator)
-uint ShenandoahHeap::get_object_age(oop obj) {
-  markWord w = obj->has_displaced_mark() ? obj->displaced_mark() : obj->mark();
-  assert(w.age() <= markWord::max_age, "Impossible!");
-  return w.age();
 }
 
 // Return the object's age, or a sentinel value when the age can't
 // necessarily be determined because of concurrent locking by the
 // mutator
-uint ShenandoahHeap::get_object_age_concurrent(oop obj) {
+uint ShenandoahHeap::get_object_age(oop obj) {
   // This is impossible to do unless we "freeze" ABA-type oscillations
   // With Lilliput, we can do this more easily.
   markWord w = obj->mark();
-  // We can do better for objects with inflated monitor
-  if (w.is_being_inflated() || w.has_displaced_mark_helper()) {
+  if (w.has_monitor()) {
+    w = w.monitor()->header();
+  } else if (w.is_being_inflated() || w.has_displaced_mark_helper()) {
     // Informs caller that we aren't able to determine the age
     return markWord::max_age + 1; // sentinel
   }
