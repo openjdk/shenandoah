@@ -114,7 +114,6 @@ void ShenandoahControlThread::run_service() {
   // degenerated cycle should be 'promoted' to a full cycle. The decision to
   // trigger a cycle or not is evaluated on the regulator thread.
   ShenandoahHeuristics* global_heuristics = heap->global_generation()->heuristics();
-  bool old_bootstrap_requested = false;
   while (!in_graceful_shutdown() && !should_terminate()) {
     // Figure out if we have pending requests.
     bool alloc_failure_pending = _alloc_failure_gc.is_set();
@@ -209,18 +208,8 @@ void ShenandoahControlThread::run_service() {
           // the heuristic to run a young collection so that we can evacuate some old regions.
           assert(!heap->is_concurrent_old_mark_in_progress(), "Should not be running mixed collections and concurrent marking");
           generation = YOUNG;
-        } else if (_requested_generation == OLD && !old_bootstrap_requested) {
-          // Arrange to perform a young GC immediately followed by a bootstrap OLD GC.  OLD GC typically requires more
-          // than twice the time required for YOUNG GC, so we run a YOUNG GC to replenish the YOUNG allocation pool before
-          // we start the longer OLD GC effort.
-          old_bootstrap_requested = true;
-          generation = YOUNG;
         } else {
-          // if (old_bootstrap_requested && (_requested_generation == OLD)), this starts the bootstrap GC that
-          //  immediately follows the preparatory young GC.
-          // But we will abandon the planned bootstrap GC if a GLOBAL GC has been now been requested.
           generation = _requested_generation;
-          old_bootstrap_requested = false;
         }
         // preemption was requested or this is a regular cycle
         cause = GCCause::_shenandoah_concurrent_gc;
@@ -402,18 +391,10 @@ void ShenandoahControlThread::run_service() {
 
     // Don't wait around if there was an allocation failure - start the next cycle immediately.
     if (!is_alloc_failure_gc()) {
-      if (old_bootstrap_requested) {
-        _requested_generation = OLD;
-        _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
-      } else {
-        // The timed wait is necessary because this thread has a responsibility to send
-        // 'alloc_words' to the pacer when it does not perform a GC.
-        MonitorLocker lock(&_control_lock, Mutex::_no_safepoint_check_flag);
-        lock.wait(ShenandoahControlIntervalMax);
-      }
-    } else {
-      // in case of alloc_failure, abandon any plans to do immediate OLD Bootstrap
-      old_bootstrap_requested = false;
+      // The timed wait is necessary because this thread has a responsibility to send
+      // 'alloc_words' to the pacer when it does not perform a GC.
+      MonitorLocker lock(&_control_lock, Mutex::_no_safepoint_check_flag);
+      lock.wait(ShenandoahControlIntervalMax);
     }
   }
 
@@ -775,6 +756,7 @@ bool ShenandoahControlThread::check_cancellation_or_degen(ShenandoahGC::Shenando
 
   if (is_alloc_failure_gc()) {
     _degen_point = point;
+    _preemption_requested.unset();
     return true;
   }
 
@@ -899,6 +881,10 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
 bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType generation) {
   if (_preemption_requested.is_set() || _gc_requested.is_set() || ShenandoahHeap::heap()->cancelled_gc()) {
     // Ignore subsequent requests from the heuristics
+    log_debug(gc, thread)("Reject request for concurrent gc: preemption_requested: %s, gc_requested: %s, gc_cancelled: %s",
+                          BOOL_TO_STR(_preemption_requested.is_set()),
+                          BOOL_TO_STR(_gc_requested.is_set()),
+                          BOOL_TO_STR(ShenandoahHeap::heap()->cancelled_gc()));
     return false;
   }
 
@@ -930,6 +916,9 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
     return true;
   }
 
+  log_debug(gc, thread)("Reject request for concurrent gc: mode: %s, allow_old_preemption: %s",
+                        gc_mode_name(gc_mode()),
+                        BOOL_TO_STR(_allow_old_preemption.is_set()));
   return false;
 }
 
