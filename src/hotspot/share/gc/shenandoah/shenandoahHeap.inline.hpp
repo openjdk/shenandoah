@@ -552,6 +552,7 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   // For all these reasons, we take the conservative approach and not attempt
   // to increase the age when the header is displaced.
   markWord w = obj->mark();
+  assert(!w.is_being_inflated(), "must not inflate monitor before evacuation of object succeeds");
   if (!w.has_displaced_mark_helper()) {
     w = w.set_age(MIN2(markWord::max_age, w.age() + additional_age));
     obj->set_mark(w);
