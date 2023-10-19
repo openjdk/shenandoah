@@ -552,8 +552,16 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   // For all these reasons, we take the conservative approach and not attempt
   // to increase the age when the header is displaced.
   markWord w = obj->mark();
+  // The mark-word has been copied from the original object. It can not be
+  // inflating, because inflation can not be interrupted by a safepoint,
+  // and after a safepoint, a Java thread would first have to successfully
+  // evacuate the object before it could inflate the monitor.
   assert(!w.is_being_inflated(), "must not inflate monitor before evacuation of object succeeds");
-  if (!w.has_displaced_mark_helper()) {
+  // It is possible that we have copied the object after another thread has
+  // already successfully completed evacuation. While harmless (we would never
+  // publish our copy), don't even attempt to modify the age when that
+  // happens.
+  if (!w.has_displaced_mark_helper() && !w.is_marked()) {
     w = w.set_age(MIN2(markWord::max_age, w.age() + additional_age));
     obj->set_mark(w);
   }
@@ -566,6 +574,7 @@ uint ShenandoahHeap::get_object_age(oop obj) {
   // This is impossible to do unless we "freeze" ABA-type oscillations
   // With Lilliput, we can do this more easily.
   markWord w = obj->mark();
+  assert(!w.is_marked(), "must not be forwarded");
   if (w.has_monitor()) {
     w = w.monitor()->header();
   } else if (w.is_being_inflated() || w.has_displaced_mark_helper()) {
