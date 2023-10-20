@@ -26,7 +26,7 @@
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
-#include "gc/shenandoah/shenandoahFreeSet.hpp"
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -547,8 +547,8 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     return false;
   }
 
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (_cannot_expand_trigger) {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
     size_t old_gen_capacity = _old_generation->max_capacity();
     size_t heap_capacity = heap->capacity();
     double percent = percent_of(old_gen_capacity, heap_capacity);
@@ -558,9 +558,6 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   }
 
   if (_fragmentation_trigger) {
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-
     size_t used = _old_generation->used();
     size_t used_regions_size = _old_generation->used_regions_size();
 
@@ -585,10 +582,21 @@ bool ShenandoahOldHeuristics::should_start_gc() {
   if (_growth_trigger) {
     // Growth may be falsely triggered during mixed evacuations, before the mixed-evacuation candidates have been
     // evacuated.  Before acting on a false trigger, we check to confirm the trigger condition is still satisfied.
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
     size_t current_usage = _old_generation->used();
     size_t trigger_threshold = _old_generation->usage_trigger_threshold();
-    if (current_usage > trigger_threshold) {
+    size_t heap_size = heap->capacity();
+    size_t consecutive_young_cycles;
+    size_t ignore_threshold = (ShenandoahIgnoreOldGrowthBelowPercentage * heap_size) / 100;
+    if ((current_usage < ignore_threshold) &&
+        ((consecutive_young_cycles = heap->shenandoah_policy()->consecutive_young_gc_count())
+         < ShenandoahDoNotIgnoreGrowthAfterYoungCycles)) {
+      log_debug(gc)("Ignoring Trigger (OLD): Old has overgrown: usage (" SIZE_FORMAT "%s) is below threshold ("
+                    SIZE_FORMAT "%s) after " SIZE_FORMAT " consecutive completed young GCs",
+                    byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage),
+                    byte_size_in_proper_unit(ignore_threshold), proper_unit_for_byte_size(ignore_threshold),
+                    consecutive_young_cycles);
+      _growth_trigger = false;
+    } else if (current_usage > trigger_threshold) {
       size_t live_at_previous_old = _old_generation->get_live_bytes_after_last_mark();
       double percent_growth = percent_of(current_usage - live_at_previous_old, live_at_previous_old);
       log_info(gc)("Trigger (OLD): Old has overgrown, live at end of previous OLD marking: "

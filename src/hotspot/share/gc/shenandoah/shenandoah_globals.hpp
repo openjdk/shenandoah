@@ -53,6 +53,31 @@
           "fragmentation and helps visualize old-gen and young-gen "        \
           "status.  This memory map is always displayed in debug builds")   \
                                                                             \
+  product(double, ShenandoahMinOldGenGrowthPercent, 12.5, EXPERIMENTAL,     \
+          "(Generational mode only) If the usage within old generation "    \
+          "has grown by at least this percent of its live memory size "     \
+          "at completion of the most recent old-generation marking "        \
+          "effort, heuristics may trigger the start of a new old-gen "      \
+          "collection.")                                                    \
+          range(0.0,100.0)                                                  \
+                                                                            \
+  product(uintx, ShenandoahIgnoreOldGrowthBelowPercentage,10, EXPERIMENTAL, \
+          "(Generational mode only) If the total usage of the old "         \
+          "generation is smaller than this percent, we do not trigger "     \
+          "old gen collections even if old has grown, except when "         \
+          "ShenandoahGenerationalDoNotIgnoreGrowthAfterYoungCycles "        \
+          "consecutive cycles have been completed following the "           \
+          "preceding old-gen collection.")                                  \
+          range(0,100)                                                      \
+                                                                            \
+  product(uintx, ShenandoahDoNotIgnoreGrowthAfterYoungCycles,               \
+          50, EXPERIMENTAL,                                                 \
+          "(Generational mode only) Even if the usage of old generation "   \
+          "is below ShenandoahIgnoreOldGrowthBelowPercentage, "             \
+          "trigger an old-generation mark if old has grown and this "       \
+          "many consecutive young-gen collections have been "               \
+          "completed following the preceding old-gen collection.")          \
+                                                                            \
   product(bool, ShenandoahGenerationalCensusAtEvac, false, EXPERIMENTAL,    \
           "(Generational mode only) Object age census at evacuation, "      \
           "rather than during marking.")                                    \
@@ -329,9 +354,9 @@
           "evacuate more live objects on every cycle, while leaving "       \
           "less headroom for application to allocate while GC is "          \
           "evacuating and updating references. This parameter is "          \
-          "consulted at the of marking, before selecting the collection "   \
-          "set.  If available memory at this time is smaller than the "     \
-          "indicated reserve, the bound on collection set size is "         \
+          "consulted at the end of marking, before selecting the "          \
+          "collection set.  If available memory at this time is smaller "   \
+          "than the indicated reserve, the bound on collection set size is "\
           "adjusted downward.  The size of a generational mixed "           \
           "evacuation collection set (comprised of both young and old "     \
           "regions) is also bounded by this parameter.  In percents of "    \
