@@ -135,7 +135,7 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
   // gets priority over old-gen marking.
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-  size_t promo_expedite_threshold = checked_cast<size_t>(percent_of(heap->young_generation()->max_capacity(), ShenandoahExpeditePromotionsThreshold));
+  size_t promo_expedite_threshold = percent_of(heap->young_generation()->max_capacity(), ShenandoahExpeditePromotionsThreshold);
   size_t promo_potential = heap->get_promotion_potential();
   if (promo_potential > promo_expedite_threshold) {
     // Detect unsigned arithmetic underflow
@@ -152,8 +152,8 @@ bool ShenandoahYoungHeuristics::should_start_gc() {
   if (mixed_candidates > ShenandoahExpediteMixedThreshold && !heap->is_concurrent_weak_root_in_progress()) {
     // We need to run young GC in order to open up some free heap regions so we can finish mixed evacuations.
     // If concurrent weak root processing is in progress, it means the old cycle has chosen mixed collection
-    // candidates, but has not completed. There is no point in evaluating the trigger before the young cycle
-    // will be able to start.
+    // candidates, but has not completed. There is no point in trying to start the young cycle before the old
+    // cycle completes.
     log_info(gc)("Trigger (%s): expedite mixed evacuation of " SIZE_FORMAT " regions",
                  _space_info->name(), mixed_candidates);
     return true;
