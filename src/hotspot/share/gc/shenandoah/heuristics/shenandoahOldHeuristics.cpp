@@ -571,7 +571,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
 
     size_t first_old_region, last_old_region;
     double density;
-    fragmentation_trigger_reason(density, first_old_region, last_old_region);
+    get_fragmentation_trigger_reason_for_log_message(density, first_old_region, last_old_region);
     size_t span_of_old_regions = (last_old_region >= first_old_region)? last_old_region + 1 - first_old_region: 0;
     size_t fragmented_free = used_regions_size - used;
 

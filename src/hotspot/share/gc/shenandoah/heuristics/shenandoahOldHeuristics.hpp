@@ -169,7 +169,7 @@ public:
   }
   void trigger_old_has_grown() { _growth_trigger = true; }
 
-  inline void fragmentation_trigger_reason(double &density, size_t &first_index, size_t &last_index) {
+  inline void get_fragmentation_trigger_reason_for_log_message(double &density, size_t &first_index, size_t &last_index) {
     density = _fragmentation_density;
     first_index = _fragmentation_first_old_region;
     last_index = _fragmentation_last_old_region;
