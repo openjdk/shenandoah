@@ -573,7 +573,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
 
     log_info(gc)("Trigger (OLD): Old has become fragmented: "
                  SIZE_FORMAT "%s available bytes spread between range spanned from "
-                 SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT "), densityr: %.1f%%",
+                 SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT "), density: %.1f%%",
                  byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free),
                  first_old_region, last_old_region, span_of_old_regions, density * 100);
     return true;
