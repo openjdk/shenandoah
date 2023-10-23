@@ -1321,11 +1321,9 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
-  bool dump_region_map = ShenandoahGenerationalLogFreeMap;
 #ifdef ASSERT
-  dump_region_map = true;
-#endif
-  if (dump_region_map) {
+  // Dump of the FreeSet details is only enabled if assertions are enabled  
+  if (LogTarget(Debug, gc, free)::is_enabled()) {
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
@@ -1411,6 +1409,7 @@ void ShenandoahFreeSet::log_status() {
     size_t total_young = retired_young + retired_young_humongous;
     size_t total_old = retired_old + retired_old_humongous;
   }
+#endif
 
   LogTarget(Info, gc, free) lt;
   if (lt.is_enabled()) {

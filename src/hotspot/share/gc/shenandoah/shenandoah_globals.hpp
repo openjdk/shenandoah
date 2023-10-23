@@ -46,13 +46,6 @@
           "fail, resulting in stop-the-world full GCs.")                    \
           range(0,100)                                                      \
                                                                             \
-  product(bool, ShenandoahGenerationalLogFreeMap, false, EXPERIMENTAL,      \
-          "(Generational mode only) If GC logging is enabled, display "     \
-          "a map of region usage each time the free set is rebuilt. "       \
-          "This map helps identify issues with humongous memory "           \
-          "fragmentation and helps visualize old-gen and young-gen "        \
-          "status.  This memory map is always displayed in debug builds")   \
-                                                                            \
   product(double, ShenandoahMinOldGenGrowthPercent, 12.5, EXPERIMENTAL,     \
           "(Generational mode only) If the usage within old generation "    \
           "has grown by at least this percent of its live memory size "     \
