@@ -124,6 +124,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     if (r == nullptr) {
       break;
     }
+    assert(r->is_regular(), "There should be no humongous regions in the set of mixed-evac candidates");
 
     // If region r is evacuated to fragmented memory (to free memory within a partially used region), then we need
     // to decrease the capacity of the fragmented memory by the scaled loss.
@@ -327,7 +328,8 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     total_garbage += garbage;
     live_data += live_bytes;
 
-    if (region->is_regular() || region->is_pinned()) {
+    // Only place regular regions into the candidate set
+    if (region->is_regular()) {
       if (!region->has_live()) {
         assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
         region->make_trash_immediate();
@@ -341,6 +343,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       }
     } else if (region->is_humongous_start()) {
       if (!region->has_live()) {
+        assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
         // The humongous object is dead, we can just return this region and the continuations
         // immediately to the freeset - no evacuations are necessary here. The continuations
         // will be made into trash by this method, so they'll be skipped by the 'is_regular'
