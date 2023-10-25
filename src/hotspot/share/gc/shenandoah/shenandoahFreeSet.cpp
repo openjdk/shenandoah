@@ -218,6 +218,11 @@ inline size_t ShenandoahSetsOfFree::rightmost(ShenandoahFreeMemoryType which_set
   return idx;
 }
 
+inline bool ShenandoahSetsOfFree::is_empty(ShenandoahFreeMemoryType which_set) const {
+  assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
+  return (leftmost(which_set) > rightmost(which_set));
+}
+
 size_t ShenandoahSetsOfFree::leftmost_empty(ShenandoahFreeMemoryType which_set) {
   assert (which_set > NotFree && which_set < NumFreeSets, "selected free set must be valid");
   for (size_t idx = _leftmosts_empty[which_set]; idx < _max; idx++) {
@@ -563,12 +568,8 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_shared: {
       // Try to allocate in the mutator view
       // Allocate within mutator free from high memory to low so as to preserve low memory for humongous allocations
-
-      // Some of this code to be replaced with improve-humongous-allocation code
-      if (_free_sets.leftmost(Mutator) < _free_sets.rightmost(Mutator)) {
-        // Otherwise, this free set is empty
-
-        // Use signed integer index.  Otherwise, loop will never terminate.
+      if (!_free_sets.is_empty(Mutator)) {
+        // Use signed idx.  Otherwise, loop will never terminate.
         int leftmost = (int) _free_sets.leftmost(Mutator);
         for (int idx = (int) _free_sets.rightmost(Mutator); idx >= leftmost; idx--) {
           ShenandoahHeapRegion* r = _heap->get_region(idx);
@@ -928,7 +929,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     }
 
     end++;
-  };
+  }
 
   size_t remainder = words_size & ShenandoahHeapRegion::region_size_words_mask();
   ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
@@ -1002,15 +1003,6 @@ size_t ShenandoahFreeSet::alloc_capacity(ShenandoahHeapRegion *r) const {
 
 bool ShenandoahFreeSet::has_alloc_capacity(ShenandoahHeapRegion *r) const {
   return alloc_capacity(r) > 0;
-}
-
-bool ShenandoahFreeSet::has_alloc_capacity(size_t idx) const {
-  ShenandoahHeapRegion* r = _heap->get_region(idx);
-  return alloc_capacity(r) > 0;
-}
-
-bool ShenandoahFreeSet::has_no_alloc_capacity(ShenandoahHeapRegion *r) const {
-  return alloc_capacity(r) == 0;
 }
 
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
@@ -1242,7 +1234,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     old_capacity += xfer_bytes;
     old_available += xfer_bytes;
     old_unaffiliated_regions += old_region_deficit;
-    young_capacity -= xfer_bytes;;
+    young_capacity -= xfer_bytes;
     young_available -= xfer_bytes;
     young_unaffiliated_regions -= old_region_deficit;
   }
@@ -1355,11 +1347,8 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
-  bool dump_region_map = ShenandoahGenerationalLogFreeMap;
-#ifdef ASSERT
-  dump_region_map = true;
-#endif
-  if (dump_region_map) {
+  // Dump of the FreeSet details is only enabled if assertions are enabled
+  if (LogTarget(Debug, gc, free)::is_enabled()) {
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
@@ -1381,10 +1370,10 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
-    log_info(gc, free)("FreeSet map legend:"
+    log_debug(gc, free)("FreeSet map legend:"
                        " M:mutator_free C:collector_free O:old_collector_free"
                        " H:humongous ~:retired old _:retired young");
-    log_info(gc, free)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
+    log_debug(gc, free)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
                        "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocates from %s",
                        _free_sets.leftmost(Mutator), _free_sets.rightmost(Mutator),
@@ -1396,7 +1385,7 @@ void ShenandoahFreeSet::log_status() {
       ShenandoahHeapRegion *r = _heap->get_region(i);
       uint idx = i % 64;
       if ((i != 0) && (idx == 0)) {
-        log_info(gc, free)(" %6u: %s", i-64, buffer);
+        log_debug(gc, free)(" %6u: %s", i-64, buffer);
       }
       if (_free_sets.in_free_set(i, Mutator)) {
         assert(!r->is_old(), "Old regions should not be in mutator_free set");
@@ -1441,7 +1430,7 @@ void ShenandoahFreeSet::log_status() {
     } else {
       remnant = 64;
     }
-    log_info(gc, free)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
+    log_debug(gc, free)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
     size_t total_young = retired_young + retired_young_humongous;
     size_t total_old = retired_old + retired_old_humongous;
   }

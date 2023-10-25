@@ -209,7 +209,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
     // No need for old_gen->increase_used() as this was done when plabs were allocated.
     heap->set_young_evac_reserve(0);
     heap->set_old_evac_reserve(0);
-    heap->reset_old_evac_expended();
     heap->set_promoted_reserve(0);
 
     // Full GC supersedes any marking or coalescing in old generation.
@@ -1544,7 +1543,6 @@ void ShenandoahFullGC::phase5_epilog() {
     }
     heap->collection_set()->clear();
     size_t young_cset_regions, old_cset_regions;
-
     size_t first_old, last_old, num_old;
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
 

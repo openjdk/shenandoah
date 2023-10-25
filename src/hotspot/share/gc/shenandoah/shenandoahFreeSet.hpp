@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2016, 2019, Red Hat, Inc. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
@@ -97,6 +98,8 @@ public:
   size_t leftmost_empty(ShenandoahFreeMemoryType which_set);
   size_t rightmost_empty(ShenandoahFreeMemoryType which_set);
 
+  inline bool is_empty(ShenandoahFreeMemoryType which_set) const;
+
   inline void increase_used(ShenandoahFreeMemoryType which_set, size_t bytes);
 
   inline size_t capacity_of(ShenandoahFreeMemoryType which_set) const {
@@ -172,23 +175,13 @@ private:
   void flip_to_gc(ShenandoahHeapRegion* r);
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
-  void adjust_bounds_for_additional_old_collector_free_region(size_t idx);
-
-  void recompute_bounds();
-  void adjust_bounds();
-  bool touches_bounds(size_t num) const;
-
-  // Used of free set represents the amount of is_mutator_free set that has been consumed since most recent rebuild.
-  void increase_used(size_t amount);
   void clear_internal();
 
   void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   bool can_allocate_from(ShenandoahHeapRegion *r) const;
   bool can_allocate_from(size_t idx) const;
-  bool has_alloc_capacity(size_t idx) const;
   bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
-  bool has_no_alloc_capacity(ShenandoahHeapRegion *r) const;
 
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
@@ -199,7 +192,6 @@ public:
   void clear();
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions,
                           size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
-
   void rebuild(size_t young_cset_regions, size_t old_cset_regions);
 
   void move_collector_sets_to_mutator(size_t cset_regions);
@@ -228,6 +220,7 @@ public:
   double external_fragmentation();
 
   void print_on(outputStream* out) const;
+
   void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                         size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
   void reserve_regions(size_t young_reserve, size_t old_reserve);

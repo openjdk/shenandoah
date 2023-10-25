@@ -598,10 +598,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _update_refs_iterator(this),
   _promoted_reserve(0),
   _old_evac_reserve(0),
-  _old_evac_expended(0),
   _young_evac_reserve(0),
-  _captured_old_usage(0),
-  _previous_promotion(0),
   _upgraded_to_full(false),
   _age_census(nullptr),
   _has_evacuation_reserve_quantities(false),
@@ -618,7 +615,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _phase_timings(nullptr),
   _evac_tracker(nullptr),
   _mmu_tracker(),
-  _generation_sizer(&_mmu_tracker),
+  _generation_sizer(),
   _monitoring_support(nullptr),
   _memory_pool(nullptr),
   _young_gen_memory_pool(nullptr),
@@ -974,7 +971,7 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
     if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
       log_info(gc, ergo)("Squelching additional promotion failure reports for current epoch");
     } else if (gc_id != last_report_epoch) {
-      last_report_epoch = gc_id;;
+      last_report_epoch = gc_id;
       epoch_report_count = 1;
     }
   }
@@ -1167,22 +1164,24 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
   assert(_old_generation != nullptr, "Should only have mixed collections in generation mode.");
-  log_info(gc)("Terminating old gc cycle.");
-
-  // Stop marking
-  old_generation()->cancel_marking();
-  // Stop coalescing undead objects
-  set_prepare_for_old_mark_in_progress(false);
-  // Stop tracking old regions
-  old_heuristics()->abandon_collection_candidates();
-  // Remove old generation access to young generation mark queues
-  young_generation()->set_old_gen_task_queues(nullptr);
-  // Transition to IDLE now.
-  _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
-}
-
-bool ShenandoahHeap::is_old_gc_active() {
-  return _old_generation->state() != ShenandoahOldGeneration::IDLE;
+  if (_old_generation->state() == ShenandoahOldGeneration::IDLE) {
+    assert(!old_generation()->is_concurrent_mark_in_progress(), "Cannot be marking in IDLE");
+    assert(!old_heuristics()->has_coalesce_and_fill_candidates(), "Cannot have coalesce and fill candidates in IDLE");
+    assert(!old_heuristics()->unprocessed_old_collection_candidates(), "Cannot have mixed collection candidates in IDLE");
+    assert(!young_generation()->is_bootstrap_cycle(), "Cannot have old mark queues if IDLE");
+  } else {
+    log_info(gc)("Terminating old gc cycle.");
+    // Stop marking
+    old_generation()->cancel_marking();
+    // Stop coalescing undead objects
+    set_prepare_for_old_mark_in_progress(false);
+    // Stop tracking old regions
+    old_heuristics()->abandon_collection_candidates();
+    // Remove old generation access to young generation mark queues
+    young_generation()->set_old_gen_task_queues(nullptr);
+    // Transition to IDLE now.
+    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
+  }
 }
 
 // xfer_limit is the maximum we're able to transfer from young to old
@@ -1928,37 +1927,6 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
   }
 }
 
-class ShenandoahTagGCLABClosure : public ThreadClosure {
-public:
-  void do_thread(Thread* thread) {
-    PLAB* gclab = ShenandoahThreadLocalData::gclab(thread);
-    assert(gclab != nullptr, "GCLAB should be initialized for %s", thread->name());
-    if (gclab->words_remaining() > 0) {
-      ShenandoahHeapRegion* r = ShenandoahHeap::heap()->heap_region_containing(gclab->allocate(0));
-      r->set_young_lab_flag();
-    }
-  }
-};
-
-void ShenandoahHeap::set_young_lab_region_flags() {
-  if (!UseTLAB) {
-    return;
-  }
-  for (size_t i = 0; i < _num_regions; i++) {
-    _regions[i]->clear_young_lab_flags();
-  }
-  ShenandoahTagGCLABClosure cl;
-  workers()->threads_do(&cl);
-  for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
-    cl.do_thread(t);
-    ThreadLocalAllocBuffer& tlab = t->tlab();
-    if (tlab.end() != nullptr) {
-      ShenandoahHeapRegion* r = heap_region_containing(tlab.start());
-      r->set_young_lab_flag();
-    }
-  }
-}
-
 // Returns size in bytes
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
   if (ShenandoahElasticTLAB) {
@@ -2470,9 +2438,11 @@ void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
 void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
 #ifdef ASSERT
   // has_forwarded_objects() iff UPDATEREFS or EVACUATION
-  bool has_forwarded = has_forwarded_objects()? 1: 0;
-  bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION)? 1: 0;
-  assert (has_forwarded == updating_or_evacuating, "Has forwarded objects iff updating or evacuating");
+  bool has_forwarded = has_forwarded_objects();
+  bool updating_or_evacuating = _gc_state.is_set(UPDATEREFS | EVACUATION);
+  bool evacuating = _gc_state.is_set(EVACUATION);
+  assert ((has_forwarded == updating_or_evacuating) || (evacuating && !has_forwarded && collection_set()->is_empty()),
+          "Updating or evacuating iff has forwarded objects, or if evacuation phase is promoting in place without forwarding");
 #endif
   if (!in_progress && is_concurrent_young_mark_in_progress()) {
     // If young-marking is in progress when we turn off OLD_MARKING, leave MARKING (and YOUNG_MARKING) on
@@ -3120,6 +3090,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   size_t young_cset_regions, old_cset_regions;
   size_t first_old_region, last_old_region, old_region_count;
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
+  // If there are no old regions, first_old_region will be greater than last_old_region
+  assert((first_old_region > last_old_region) ||
+         ((last_old_region + 1 - first_old_region >= old_region_count) &&
+          get_region(first_old_region)->is_old() && get_region(last_old_region)->is_old()),
+         "sanity: old_region_count: " SIZE_FORMAT ", first_old_region: " SIZE_FORMAT ", last_old_region: " SIZE_FORMAT,
+         old_region_count, first_old_region, last_old_region);
 
   if (mode()->is_generational()) {
     assert(verify_generation_usage(true, old_generation()->used_regions(),
@@ -3146,15 +3122,10 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
 
   if (mode()->is_generational()) {
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
-
-    // Candidate new comamnd-line configuration option.  The percent of heap that we strive to maintain as defragmented
-    // for purpose of allocating humongous objects.
-    const int ShenandoahGenerationalHumongousReserve = 16;
-
     size_t allowed_old_gen_span = num_regions() - (ShenandoahGenerationalHumongousReserve * num_regions() / 100);
 
     // Tolerate lower density if total span is small.  Here's the implementation:
-    //   if old_gen spans more than 1005% and density < 87.5%, trigger old-defrag
+    //   if old_gen spans more than 100% and density < 87.5%, trigger old-defrag
     //   else if old_gen spans more than 87.5% and density < 75%, trigger old-defrag
     //   else if old_gen spans more than 75% and density < 62.5%, trigger old-defrag
     //   else if old_gen spans more than 62.5% and density < 50%, trigger old-defrag
@@ -3170,16 +3141,14 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
     size_t old_bytes_spanned = old_region_span * region_size_bytes;
     double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
-    
+
     uint eighths = 8;
-    bool triggered = false;
     for (uint i = 0; i < 5; i++) {
       size_t span_threshold = eighths * allowed_old_gen_span / 8;
       eighths--;
       double density_threshold = eighths / 8.0;
       if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
         old_heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-        triggered = true;
         break;
       }
     }
