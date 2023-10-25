@@ -190,16 +190,16 @@ void ShenandoahAdaptiveHeuristics::record_cycle_start() {
 #undef KELVIN_NEW_CODE
 void ShenandoahAdaptiveHeuristics::add_degenerated_gc_time(double timestamp, double gc_time) {
   // Conservatively add sample into linear model If this time is above the predicted concurrent gc time
-#ifdef KELVIN_NEW_CODE  
+#ifdef KELVIN_NEW_CODE
   log_info(gc)("add_degenerated_gc_time(@%.3f, %.3f)", timestamp, gc_time);
 #endif
   if (predict_gc_time(timestamp) < gc_time) {
-#ifdef KELVIN_NEW_CODE  
+#ifdef KELVIN_NEW_CODE
     log_info(gc)("add_degenerated_gc_time(@%.3f, %.3f) is adding to model", timestamp, gc_time);
 #endif
     add_gc_time(timestamp, gc_time);
   } else {
-#ifdef KELVIN_NEW_CODE  
+#ifdef KELVIN_NEW_CODE
     log_info(gc)("add_degenerated_gc_time(@%.3f, %.3f) is ignored", timestamp, gc_time);
 #endif
   }
@@ -570,7 +570,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   if (planned_gc_time > allocation_headroom / avg_alloc_rate) {
     log_info(gc)("Trigger (%s): Planned %s GC time (%.2f ms) is above the time for average allocation rate (%.0f %sB/s)"
                  " to deplete free headroom (" SIZE_FORMAT "%s) (margin of error = %.2f)",
-                 _space_info->name(), planned_gc_time_is_average? "(from average)": "(by linear prediction)", planned_gc_time * 1000, 
+                 _space_info->name(), planned_gc_time_is_average? "(from average)": "(by linear prediction)", planned_gc_time * 1000,
                  byte_size_in_proper_unit(avg_alloc_rate), proper_unit_for_byte_size(avg_alloc_rate),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                  _margin_of_error_sd);
@@ -688,7 +688,7 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
                                                              size_t available, size_t spike_headroom, size_t penalties, size_t headroom) const
 #else
 size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const
-#endif                                                             
+#endif
 {
   double *x_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
   double *y_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
