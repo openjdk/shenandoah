@@ -204,6 +204,8 @@ private:
   //  CardTable::clean_card_val()
   //  CardTable::dirty_card_val()
 
+  const size_t LogCardsPerIntPtr;
+
   ShenandoahHeap *_heap;
   ShenandoahCardTable *_card_table;
   size_t _card_shift;
@@ -239,33 +241,45 @@ public:
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
+  // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
+  // in parallel threads, each invocation processing one entire HeapRegion at a time.
   void swap_remset() {  _card_table->swap_card_tables(); }
 
+  // Merge any dirty values from write table into the read table, while leaving
+  // the write table unchanged.
   void merge_write_table(HeapWord* start, size_t word_count) {
-    size_t card_index = card_index_for_addr(start);
-    size_t num_cards = word_count / CardTable::card_size_in_words();
-    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardValue));
-    intptr_t* read_table_ptr = (intptr_t*) &(_card_table->read_byte_map())[card_index];
-    intptr_t* write_table_ptr = (intptr_t*) &(_card_table->write_byte_map())[card_index];
-    for (size_t i = 0; i < iterations; i++) {
-      intptr_t card_value = *write_table_ptr;
-      *read_table_ptr++ &= card_value;
-      write_table_ptr++;
+    const size_t first_index = card_index_for_addr(start);
+    size_t  last_index = card_index_for_addr(start + word_count - 1);
+
+    // Avoid division, use shift instead
+    size_t num_cards = last_index - first_index + 1;
+    assert(num_cards % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+    last_index = first_index + (num_cards >> LogCardsPerIntPtr);
+
+    intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
+    intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
+
+    for (size_t i = first_index; i <= last_index; i++) {
+      read_table[i] &= write_table[i];
     }
   }
 
-  // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
-  // in parallel threads, each invocation processing one entire HeapRegion at a time.  Processing of a region
-  // consists of copying the write table to the read table and cleaning the write table.
+  // Destructively copy the write table to the read table, and clean the write table.
   void reset_remset(HeapWord* start, size_t word_count) {
-    size_t card_index = card_index_for_addr(start);
-    size_t num_cards = word_count / CardTable::card_size_in_words();
-    size_t iterations = num_cards / (sizeof (intptr_t) / sizeof (CardValue));
-    intptr_t* read_table_ptr = (intptr_t*) &(_card_table->read_byte_map())[card_index];
-    intptr_t* write_table_ptr = (intptr_t*) &(_card_table->write_byte_map())[card_index];
-    for (size_t i = 0; i < iterations; i++) {
-      *read_table_ptr++ = *write_table_ptr;
-      *write_table_ptr++ = CardTable::clean_card_row_val();
+    const size_t first_index = card_index_for_addr(start);
+    size_t  last_index = card_index_for_addr(start + word_count - 1);
+
+    // Avoid division, use shift instead
+    size_t num_cards = last_index - first_index + 1;
+    assert(num_cards % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+    last_index = first_index + (num_cards >> LogCardsPerIntPtr);
+
+    intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
+    intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
+
+    for (size_t i = first_index; i <= last_index; i++) {
+      read_table[i]  = write_table[i];
+      write_table[i] = CardTable::clean_card_row_val();
     }
   }
 
