@@ -560,7 +560,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, size_t nu
       if ((r->garbage() < old_garbage_threshold)) {
         HeapWord* tams = ctx->top_at_mark_start(r);
         HeapWord* original_top = r->top();
-        if (tams == original_top) {
+        if (!heap->is_concurrent_old_mark_in_progress() && tams == original_top) {
           // No allocations from this region have been made during concurrent mark. It meets all the criteria
           // for in-place-promotion. Though we only need the value of top when we fill the end of the region,
           // we use this field to indicate that this region should be promoted in place during the evacuation
@@ -760,7 +760,8 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     size_t young_cset_regions, old_cset_regions;
 
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
-    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
+    size_t first_old, last_old, num_old;
+    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
   }
   heap->set_evacuation_reserve_quantities(false);
@@ -1015,10 +1016,10 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
   heuristics()->record_success_concurrent(abbreviated);
-  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent();
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent(is_young());
 }
 
 void ShenandoahGeneration::record_success_degenerated() {
   heuristics()->record_success_degenerated();
-  ShenandoahHeap::heap()->shenandoah_policy()->record_success_degenerated();
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_degenerated(is_young());
 }

@@ -117,6 +117,7 @@ void ShenandoahControlThread::run_service() {
   while (!in_graceful_shutdown() && !should_terminate()) {
     // Figure out if we have pending requests.
     bool alloc_failure_pending = _alloc_failure_gc.is_set();
+    bool humongous_alloc_failure_pending = _humongous_alloc_failure_gc.is_set();
     bool is_gc_requested = _gc_requested.is_set();
     GCCause::Cause requested_gc_cause = _requested_gc_cause;
     bool explicit_gc_requested = is_gc_requested && is_explicit_gc(requested_gc_cause);
@@ -154,12 +155,20 @@ void ShenandoahControlThread::run_service() {
       generation = _degen_generation->type();
       bool old_gen_evacuation_failed = heap->clear_old_evacuation_failure();
 
-      // Do not bother with degenerated cycle if old generation evacuation failed
-      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle() && !old_gen_evacuation_failed) {
+      // Do not bother with degenerated cycle if old generation evacuation failed or if humongous allocation failed
+      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle() &&
+          !old_gen_evacuation_failed && !humongous_alloc_failure_pending) {
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_degenerated(degen_point);
         set_gc_mode(stw_degenerated);
       } else {
+        // TODO: if humongous_alloc_failure_pending, there might be value in trying a "compacting" degen before
+        // going all the way to full.  But it's a lot of work to implement this, and it may not provide value.
+        // A compacting degen can move young regions around without doing full old-gen mark (relying upon the
+        // remembered set scan), so it might be faster than a full gc.
+        //
+        // Longer term, think about how to defragment humongous memory concurrently.
+
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_full();
         generation = select_global_generation();
@@ -819,7 +828,7 @@ bool ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
   }
 
   _degen_generation->heuristics()->record_success_degenerated();
-  heap->shenandoah_policy()->record_success_degenerated();
+  heap->shenandoah_policy()->record_success_degenerated(_degen_generation->is_young());
   return !gc.upgraded_to_full();
 }
 
@@ -852,8 +861,9 @@ bool ShenandoahControlThread::is_explicit_gc(GCCause::Cause cause) const {
 }
 
 bool ShenandoahControlThread::is_implicit_gc(GCCause::Cause cause) const {
-  return !is_explicit_gc(cause) &&
-          (cause != GCCause::_shenandoah_concurrent_gc);
+  return !is_explicit_gc(cause)
+      && cause != GCCause::_shenandoah_concurrent_gc
+      && cause != GCCause::_no_gc;
 }
 
 void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
@@ -962,8 +972,9 @@ void ShenandoahControlThread::handle_alloc_failure(ShenandoahAllocRequest& req) 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   assert(current()->is_Java_thread(), "expect Java thread here");
+  bool is_humongous = req.size() > ShenandoahHeapRegion::region_size_words();
 
-  if (try_set_alloc_failure_gc()) {
+  if (try_set_alloc_failure_gc(is_humongous)) {
     // Only report the first allocation failure
     log_info(gc)("Failed to allocate %s, " SIZE_FORMAT "%s",
                  req.type_string(),
@@ -980,8 +991,9 @@ void ShenandoahControlThread::handle_alloc_failure(ShenandoahAllocRequest& req) 
 
 void ShenandoahControlThread::handle_alloc_failure_evac(size_t words) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
+  bool is_humongous = (words > ShenandoahHeapRegion::region_size_words());
 
-  if (try_set_alloc_failure_gc()) {
+  if (try_set_alloc_failure_gc(is_humongous)) {
     // Only report the first allocation failure
     log_info(gc)("Failed to allocate " SIZE_FORMAT "%s for evacuation",
                  byte_size_in_proper_unit(words * HeapWordSize), proper_unit_for_byte_size(words * HeapWordSize));
@@ -993,16 +1005,24 @@ void ShenandoahControlThread::handle_alloc_failure_evac(size_t words) {
 
 void ShenandoahControlThread::notify_alloc_failure_waiters() {
   _alloc_failure_gc.unset();
+  _humongous_alloc_failure_gc.unset();
   MonitorLocker ml(&_alloc_failure_waiters_lock);
   ml.notify_all();
 }
 
-bool ShenandoahControlThread::try_set_alloc_failure_gc() {
+bool ShenandoahControlThread::try_set_alloc_failure_gc(bool is_humongous) {
+  if (is_humongous) {
+    _humongous_alloc_failure_gc.try_set();
+  }
   return _alloc_failure_gc.try_set();
 }
 
 bool ShenandoahControlThread::is_alloc_failure_gc() {
   return _alloc_failure_gc.is_set();
+}
+
+bool ShenandoahControlThread::is_humongous_alloc_failure_gc() {
+  return _humongous_alloc_failure_gc.is_set();
 }
 
 void ShenandoahControlThread::notify_gc_waiters() {
