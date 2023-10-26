@@ -48,7 +48,7 @@ bool ShenandoahStringDedup::is_candidate(oop obj) {
   const markWord mark = obj->mark();
 
   // Having/had displaced header, too risky to deal with them, skip
-  if (mark == markWord::INFLATING() || mark.has_displaced_mark_helper()) {
+  if ((LockingMode != LM_LIGHTWEIGHT && mark == markWord::INFLATING()) || mark.has_displaced_mark_helper()) {
     return false;
   }
 
