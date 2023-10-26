@@ -556,7 +556,7 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   // inflating, because inflation can not be interrupted by a safepoint,
   // and after a safepoint, a Java thread would first have to successfully
   // evacuate the object before it could inflate the monitor.
-  assert(!w.is_being_inflated(), "must not inflate monitor before evacuation of object succeeds");
+  assert(!w.is_being_inflated() || LockingMode == LM_LIGHTWEIGHT, "must not inflate monitor before evacuation of object succeeds");
   // It is possible that we have copied the object after another thread has
   // already successfully completed evacuation. While harmless (we would never
   // publish our copy), don't even attempt to modify the age when that
