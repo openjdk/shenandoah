@@ -88,10 +88,6 @@ public:
   void record_success_full();
 
   virtual bool should_start_gc();
-#undef KELVIN_TRACE_HEADER
-#ifdef KELVIN_TRACE_HEADER
-  void timestamp_for_sample(double timestamp, double interval);
-#endif
   virtual const char* name()     { return "Adaptive"; }
   virtual bool is_diagnostic()   { return false; }
   virtual bool is_experimental() { return false; }
@@ -127,13 +123,8 @@ public:
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
 
-#undef KELVIN_TRACE_CONSUMPTION_X
-#ifdef KELVIN_TRACE_CONSUMPTION_X
-  size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time,
-                                 size_t available, size_t spike_headroom, size_t penalties, size_t headroom) const;
-#else
   size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const;
-#endif
+
 protected:
   ShenandoahAllocationRate _allocation_rate;
 

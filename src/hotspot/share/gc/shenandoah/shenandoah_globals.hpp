@@ -234,7 +234,7 @@
           "to 100 effectively disables the shortcut.")                      \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahAdaptiveSampleFrequencyHz, 10, EXPERIMENTAL,     \
+  product(uintx, ShenandoahAdaptiveSampleFrequencyHz, 100, EXPERIMENTAL,    \
           "The number of times per second to update the allocation rate "   \
           "moving average.")                                                \
                                                                             \
@@ -256,7 +256,7 @@
           "the heuristic is to allocation spikes. Decreasing this number "  \
           "increases the sensitivity. ")                                    \
                                                                             \
-  product(double, ShenandoahAdaptiveDecayFactor, 0.1, EXPERIMENTAL,         \
+  product(double, ShenandoahAdaptiveDecayFactor, 0.75, EXPERIMENTAL,        \
           "The decay factor (alpha) used for values in the weighted "       \
           "moving average of cycle time and allocation rate. "              \
           "Larger values give more weight to recent values.")               \
