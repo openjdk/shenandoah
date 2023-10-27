@@ -56,8 +56,8 @@ void ShenandoahDirectCardMarkRememberedSet::merge_write_table(HeapWord* start, s
   size_t end_index = card_index_for_addr(start + word_count - 1) + 1;
 
   // Avoid division, use shift instead
-  assert(start_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
-  assert(end_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(start_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(end_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
 
   start_index >>= LogCardsPerIntPtr;
   end_index >>= LogCardsPerIntPtr;
@@ -77,8 +77,8 @@ void ShenandoahDirectCardMarkRememberedSet::reset_remset(HeapWord* start, size_t
   size_t end_index = card_index_for_addr(start + word_count - 1) + 1;
 
   // Avoid division, use shift instead
-  assert(start_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
-  assert(end_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(start_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(end_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
 
   start_index >>= LogCardsPerIntPtr;
   end_index >>= LogCardsPerIntPtr;
