@@ -30,7 +30,9 @@
 #include "memory/allocation.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
+#include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
+#include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "utilities/numberSeq.hpp"
 
@@ -154,6 +156,13 @@ protected:
   // source of feedback to adjust trigger parameters.
   TruncatedSeq _available;
 
+  ShenandoahFreeSet* _freeset;
+  ShenandoahRegulatorThread* _regulator_thread;
+
+  size_t _previous_total_allocations;
+  double _previous_allocation_timestamp;
+
+
   // Keep track of GC_TIME_SAMPLE_SIZE most recent concurrent GC cycle times
   uint _gc_time_first_sample_index;
   uint _gc_time_num_samples;
@@ -174,7 +183,9 @@ protected:
   void add_degenerated_gc_time(double timestamp_at_start, double duration);
   double predict_gc_time(double timestamp_at_start);
 
-  // Keep track of SPIKE_ACCELERATION_SAMPLE_SIZE most recent spike allocation rate measurements
+  // Keep track of SPIKE_ACCELERATION_SAMPLE_SIZE most recent spike allocation rate measurements. Note that it is
+  // typical to experience a small spike following end of GC cycle, as mutator threads refresh their TLABs.  But
+  // there is generally an abundance of memory at this time as well, so this will not generally trigger GC.
   uint _spike_acceleration_first_sample_index;
   uint _spike_acceleration_num_samples;
   double* const _spike_acceleration_rate_samples;

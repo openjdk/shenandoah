@@ -151,6 +151,16 @@ private:
   ShenandoahHeap* const _heap;
   ShenandoahSetsOfFree _free_sets;
 
+  // Even if this wraps around, the difference between two measurements effectively represents bytes allocated between
+  // two checkpoints.  This is modified under heaplock.  This is fetched concurrently by the regulator thread to determine
+  // allocation rates (approximately once per ms).  I'm not declaring as volatile because it's ok if regulator thread sees
+  // slightly stale values, and because the normal read access to this field is within a non-inlined single-use context that
+  // will not be cached in a register by the compiler.
+  //
+  // TODO: experiment with the performance impact of declaring this volatile on various hardware configurations.
+  //
+  size_t _total_mutator_bytes_allocated;
+
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
 
   HeapWord* allocate_aligned_plab(size_t size, ShenandoahAllocRequest& req, ShenandoahHeapRegion* r);
@@ -183,8 +193,17 @@ private:
   bool can_allocate_from(size_t idx) const;
   bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
 
+  inline void increase_mutator_allocations(size_t delta) {
+    shenandoah_assert_heaplocked();
+    _total_mutator_bytes_allocated += delta;
+  }
+
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
+
+  inline size_t get_mutator_allocations() {
+    return _total_mutator_bytes_allocated;
+  }
 
   size_t alloc_capacity(ShenandoahHeapRegion *r) const;
   size_t alloc_capacity(size_t idx) const;

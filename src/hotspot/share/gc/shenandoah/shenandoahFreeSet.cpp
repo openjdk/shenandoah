@@ -411,7 +411,8 @@ void ShenandoahSetsOfFree::assert_bounds() {
 
 ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   _heap(heap),
-  _free_sets(max_regions, this)
+  _free_sets(max_regions, this),
+  _total_mutator_bytes_allocated(0)
 {
   clear_internal();
 }
@@ -836,6 +837,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (req.is_mutator_alloc()) {
       assert(req.is_young(), "Mutator allocations always come from young generation.");
       _free_sets.increase_used(Mutator, req.actual_size() * HeapWordSize);
+      increase_mutator_allocations(req.actual_size() * HeapWordSize);
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
 
@@ -867,6 +869,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       size_t waste = r->free();
       if (waste > 0) {
         _free_sets.increase_used(Mutator, waste);
+        increase_mutator_allocations( waste);
         // This one request could cause several regions to be "retired", so we must accumulate the waste
         req.set_waste((waste >> LogHeapWordSize) + req.waste());
       }
@@ -967,6 +970,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
   _free_sets.increase_used(Mutator, total_humongous_size);
+  increase_mutator_allocations(total_humongous_size);
   _free_sets.assert_bounds();
   req.set_actual_size(words_size);
   if (remainder != 0) {

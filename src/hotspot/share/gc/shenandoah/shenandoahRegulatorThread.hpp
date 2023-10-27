@@ -81,12 +81,24 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
   ShenandoahHeuristics* _old_heuristics;
   ShenandoahHeuristics* _global_heuristics;
 
+  // duration of planned regulator sleep period
   int _sleep;
+  double _most_recent_regulator_wake_time;
   double _last_sleep_adjust_time;
 
   void regulator_sleep();
 
   bool request_concurrent_gc(ShenandoahGenerationType generation);
+
+ public:
+  inline double get_most_recent_regulator_wake_time() const {
+    return _most_recent_regulator_wake_time;
+  }
+
+  // return planned sleep duration, in ms
+  inline int planned_sleep_interval() const {
+    return _sleep;
+  }
 };
 
 

@@ -40,7 +40,8 @@ ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahControlThread* co
   ConcurrentGCThread(),
   _control_thread(control_thread),
   _sleep(ShenandoahControlIntervalMin),
-  _last_sleep_adjust_time(os::elapsedTime()) {
+  _most_recent_regulator_wake_time(os::elapsedTime()),
+  _last_sleep_adjust_time(_most_recent_regulator_wake_time) {
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   _old_heuristics = get_heuristics(heap->old_generation());
@@ -129,21 +130,26 @@ void ShenandoahRegulatorThread::regulator_sleep() {
   // Wait before performing the next action. If allocation happened during this wait,
   // we exit sooner, to let heuristics re-evaluate new conditions. If we are at idle,
   // back off exponentially.
-  double current = os::elapsedTime();
-  if (_heap_changed.try_unset()) {
-    _sleep = ShenandoahControlIntervalMin;
-  } else if ((current - _last_sleep_adjust_time) * 1000 > ShenandoahControlIntervalAdjustPeriod){
-    _sleep = MIN2<int>(ShenandoahControlIntervalMax, MAX2(1, _sleep * 2));
-    _last_sleep_adjust_time = current;
+  size_t before_sleep = 0;
+  if (LogTarget(Debug, gc, thread)::is_enabled()) {
+    before_sleep = os::elapsedTime();
   }
 
   os::naked_short_sleep(_sleep);
   if (LogTarget(Debug, gc, thread)::is_enabled()) {
-    double elapsed = os::elapsedTime() - current;
+    double elapsed = os::elapsedTime() - before_sleep;
     double hiccup = elapsed - double(_sleep);
     if (hiccup > 0.001) {
       log_debug(gc, thread)("Regulator hiccup time: %.3fs", hiccup);
     }
+  }
+
+  _most_recent_regulator_wake_time = os::elapsedTime();
+  if (_heap_changed.try_unset()) {
+    _sleep = ShenandoahControlIntervalMin;
+  } else if ((_most_recent_regulator_wake_time - _last_sleep_adjust_time) * 1000 > ShenandoahControlIntervalAdjustPeriod){
+    _sleep = MIN2<int>(ShenandoahControlIntervalMax, MAX2(1, _sleep * 2));
+    _last_sleep_adjust_time = _most_recent_regulator_wake_time;
   }
 }
 

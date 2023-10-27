@@ -234,7 +234,7 @@
           "to 100 effectively disables the shortcut.")                      \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahAdaptiveSampleFrequencyHz, 100, EXPERIMENTAL,    \
+  product(uintx, ShenandoahAdaptiveSampleFrequencyHz, 10, EXPERIMENTAL,     \
           "The number of times per second to update the allocation rate "   \
           "moving average.")                                                \
                                                                             \

@@ -60,7 +60,8 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-const size_t ShenandoahAdaptiveHeuristics::SPIKE_ACCELERATION_SAMPLE_SIZE = 3;
+// Given that we ask should_start_gc() approximately once per ms, this sample size corresponds to spikeseen during 6 ms time span
+const size_t ShenandoahAdaptiveHeuristics::SPIKE_ACCELERATION_SAMPLE_SIZE = 6;
 
 // Separately, we keep track of the average gc time.  We track the most recent GC_TIME_SAMPLE_SIZE GC times in order to
 // detect changing trends in the time required to perform GC.  If the number of samples is too large, we will not be as
@@ -75,6 +76,10 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
   _last_trigger(OTHER),
   _available(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor),
+  _freeset(ShenandoahHeap::heap()->free_set()),
+  _regulator_thread(ShenandoahHeap::heap()->regulator_thread()),
+  _previous_total_allocations(0),
+  _previous_allocation_timestamp(0.0),
   _gc_time_first_sample_index(0),
   _gc_time_num_samples(0),
   _gc_time_timestamps(NEW_C_HEAP_ARRAY(double, GC_TIME_SAMPLE_SIZE, mtGC)),
@@ -346,7 +351,6 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   allocation_headroom -= MIN2(allocation_headroom, spike_headroom);
   allocation_headroom -= MIN2(allocation_headroom, penalties);
 
-  size_t consumption_accelerated = 0;
   double acceleration = 0.0;
   double current_alloc_rate = 0.0;
   double predicted_gc_time = predict_gc_time(now);
@@ -360,7 +364,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     planned_gc_time_is_average = true;
   }
 
-  double predicted_future_gc_time = predict_gc_time(now + _allocation_rate.interval());
+  double predicted_future_gc_time = predict_gc_time(now + _regulator_thread->planned_sleep_interval() / 1000.0);
   double future_planned_gc_time;
   bool future_planned_gc_time_is_average;
   if (predicted_future_gc_time > avg_cycle_time) {
@@ -373,23 +377,27 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   _last_trigger = OTHER;
 
-  if (rate > 0.0) {
-    // We just collected a new spike allocation rate sample
+  size_t total_allocations = _freeset->get_mutator_allocations();
+  double instantaneous_sample_time= _regulator_thread->get_most_recent_regulator_wake_time();
+  double instantaneous_rate = (total_allocations - _previous_total_allocations) / (now - _previous_allocation_timestamp);
+  _previous_total_allocations = total_allocations;
+  _previous_allocation_timestamp = now;
 
-    uint new_sample_index = (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % SPIKE_ACCELERATION_SAMPLE_SIZE;
+  // use instantaneous_rate instead of rate in the following then-clause
 
-    _spike_acceleration_rate_samples[new_sample_index] = rate;
-    _spike_acceleration_rate_timestamps[new_sample_index] = now;
-    if (_spike_acceleration_num_samples == SPIKE_ACCELERATION_SAMPLE_SIZE) {
-      _spike_acceleration_first_sample_index++;
-      if (_spike_acceleration_first_sample_index == SPIKE_ACCELERATION_SAMPLE_SIZE) {
-        _spike_acceleration_first_sample_index = 0;
-      }
-    } else {
-      _spike_acceleration_num_samples++;
+  uint new_sample_index = (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % SPIKE_ACCELERATION_SAMPLE_SIZE;
+
+  _spike_acceleration_rate_samples[new_sample_index] = instantaneous_rate;
+  _spike_acceleration_rate_timestamps[new_sample_index] = instantaneous_sample_time;
+  if (_spike_acceleration_num_samples == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+    _spike_acceleration_first_sample_index++;
+    if (_spike_acceleration_first_sample_index == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+      _spike_acceleration_first_sample_index = 0;
     }
-    consumption_accelerated = accelerated_consumption(acceleration, current_alloc_rate, future_planned_gc_time);
+  } else {
+    _spike_acceleration_num_samples++;
   }
+  size_t consumption_accelerated = accelerated_consumption(acceleration, current_alloc_rate, future_planned_gc_time);
 
   size_t min_threshold = min_free_threshold();
   if (available < min_threshold) {
@@ -613,7 +621,7 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
     // else, leave current_rate = y_max, acceleration = 0
   }
 
-  double time_delta = _allocation_rate.interval() + predicted_cycle_time;
+  double time_delta = _regulator_thread->planned_sleep_interval() / 1000.0 + predicted_cycle_time;
   size_t bytes_to_be_consumed = (size_t) (current_rate * time_delta + 0.5 * acceleration * time_delta * time_delta);
   return bytes_to_be_consumed;
 }

@@ -543,9 +543,8 @@ private:
   ShenandoahMmuTracker          _mmu_tracker;
   ShenandoahGenerationSizer     _generation_sizer;
 
-  ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
-
 public:
+  ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
   ShenandoahControlThread*   control_thread()          { return _control_thread;    }
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
