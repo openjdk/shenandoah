@@ -33,6 +33,10 @@
 
 ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(ShenandoahCardTable* card_table, size_t total_card_count) :
   LogCardsPerIntPtr(log2i_exact(sizeof(intptr_t)/sizeof(CardValue))) {
+
+  // Confirm that the division above is kosher
+  assert(sizeof(intptr_t) % sizeof(CardValue) == 0, "Integer division loses information");
+
   _heap = ShenandoahHeap::heap();
   _card_table = card_table;
   _total_card_count = total_card_count;
