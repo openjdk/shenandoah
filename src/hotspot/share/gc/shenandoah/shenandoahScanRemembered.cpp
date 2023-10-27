@@ -52,7 +52,8 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
 // the write table unchanged.
 void ShenandoahDirectCardMarkRememberedSet::merge_write_table(HeapWord* start, size_t word_count) {
   size_t start_index = card_index_for_addr(start);
-  size_t   end_index = card_index_for_addr(start + word_count);
+  // Avoid access past end of heap in card_index_for_addr()
+  size_t end_index = card_index_for_addr(start + word_count - 1) + 1;
 
   // Avoid division, use shift instead
   assert(start_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
@@ -72,7 +73,8 @@ void ShenandoahDirectCardMarkRememberedSet::merge_write_table(HeapWord* start, s
 // Destructively copy the write table to the read table, and clean the write table.
 void ShenandoahDirectCardMarkRememberedSet::reset_remset(HeapWord* start, size_t word_count) {
   size_t start_index = card_index_for_addr(start);
-  size_t   end_index = card_index_for_addr(start + word_count);
+  // Avoid access past end of heap in card_index_for_addr()
+  size_t end_index = card_index_for_addr(start + word_count - 1) + 1;
 
   // Avoid division, use shift instead
   assert(start_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
