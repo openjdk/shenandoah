@@ -247,45 +247,13 @@ public:
 
   // Merge any dirty values from write table into the read table, while leaving
   // the write table unchanged.
-  void merge_write_table(HeapWord* start, size_t word_count) {
-    const size_t first_index = card_index_for_addr(start);
-    size_t  last_index = card_index_for_addr(start + word_count - 1);
-
-    // Avoid division, use shift instead
-    size_t num_cards = last_index - first_index + 1;
-    assert(num_cards % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
-    last_index = first_index + (num_cards >> LogCardsPerIntPtr);
-
-    intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
-    intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
-
-    for (size_t i = first_index; i <= last_index; i++) {
-      read_table[i] &= write_table[i];
-    }
-  }
+  void merge_write_table(HeapWord* start, size_t word_count);
 
   // Destructively copy the write table to the read table, and clean the write table.
-  void reset_remset(HeapWord* start, size_t word_count) {
-    const size_t first_index = card_index_for_addr(start);
-    size_t  last_index = card_index_for_addr(start + word_count - 1);
-
-    // Avoid division, use shift instead
-    size_t num_cards = last_index - first_index + 1;
-    assert(num_cards % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
-    last_index = first_index + (num_cards >> LogCardsPerIntPtr);
-
-    intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
-    intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
-
-    for (size_t i = first_index; i <= last_index; i++) {
-      read_table[i]  = write_table[i];
-      write_table[i] = CardTable::clean_card_row_val();
-    }
-  }
+  void reset_remset(HeapWord* start, size_t word_count);
 
   // Called by GC thread after scanning old remembered set in order to prepare for next GC pass
   void clear_old_remset() {  _card_table->clear_read_table(); }
-
 };
 
 // A ShenandoahCardCluster represents the minimal unit of work

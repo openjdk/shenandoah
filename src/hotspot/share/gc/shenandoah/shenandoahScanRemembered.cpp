@@ -48,6 +48,48 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
   assert(total_card_count > 0, "Card count cannot be zero.");
 }
 
+// Merge any dirty values from write table into the read table, while leaving
+// the write table unchanged.
+void ShenandoahDirectCardMarkRememberedSet::merge_write_table(HeapWord* start, size_t word_count) {
+  size_t start_index = card_index_for_addr(start);
+  size_t   end_index = card_index_for_addr(start + word_count);
+
+  // Avoid division, use shift instead
+  assert(start_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(end_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+
+  start_index >>= LogCardsPerIntPtr;
+  end_index >>= LogCardsPerIntPtr;
+
+  intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
+  intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
+
+  for (size_t i = start_index; i < end_index; i++) {
+    read_table[i] &= write_table[i];
+  }
+}
+
+// Destructively copy the write table to the read table, and clean the write table.
+void ShenandoahDirectCardMarkRememberedSet::reset_remset(HeapWord* start, size_t word_count) {
+  size_t start_index = card_index_for_addr(start);
+  size_t   end_index = card_index_for_addr(start + word_count);
+
+  // Avoid division, use shift instead
+  assert(start_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(end_index % (1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+
+  start_index >>= LogCardsPerIntPtr;
+  end_index >>= LogCardsPerIntPtr;
+
+  intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
+  intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
+
+  for (size_t i = start_index; i < end_index; i++) {
+    read_table[i]  = write_table[i];
+    write_table[i] = CardTable::clean_card_row_val();
+  }
+}
+
 ShenandoahScanRememberedTask::ShenandoahScanRememberedTask(ShenandoahObjToScanQueueSet* queue_set,
                                                            ShenandoahObjToScanQueueSet* old_queue_set,
                                                            ShenandoahReferenceProcessor* rp,
