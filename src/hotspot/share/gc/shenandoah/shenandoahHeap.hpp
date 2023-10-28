@@ -199,6 +199,7 @@ public:
   jint initialize() override;
   void post_initialize() override;
   void initialize_heuristics_generations();
+  void finish_initialize_heuristics_generations();
   virtual void print_init_logger() const;
   void initialize_serviceability() override;
 

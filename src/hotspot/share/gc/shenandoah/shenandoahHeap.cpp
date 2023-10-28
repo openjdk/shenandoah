@@ -488,9 +488,20 @@ jint ShenandoahHeap::initialize() {
   _control_thread = new ShenandoahControlThread();
   _regulator_thread = new ShenandoahRegulatorThread(_control_thread);
 
+  // We need to initialize _regulator_thread and _free_set before we finish initializing heuristics
+  finish_initialize_heuristics_generations();
+
   print_init_logger();
 
   return JNI_OK;
+}
+
+void ShenandoahHeap::finish_initialize_heuristics_generations() {
+  _global_generation->heuristics()->initialize();
+  if (mode()->is_generational()) {
+    _young_generation->heuristics()->initialize();
+    _old_generation->heuristics()->initialize();
+  }
 }
 
 void ShenandoahHeap::print_init_logger() const {

@@ -76,8 +76,8 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
   _spike_threshold_sd(ShenandoahAdaptiveInitialSpikeThreshold),
   _last_trigger(OTHER),
   _available(Moving_Average_Samples, ShenandoahAdaptiveDecayFactor),
-  _freeset(ShenandoahHeap::heap()->free_set()),
-  _regulator_thread(ShenandoahHeap::heap()->regulator_thread()),
+  _freeset(nullptr),
+  _regulator_thread(nullptr),
   _previous_total_allocations(0),
   _previous_allocation_timestamp(0.0),
   _gc_time_first_sample_index(0),
@@ -105,6 +105,11 @@ ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {
   FREE_C_HEAP_ARRAY(double, _gc_time_samples);
   FREE_C_HEAP_ARRAY(double, _gc_time_xy);
   FREE_C_HEAP_ARRAY(double, _gc_time_xx);
+}
+
+void ShenandoahAdaptiveHeuristics::initialize() {
+  _freeset = ShenandoahHeap::heap()->free_set();
+  _regulator_thread = ShenandoahHeap::heap()->regulator_thread();
 }
 
 void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
@@ -249,6 +254,21 @@ double ShenandoahAdaptiveHeuristics::predict_gc_time(double timestamp_at_start) 
   return result;
 }
 
+void ShenandoahAdaptiveHeuristics::add_rate_to_acceleration_history(double timestamp, double rate) {
+  uint new_sample_index =
+    (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % SPIKE_ACCELERATION_SAMPLE_SIZE;
+  _spike_acceleration_rate_timestamps[new_sample_index] = timestamp;
+  _spike_acceleration_rate_samples[new_sample_index] = rate;
+  if (_spike_acceleration_num_samples == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+    _spike_acceleration_first_sample_index++;
+    if (_spike_acceleration_first_sample_index == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+      _spike_acceleration_first_sample_index = 0;
+    }
+  } else {
+    _spike_acceleration_num_samples++;
+  }
+}
+
 void ShenandoahAdaptiveHeuristics::record_success_concurrent(bool abbreviated) {
   ShenandoahHeuristics::record_success_concurrent(abbreviated);
   double now = os::elapsedTime();
@@ -330,6 +350,8 @@ static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }
 
+#undef KELVIN_NEEDS_TO_SEE
+
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t capacity = _space_info->soft_max_capacity();
   size_t available = _space_info->soft_available();
@@ -341,7 +363,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   // Track allocation rate even if we decide to start a cycle for other reasons.
   double rate = _allocation_rate.sample(allocated);
-  double now =  _allocation_rate.last_sample_time();
+  double now =  _regulator_thread->get_most_recent_regulator_wake_time();
   double avg_cycle_time = _gc_cycle_time_history->davg() + (_margin_of_error_sd * _gc_cycle_time_history->dsd());
   double avg_alloc_rate = _allocation_rate.upper_bound(_margin_of_error_sd);
   size_t allocation_headroom = available;
@@ -378,25 +400,11 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   _last_trigger = OTHER;
 
   size_t total_allocations = _freeset->get_mutator_allocations();
-  double instantaneous_sample_time= _regulator_thread->get_most_recent_regulator_wake_time();
   double instantaneous_rate = (total_allocations - _previous_total_allocations) / (now - _previous_allocation_timestamp);
   _previous_total_allocations = total_allocations;
   _previous_allocation_timestamp = now;
 
-  // use instantaneous_rate instead of rate in the following then-clause
-
-  uint new_sample_index = (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % SPIKE_ACCELERATION_SAMPLE_SIZE;
-
-  _spike_acceleration_rate_samples[new_sample_index] = instantaneous_rate;
-  _spike_acceleration_rate_timestamps[new_sample_index] = instantaneous_sample_time;
-  if (_spike_acceleration_num_samples == SPIKE_ACCELERATION_SAMPLE_SIZE) {
-    _spike_acceleration_first_sample_index++;
-    if (_spike_acceleration_first_sample_index == SPIKE_ACCELERATION_SAMPLE_SIZE) {
-      _spike_acceleration_first_sample_index = 0;
-    }
-  } else {
-    _spike_acceleration_num_samples++;
-  }
+  add_rate_to_acceleration_history(now, instantaneous_rate);
   size_t consumption_accelerated = accelerated_consumption(acceleration, current_alloc_rate, future_planned_gc_time);
 
   size_t min_threshold = min_free_threshold();
@@ -482,6 +490,12 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
                  byte_size_in_proper_unit(rate), proper_unit_for_byte_size(rate),
                  byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
                  _spike_threshold_sd);
+    log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - "
+                       SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
+                       byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
+                       byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
+                       byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
+                       byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
     _last_trigger = SPIKE;
     return true;
   }
@@ -521,30 +535,33 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //  6. Use Consumption = CurrentRate * GCTime + 1/2 * Acceleration * GCTime * GCTime
   //     (See High School physics discussions on constant acceleration: D = v0 * t + 1/2 * a * t^2)
   //  7. if Consumption exceeds headroom, trigger now
+  //
+  // Though larger sample size would improve quality of predictor, it would delay our trigger response as well.
 
-  // Though larger sample size would improve quality of predictor, it would delay our trigger response as well.  A
-  // SPIKE_ACCELERATION_SAMPLE_SIZE of 2 might work, but that would be more vulnerable to noise.
+  if (consumption_accelerated > allocation_headroom) {
+    size_t size_t_acceleration = (size_t) acceleration;
+    size_t size_t_alloc_rate = (size_t) current_alloc_rate;
+    log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
+                 "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for planned %s GC time (%.2f ms)",
+                 _space_info->name(),
+                 byte_size_in_proper_unit(consumption_accelerated), proper_unit_for_byte_size(consumption_accelerated),
+                 byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
+                 byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
+                 byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
+                 future_planned_gc_time_is_average? "(from average)": "(by linear prediction)", future_planned_gc_time * 1000);
+    log_info(gc, ergo)("Free headroom: " SIZE_FORMAT "%s (free) - " SIZE_FORMAT "%s (spike) - "
+                       SIZE_FORMAT "%s (penalties) = " SIZE_FORMAT "%s",
+                       byte_size_in_proper_unit(available),           proper_unit_for_byte_size(available),
+                       byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
+                       byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties),
+                       byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom));
+    _spike_acceleration_num_samples = 0;
+    _spike_acceleration_first_sample_index = 0;
 
-  if (rate > 0.0) {
-    if (consumption_accelerated > allocation_headroom) {
-      size_t size_t_acceleration = (size_t) acceleration;
-      size_t size_t_alloc_rate = (size_t) current_alloc_rate;
-      log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
-                   "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for planned %s GC time (%.2f ms)",
-                   _space_info->name(),
-                   byte_size_in_proper_unit(consumption_accelerated), proper_unit_for_byte_size(consumption_accelerated),
-                   byte_size_in_proper_unit(allocation_headroom), proper_unit_for_byte_size(allocation_headroom),
-                   byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
-                   byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
-                   future_planned_gc_time_is_average? "(from average)": "(by linear prediction)", future_planned_gc_time * 1000);
-      _spike_acceleration_num_samples = 0;
-      _spike_acceleration_first_sample_index = 0;
-
-      // Count this as a form of RATE trigger for purposes of adjusting heuristic triggering configuration because this
-      // trigger is influenced more by margin_of_error_sd than by spike_threshold_sd.
-      _last_trigger = RATE;
-      return true;
-    }
+    // Count this as a form of RATE trigger for purposes of adjusting heuristic triggering configuration because this
+    // trigger is influenced more by margin_of_error_sd than by spike_threshold_sd.
+    _last_trigger = RATE;
+    return true;
   }
 
   if (ShenandoahHeuristics::should_start_gc()) {
@@ -581,45 +598,89 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
   double *y_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
   double x_sum = 0.0;
   double y_sum = 0.0;
-  double y_max = 0.0;
+  double y_avg = 0.0;
 
+  assert(_spike_acceleration_num_samples > 0, "At minimum, we should have sample from this period");
+
+  size_t count_zeroes = 0;
+  bool non_zero_decreases = false;
+  double largest_rate_seen = 0.0;
   for (uint i = 0; i < _spike_acceleration_num_samples; i++) {
     uint index = (_spike_acceleration_first_sample_index + i) % SPIKE_ACCELERATION_SAMPLE_SIZE;
     x_array[i] = _spike_acceleration_rate_timestamps[index];
     x_sum += x_array[i];
     y_array[i] = _spike_acceleration_rate_samples[index];
-    if (y_array[i] > y_max) {
-      y_max = y_array[i];
+    if (y_array[i] == 0) {
+      count_zeroes++;
+    } else {
+      if (y_array[i] < largest_rate_seen) {
+        non_zero_decreases = true;
+      } else {
+        largest_rate_seen = y_array[i];
+      }
     }
     y_sum += y_array[i];
   }
+  // Note that y_avg is approximate, because it is not weighted for reality that some samples span more time than others.
+  // Unless demonstrated to the contrary, assume this approximation is good enought.
+  y_avg = y_sum / _spike_acceleration_num_samples;
 
-  // By default, use y_max for current rate, and no acceleration.  Overwrite iff there is positive slope
+  // By default, use y_avg for current rate, and no acceleration.  Overwrite iff there is positive slope
   // of best-fit line.
-  current_rate = y_max;
+  current_rate = y_avg;
   acceleration = 0.0;
+
   if (_spike_acceleration_num_samples >= SPIKE_ACCELERATION_SAMPLE_SIZE) {
-    double *xy_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
-    double *x2_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
-    double xy_sum = 0.0;
-    double x2_sum = 0.0;
-    for (uint i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
-      xy_array[i] = x_array[i] * y_array[i];
-      xy_sum += xy_array[i];
-      x2_array[i] = x_array[i] * x_array[i];
-      x2_sum += x2_array[i];
+
+    // It is sometimes difficult to distinguish between "random" noise and a meaningful acceleration trend.
+    //
+    // For this reason, we disqualify the immediate acceleration trigger if:
+    //
+    //  1. the number of zeroes is > 3 (more than half of sample size 6), or if
+    //
+    //  2. the number of zeroes is 3, and the non-zero entries are not strictly increasing
+    //
+    // Otherwise, we end up with way too many unproductive acceleration triggers.  Samples that are
+    // disqualified in this invocation of should_start_gc() may be combined with additional samples
+    // gathered for a subsequent should_start_gc() evaluation that is not disqualified.
+
+    if ((count_zeroes > SPIKE_ACCELERATION_SAMPLE_SIZE / 2) ||
+        ((count_zeroes >= SPIKE_ACCELERATION_SAMPLE_SIZE / 2) && non_zero_decreases)) {
+
+      // disqualify this acceleration trigger: leave current_rate = y_max, acceleration = 0
+
+    } else {
+      double *xy_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
+      double *x2_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
+      double xy_sum = 0.0;
+      double x2_sum = 0.0;
+      for (uint i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
+        xy_array[i] = x_array[i] * y_array[i];
+        xy_sum += xy_array[i];
+        x2_array[i] = x_array[i] * x_array[i];
+        x2_sum += x2_array[i];
+      }
+      // Find the best-fit least-squares linear representation of rate vs time
+      double m;                 /* slope */
+      double b;                 /* y-intercept */
+
+      m = (SPIKE_ACCELERATION_SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SPIKE_ACCELERATION_SAMPLE_SIZE * x2_sum - x_sum * x_sum);
+      if (m > 0) {
+        b = (y_sum - m * x_sum) / SPIKE_ACCELERATION_SAMPLE_SIZE;
+        acceleration = m;
+        current_rate = m * x_array[SPIKE_ACCELERATION_SAMPLE_SIZE - 1] + b;
+#ifdef KELVIN_NEEDS_TO_SEE
+        log_info(gc)("Calculating acceleration to be %.3f, with current rate: %.3f", acceleration, current_rate);
+        for (size_t i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
+          double t = x_array[i];
+          log_info(gc)("@ time: %.3f, rate: %.3f, predicted rate: %.3f", t, y_array[i], acceleration * t + b);
+        }
+#endif
+      }
+      // here also, leave current_rate = y_max, acceleration = 0
     }
-    // Find the best-fit least-squares linear representation of rate vs time
-    double m;                 /* slope */
-    double b;                 /* y-intercept */
-    m = (SPIKE_ACCELERATION_SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SPIKE_ACCELERATION_SAMPLE_SIZE * x2_sum - x_sum * x_sum);
-    if (m > 0) {
-      b = (y_sum - m * x_sum) / SPIKE_ACCELERATION_SAMPLE_SIZE;
-      acceleration = m;
-      current_rate = m * x_array[SPIKE_ACCELERATION_SAMPLE_SIZE - 1] + b;
-    }
-    // else, leave current_rate = y_max, acceleration = 0
   }
+  // and here also, leave current_rate = y_max, acceleration = 0
 
   double time_delta = _regulator_thread->planned_sleep_interval() / 1000.0 + predicted_cycle_time;
   size_t bytes_to_be_consumed = (size_t) (current_rate * time_delta + 0.5 * acceleration * time_delta * time_delta);

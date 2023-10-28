@@ -79,6 +79,8 @@ public:
 
   virtual ~ShenandoahAdaptiveHeuristics();
 
+  virtual void initialize();
+
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                      RegionData* data, size_t size,
                                                      size_t actual_free);
@@ -125,6 +127,7 @@ public:
   void adjust_margin_of_error(double amount);
   void adjust_spike_threshold(double amount);
 
+  void add_rate_to_acceleration_history(double timestamp, double rate);
   size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const;
 
 protected:
