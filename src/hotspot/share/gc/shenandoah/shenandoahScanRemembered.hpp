@@ -204,7 +204,8 @@ private:
   //  CardTable::clean_card_val()
   //  CardTable::dirty_card_val()
 
-  const size_t LogCardsPerIntPtr;
+  const size_t LogCardValsPerIntPtr;    // the number of card values (entries) in an intptr_t
+  const size_t LogCardSizeInWords;      // the size of a card in heap word units
 
   ShenandoahHeap *_heap;
   ShenandoahCardTable *_card_table;

@@ -32,10 +32,11 @@
 #include "logging/log.hpp"
 
 ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(ShenandoahCardTable* card_table, size_t total_card_count) :
-  LogCardsPerIntPtr(log2i_exact(sizeof(intptr_t)/sizeof(CardValue))) {
+  LogCardValsPerIntPtr(log2i_exact(sizeof(intptr_t)) - log2i_exact(sizeof(CardValue))),
+  LogCardSizeInWords(log2i_exact(CardTable::card_size_in_words())) {
 
-  // Confirm that the division above is kosher
-  assert(sizeof(intptr_t) % sizeof(CardValue) == 0, "Integer division loses information");
+  // Paranoid assert for LogCardsPerIntPtr calculation above
+  assert(sizeof(intptr_t) > sizeof(CardValue), "LogsCardValsPerIntPtr would underflow");
 
   _heap = ShenandoahHeap::heap();
   _card_table = card_table;
@@ -56,20 +57,22 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
 // the write table unchanged.
 void ShenandoahDirectCardMarkRememberedSet::merge_write_table(HeapWord* start, size_t word_count) {
   size_t start_index = card_index_for_addr(start);
-  // Avoid access past end of heap in card_index_for_addr()
+#ifdef ASSERT
+  // avoid querying card_index_for_addr() for an address past end of heap
   size_t end_index = card_index_for_addr(start + word_count - 1) + 1;
+#endif
+  assert(start_index % ((size_t)1 << LogCardValsPerIntPtr) == 0, "Expected a multiple of CardValsPerIntPtr");
+  assert(end_index % ((size_t)1 << LogCardValsPerIntPtr) == 0, "Expected a multiple of CardValsPerIntPtr");
+
+  // We'll access in groups of intptr_t worth of card entries
+  intptr_t* const read_table  = (intptr_t*) &(_card_table->read_byte_map())[start_index];
+  intptr_t* const write_table = (intptr_t*) &(_card_table->write_byte_map())[start_index];
 
   // Avoid division, use shift instead
-  assert(start_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
-  assert(end_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(word_count % ((size_t)1 << (LogCardSizeInWords + LogCardValsPerIntPtr)) == 0, "Expected a multiple of CardSizeInWords*CardValsPerIntPtr");
+  size_t const num = word_count >> (LogCardSizeInWords + LogCardValsPerIntPtr);
 
-  start_index >>= LogCardsPerIntPtr;
-  end_index >>= LogCardsPerIntPtr;
-
-  intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
-  intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
-
-  for (size_t i = start_index; i < end_index; i++) {
+  for (size_t i = 0; i < num; i++) {
     read_table[i] &= write_table[i];
   }
 }
@@ -77,20 +80,22 @@ void ShenandoahDirectCardMarkRememberedSet::merge_write_table(HeapWord* start, s
 // Destructively copy the write table to the read table, and clean the write table.
 void ShenandoahDirectCardMarkRememberedSet::reset_remset(HeapWord* start, size_t word_count) {
   size_t start_index = card_index_for_addr(start);
-  // Avoid access past end of heap in card_index_for_addr()
+#ifdef ASSERT
+  // avoid querying card_index_for_addr() for an address past end of heap
   size_t end_index = card_index_for_addr(start + word_count - 1) + 1;
+#endif
+  assert(start_index % ((size_t)1 << LogCardValsPerIntPtr) == 0, "Expected a multiple of CardValsPerIntPtr");
+  assert(end_index % ((size_t)1 << LogCardValsPerIntPtr) == 0, "Expected a multiple of CardValsPerIntPtr");
+
+  // We'll access in groups of intptr_t worth of card entries
+  intptr_t* const read_table  = (intptr_t*) &(_card_table->read_byte_map())[start_index];
+  intptr_t* const write_table = (intptr_t*) &(_card_table->write_byte_map())[start_index];
 
   // Avoid division, use shift instead
-  assert(start_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
-  assert(end_index % ((size_t)1 << LogCardsPerIntPtr) == 0, "Expected a multiple of CardsPerIntPtr");
+  assert(word_count % ((size_t)1 << (LogCardSizeInWords + LogCardValsPerIntPtr)) == 0, "Expected a multiple of CardSizeInWords*CardValsPerIntPtr");
+  size_t const num = word_count >> (LogCardSizeInWords + LogCardValsPerIntPtr);
 
-  start_index >>= LogCardsPerIntPtr;
-  end_index >>= LogCardsPerIntPtr;
-
-  intptr_t* const read_table  = (intptr_t*)(_card_table->read_byte_map());
-  intptr_t* const write_table = (intptr_t*)(_card_table->write_byte_map());
-
-  for (size_t i = start_index; i < end_index; i++) {
+  for (size_t i = 0; i < num; i++) {
     read_table[i]  = write_table[i];
     write_table[i] = CardTable::clean_card_row_val();
   }
