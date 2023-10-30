@@ -85,6 +85,7 @@ public:
                                                      RegionData* data, size_t size,
                                                      size_t actual_free);
 
+  virtual void start_idle_span(size_t mutator_available);
   void record_cycle_start();
   void record_degenerated_cycle_start(bool out_of_cycle);
   void record_success_concurrent(bool abbreviated);
@@ -110,6 +111,8 @@ public:
   const static double HIGHEST_EXPECTED_AVAILABLE_AT_END;
 
   const static size_t SPIKE_ACCELERATION_SAMPLE_SIZE;
+  const static size_t SPIKE_DETECTION_SAMPLE_SIZE;
+
   const static size_t GC_TIME_SAMPLE_SIZE;
   const static size_t HISTORICAL_PERIOD_SAMPLE_SIZE;
 
@@ -164,7 +167,8 @@ protected:
 
   size_t _previous_total_allocations;
   double _previous_allocation_timestamp;
-
+  size_t _total_allocations_at_start_of_idle;
+  size_t _allocation_cliff;
 
   // Keep track of GC_TIME_SAMPLE_SIZE most recent concurrent GC cycle times
   uint _gc_time_first_sample_index;

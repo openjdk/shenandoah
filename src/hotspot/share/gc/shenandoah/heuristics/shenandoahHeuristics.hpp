@@ -137,6 +137,10 @@ public:
     _guaranteed_gc_interval = guaranteed_gc_interval;
   }
 
+  virtual void start_idle_span(size_t mutator_available) {
+    // default implementation does nothing
+  }
+
   virtual void record_cycle_start();
 
   virtual void record_degenerated_cycle_start(bool out_of_cycle);

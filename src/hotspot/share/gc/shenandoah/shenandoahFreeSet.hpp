@@ -150,6 +150,8 @@ class ShenandoahFreeSet : public CHeapObj<mtGC> {
 private:
   ShenandoahHeap* const _heap;
   ShenandoahSetsOfFree _free_sets;
+  // Temporarily holds mutator_free allocatable bytes between prepare_to_rebuild() and rebuild()
+  size_t _prepare_to_rebuild_mutator_free;
 
   // Even if this wraps around, the difference between two measurements effectively represents bytes allocated between
   // two checkpoints.  This is modified under heaplock.  This is fetched concurrently by the regulator thread to determine
@@ -193,6 +195,9 @@ private:
   bool can_allocate_from(size_t idx) const;
   bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
 
+  // Sets aside regions for collector and old-collector reserve.  Returnes mutator free.
+  size_t reserve_regions(size_t young_reserve, size_t old_reserve);
+
   inline void increase_mutator_allocations(size_t delta) {
     shenandoah_assert_heaplocked();
     _total_mutator_bytes_allocated += delta;
@@ -211,7 +216,9 @@ public:
   void clear();
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions,
                           size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
-  void rebuild(size_t young_cset_regions, size_t old_cset_regions);
+
+  // Rebuild the free set and return mutator free
+  size_t rebuild(size_t young_cset_regions, size_t old_cset_regions);
 
   void move_collector_sets_to_mutator(size_t cset_regions);
 
@@ -240,9 +247,8 @@ public:
 
   void print_on(outputStream* out) const;
 
-  void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
+  size_t find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                         size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
-  void reserve_regions(size_t young_reserve, size_t old_reserve);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP

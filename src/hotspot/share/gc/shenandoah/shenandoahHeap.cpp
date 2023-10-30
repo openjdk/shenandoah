@@ -3129,9 +3129,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // within partially consumed regions of memory.
   }
   // Rebuild free set based on adjusted generation sizes.
-  _free_set->rebuild(young_cset_regions, old_cset_regions);
+  size_t mutator_free = _free_set->rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational()) {
+    young_generation()->heuristics()->start_idle_span(mutator_free);
+
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
     size_t allowed_old_gen_span = num_regions() - (ShenandoahGenerationalHumongousReserve * num_regions() / 100);
 

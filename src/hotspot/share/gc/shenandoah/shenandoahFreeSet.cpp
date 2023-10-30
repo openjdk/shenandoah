@@ -1077,9 +1077,12 @@ void ShenandoahFreeSet::clear_internal() {
 // move some of the mutator regions into the collector set or old_collector set with the intent of packing
 // old_collector memory into the highest (rightmost) addresses of the heap and the collector memory into the
 // next highest addresses of the heap, with mutator memory consuming the lowest addresses of the heap.
-void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
+//
+// Returns total mutator alloc capacity.
+size_t ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                                          size_t &first_old_region, size_t &last_old_region,
                                                          size_t &old_region_count) {
+  size_t mutator_alloc_capacity = 0;
   first_old_region = _heap->num_regions();
   last_old_region = 0;
   old_region_count = 0;
@@ -1095,6 +1098,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
         assert(region->is_young(), "Trashed region should be old or young");
         young_cset_regions++;
       }
+      mutator_alloc_capacity += alloc_capacity(region);
     } else if (region->is_old() && region->is_regular()) {
       old_region_count++;
       if (first_old_region > idx) {
@@ -1116,7 +1120,9 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
           idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
           byte_size_in_proper_unit(region->used()), proper_unit_for_byte_size(region->used()));
       } else {
-        _free_sets.make_free(idx, Mutator, alloc_capacity(region));
+        size_t ac = alloc_capacity(region);
+        _free_sets.make_free(idx, Mutator, ac);
+        mutator_alloc_capacity += ac;
         log_debug(gc, free)(
           "  Adding Region " SIZE_FORMAT " (Free: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s) to mutator set",
           idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
@@ -1124,6 +1130,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
       }
     }
   }
+  return mutator_alloc_capacity;
 }
 
 // Move no more than cset_regions from the existing Collector and OldCollector free sets to the Mutator free set.
@@ -1198,10 +1205,11 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
 
   // This places regions that have alloc_capacity into the old_collector set if they identify as is_old() or the
   // mutator set otherwise.
-  find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
+  _prepare_to_rebuild_mutator_free =
+    find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
 }
 
-void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions) {
+size_t ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions) {
   shenandoah_assert_heaplocked();
   size_t young_reserve, old_reserve;
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -1282,10 +1290,12 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     young_reserve = young_unaffiliated_regions * region_size_bytes;
   }
 
-  reserve_regions(young_reserve, old_reserve);
+  size_t mutator_free = reserve_regions(young_reserve, old_reserve);
   _free_sets.establish_alloc_bias(OldCollector);
   _free_sets.assert_bounds();
   log_status();
+
+  return mutator_free;
 }
 
 // Having placed all regions that have allocation capacity into the mutator set if they identify as is_young()
@@ -1293,8 +1303,10 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 // into the collector set or old collector set in order to assure that the memory available for allocations within
 // the collector set is at least to_reserve, and the memory available for allocations within the old collector set
 // is at least to_reserve_old.
-void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
-
+//
+// Return the total number of available bytes remaining in Mutator free set
+size_t ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old) {
+  size_t mutator_free = _prepare_to_rebuild_mutator_free;
   for (size_t i = _heap->num_regions(); i > 0; i--) {
     size_t idx = i - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
@@ -1316,6 +1328,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     }
 
     if (move_to_old) {
+      mutator_free -= ac;
       if (r->is_trash() || !r->is_affiliated()) {
         // OLD regions that have available memory are already in the old_collector free set
         _free_sets.move_to_set(idx, OldCollector, ac);
@@ -1325,6 +1338,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     }
 
     if (move_to_young) {
+      mutator_free -= ac;
       // Note: In a previous implementation, regions were only placed into the survivor space (collector_is_free) if
       // they were entirely empty.  I'm not sure I understand the rationale for that.  That alternative behavior would
       // tend to mix survivor objects with ephemeral objects, making it more difficult to reclaim the memory for the
@@ -1346,6 +1360,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
                          PROPERFMTARGS(to_reserve), PROPERFMTARGS(young_reserve));
     }
   }
+  return mutator_free;
 }
 
 void ShenandoahFreeSet::log_status() {
