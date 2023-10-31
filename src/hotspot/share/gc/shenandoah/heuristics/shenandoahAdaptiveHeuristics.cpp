@@ -383,7 +383,38 @@ void ShenandoahAdaptiveHeuristics::start_idle_span(size_t mutator_available) {
                byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
                byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties));
 
+  _most_recent_headroom_at_start_of_idle = mutator_available;
   _allocation_cliff = total_allocations + mutator_available;
+}
+
+void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
+  assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
+         "In range before adjustment: " INTX_FORMAT, _gc_time_penalties);
+
+  intx new_val = _gc_time_penalties + step;
+
+  // Do not penalize beyond what was within "our" power to manage.  The reason we degenerated may have been that
+  // we were dealt a bad hand.  Excessive penalization will cause overly aggressive triggering of young, which
+  // will result in starvation of old collections, resulting in inefficient utilization of memory.
+  size_t capacity = _space_info->soft_max_capacity();
+  size_t anticipated_capacity = _space_info->soft_max_capacity();
+  size_t anticipated_penalties      = capacity / 100 * new_val;;
+  size_t previous_penalties         = capacity / 100 * _gc_time_penalties;;
+  if (anticipated_penalties - previous_penalties > _most_recent_headroom_at_start_of_idle) {
+    size_t maximum_penalties = _most_recent_headroom_at_start_of_idle + previous_penalties;
+    new_val = maximum_penalties * 100 / capacity;
+  }
+  if (new_val < 0) {
+    new_val = 0;
+  }
+  if (new_val > 100) {
+    new_val = 100;
+  }
+
+  _gc_time_penalties = new_val;
+
+  assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
+         "In range after adjustment: " INTX_FORMAT, _gc_time_penalties);
 }
 
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
@@ -713,9 +744,11 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
 #endif
       }
       // This representation of goodness is not exactly standard deviation or chi-square value, but is similar.
+      const double MAXIMUM_GOODNESS_DEVIATION = 0.15;
+
       double goodness = sqrt(sum_of_squared_differences / SPIKE_ACCELERATION_SAMPLE_SIZE);
       assert(goodness / proposed_current_rate > 0, "proposed_current_rate should be positive because m is positive");
-      bool is_good_predictor = (goodness / proposed_current_rate) < 0.25;
+      bool is_good_predictor = (goodness / proposed_current_rate) <= MAXIMUM_GOODNESS_DEVIATION;;
 #ifdef KELVIN_NEEDS_TO_SEE
       log_info(gc)("goodness is: %.3f which is %s predictor because ratio is %.1f out of proposed rate: %.3f",
                    goodness, is_good_predictor? "good": "not good", (goodness / proposed_current_rate), proposed_current_rate);

@@ -123,7 +123,7 @@ protected:
                                                      RegionData* data, size_t data_size,
                                                      size_t free) = 0;
 
-  void adjust_penalty(intx step);
+  virtual void adjust_penalty(intx step);
 
 public:
   ShenandoahHeuristics(ShenandoahSpaceInfo* space_info);

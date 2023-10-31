@@ -85,6 +85,8 @@ public:
                                                      RegionData* data, size_t size,
                                                      size_t actual_free);
 
+  virtual void adjust_penalty(intx step);
+
   virtual void start_idle_span(size_t mutator_available);
   void record_cycle_start();
   void record_degenerated_cycle_start(bool out_of_cycle);
@@ -197,6 +199,8 @@ protected:
   uint _spike_acceleration_num_samples;
   double* const _spike_acceleration_rate_samples;
   double* const _spike_acceleration_rate_timestamps;
+
+  size_t _most_recent_headroom_at_start_of_idle;
 
   size_t min_free_threshold();
 };
