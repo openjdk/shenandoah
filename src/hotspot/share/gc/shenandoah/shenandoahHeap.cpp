@@ -424,7 +424,7 @@ jint ShenandoahHeap::initialize() {
     // We are initializing free set.  We ignore cset region tallies.
     size_t first_old, last_old, num_old;
     _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-    _free_set->rebuild(young_cset_regions, old_cset_regions);
+    size_t mutator_free = _free_set->rebuild(young_cset_regions, old_cset_regions);
   }
 
   if (AlwaysPreTouch) {
@@ -3132,6 +3132,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   size_t mutator_free = _free_set->rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational()) {
+
     young_generation()->heuristics()->start_idle_span(mutator_free);
 
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;

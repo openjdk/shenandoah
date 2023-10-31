@@ -61,14 +61,14 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-// Given that we ask should_start_gc() approximately once per ms, this sample size corresponds to spikes seen in 24 ms time span.
-// Smaller values may increase the likelihood that noise in the signal causes a trigger.  Larger values delay the trigger.
-const size_t ShenandoahAdaptiveHeuristics::SPIKE_ACCELERATION_SAMPLE_SIZE = 24;
+// Given that we ask should_start_gc() approximately once per ms, this sample size corresponds to spikes seen in 16 ms time span.
+const size_t ShenandoahAdaptiveHeuristics::SPIKE_ACCELERATION_SAMPLE_SIZE = 16;
 
 // Even if we do not detect acceleration, we may detect a "momentary" spike.  This momentary spike is represented by the average
-// allocation rate calculated for the most recently collected SPIKE_DETECTION_SAMPLE_SIZE rates.  Smaller values increase the
-// likelihood that noise in the signal causes a trigger.  Larger values delay the trigger.
-const size_t ShenandoahAdaptiveHeuristics::SPIKE_DETECTION_SAMPLE_SIZE = 6;
+// allocation rate calculated for the most recently collected SPIKE_DETECTION_SAMPLE_SIZE rates.
+//
+// SPIKE_DETECTION_SAMPLE_SIZE must be less than or equal to SPIKE_ACCELERATION_SAMPLE_SIZE
+const size_t ShenandoahAdaptiveHeuristics::SPIKE_DETECTION_SAMPLE_SIZE = 3;
 
 // Separately, we keep track of the average gc time.  We track the most recent GC_TIME_SAMPLE_SIZE GC times in order to
 // detect changing trends in the time required to perform GC.  If the number of samples is too large, we will not be as
@@ -346,7 +346,7 @@ void ShenandoahAdaptiveHeuristics::record_success_degenerated() {
 }
 
 void ShenandoahAdaptiveHeuristics::record_success_full() {
-  ShenandoahHeuristics::record_success_full();
+  this->ShenandoahHeuristics::record_success_full();
 
   // Adjust both trigger's parameters in the case of a full GC because
   // either of them should have triggered earlier to avoid this case.
@@ -447,18 +447,8 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   _previous_total_allocations = total_allocations;
   _previous_allocation_timestamp = now;
 
-#ifdef KELVIN_NEEDS_TO_SEE
-  log_info(gc)("should_start_gc (%s)? instantaneous_rate: %.3f, planned_gc_time: %.3f (%s), allocated: "
-               SIZE_FORMAT ", available: " SIZE_FORMAT,
-               _space_info->name(), instantaneous_rate, future_planned_gc_time,
-               future_planned_gc_time_is_average? "from average": "from linear prediction", allocated, available);
-#endif
   add_rate_to_acceleration_history(now, instantaneous_rate);
   size_t consumption_accelerated = accelerated_consumption(acceleration, current_alloc_rate, future_planned_gc_time);
-#ifdef KELVIN_NEEDS_TO_SEE
-  log_info(gc)("back from accelerated_consumption, acceleration: %.3f, alloc_rate: %.3f", acceleration, current_alloc_rate);
-#endif
-
   size_t min_threshold = min_free_threshold();
   if (available < min_threshold) {
     log_info(gc)("Trigger (%s): Free (" SIZE_FORMAT "%s) is below minimum threshold (" SIZE_FORMAT "%s)", _space_info->name(),
@@ -702,19 +692,42 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
     double b;                 /* y-intercept */
 
     m = (SPIKE_ACCELERATION_SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SPIKE_ACCELERATION_SAMPLE_SIZE * x2_sum - x_sum * x_sum);
+    b = (y_sum - m * x_sum) / SPIKE_ACCELERATION_SAMPLE_SIZE;
+
     if (m > 0) {
-      b = (y_sum - m * x_sum) / SPIKE_ACCELERATION_SAMPLE_SIZE;
-      acceleration = m;
-      current_rate = m * x_array[SPIKE_ACCELERATION_SAMPLE_SIZE - 1] + b;
+      double proposed_current_rate = m * x_array[SPIKE_ACCELERATION_SAMPLE_SIZE - 1] + b;
+
 #ifdef KELVIN_NEEDS_TO_SEE
-      log_info(gc)("Calculating acceleration to be %.3f, with current rate: %.3f", acceleration, current_rate);
+      log_info(gc)("Calculating acceleration to be %.3f, with current rate: %.3f", m, proposed_current_rate);
+#endif
+      // Measure goodness of fit
+      double sum_of_squared_differences = 0;
       for (size_t i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
         double t = x_array[i];
-        log_info(gc)("@ time: %.3f, rate: %.3f, predicted rate: %.3f", t, y_array[i], acceleration * t + b);
-      }
+        double measured = y_array[i];
+        double predicted = m * t + b;
+        double delta = predicted - measured;
+        sum_of_squared_differences += delta * delta;
+#ifdef KELVIN_NEEDS_TO_SEE
+        log_info(gc)("@ time: %.3f, rate: %.3f, predicted rate: %.3f", t, measured, predicted);
 #endif
+      }
+      // This representation of goodness is not exactly standard deviation or chi-square value, but is similar.
+      double goodness = sqrt(sum_of_squared_differences / SPIKE_ACCELERATION_SAMPLE_SIZE);
+      assert(goodness / proposed_current_rate > 0, "proposed_current_rate should be positive because m is positive");
+      bool is_good_predictor = (goodness / proposed_current_rate) < 0.25;
+#ifdef KELVIN_NEEDS_TO_SEE
+      log_info(gc)("goodness is: %.3f which is %s predictor because ratio is %.1f out of proposed rate: %.3f",
+                   goodness, is_good_predictor? "good": "not good", (goodness / proposed_current_rate), proposed_current_rate);
+#endif
+
+      if (is_good_predictor) {
+        acceleration = m;
+        current_rate = proposed_current_rate;
+      }
+      // else, leave current_rate = y_max, acceleration = 0
     }
-    // leave current_rate = y_max, acceleration = 0
+    // else, leave current_rate = y_max, acceleration = 0
   }
   // and here also, leave current_rate = y_max, acceleration = 0
 

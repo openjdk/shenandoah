@@ -221,6 +221,10 @@ bool ShenandoahHeuristics::should_start_gc() {
 }
 
 bool ShenandoahHeuristics::should_degenerate_cycle() {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("should_degenerate_cycle() sees _degen_in_a_row: %u", _degenerated_cycles_in_a_row);
+#endif
   return _degenerated_cycles_in_a_row <= ShenandoahFullGCThreshold;
 }
 

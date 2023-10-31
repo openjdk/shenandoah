@@ -1563,7 +1563,10 @@ void ShenandoahFullGC::phase5_epilog() {
       // Invoke this in case we are able to transfer memory from OLD to YOUNG.
       heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
     }
-    heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
+
+    // rebuild() takes into consideration the planned transfers represented by old_region_suplus and deficit
+    size_t mutator_free = heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
+    heap->young_generation()->heuristics()->start_idle_span(mutator_free);
 
     // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
     // abbreviated cycle.
@@ -1592,6 +1595,7 @@ void ShenandoahFullGC::phase5_epilog() {
         region_xfer = 0;
         success = true;
       }
+
       heap->set_old_region_surplus(0);
       heap->set_old_region_deficit(0);
       size_t young_available = young_gen->available();
@@ -1601,6 +1605,7 @@ void ShenandoahFullGC::phase5_epilog() {
                          success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
                          byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
                          byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+
     }
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }

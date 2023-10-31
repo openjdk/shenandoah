@@ -290,7 +290,7 @@ bool ShenandoahGenerationSizer::transfer_to_old(size_t regions) const {
     young_gen->decrease_capacity(bytes_to_transfer);
     old_gen->increase_capacity(bytes_to_transfer);
     size_t new_size = old_gen->max_capacity();
-    log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+    log_debug(gc,free)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
                  regions, young_gen->name(), old_gen->name(),
                  byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
     return true;
@@ -309,7 +309,7 @@ void ShenandoahGenerationSizer::force_transfer_to_old(size_t regions) const {
   young_gen->decrease_capacity(bytes_to_transfer);
   old_gen->increase_capacity(bytes_to_transfer);
   size_t new_size = old_gen->max_capacity();
-  log_info(gc)("Forcing transfer of " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+  log_debug(gc,free)("Forcing transfer of " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
                regions, young_gen->name(), old_gen->name(),
                byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
 }
@@ -332,7 +332,7 @@ bool ShenandoahGenerationSizer::transfer_to_young(size_t regions) const {
     old_gen->decrease_capacity(bytes_to_transfer);
     young_gen->increase_capacity(bytes_to_transfer);
     size_t new_size = young_gen->max_capacity();
-    log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
+    log_debug(gc,free)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " SIZE_FORMAT "%s",
                  regions, old_gen->name(), young_gen->name(),
                  byte_size_in_proper_unit(new_size), proper_unit_for_byte_size(new_size));
     return true;

@@ -137,7 +137,6 @@ void ShenandoahSetsOfFree::remove_from_free_sets(size_t idx) {
   _region_counts[NotFree]++;
 }
 
-
 void ShenandoahSetsOfFree::make_free(size_t idx, ShenandoahFreeMemoryType which_set, size_t region_capacity) {
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert (_membership[idx] == NotFree, "Cannot make free if already free");
@@ -161,7 +160,7 @@ void ShenandoahSetsOfFree::move_to_set(size_t idx, ShenandoahFreeMemoryType new_
   //  During flip_to_gc:
   //                  Mutator empty => Collector
   //                  Mutator empty => Old Collector
-  // At start of update refs:
+  //  At start of update refs:
   //                  Collector => Mutator
   //                  OldCollector Empty => Mutator
   assert (((region_capacity <= _region_size_bytes) &&

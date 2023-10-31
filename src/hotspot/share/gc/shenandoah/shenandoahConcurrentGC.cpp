@@ -201,6 +201,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     }
   }
 
+  size_t muator_free;
   if (heap->has_forwarded_objects()) {
     // Perform update-refs phase.
     vmop_entry_init_updaterefs();

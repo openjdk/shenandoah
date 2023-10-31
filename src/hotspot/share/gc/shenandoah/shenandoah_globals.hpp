@@ -54,7 +54,7 @@
           "collection.")                                                    \
           range(0.0,100.0)                                                  \
                                                                             \
-  product(uintx, ShenandoahIgnoreOldGrowthBelowPercentage,10, EXPERIMENTAL, \
+  product(uintx, ShenandoahIgnoreOldGrowthBelowPercentage, 10, EXPERIMENTAL,\
           "(Generational mode only) If the total usage of the old "         \
           "generation is smaller than this percent, we do not trigger "     \
           "old gen collections even if old has grown, except when "         \
@@ -256,7 +256,7 @@
           "the heuristic is to allocation spikes. Decreasing this number "  \
           "increases the sensitivity. ")                                    \
                                                                             \
-  product(double, ShenandoahAdaptiveDecayFactor, 0.75, EXPERIMENTAL,        \
+  product(double, ShenandoahAdaptiveDecayFactor, 0.5, EXPERIMENTAL,        \
           "The decay factor (alpha) used for values in the weighted "       \
           "moving average of cycle time and allocation rate. "              \
           "Larger values give more weight to recent values.")               \
