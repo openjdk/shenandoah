@@ -526,13 +526,6 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
       old_generation->prepare_gc();
       _allow_old_preemption.unset();
 
-      if (heap->is_prepare_for_old_mark_in_progress()) {
-        // Coalescing threads detected the cancellation request and aborted. Stay
-        // in this state so control thread may resume the coalescing work.
-        assert(old_generation->state() == ShenandoahOldGeneration::FILLING, "Prepare for mark should be in progress");
-        assert(heap->cancelled_gc(), "Preparation for GC is not complete, expected cancellation");
-      }
-
       // Before bootstrapping begins, we must acknowledge any cancellation request.
       // If the gc has not been cancelled, this does nothing. If it has been cancelled,
       // this will clear the cancellation request and exit before starting the bootstrap

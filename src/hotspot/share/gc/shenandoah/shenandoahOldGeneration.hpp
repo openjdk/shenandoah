@@ -92,10 +92,10 @@ private:
 
   static const size_t FRACTIONAL_DENOMINATOR = 64536;
 
-  // During initialization of the JVM, we search for the correct old-gen size by initally performing old-gen
+  // During initialization of the JVM, we search for the correct old-gen size by initially performing old-gen
   // collection when old-gen usage is 50% more (INITIAL_GROWTH_BEFORE_COMPACTION) than the initial old-gen size
   // estimate (3.125% of heap).  The next old-gen trigger occurs when old-gen grows 25% larger than its live
-  // memory at the end of the first old-gen collection.  Then we trigger again when old-gen growns 12.5%
+  // memory at the end of the first old-gen collection.  Then we trigger again when old-gen grows 12.5%
   // more than its live memory at the end of the previous old-gen collection.  Thereafter, we trigger each time
   // old-gen grows more than 12.5% following the end of its previous old-gen collection.
   static const size_t INITIAL_GROWTH_BEFORE_COMPACTION = FRACTIONAL_DENOMINATOR / 2;        //  50.0%

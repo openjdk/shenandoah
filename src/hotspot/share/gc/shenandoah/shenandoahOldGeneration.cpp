@@ -267,7 +267,6 @@ bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
 
 bool ShenandoahOldGeneration::coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  heap->set_prepare_for_old_mark_in_progress(true);
   transition_to(FILLING);
 
   ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
@@ -285,8 +284,6 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
 
   workers->run_task(&task);
   if (task.is_completed()) {
-    // Remember that we're done with coalesce-and-fill.
-    heap->set_prepare_for_old_mark_in_progress(false);
     old_heuristics->abandon_collection_candidates();
     return true;
   } else {

@@ -584,7 +584,6 @@ void ShenandoahHeap::initialize_heuristics_generations() {
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(nullptr),
-  _prepare_for_old_mark(false),
   _initial_size(0),
   _promotion_potential(0),
   _committed(0),
@@ -1173,8 +1172,6 @@ void ShenandoahHeap::cancel_old_gc() {
     log_info(gc)("Terminating old gc cycle.");
     // Stop marking
     old_generation()->cancel_marking();
-    // Stop coalescing undead objects
-    set_prepare_for_old_mark_in_progress(false);
     // Stop tracking old regions
     old_heuristics()->abandon_collection_candidates();
     // Remove old generation access to young generation mark queues
@@ -2446,10 +2443,8 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
   manage_satb_barrier(in_progress);
 }
 
-void ShenandoahHeap::set_prepare_for_old_mark_in_progress(bool in_progress) {
-  // Unlike other set-gc-state functions, this may happen outside safepoint.
-  // Is only set and queried by control thread, so no coherence issues.
-  _prepare_for_old_mark = in_progress;
+bool ShenandoahHeap::is_prepare_for_old_mark_in_progress() const {
+  return old_generation()->state() == ShenandoahOldGeneration::FILLING;
 }
 
 void ShenandoahHeap::set_aging_cycle(bool in_progress) {
