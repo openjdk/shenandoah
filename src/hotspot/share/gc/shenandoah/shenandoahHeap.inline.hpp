@@ -541,8 +541,8 @@ void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   // This operates on new copy of an object. This means that the object's mark-word
   // is thread-local and therefore safe to access. However, when the mark is
   // displaced (i.e. stack-locked or monitor-locked), then it must be considered
-  //a shared memory location. It can/ be accessed by other threads.
-  // In particular, a competing evacuating/ thread can succeed to install its copy
+  // a shared memory location. It can be accessed by other threads.
+  // In particular, a competing evacuating thread can succeed to install its copy
   // as the forwardee and continue to unlock the object, at which point 'our'
   // write to the foreign stack-location would potentially over-write random
   // information on that stack. Writing to a monitor is less problematic,
