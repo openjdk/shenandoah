@@ -103,7 +103,8 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
   _spike_acceleration_first_sample_index(0),
   _spike_acceleration_num_samples(0),
   _spike_acceleration_rate_samples(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)),
-  _spike_acceleration_rate_timestamps(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)) { }
+  _spike_acceleration_rate_timestamps(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)),
+  _most_recent_headroom_at_start_of_idle(0) { }
 
 ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {
   FREE_C_HEAP_ARRAY(double, _spike_acceleration_rate_samples);
@@ -360,7 +361,7 @@ static double saturate(double value, double min, double max) {
 
 #undef KELVIN_NEEDS_TO_SEE
 
-void ShenandoahAdaptiveHeuristics::start_idle_span(size_t mutator_available) {
+void ShenandoahAdaptiveHeuristics::start_idle_span() {
   size_t capacity = _space_info->soft_max_capacity();
   size_t total_allocations = _freeset->get_mutator_allocations();
   size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
@@ -369,6 +370,12 @@ void ShenandoahAdaptiveHeuristics::start_idle_span(size_t mutator_available) {
   // make headroom adjustments
   size_t headroom_adjustments = spike_headroom + penalties;
 
+  size_t mutator_available = ShenandoahHeap::heap()->get_mutator_free_after_updaterefs();
+#undef KELVIN_VISIBLE
+#ifdef KELVIN_VISIBLE
+  log_info(gc)("Fetched mutator_available: " SIZE_FORMAT ", making headroom adjustments: " SIZE_FORMAT,
+               mutator_available, headroom_adjustments);
+#endif
   if (mutator_available >= headroom_adjustments) {
     mutator_available -= headroom_adjustments;;
   } else {
@@ -392,17 +399,31 @@ void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
          "In range before adjustment: " INTX_FORMAT, _gc_time_penalties);
 
   intx new_val = _gc_time_penalties + step;
+  if (step > 0) {
+#ifdef KELVIN_VISIBLE
+    log_info(gc)("Proposing to increase penalty from %ld by %ld to %ld", _gc_time_penalties, step, new_val);
+#endif
+    // Do not penalize beyond what was within "our" power to manage.  The reason we degenerated may have been that
+    // we were dealt a bad hand.  Excessive penalization will cause overly aggressive triggering of young, which
+    // will result in starvation of old collections, resulting in inefficient utilization of memory.
+    size_t anticipated_capacity       = _space_info->soft_max_capacity();
+    size_t anticipated_penalties      = anticipated_capacity / 100 * new_val;;
+    size_t previous_penalties         = anticipated_capacity / 100 * _gc_time_penalties;;
+#ifdef KELVIN_VISIBLE
+    log_info(gc)("anticipated_capacity: " SIZE_FORMAT ", previous_penalties: " SIZE_FORMAT ", anticipated_penalties: " SIZE_FORMAT,
+                 anticipated_capacity, previous_penalties, anticipated_penalties);
+    log_info(gc)(" proposed penalty growth: " SIZE_FORMAT ", compared to headroom at start of idle: " SIZE_FORMAT,
+                 anticipated_penalties - previous_penalties, _most_recent_headroom_at_start_of_idle);
+#endif
 
-  // Do not penalize beyond what was within "our" power to manage.  The reason we degenerated may have been that
-  // we were dealt a bad hand.  Excessive penalization will cause overly aggressive triggering of young, which
-  // will result in starvation of old collections, resulting in inefficient utilization of memory.
-  size_t capacity = _space_info->soft_max_capacity();
-  size_t anticipated_capacity = _space_info->soft_max_capacity();
-  size_t anticipated_penalties      = capacity / 100 * new_val;;
-  size_t previous_penalties         = capacity / 100 * _gc_time_penalties;;
-  if (anticipated_penalties - previous_penalties > _most_recent_headroom_at_start_of_idle) {
-    size_t maximum_penalties = _most_recent_headroom_at_start_of_idle + previous_penalties;
-    new_val = maximum_penalties * 100 / capacity;
+    if (anticipated_penalties - previous_penalties > _most_recent_headroom_at_start_of_idle) {
+      size_t maximum_penalties = _most_recent_headroom_at_start_of_idle + previous_penalties;
+      new_val = maximum_penalties * 100 / anticipated_capacity;
+#ifdef KELVIN_VISIBLE
+      log_info(gc)(" maximum_penalties computed as: " SIZE_FORMAT, maximum_penalties);
+      log_info(gc)(" adjusting new gc_time_penalties to %ld", new_val);
+#endif
+    }
   }
   if (new_val < 0) {
     new_val = 0;
@@ -415,6 +436,7 @@ void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
 
   assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
          "In range after adjustment: " INTX_FORMAT, _gc_time_penalties);
+  start_idle_span();
 }
 
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {

@@ -1566,7 +1566,7 @@ void ShenandoahFullGC::phase5_epilog() {
 
     // rebuild() takes into consideration the planned transfers represented by old_region_suplus and deficit
     size_t mutator_free = heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
-    heap->young_generation()->heuristics()->start_idle_span(mutator_free);
+    heap->set_mutator_free_after_updaterefs(mutator_free);
 
     // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
     // abbreviated cycle.

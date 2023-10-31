@@ -87,7 +87,6 @@ public:
 
   virtual void adjust_penalty(intx step);
 
-  virtual void start_idle_span(size_t mutator_available);
   void record_cycle_start();
   void record_degenerated_cycle_start(bool out_of_cycle);
   void record_success_concurrent(bool abbreviated);
@@ -134,6 +133,8 @@ public:
 
   void add_rate_to_acceleration_history(double timestamp, double rate);
   size_t accelerated_consumption(double& acceleration, double& current_rate, double predicted_cycle_time) const;
+
+  void start_idle_span();
 
 protected:
   ShenandoahAllocationRate _allocation_rate;

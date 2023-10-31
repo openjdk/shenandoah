@@ -699,6 +699,7 @@ private:
   // How many bytes to transfer between old and young after we have finished recycling collection set regions?
   size_t _old_regions_surplus;
   size_t _old_regions_deficit;
+  size_t _mutator_free_after_updaterefs;
 
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region, bool is_promotion);
 
@@ -736,6 +737,9 @@ public:
 
   inline size_t get_old_region_surplus() { return _old_regions_surplus; };
   inline size_t get_old_region_deficit() { return _old_regions_deficit; };
+
+  inline void set_mutator_free_after_updaterefs(size_t val) { _mutator_free_after_updaterefs = val; };
+  inline size_t get_mutator_free_after_updaterefs() const   { return _mutator_free_after_updaterefs; };
 
 // ---------- Marking support
 //
