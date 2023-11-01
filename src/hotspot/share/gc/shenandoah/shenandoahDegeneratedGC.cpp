@@ -106,9 +106,9 @@ void ShenandoahDegenGC::op_degenerated() {
       // If we are in a global cycle, the old generation should not be marking. It is, however,
       // allowed to be holding regions for evacuation or coalescing.
       ShenandoahOldGeneration::State state = old_generation->state();
-      assert(state == ShenandoahOldGeneration::IDLE
-             || state == ShenandoahOldGeneration::WAITING_FOR_EVAC
-             || state == ShenandoahOldGeneration::WAITING_FOR_FILL,
+      assert(state == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP
+             || state == ShenandoahOldGeneration::EVACUATING
+             || state == ShenandoahOldGeneration::FILLING,
              "Old generation cannot be in state: %s", old_generation->state_name());
     }
   }

@@ -84,7 +84,7 @@ public:
 
 public:
   enum State {
-    IDLE, FILLING, BOOTSTRAPPING, MARKING, WAITING_FOR_EVAC, WAITING_FOR_FILL
+    FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING
   };
 
 private:
@@ -132,7 +132,7 @@ public:
   size_t usage_trigger_threshold() const;
 
   bool can_start_gc() {
-    return _state == IDLE || _state == WAITING_FOR_FILL;
+    return _state == WAITING_FOR_BOOTSTRAP;
   }
 
   static const char* state_name(State state);

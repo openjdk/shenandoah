@@ -515,11 +515,6 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
   switch (original_state) {
-    case ShenandoahOldGeneration::WAITING_FOR_FILL:
-    case ShenandoahOldGeneration::IDLE: {
-      assert(!heap->is_concurrent_old_mark_in_progress(), "Old already in progress");
-      assert(old_generation->task_queues()->is_empty(), "Old mark queues should be empty");
-    }
     case ShenandoahOldGeneration::FILLING: {
       _allow_old_preemption.set();
       ShenandoahGCSession session(cause, old_generation);
@@ -537,10 +532,11 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
         return;
       }
 
-      // Coalescing threads completed and nothing was cancelled. it is safe to transition
-      // to the bootstrapping state now.
-      old_generation->transition_to(ShenandoahOldGeneration::BOOTSTRAPPING);
+      // Coalescing threads completed and nothing was cancelled. it is safe to transition from this state.
+      old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+      return;
     }
+    case ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP:
     case ShenandoahOldGeneration::BOOTSTRAPPING: {
       // Configure the young generation's concurrent mark to put objects in
       // old regions into the concurrent mark queues associated with the old

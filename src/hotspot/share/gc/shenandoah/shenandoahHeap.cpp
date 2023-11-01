@@ -739,7 +739,7 @@ ShenandoahYoungHeuristics* ShenandoahHeap::young_heuristics() {
 }
 
 bool ShenandoahHeap::doing_mixed_evacuations() {
-  return _old_generation->state() == ShenandoahOldGeneration::WAITING_FOR_EVAC;
+  return _old_generation->state() == ShenandoahOldGeneration::EVACUATING;
 }
 
 bool ShenandoahHeap::is_old_bitmap_stable() const {
@@ -1163,7 +1163,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
   assert(_old_generation != nullptr, "Should only have mixed collections in generation mode.");
-  if (_old_generation->state() == ShenandoahOldGeneration::IDLE) {
+  if (_old_generation->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP) {
     assert(!old_generation()->is_concurrent_mark_in_progress(), "Cannot be marking in IDLE");
     assert(!old_heuristics()->has_coalesce_and_fill_candidates(), "Cannot have coalesce and fill candidates in IDLE");
     assert(!old_heuristics()->unprocessed_old_collection_candidates(), "Cannot have mixed collection candidates in IDLE");
@@ -1177,7 +1177,7 @@ void ShenandoahHeap::cancel_old_gc() {
     // Remove old generation access to young generation mark queues
     young_generation()->set_old_gen_task_queues(nullptr);
     // Transition to IDLE now.
-    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
+    _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
   }
 }
 
