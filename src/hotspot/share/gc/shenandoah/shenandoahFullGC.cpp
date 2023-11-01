@@ -190,6 +190,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
     assert((heap->old_generation()->used() + heap->old_generation()->get_humongous_waste())
            <= heap->old_generation()->used_regions_size(), "Old consumed can be no larger than span of affiliated regions");
 
+    // Establish baseline for next old-has-grown trigger.
+    heap->old_generation()->set_live_bytes_after_last_mark(heap->old_generation()->used() +
+                                                           heap->old_generation()->get_humongous_waste());
   }
   if (metrics.is_good_progress()) {
     ShenandoahHeap::heap()->notify_gc_progress();
@@ -421,7 +424,6 @@ void ShenandoahFullGC::phase1_mark_heap() {
     }
   }
   log_info(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));
-  heap->old_generation()->set_live_bytes_after_last_mark(live_bytes_in_old);
 }
 
 class ShenandoahPrepareForCompactionTask : public WorkerTask {
@@ -1543,7 +1545,8 @@ void ShenandoahFullGC::phase5_epilog() {
     }
     heap->collection_set()->clear();
     size_t young_cset_regions, old_cset_regions;
-    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions);
+    size_t first_old, last_old, num_old;
+    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
 
     // We also do not expand old generation size following Full GC because we have scrambled age populations and
     // no longer have objects separated by age into distinct regions.
