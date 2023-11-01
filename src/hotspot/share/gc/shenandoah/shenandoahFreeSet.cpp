@@ -1097,7 +1097,6 @@ size_t ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_re
         assert(region->is_young(), "Trashed region should be old or young");
         young_cset_regions++;
       }
-      mutator_alloc_capacity += alloc_capacity(region);
     } else if (region->is_old() && region->is_regular()) {
       old_region_count++;
       if (first_old_region > idx) {
@@ -1122,6 +1121,11 @@ size_t ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_re
         size_t ac = alloc_capacity(region);
         _free_sets.make_free(idx, Mutator, ac);
         mutator_alloc_capacity += ac;
+#undef KELVIN_MUTATOR_FREE
+#ifdef KELVIN_MUTATOR_FREE
+        log_info(gc)("frwac adding ac: " SIZE_FORMAT " for region: " SIZE_FORMAT ", total alloc_capacity: " SIZE_FORMAT,
+                     ac, region->index(), mutator_alloc_capacity);
+#endif
         log_debug(gc, free)(
           "  Adding Region " SIZE_FORMAT " (Free: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s) to mutator set",
           idx, byte_size_in_proper_unit(region->free()), proper_unit_for_byte_size(region->free()),
@@ -1311,6 +1315,7 @@ size_t ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_o
     ShenandoahHeapRegion* r = _heap->get_region(idx);
 
     if (!_free_sets.in_free_set(idx, Mutator)) {
+      // Regions that are already affiliated with OLD will not be in the Mutator free set.
       continue;
     }
 
@@ -1328,16 +1333,18 @@ size_t ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_o
 
     if (move_to_old) {
       mutator_free -= ac;
-      if (r->is_trash() || !r->is_affiliated()) {
-        // OLD regions that have available memory are already in the old_collector free set
-        _free_sets.move_to_set(idx, OldCollector, ac);
-        log_debug(gc, free)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
-        continue;
-      }
-    }
-
-    if (move_to_young) {
+#ifdef KELVIN_MUTATOR_FREE
+      log_info(gc)("rr moving region " SIZE_FORMAT " to old, subtracting  ac: " SIZE_FORMAT ", total alloc_capacity: " SIZE_FORMAT,
+                   r->index(), ac, mutator_free);
+#endif
+      _free_sets.move_to_set(idx, OldCollector, ac);
+      log_debug(gc, free)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
+    } else if (move_to_young) {
       mutator_free -= ac;
+#ifdef KELVIN_MUTATOR_FREE
+      log_info(gc)("rr moving region " SIZE_FORMAT " to collector, subtracting  ac: " SIZE_FORMAT ", total alloc_capacity: " SIZE_FORMAT,
+                   r->index(), ac, mutator_free);
+#endif
       // Note: In a previous implementation, regions were only placed into the survivor space (collector_is_free) if
       // they were entirely empty.  I'm not sure I understand the rationale for that.  That alternative behavior would
       // tend to mix survivor objects with ephemeral objects, making it more difficult to reclaim the memory for the
@@ -1485,6 +1492,10 @@ void ShenandoahFreeSet::log_status() {
           }
           total_used += r->used();
           total_free += free;
+#ifdef KELVIN_MUTATOR_FREE
+          log_info(gc)("log_status adds " SIZE_FORMAT " from region " SIZE_FORMAT " to yield available_mutator: " SIZE_FORMAT,
+                       free, r->index(), total_free);
+#endif
           max_contig = MAX2(max_contig, empty_contig);
           last_idx = idx;
         }

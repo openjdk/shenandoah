@@ -3131,6 +3131,10 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   // Rebuild free set based on adjusted generation sizes.
   size_t mutator_free = _free_set->rebuild(young_cset_regions, old_cset_regions);
   set_mutator_free_after_updaterefs(mutator_free);
+#undef KELVIN_MUTATOR_FREE
+#ifdef KELVIN_MUTATOR_FREE
+  log_info(gc)("ShenHeap::rebuild_free_set() believes mutator_free is: " SIZE_FORMAT, mutator_free);
+#endif
   if (mode()->is_generational()) {
 
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
