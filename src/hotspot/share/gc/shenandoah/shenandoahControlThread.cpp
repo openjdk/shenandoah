@@ -573,13 +573,11 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
       if (marking_complete) {
         assert(old_generation->state() != ShenandoahOldGeneration::MARKING, "Should not still be marking");
         if (original_state == ShenandoahOldGeneration::MARKING) {
-          heap->mmu_tracker()->record_old_marking_increment(old_generation, GCId::current(), true,
-                                                            heap->collection_set()->has_old_regions());
+          heap->mmu_tracker()->record_old_marking_increment(true);
           heap->log_heap_status("At end of Concurrent Old Marking finishing increment");
         }
       } else if (original_state == ShenandoahOldGeneration::MARKING) {
-        heap->mmu_tracker()->record_old_marking_increment(old_generation, GCId::current(), false,
-                                                          heap->collection_set()->has_old_regions());
+        heap->mmu_tracker()->record_old_marking_increment(false);
         heap->log_heap_status("At end of Concurrent Old Marking increment");
       }
       break;
@@ -715,11 +713,11 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahHeap* heap,
                                       "At end of Concurrent Young GC";
         if (heap->collection_set()->has_old_regions()) {
           bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
-          mmu_tracker->record_mixed(generation, get_gc_id(), mixed_is_done);
+          mmu_tracker->record_mixed(get_gc_id());
         } else if (do_old_gc_bootstrap) {
-          mmu_tracker->record_bootstrap(generation, get_gc_id(), heap->collection_set()->has_old_regions());
+          mmu_tracker->record_bootstrap(get_gc_id());
         } else {
-          mmu_tracker->record_young(generation, get_gc_id());
+          mmu_tracker->record_young(get_gc_id());
         }
       }
     } else {
@@ -730,7 +728,7 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahHeap* heap,
       } else {
         // We only record GC results if GC was successful
         msg = "At end of Concurrent Global GC";
-        mmu_tracker->record_global(generation, get_gc_id());
+        mmu_tracker->record_global(get_gc_id());
       }
     }
   } else {
