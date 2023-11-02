@@ -537,6 +537,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
       return;
     }
     case ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP:
+      old_generation->transition_to(ShenandoahOldGeneration::BOOTSTRAPPING);
     case ShenandoahOldGeneration::BOOTSTRAPPING: {
       // Configure the young generation's concurrent mark to put objects in
       // old regions into the concurrent mark queues associated with the old

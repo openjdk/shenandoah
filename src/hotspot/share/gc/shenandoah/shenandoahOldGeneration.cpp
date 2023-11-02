@@ -351,11 +351,11 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
 
 const char* ShenandoahOldGeneration::state_name(State state) {
   switch (state) {
-    case WAITING_FOR_BOOTSTRAP:              return "Idle";
-    case FILLING:           return "Coalescing";
-    case BOOTSTRAPPING:     return "Bootstrapping";
-    case MARKING:           return "Marking";
-    case EVACUATING:  return "Waiting for evacuation";
+    case WAITING_FOR_BOOTSTRAP: return "Waiting for Bootstrap";
+    case FILLING:               return "Coalescing";
+    case BOOTSTRAPPING:         return "Bootstrapping";
+    case MARKING:               return "Marking";
+    case EVACUATING:            return "Evacuation";
     default:
       ShouldNotReachHere();
       return "Unknown";
