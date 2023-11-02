@@ -36,7 +36,6 @@ private:
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   ShenandoahOldHeuristics* _old_heuristics;
 
-  bool entry_coalesce_and_fill();
   bool coalesce_and_fill();
 
 public:
@@ -57,6 +56,7 @@ public:
   void set_concurrent_mark_in_progress(bool in_progress) override;
   bool is_concurrent_mark_in_progress() override;
 
+  bool entry_coalesce_and_fill();
   virtual void prepare_gc() override;
   void prepare_regions_and_collection_set(bool concurrent) override;
   virtual void record_success_concurrent(bool abbreviated) override;

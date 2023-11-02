@@ -516,9 +516,9 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
 
   switch (original_state) {
     case ShenandoahOldGeneration::FILLING: {
-      _allow_old_preemption.set();
       ShenandoahGCSession session(cause, old_generation);
-      old_generation->prepare_gc();
+      _allow_old_preemption.set();
+      old_generation->entry_coalesce_and_fill();
       _allow_old_preemption.unset();
 
       // Before bootstrapping begins, we must acknowledge any cancellation request.

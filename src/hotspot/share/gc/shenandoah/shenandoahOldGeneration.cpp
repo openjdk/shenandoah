@@ -233,20 +233,11 @@ void ShenandoahOldGeneration::cancel_marking() {
 }
 
 void ShenandoahOldGeneration::prepare_gc() {
-  // Make the old generation regions parseable, so they can be safely
-  // scanned when looking for objects in memory indicated by dirty cards.
-  if (entry_coalesce_and_fill()) {
-    // Now that we have made the old generation parseable, it is safe to reset the mark bitmap.
-    static const char* msg = "Concurrent reset (OLD)";
-    ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_reset_old);
-    ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
-                                ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
-                                msg);
-    ShenandoahGeneration::prepare_gc();
-  }
-  // Else, coalesce-and-fill has been preempted and we'll finish that effort in the future.  Do not invoke
-  // ShenandoahGeneration::prepare_gc() until coalesce-and-fill is done because it resets the mark bitmap
-  // and invokes set_mark_incomplete().  Coalesce-and-fill depends on the mark bitmap.
+
+  // Now that we have made the old generation parseable, it is safe to reset the mark bitmap.
+  assert(state() != FILLING, "Cannot reset old without making it parseable");
+
+  ShenandoahGeneration::prepare_gc();
 }
 
 bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
@@ -265,6 +256,8 @@ bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
   return coalesce_and_fill();
 }
 
+// Make the old generation regions parseable, so they can be safely
+// scanned when looking for objects in memory indicated by dirty cards.
 bool ShenandoahOldGeneration::coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   transition_to(FILLING);
@@ -287,7 +280,9 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
     old_heuristics->abandon_collection_candidates();
     return true;
   } else {
-    // Otherwise, we were preempted before the work was done.
+    // Coalesce-and-fill has been preempted. We'll finish that effort in the future.  Do not invoke
+    // ShenandoahGeneration::prepare_gc() until coalesce-and-fill is done because it resets the mark bitmap
+    // and invokes set_mark_incomplete().  Coalesce-and-fill depends on the mark bitmap.
     log_debug(gc)("Suspending coalesce-and-fill of old heap regions");
     return false;
   }
