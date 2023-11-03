@@ -75,7 +75,7 @@ public:
   void record_success_concurrent(bool is_young);
   void record_success_old();
   void record_interrupted_old();
-  void record_success_degenerated(bool is_young);
+  void record_success_degenerated(bool is_young, bool is_upgraded_to_full);
   void record_success_full();
   void record_alloc_failure_to_degenerated(ShenandoahGC::ShenandoahDegenPoint point);
   void record_alloc_failure_to_full();

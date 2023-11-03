@@ -115,8 +115,10 @@ void ShenandoahCollectorPolicy::record_interrupted_old() {
   _interrupted_old_gcs++;
 }
 
-void ShenandoahCollectorPolicy::record_success_degenerated(bool is_young) {
-  _degenerated_cycles_in_a_row++;
+void ShenandoahCollectorPolicy::record_success_degenerated(bool is_young, bool is_upgraded_to_full) {
+  if (!is_upgraded_to_full) {
+    _degenerated_cycles_in_a_row++;
+  }
   if (is_young) {
     _consecutive_young_gcs++;
   } else {
