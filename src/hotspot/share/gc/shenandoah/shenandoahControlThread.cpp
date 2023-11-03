@@ -210,6 +210,12 @@ void ShenandoahControlThread::run_service() {
     } else {
       // We should only be here if the regulator requested a cycle or if
       // there is an old generation mark in progress.
+      if (generation == select_global_generation()) {
+        heap->set_unload_classes(global_heuristics->should_unload_classes());
+      } else {
+        heap->set_unload_classes(false);
+      }
+
       if (_requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
         if (_requested_generation == OLD && heap->doing_mixed_evacuations()) {
           // If a request to start an old cycle arrived while an old cycle was running, but _before_
@@ -227,12 +233,6 @@ void ShenandoahControlThread::run_service() {
         // Don't start a new old marking if there is one already in progress
         if (generation == OLD && heap->is_concurrent_old_mark_in_progress()) {
           set_gc_mode(servicing_old);
-        }
-
-        if (generation == select_global_generation()) {
-          heap->set_unload_classes(global_heuristics->should_unload_classes());
-        } else {
-          heap->set_unload_classes(false);
         }
 
         // Don't want to spin in this loop and start a cycle every time, so
