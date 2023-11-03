@@ -382,7 +382,7 @@ void ShenandoahAdaptiveHeuristics::start_idle_span() {
     mutator_available = 0;
   }
 
-  assert(!strcmp(_space_info->name(), "YOUNG"), "Assume young space");
+  assert(!strcmp(_space_info->name(), "YOUNG"), "Assumed young space, but got: %s", _space_info->name());
   log_info(gc)("At start of idle gc span for %s, mutator available set to: " SIZE_FORMAT "%s"
                " after adjusting for spike_headroom: " SIZE_FORMAT "%s"
                " and penalties: " SIZE_FORMAT "%s", _space_info->name(),
@@ -436,7 +436,9 @@ void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
 
   assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
          "In range after adjustment: " INTX_FORMAT, _gc_time_penalties);
-  start_idle_span();
+  if (strcmp(_space_info->name(), "YOUNG") == 0) {
+    start_idle_span();
+  }
 }
 
 bool ShenandoahAdaptiveHeuristics::should_start_gc() {
