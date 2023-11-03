@@ -46,7 +46,8 @@ ShenandoahCollectorPolicy::ShenandoahCollectorPolicy() :
   _explicit_full(0),
   _implicit_concurrent(0),
   _implicit_full(0),
-  _cycle_counter(0) {
+  _cycle_counter(0),
+  _degenerated_cycles_in_a_row(0) {
 
   Copy::zero_to_bytes(_degen_points, sizeof(size_t) * ShenandoahGC::_DEGENERATED_LIMIT);
 
@@ -82,10 +83,12 @@ void ShenandoahCollectorPolicy::record_alloc_failure_to_degenerated(ShenandoahGC
 
 void ShenandoahCollectorPolicy::record_degenerated_upgrade_to_full() {
   ShenandoahHeap::heap()->record_upgrade_to_full();
+  _degenerated_cycles_in_a_row = 0;
   _alloc_failure_degenerated_upgrade_to_full++;
 }
 
 void ShenandoahCollectorPolicy::record_success_concurrent(bool is_young) {
+  _degenerated_cycles_in_a_row = 0;
   if (is_young) {
     _consecutive_young_gcs++;
   } else {
@@ -113,6 +116,7 @@ void ShenandoahCollectorPolicy::record_interrupted_old() {
 }
 
 void ShenandoahCollectorPolicy::record_success_degenerated(bool is_young) {
+  _degenerated_cycles_in_a_row++;
   if (is_young) {
     _consecutive_young_gcs++;
   } else {
@@ -122,6 +126,7 @@ void ShenandoahCollectorPolicy::record_success_degenerated(bool is_young) {
 }
 
 void ShenandoahCollectorPolicy::record_success_full() {
+  _degenerated_cycles_in_a_row = 0;
   _consecutive_young_gcs = 0;
   _success_full_gcs++;
 }
@@ -141,6 +146,11 @@ void ShenandoahCollectorPolicy::record_shutdown() {
 bool ShenandoahCollectorPolicy::is_at_shutdown() {
   return _in_shutdown.is_set();
 }
+
+bool ShenandoahCollectorPolicy::should_degenerate_cycle() {
+  return _degenerated_cycles_in_a_row <= ShenandoahFullGCThreshold;
+}
+
 
 
 void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {

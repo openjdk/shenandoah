@@ -61,6 +61,8 @@ private:
   ShenandoahSharedFlag _in_shutdown;
   ShenandoahTracer* _tracer;
 
+  uint _degenerated_cycles_in_a_row;
+
 public:
   ShenandoahCollectorPolicy();
 
@@ -85,6 +87,8 @@ public:
 
   void record_shutdown();
   bool is_at_shutdown();
+
+  bool should_degenerate_cycle();
 
   ShenandoahTracer* tracer() {return _tracer;}
 

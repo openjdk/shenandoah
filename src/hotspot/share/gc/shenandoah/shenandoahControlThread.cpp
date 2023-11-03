@@ -156,7 +156,7 @@ void ShenandoahControlThread::run_service() {
       bool old_gen_evacuation_failed = heap->clear_old_evacuation_failure();
 
       // Do not bother with degenerated cycle if old generation evacuation failed or if humongous allocation failed
-      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle() &&
+      if (ShenandoahDegeneratedGC && policy->should_degenerate_cycle() &&
           !old_gen_evacuation_failed && !humongous_alloc_failure_pending) {
         heuristics->record_allocation_failure_gc();
         policy->record_alloc_failure_to_degenerated(degen_point);
