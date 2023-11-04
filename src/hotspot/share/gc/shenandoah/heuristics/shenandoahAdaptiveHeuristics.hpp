@@ -111,9 +111,6 @@ public:
   const static double LOWEST_EXPECTED_AVAILABLE_AT_END;
   const static double HIGHEST_EXPECTED_AVAILABLE_AT_END;
 
-  const static size_t SPIKE_ACCELERATION_SAMPLE_SIZE;
-  const static size_t SPIKE_DETECTION_SAMPLE_SIZE;
-
   const static size_t GC_TIME_SAMPLE_SIZE;
   const static size_t HISTORICAL_PERIOD_SAMPLE_SIZE;
 

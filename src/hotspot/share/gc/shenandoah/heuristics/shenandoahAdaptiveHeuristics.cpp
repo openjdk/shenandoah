@@ -61,15 +61,6 @@ const double ShenandoahAdaptiveHeuristics::HIGHEST_EXPECTED_AVAILABLE_AT_END = 0
 const double ShenandoahAdaptiveHeuristics::MINIMUM_CONFIDENCE = 0.319; // 25%
 const double ShenandoahAdaptiveHeuristics::MAXIMUM_CONFIDENCE = 3.291; // 99.9%
 
-// Given that we ask should_start_gc() approximately once per ms, this sample size corresponds to spikes seen in 16 ms time span.
-const size_t ShenandoahAdaptiveHeuristics::SPIKE_ACCELERATION_SAMPLE_SIZE = 16;
-
-// Even if we do not detect acceleration, we may detect a "momentary" spike.  This momentary spike is represented by the average
-// allocation rate calculated for the most recently collected SPIKE_DETECTION_SAMPLE_SIZE rates.
-//
-// SPIKE_DETECTION_SAMPLE_SIZE must be less than or equal to SPIKE_ACCELERATION_SAMPLE_SIZE
-const size_t ShenandoahAdaptiveHeuristics::SPIKE_DETECTION_SAMPLE_SIZE = 3;
-
 // Separately, we keep track of the average gc time.  We track the most recent GC_TIME_SAMPLE_SIZE GC times in order to
 // detect changing trends in the time required to perform GC.  If the number of samples is too large, we will not be as
 // responsive to change trends, as the best-fit line will look more like an average.
@@ -102,8 +93,8 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
   _gc_time_sd(0.0),
   _spike_acceleration_first_sample_index(0),
   _spike_acceleration_num_samples(0),
-  _spike_acceleration_rate_samples(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)),
-  _spike_acceleration_rate_timestamps(NEW_C_HEAP_ARRAY(double, SPIKE_ACCELERATION_SAMPLE_SIZE, mtGC)),
+  _spike_acceleration_rate_samples(NEW_C_HEAP_ARRAY(double, ShenandoahRateAccelerationSampleSize, mtGC)),
+  _spike_acceleration_rate_timestamps(NEW_C_HEAP_ARRAY(double, ShenandoahRateAccelerationSampleSize, mtGC)),
   _most_recent_headroom_at_start_of_idle(0) { }
 
 ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {
@@ -265,12 +256,12 @@ double ShenandoahAdaptiveHeuristics::predict_gc_time(double timestamp_at_start) 
 
 void ShenandoahAdaptiveHeuristics::add_rate_to_acceleration_history(double timestamp, double rate) {
   uint new_sample_index =
-    (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % SPIKE_ACCELERATION_SAMPLE_SIZE;
+    (_spike_acceleration_first_sample_index + _spike_acceleration_num_samples) % ShenandoahRateAccelerationSampleSize;
   _spike_acceleration_rate_timestamps[new_sample_index] = timestamp;
   _spike_acceleration_rate_samples[new_sample_index] = rate;
-  if (_spike_acceleration_num_samples == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+  if (_spike_acceleration_num_samples == ShenandoahRateAccelerationSampleSize) {
     _spike_acceleration_first_sample_index++;
-    if (_spike_acceleration_first_sample_index == SPIKE_ACCELERATION_SAMPLE_SIZE) {
+    if (_spike_acceleration_first_sample_index == ShenandoahRateAccelerationSampleSize) {
       _spike_acceleration_first_sample_index = 0;
     }
   } else {
@@ -613,7 +604,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   //
   // Outline of this heuristic triggering technique:
   //
-  //  1. We remember the three most recent samples of spike allocation rate r0, r1, r2 samples at t0, t1, and t2
+  //  1. We remember the N (e.g. N=3) most recent samples of spike allocation rate r0, r1, r2 samples at t0, t1, and t2
   //  2. if r1 < r0 or r2 < r1, approximate Acceleration = 0.0, Rate = Max(r0, r1, r2)
   //  3. Otherwise, use least squares method to compute best-fit line through rate vs time
   //  4. The slope of this line represents Acceleration. The y-intercept of this line represents "initial rate"
@@ -674,8 +665,8 @@ void ShenandoahAdaptiveHeuristics::adjust_last_trigger_parameters(double amount)
 size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleration, double& current_rate,
                                                              double predicted_cycle_time) const
 {
-  double *x_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
-  double *y_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
+  double *x_array = (double *) alloca(ShenandoahRateAccelerationSampleSize * sizeof(double));
+  double *y_array = (double *) alloca(ShenandoahRateAccelerationSampleSize * sizeof(double));
   double x_sum = 0.0;
   double y_sum = 0.0;
   double y_avg;
@@ -686,7 +677,7 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
   bool non_zero_decreases = false;
   double largest_rate_seen = 0.0;
   for (uint i = 0; i < _spike_acceleration_num_samples; i++) {
-    uint index = (_spike_acceleration_first_sample_index + i) % SPIKE_ACCELERATION_SAMPLE_SIZE;
+    uint index = (_spike_acceleration_first_sample_index + i) % ShenandoahRateAccelerationSampleSize;
     x_array[i] = _spike_acceleration_rate_timestamps[index];
     x_sum += x_array[i];
     y_array[i] = _spike_acceleration_rate_samples[index];
@@ -702,14 +693,14 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
     }
   }
 
-  if (_spike_acceleration_num_samples >= SPIKE_DETECTION_SAMPLE_SIZE) {
+  if (_spike_acceleration_num_samples >= ShenandoahMomentaryAllocationRateSpikeSampleSize) {
     double sum_for_average = 0.0;
-    for (uint i = _spike_acceleration_num_samples - SPIKE_DETECTION_SAMPLE_SIZE; i < _spike_acceleration_num_samples; i++) {
+    for (uint i = _spike_acceleration_num_samples - ShenandoahMomentaryAllocationRateSpikeSampleSize; i < _spike_acceleration_num_samples; i++) {
       sum_for_average += y_array[i];
     }
     // Note that y_avg is approximate, because it is not weighted for reality that some samples span more time than others.
     // Unless demonstrated to the contrary, assume this approximation is good enought.
-    y_avg = sum_for_average / SPIKE_DETECTION_SAMPLE_SIZE;
+    y_avg = sum_for_average / ShenandoahMomentaryAllocationRateSpikeSampleSize;
   } else {
     y_avg = 0.0;
   }
@@ -718,7 +709,7 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
   current_rate = y_avg;
   acceleration = 0.0;
 
-  if (_spike_acceleration_num_samples >= SPIKE_ACCELERATION_SAMPLE_SIZE) {
+  if (_spike_acceleration_num_samples >= ShenandoahRateAccelerationSampleSize) {
 
     // It is sometimes difficult to distinguish between "random" noise and a meaningful acceleration trend.
     //
@@ -732,11 +723,11 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
     // disqualified in this invocation of should_start_gc() may be combined with additional samples
     // gathered for a subsequent should_start_gc() evaluation that is not disqualified.
 
-    double *xy_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
-    double *x2_array = (double *) alloca(SPIKE_ACCELERATION_SAMPLE_SIZE * sizeof(double));
+    double *xy_array = (double *) alloca(ShenandoahRateAccelerationSampleSize * sizeof(double));
+    double *x2_array = (double *) alloca(ShenandoahRateAccelerationSampleSize * sizeof(double));
     double xy_sum = 0.0;
     double x2_sum = 0.0;
-    for (uint i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
+    for (uint i = 0; i < ShenandoahRateAccelerationSampleSize; i++) {
       xy_array[i] = x_array[i] * y_array[i];
       xy_sum += xy_array[i];
       x2_array[i] = x_array[i] * x_array[i];
@@ -746,18 +737,18 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
     double m;                 /* slope */
     double b;                 /* y-intercept */
 
-    m = (SPIKE_ACCELERATION_SAMPLE_SIZE * xy_sum - x_sum * y_sum) / (SPIKE_ACCELERATION_SAMPLE_SIZE * x2_sum - x_sum * x_sum);
-    b = (y_sum - m * x_sum) / SPIKE_ACCELERATION_SAMPLE_SIZE;
+    m = (ShenandoahRateAccelerationSampleSize * xy_sum - x_sum * y_sum) / (ShenandoahRateAccelerationSampleSize * x2_sum - x_sum * x_sum);
+    b = (y_sum - m * x_sum) / ShenandoahRateAccelerationSampleSize;
 
     if (m > 0) {
-      double proposed_current_rate = m * x_array[SPIKE_ACCELERATION_SAMPLE_SIZE - 1] + b;
+      double proposed_current_rate = m * x_array[ShenandoahRateAccelerationSampleSize - 1] + b;
 
 #ifdef KELVIN_NEEDS_TO_SEE
       log_info(gc)("Calculating acceleration to be %.3f, with current rate: %.3f", m, proposed_current_rate);
 #endif
       // Measure goodness of fit
       double sum_of_squared_differences = 0;
-      for (size_t i = 0; i < SPIKE_ACCELERATION_SAMPLE_SIZE; i++) {
+      for (size_t i = 0; i < ShenandoahRateAccelerationSampleSize; i++) {
         double t = x_array[i];
         double measured = y_array[i];
         double predicted = m * t + b;
@@ -768,11 +759,9 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
 #endif
       }
       // This representation of goodness is not exactly standard deviation or chi-square value, but is similar.
-      const double MAXIMUM_GOODNESS_DEVIATION = 0.15;
-
-      double goodness = sqrt(sum_of_squared_differences / SPIKE_ACCELERATION_SAMPLE_SIZE);
+      double goodness = sqrt(sum_of_squared_differences / ShenandoahRateAccelerationSampleSize);
       assert(goodness / proposed_current_rate > 0, "proposed_current_rate should be positive because m is positive");
-      bool is_good_predictor = (goodness / proposed_current_rate) <= MAXIMUM_GOODNESS_DEVIATION;;
+      bool is_good_predictor = (goodness / proposed_current_rate) <= ShenandoahAcceleratedAllocationRateGoodnessRatio;
 #ifdef KELVIN_NEEDS_TO_SEE
       log_info(gc)("goodness is: %.3f which is %s predictor because ratio is %.1f out of proposed rate: %.3f",
                    goodness, is_good_predictor? "good": "not good", (goodness / proposed_current_rate), proposed_current_rate);
