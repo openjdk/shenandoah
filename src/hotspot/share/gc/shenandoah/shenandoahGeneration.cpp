@@ -35,6 +35,7 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
+#include "gc/shenandoah/heuristics/shenandoahAdaptiveHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 
 #include "utilities/quickSort.hpp"
@@ -763,7 +764,10 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
     size_t first_old, last_old, num_old;
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-    heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
+    size_t mutator_free = heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
+    if (heap->mode()->is_generational()) {
+      ((ShenandoahAdaptiveHeuristics*) (heap->young_generation()->heuristics()))->start_evac_span(mutator_free);
+    }
   }
   heap->set_evacuation_reserve_quantities(false);
 }

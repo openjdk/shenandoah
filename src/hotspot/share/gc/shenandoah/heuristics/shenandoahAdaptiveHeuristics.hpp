@@ -87,6 +87,20 @@ public:
 
   virtual void adjust_penalty(intx step);
 
+  // In case we rebuild free set during idle span, such as when we finish OLD GC marking and add immediate garbage to
+  // free set, invoke this to recalibrate the triggering heuristic.
+  void resume_idle_span(size_t mutator_available);
+
+  // 
+  void start_evac_span(size_t mutator_available);
+
+  // How much memory is available for mutator allocations?
+  //  (as calculated by mutator free at last rebuild minus mutator allocations since last rebuild)
+  inline size_t allocatable() const {
+    size_t total_allocations = _freeset->get_mutator_allocations();
+    return (total_allocations > _allocation_cliff)? 0: _allocation_cliff - total_allocations;
+  }
+
   void record_cycle_start();
   void record_degenerated_cycle_start(bool out_of_cycle);
   void record_success_concurrent(bool abbreviated);

@@ -348,7 +348,11 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     heap->free_set()->prepare_to_rebuild(cset_young_regions, cset_old_regions, first_old, last_old, num_old);
     // This is just old-gen completion.  No future budgeting required here.  The only reason to rebuild the freeset here
     // is in case there was any immediate old garbage identified.
-    heap->free_set()->rebuild(cset_young_regions, cset_old_regions);
+    size_t mutator_free = heap->free_set()->rebuild(cset_young_regions, cset_old_regions);
+    if (heap->mode()->is_generational()) {
+      // In case we have added immediate garbage to the mutator free set, recalibrate the triggering heuristic.
+      ((ShenandoahAdaptiveHeuristics *) (heap->young_generation()->heuristics()))->resume_idle_span(mutator_free);
+    }
   }
 }
 

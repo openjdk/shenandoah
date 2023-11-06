@@ -385,6 +385,40 @@ void ShenandoahAdaptiveHeuristics::start_idle_span() {
   _allocation_cliff = total_allocations + mutator_available;
 }
 
+void ShenandoahAdaptiveHeuristics::resume_idle_span(size_t mutator_available) {
+  size_t capacity = _space_info->soft_max_capacity();
+  size_t total_allocations = _freeset->get_mutator_allocations();
+  size_t spike_headroom = capacity / 100 * ShenandoahAllocSpikeFactor;
+  size_t penalties      = capacity / 100 * _gc_time_penalties;
+
+  // make headroom adjustments
+  size_t headroom_adjustments = spike_headroom + penalties;
+
+  if (mutator_available >= headroom_adjustments) {
+    mutator_available -= headroom_adjustments;;
+  } else {
+    mutator_available = 0;
+  }
+
+  assert(!strcmp(_space_info->name(), "YOUNG"), "Assumed young space, but got: %s", _space_info->name());
+  log_info(gc)("At resumption of idle gc span for %s, mutator available set to: " SIZE_FORMAT "%s"
+               " after adjusting for spike_headroom: " SIZE_FORMAT "%s"
+               " and penalties: " SIZE_FORMAT "%s", _space_info->name(),
+               byte_size_in_proper_unit(mutator_available),   proper_unit_for_byte_size(mutator_available),
+               byte_size_in_proper_unit(spike_headroom),      proper_unit_for_byte_size(spike_headroom),
+               byte_size_in_proper_unit(penalties),           proper_unit_for_byte_size(penalties));
+
+  _most_recent_headroom_at_start_of_idle = mutator_available;
+  _allocation_cliff = total_allocations + mutator_available;
+}
+
+// There is no headroom during evacuation and update refs.  This information is not used to trigger the next GC.
+// Rather, it is made available to support throttling of allocations during GC.
+void ShenandoahAdaptiveHeuristics::start_evac_span(size_t mutator_free) {
+  size_t total_allocations = _freeset->get_mutator_allocations();
+  _allocation_cliff = total_allocations + mutator_free;
+}
+
 void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
   assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
          "In range before adjustment: " INTX_FORMAT, _gc_time_penalties);
@@ -446,7 +480,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
   size_t total_allocations = _freeset->get_mutator_allocations();
   size_t allocated_since_last_sample = total_allocations - _previous_total_allocations;
   size_t allocated_since_idle = total_allocations - _total_allocations_at_start_of_idle;
-  size_t allocatable = (total_allocations > _allocation_cliff)? 0: _allocation_cliff - total_allocations;
+  size_t allocatable = this->allocatable();
 #endif
 
   // Track allocation rate even if we decide to start a cycle for other reasons.
