@@ -1332,14 +1332,16 @@ size_t ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_o
     }
 
     if (move_to_old) {
-      mutator_free -= ac;
-#ifdef KELVIN_MUTATOR_FREE
-      log_info(gc)("rr moving region " SIZE_FORMAT " to old, subtracting  ac: " SIZE_FORMAT ", total alloc_capacity: " SIZE_FORMAT,
-                   r->index(), ac, mutator_free);
-#endif
-      _free_sets.move_to_set(idx, OldCollector, ac);
-      log_debug(gc, free)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
-    } else if (move_to_young) {
+      if (r->is_trash() || !r->is_affiliated()) {
+        // OLD regions that have available memory are already in the old_collector free set
+        mutator_free -= ac;
+        _free_sets.move_to_set(idx, OldCollector, ac);
+        log_debug(gc, free)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
+        continue;
+      }
+    }
+
+    if (move_to_young) {
       mutator_free -= ac;
 #ifdef KELVIN_MUTATOR_FREE
       log_info(gc)("rr moving region " SIZE_FORMAT " to collector, subtracting  ac: " SIZE_FORMAT ", total alloc_capacity: " SIZE_FORMAT,
