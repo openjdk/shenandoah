@@ -541,7 +541,7 @@
           "When running in passive mode, this can be toggled to measure "   \
           "either Degenerated GC or Full GC costs.")                        \
                                                                             \
-  product(uintx, ShenandoahFullGCThreshold, 16, EXPERIMENTAL,               \
+  product(uintx, ShenandoahFullGCThreshold, 3, EXPERIMENTAL,                \
           "How many productive back-to-back Degenerated GCs should happen " \
           "before going to a Full GC.  Note that Degenerated GCs that are " \
           "not productive will immediately upgraded to Full GC.")           \
