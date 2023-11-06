@@ -210,12 +210,6 @@ void ShenandoahControlThread::run_service() {
     } else {
       // We should only be here if the regulator requested a cycle or if
       // there is an old generation mark in progress.
-      if (generation == select_global_generation()) {
-        heap->set_unload_classes(global_heuristics->should_unload_classes());
-      } else {
-        heap->set_unload_classes(false);
-      }
-
       if (_requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
         if (_requested_generation == OLD && heap->doing_mixed_evacuations()) {
           // If a request to start an old cycle arrived while an old cycle was running, but _before_
@@ -265,6 +259,12 @@ void ShenandoahControlThread::run_service() {
     if (gc_requested) {
       // GC is starting, bump the internal ID
       update_gc_id();
+
+      if (generation == select_global_generation()) {
+        heap->set_unload_classes(global_heuristics->should_unload_classes());
+      } else {
+        heap->set_unload_classes(false);
+      }
 
       heap->reset_bytes_allocated_since_gc_start();
 
