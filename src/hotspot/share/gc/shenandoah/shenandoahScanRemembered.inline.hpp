@@ -583,6 +583,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // the old generation marking. These include objects allocated since the
   // start of old generation marking (being those above TAMS).
   const ShenandoahHeap* heap = ShenandoahHeap::heap();
+  log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(heap->is_old_bitmap_stable()));
   const ShenandoahMarkingContext* ctx = heap->is_old_bitmap_stable() ?
                                         heap->marking_context() : nullptr;
 
