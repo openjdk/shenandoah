@@ -45,7 +45,7 @@ bool ShenandoahPassiveHeuristics::should_unload_classes() {
 }
 
 bool ShenandoahPassiveHeuristics::should_degenerate_cycle() {
-  // Always fal to Degenerated GC, if enabled
+  // Always fail to Degenerated GC, if enabled
   return ShenandoahDegeneratedGC;
 }
 
