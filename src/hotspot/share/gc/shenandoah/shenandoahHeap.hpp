@@ -348,8 +348,9 @@ private:
   ShenandoahSharedFlag   _degenerated_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_move_in_progress;
-  ShenandoahSharedFlag   _progress_last_gc;
   ShenandoahSharedFlag   _concurrent_strong_root_in_progress;
+
+  size_t _gc_no_progress_count;
 
   // TODO: Revisit the following comment.  It may not accurately represent the true behavior when evacuations fail due to
   // difficulty finding memory to hold evacuated objects.
@@ -389,7 +390,6 @@ private:
 
 public:
   char gc_state() const;
-  static address gc_state_addr();
 
   void set_evacuation_reserve_quantities(bool is_valid);
   void set_concurrent_young_mark_in_progress(bool in_progress);
@@ -417,7 +417,7 @@ public:
   inline bool is_full_gc_in_progress() const;
   inline bool is_full_gc_move_in_progress() const;
   inline bool has_forwarded_objects() const;
-  inline bool is_gc_in_progress_mask(uint mask) const;
+
   inline bool is_stw_gc_in_progress() const;
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
@@ -517,8 +517,9 @@ private:
   void recycle_trash();
 public:
   void rebuild_free_set(bool concurrent);
-  void notify_gc_progress()    { _progress_last_gc.set();   }
-  void notify_gc_no_progress() { _progress_last_gc.unset(); }
+  void notify_gc_progress();
+  void notify_gc_no_progress();
+  size_t get_gc_no_progress_count() const;
 
 //
 // Mark support
