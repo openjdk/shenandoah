@@ -2798,6 +2798,7 @@ public:
     _regions(regions),
     _work_chunks(work_chunks)
   {
+    log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(_heap->is_old_bitmap_stable()));
   }
 
   void work(uint worker_id) {

@@ -229,6 +229,12 @@ void ShenandoahControlThread::run_service() {
           set_gc_mode(servicing_old);
         }
 
+        if (generation == select_global_generation()) {
+          heap->set_unload_classes(global_heuristics->should_unload_classes());
+        } else {
+          heap->set_unload_classes(false);
+        }
+
         // Don't want to spin in this loop and start a cycle every time, so
         // clear requested gc cause. This creates a race with callers of the
         // blocking 'request_gc' method, but there it loops and resets the
@@ -244,6 +250,7 @@ void ShenandoahControlThread::run_service() {
         cause = GCCause::_shenandoah_concurrent_gc;
         generation = OLD;
         set_gc_mode(servicing_old);
+        heap->set_unload_classes(false);
       }
     }
 
@@ -259,12 +266,6 @@ void ShenandoahControlThread::run_service() {
     if (gc_requested) {
       // GC is starting, bump the internal ID
       update_gc_id();
-
-      if (generation == select_global_generation()) {
-        heap->set_unload_classes(global_heuristics->should_unload_classes());
-      } else {
-        heap->set_unload_classes(false);
-      }
 
       heap->reset_bytes_allocated_since_gc_start();
 
