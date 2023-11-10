@@ -513,7 +513,7 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
     }
     case ShenandoahOldGeneration::FILLING: {
       _allow_old_preemption.set();
-      ShenandoahGCSession session(cause, old_generation);
+//      ShenandoahGCSession session(cause, old_generation);
       old_generation->prepare_gc();
       _allow_old_preemption.unset();
 

@@ -84,16 +84,15 @@ void ShenandoahCollectorPolicy::record_degenerated_upgrade_to_full() {
   _alloc_failure_degenerated_upgrade_to_full++;
 }
 
-void ShenandoahCollectorPolicy::record_success_concurrent() {
+void ShenandoahCollectorPolicy::record_success_concurrent(bool abbreviated) {
   _success_concurrent_gcs++;
+  if (abbreviated) {
+    _abbreviated_cycles++;
+  }
 }
 
 void ShenandoahCollectorPolicy::record_mixed_cycle() {
   _mixed_gcs++;
-}
-
-void ShenandoahCollectorPolicy::record_abbreviated_cycle() {
-  _abbreviated_cycles++;
 }
 
 void ShenandoahCollectorPolicy::record_success_old() {
@@ -137,17 +136,19 @@ void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {
   out->print_cr("enough regions with no live objects to skip evacuation.");
   out->cr();
 
-  out->print_cr(SIZE_FORMAT_W(5) " Successful Concurrent GCs",         _success_concurrent_gcs);
-  out->print_cr("  " SIZE_FORMAT_W(5) " invoked explicitly",           _explicit_concurrent);
-  out->print_cr("  " SIZE_FORMAT_W(5) " invoked implicitly",           _implicit_concurrent);
+  out->print_cr(SIZE_FORMAT_W(5) " Total GCs",                         _cycle_counter);
+  out->print_cr(SIZE_FORMAT_W(5) " Successful Concurrent GCs (%.2f)",  _success_concurrent_gcs, percent_of(_success_concurrent_gcs, _cycle_counter));
+  out->print_cr("  " SIZE_FORMAT_W(5) " invoked explicitly (%.2f)",    _explicit_concurrent, percent_of(_explicit_concurrent, _success_concurrent_gcs));
+  out->print_cr("  " SIZE_FORMAT_W(5) " invoked implicitly (%.2f)",    _implicit_concurrent, percent_of(_implicit_concurrent, _success_concurrent_gcs));
+  out->print_cr("  " SIZE_FORMAT_W(5) " Abbreviated GCs (%.2f)",       _abbreviated_cycles, percent_of(_abbreviated_cycles, _success_concurrent_gcs));
   out->cr();
 
-  out->print_cr(SIZE_FORMAT_W(5) " Completed Old GCs",                 _success_old_gcs);
+  out->print_cr(SIZE_FORMAT_W(5) " Completed Old GCs (%.2f)",          _success_old_gcs, percent_of(_success_old_gcs, _cycle_counter));
   out->print_cr("  " SIZE_FORMAT_W(5) " mixed",                        _mixed_gcs);
   out->print_cr("  " SIZE_FORMAT_W(5) " interruptions",                _interrupted_old_gcs);
   out->cr();
 
-  out->print_cr(SIZE_FORMAT_W(5) " Degenerated GCs",                   _success_degenerated_gcs);
+  out->print_cr(SIZE_FORMAT_W(5) " Degenerated GCs (%.2f)",            _success_degenerated_gcs, percent_of(_success_degenerated_gcs, _cycle_counter));
   out->print_cr("  " SIZE_FORMAT_W(5) " caused by allocation failure", _alloc_failure_degenerated);
   for (int c = 0; c < ShenandoahGC::_DEGENERATED_LIMIT; c++) {
     if (_degen_points[c] > 0) {
@@ -155,15 +156,11 @@ void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {
       out->print_cr("    " SIZE_FORMAT_W(5) " happened at %s",         _degen_points[c], desc);
     }
   }
-  out->print_cr("  " SIZE_FORMAT_W(5) " upgraded to Full GC",          _alloc_failure_degenerated_upgrade_to_full);
   out->cr();
 
-  out->print_cr(SIZE_FORMAT_W(5) " Abbreviated GCs",                   _abbreviated_cycles);
-  out->cr();
-
-  out->print_cr(SIZE_FORMAT_W(5) " Full GCs",                          _success_full_gcs + _alloc_failure_degenerated_upgrade_to_full);
-  out->print_cr("  " SIZE_FORMAT_W(5) " invoked explicitly",           _explicit_full);
-  out->print_cr("  " SIZE_FORMAT_W(5) " invoked implicitly",           _implicit_full);
-  out->print_cr("  " SIZE_FORMAT_W(5) " caused by allocation failure", _alloc_failure_full);
-  out->print_cr("  " SIZE_FORMAT_W(5) " upgraded from Degenerated GC", _alloc_failure_degenerated_upgrade_to_full);
+  out->print_cr(SIZE_FORMAT_W(5) " Full GCs (%.2f)",                          _success_full_gcs, percent_of(_success_full_gcs, _cycle_counter));
+  out->print_cr("  " SIZE_FORMAT_W(5) " invoked explicitly (%.2f)",           _explicit_full, percent_of(_explicit_full, _success_full_gcs));
+  out->print_cr("  " SIZE_FORMAT_W(5) " invoked implicitly (%.2f)",           _implicit_full, percent_of(_implicit_full, _success_full_gcs));
+  out->print_cr("  " SIZE_FORMAT_W(5) " caused by allocation failure (%.2f)", _alloc_failure_full, percent_of(_alloc_failure_full, _success_full_gcs));
+  out->print_cr("  " SIZE_FORMAT_W(5) " upgraded from Degenerated GC (%.2f)", _alloc_failure_degenerated_upgrade_to_full, percent_of(_alloc_failure_degenerated_upgrade_to_full, _success_full_gcs));
 }

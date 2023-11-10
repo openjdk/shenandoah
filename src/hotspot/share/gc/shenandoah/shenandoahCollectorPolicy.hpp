@@ -68,8 +68,7 @@ public:
   void record_cycle_start();
 
   void record_mixed_cycle();
-  void record_abbreviated_cycle();
-  void record_success_concurrent();
+  void record_success_concurrent(bool abbreviated);
   void record_success_old();
   void record_interrupted_old();
   void record_success_degenerated();
