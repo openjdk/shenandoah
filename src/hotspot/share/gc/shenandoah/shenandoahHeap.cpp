@@ -90,6 +90,8 @@
 #include "code/codeCache.hpp"
 #include "memory/classLoaderMetaspace.hpp"
 #include "memory/metaspaceUtils.hpp"
+#include "nmt/mallocTracker.hpp"
+#include "nmt/memTracker.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "prims/jvmtiTagMap.hpp"
 #include "runtime/atomic.hpp"
@@ -99,8 +101,6 @@
 #include "runtime/orderAccess.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/vmThread.hpp"
-#include "services/mallocTracker.hpp"
-#include "services/memTracker.hpp"
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
 
@@ -584,7 +584,6 @@ void ShenandoahHeap::initialize_heuristics_generations() {
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(nullptr),
-  _prepare_for_old_mark(false),
   _initial_size(0),
   _promotion_potential(0),
   _committed(0),
@@ -596,6 +595,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _regions(nullptr),
   _affiliations(nullptr),
   _update_refs_iterator(this),
+  _gc_no_progress_count(0),
   _promoted_reserve(0),
   _old_evac_reserve(0),
   _young_evac_reserve(0),
@@ -740,7 +740,7 @@ ShenandoahYoungHeuristics* ShenandoahHeap::young_heuristics() {
 }
 
 bool ShenandoahHeap::doing_mixed_evacuations() {
-  return _old_generation->state() == ShenandoahOldGeneration::WAITING_FOR_EVAC;
+  return _old_generation->state() == ShenandoahOldGeneration::EVACUATING;
 }
 
 bool ShenandoahHeap::is_old_bitmap_stable() const {
@@ -1164,7 +1164,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
   assert(_old_generation != nullptr, "Should only have mixed collections in generation mode.");
-  if (_old_generation->state() == ShenandoahOldGeneration::IDLE) {
+  if (_old_generation->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP) {
     assert(!old_generation()->is_concurrent_mark_in_progress(), "Cannot be marking in IDLE");
     assert(!old_heuristics()->has_coalesce_and_fill_candidates(), "Cannot have coalesce and fill candidates in IDLE");
     assert(!old_heuristics()->unprocessed_old_collection_candidates(), "Cannot have mixed collection candidates in IDLE");
@@ -1173,14 +1173,12 @@ void ShenandoahHeap::cancel_old_gc() {
     log_info(gc)("Terminating old gc cycle.");
     // Stop marking
     old_generation()->cancel_marking();
-    // Stop coalescing undead objects
-    set_prepare_for_old_mark_in_progress(false);
     // Stop tracking old regions
     old_heuristics()->abandon_collection_candidates();
     // Remove old generation access to young generation mark queues
     young_generation()->set_old_gen_task_queues(nullptr);
     // Transition to IDLE now.
-    _old_generation->transition_to(ShenandoahOldGeneration::IDLE);
+    _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
   }
 }
 
@@ -1337,7 +1335,19 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
-    // Allocation failed, block until control thread reacted, then retry allocation.
+    // Check that gc overhead is not exceeded.
+    //
+    // Shenandoah will grind along for quite a while allocating one
+    // object at a time using shared (non-tlab) allocations. This check
+    // is testing that the GC overhead limit has not been exceeded.
+    // This will notify the collector to start a cycle, but will raise
+    // an OOME to the mutator if the last Full GCs have not made progress.
+    if (result == nullptr && !req.is_lab_alloc() && get_gc_no_progress_count() > ShenandoahNoProgressThreshold) {
+      control_thread()->handle_alloc_failure(req, false);
+      return nullptr;
+    }
+
+    // Block until control thread reacted, then retry allocation.
     //
     // It might happen that one of the threads requesting allocation would unblock
     // way later after GC happened, only to fail the second allocation, because
@@ -1346,9 +1356,15 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     // one full GC has completed).
     size_t original_count = shenandoah_policy()->full_gc_count();
     while (result == nullptr
-        && (_progress_last_gc.is_set() || original_count == shenandoah_policy()->full_gc_count())) {
+        && (get_gc_no_progress_count() == 0 || original_count == shenandoah_policy()->full_gc_count())) {
       control_thread()->handle_alloc_failure(req);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
+    }
+
+    if (log_is_enabled(Debug, gc, alloc)) {
+      ResourceMark rm;
+      log_debug(gc, alloc)("Thread: %s, Result: " PTR_FORMAT ", Request: %s, Size: " SIZE_FORMAT ", Original: " SIZE_FORMAT ", Latest: " SIZE_FORMAT,
+                           Thread::current()->name(), p2i(result), req.type_string(), req.size(), original_count, get_gc_no_progress_count());
     }
 
   } else {
@@ -2446,10 +2462,8 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
   manage_satb_barrier(in_progress);
 }
 
-void ShenandoahHeap::set_prepare_for_old_mark_in_progress(bool in_progress) {
-  // Unlike other set-gc-state functions, this may happen outside safepoint.
-  // Is only set and queried by control thread, so no coherence issues.
-  _prepare_for_old_mark = in_progress;
+bool ShenandoahHeap::is_prepare_for_old_mark_in_progress() const {
+  return old_generation()->state() == ShenandoahOldGeneration::FILLING;
 }
 
 void ShenandoahHeap::set_aging_cycle(bool in_progress) {
@@ -2784,6 +2798,7 @@ public:
     _regions(regions),
     _work_chunks(work_chunks)
   {
+    log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(_heap->is_old_bitmap_stable()));
   }
 
   void work(uint worker_id) {
