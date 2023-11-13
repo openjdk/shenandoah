@@ -394,7 +394,7 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 //               |   |            | Filling Complete    | <-> A global collection may
 //               |   |            v                     |     may move the old generation
 //               |   |          +-----------------+     |     directly from waiting for
-//               |   +--------> |     WAITING     |     |     bootstrap to filling or 
+//               |   +--------> |     WAITING     |     |     bootstrap to filling or
 //               |   |    +---- |  FOR BOOTSTRAP  | ----+     evacuating.
 //               |   |    |     +-----------------+
 //               |   |    |       |
@@ -425,7 +425,7 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   switch (new_state) {
     case FILLING:
-      assert(_state != BOOTSTRAPPING, "Cannot beging making old regions parsable after bootstrapping");    
+      assert(_state != BOOTSTRAPPING, "Cannot beging making old regions parsable after bootstrapping");
       assert(heap->is_old_bitmap_stable(), "Cannot begin filling without first completing marking, state is '%s'", state_name(_state));
       assert(_old_heuristics->has_coalesce_and_fill_candidates(), "Cannot begin filling without something to fill.");
       break;
