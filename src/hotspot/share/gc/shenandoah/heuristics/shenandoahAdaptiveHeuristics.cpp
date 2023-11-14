@@ -426,15 +426,22 @@ void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
          "In range before adjustment: " INTX_FORMAT, _gc_time_penalties);
 
   if (step > 0) {
-    // Something bad happened.  Let's make acceleration triggers more sensitive.
-    _acceleration_goodness_ratio *= 1.15;
-    _consecutive_goodness = 0;
-  } else {
-    if (_consecutive_goodness++ >= 15) {
-      // We've seen 16 good cycles in a row.  Let's make acceleration triggers slightly less sensitive.
-      _acceleration_goodness_ratio *= 0.95;
-      _consecutive_goodness = 0;
+    // Something bad happened.  In general, we'll want to make acceleration triggers more sensitive.
+    // However, if we are already too sensitive, we may be starving old-gen marking, in which case "something bad
+    // happening" motivates decreased sensitivity.  For now, we'll use high value of _gc_time_penalties
+    // to denote that we are too overly sensitive.
+    // TODO: Should we be more sophisticated in detecting that we are overly sensitive, such as monitoring
+    //       consecutive young GC cycles with zero headroom?
+    if (_gc_time_penalties + step > 25) {
+      _acceleration_goodness_ratio *= 0.95;     // decrease sensitivity
+    } else {
+      _acceleration_goodness_ratio *= 1.10;     // increase sensitivity
     }
+    _consecutive_goodness = 0;
+  } else if (++_consecutive_goodness >= 10) {
+    // We've seen 10 good cycles in a row.  Let's make acceleration triggers slightly less sensitive.
+    _acceleration_goodness_ratio *= 0.95;
+    _consecutive_goodness = 0;
   }
 
   intx new_val = _gc_time_penalties + step;
@@ -667,13 +674,15 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
     size_t size_t_acceleration = (size_t) acceleration;
     size_t size_t_alloc_rate = (size_t) current_alloc_rate;
     log_info(gc)("Trigger (%s): Accelerated consumption (" SIZE_FORMAT "%s) exceeds free headroom (" SIZE_FORMAT "%s) at "
-                 "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT "%s/s/s) for planned %s GC time (%.2f ms)",
+                 "current rate (" SIZE_FORMAT "%s/s) with acceleration (" SIZE_FORMAT
+                 "%s/s/s) for planned %s GC time (%.2f ms) (goodness threshold = %.2f)", 
                  _space_info->name(),
                  byte_size_in_proper_unit(consumption_accelerated), proper_unit_for_byte_size(consumption_accelerated),
                  byte_size_in_proper_unit(allocatable), proper_unit_for_byte_size(allocatable),
                  byte_size_in_proper_unit(size_t_alloc_rate), proper_unit_for_byte_size(size_t_alloc_rate),
                  byte_size_in_proper_unit(size_t_acceleration), proper_unit_for_byte_size(size_t_acceleration),
-                 future_planned_gc_time_is_average? "(from average)": "(by linear prediction)", future_planned_gc_time * 1000);
+                 future_planned_gc_time_is_average? "(from average)": "(by linear prediction)", future_planned_gc_time * 1000,
+                 _acceleration_goodness_ratio);
     _spike_acceleration_num_samples = 0;
     _spike_acceleration_first_sample_index = 0;
 

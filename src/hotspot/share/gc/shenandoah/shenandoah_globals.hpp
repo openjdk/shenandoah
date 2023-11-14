@@ -49,7 +49,7 @@
           "triggering excess collections.")                                 \
                                                                             \
   product(double, ShenandoahInitialAcceleratedAllocationRateGoodnessRatio,  \
-          0.08, EXPERIMENTAL,                                               \
+          0.10, EXPERIMENTAL,                                               \
           "(Generational mode only) "                                       \
           "If the allocation rate predicted by an acceleration trend "      \
           "analysis divided by the most recently measured allocation "      \
