@@ -40,7 +40,6 @@ private:
 public:
   ShenandoahDegenGC(ShenandoahDegenPoint degen_point, ShenandoahGeneration* generation);
   bool collect(GCCause::Cause cause);
-  bool abbreviated() const;
 
 private:
   void vmop_degenerated();

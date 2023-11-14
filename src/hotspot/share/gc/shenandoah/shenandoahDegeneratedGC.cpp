@@ -508,7 +508,3 @@ void ShenandoahDegenGC::upgrade_to_full() {
   ShenandoahFullGC full_gc;
   full_gc.op_full(GCCause::_shenandoah_upgrade_to_full_gc);
 }
-
-bool ShenandoahDegenGC::abbreviated() const {
-  return _abbreviated;
-}

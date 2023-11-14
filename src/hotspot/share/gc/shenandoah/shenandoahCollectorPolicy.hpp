@@ -107,6 +107,7 @@ public:
     return _consecutive_degenerated_gcs;
   }
 
+private:
   void update_young(bool is_young);
 };
 
