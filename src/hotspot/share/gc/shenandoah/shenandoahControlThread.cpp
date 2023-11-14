@@ -300,10 +300,7 @@ void ShenandoahControlThread::run_service() {
         }
         case stw_degenerated: {
           heap->set_aging_cycle(was_aging_cycle);
-          if (!service_stw_degenerated_cycle(cause, degen_point)) {
-            // The degenerated GC was upgraded to a Full GC
-            generation = select_global_generation();
-          }
+          service_stw_degenerated_cycle(cause, degen_point);
           break;
         }
         case stw_full: {
@@ -359,7 +356,6 @@ void ShenandoahControlThread::run_service() {
 
       // Clear metaspace oom flag, if current cycle unloaded classes
       if (heap->unload_classes()) {
-        assert(generation == select_global_generation(), "Only unload classes during GLOBAL cycle");
         global_heuristics->clear_metaspace_oom();
       }
 
@@ -517,7 +513,6 @@ void ShenandoahControlThread::service_concurrent_old_cycle(ShenandoahHeap* heap,
 
   switch (original_state) {
     case ShenandoahOldGeneration::FILLING: {
-      // ShenandoahGCSession session(cause, old_generation);
       _allow_old_preemption.set();
       old_generation->entry_coalesce_and_fill();
       _allow_old_preemption.unset();
@@ -811,6 +806,10 @@ bool ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
   } else {
     assert(_degen_generation->is_young(), "Expected degenerated young cycle, if not global.");
     ShenandoahOldGeneration* old = heap->old_generation();
+    // TODO: upgrade to full GC should reset old generation state
+    if (gc.upgraded_to_full()) {
+      assert(old->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP, "Full GC should have reset old collection");
+    }
     if (old->state() == ShenandoahOldGeneration::BOOTSTRAPPING && !gc.upgraded_to_full()) {
       old->transition_to(ShenandoahOldGeneration::MARKING);
     }

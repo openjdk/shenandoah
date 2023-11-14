@@ -2039,7 +2039,7 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
   generation->heuristics()->record_cycle_end();
-  if (mode()->is_generational() && (generation->is_global() || upgraded_to_full())) {
+  if (mode()->is_generational() && generation->is_global()) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
     young_generation()->heuristics()->record_cycle_end();
     old_generation()->heuristics()->record_cycle_end();

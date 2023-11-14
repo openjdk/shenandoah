@@ -36,11 +36,13 @@ private:
   const ShenandoahDegenPoint  _degen_point;
   ShenandoahGeneration* _generation;
   bool _upgraded_to_full;
+  bool _abbreviated;
 
 public:
   ShenandoahDegenGC(ShenandoahDegenPoint degen_point, ShenandoahGeneration* generation);
   bool collect(GCCause::Cause cause);
-  bool upgraded_to_full();
+  bool upgraded_to_full() const;
+  bool abbreviated() const;
 
 private:
   void vmop_degenerated();

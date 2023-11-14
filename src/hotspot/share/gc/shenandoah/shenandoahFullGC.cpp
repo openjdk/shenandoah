@@ -175,6 +175,10 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
   metrics.snap_after();
   if (heap->mode()->is_generational()) {
+    // Full GC should reset time since last gc for young and old heuristics
+    heap->young_generation()->heuristics()->record_cycle_end();
+    heap->old_generation()->heuristics()->record_cycle_end();
+
     heap->mmu_tracker()->record_full(GCId::current());
     heap->log_heap_status("At end of Full GC");
 
