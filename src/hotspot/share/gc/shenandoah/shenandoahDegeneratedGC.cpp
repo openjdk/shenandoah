@@ -50,7 +50,6 @@ ShenandoahDegenGC::ShenandoahDegenGC(ShenandoahDegenPoint degen_point, Shenandoa
   ShenandoahGC(),
   _degen_point(degen_point),
   _generation(generation),
-  _upgraded_to_full(false),
   _abbreviated(false) {
 }
 
@@ -355,7 +354,7 @@ void ShenandoahDegenGC::op_degenerated() {
     op_degenerated_futile();
   } else {
     heap->notify_gc_progress();
-    heap->shenandoah_policy()->record_success_degenerated(_generation->is_young(), false);
+    heap->shenandoah_policy()->record_success_degenerated(_generation->is_young(), _abbreviated);
     _generation->heuristics()->record_success_degenerated();
   }
 }
@@ -506,13 +505,8 @@ const char* ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point) c
 void ShenandoahDegenGC::upgrade_to_full() {
   log_info(gc)("Degenerate GC upgrading to Full GC");
   ShenandoahHeap::heap()->shenandoah_policy()->record_degenerated_upgrade_to_full();
-  _upgraded_to_full = true;
   ShenandoahFullGC full_gc;
   full_gc.op_full(GCCause::_shenandoah_upgrade_to_full_gc);
-}
-
-bool ShenandoahDegenGC::upgraded_to_full() const {
-  return _upgraded_to_full;
 }
 
 bool ShenandoahDegenGC::abbreviated() const {

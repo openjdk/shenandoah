@@ -1016,10 +1016,5 @@ void ShenandoahGeneration::decrease_capacity(size_t decrement) {
 
 void ShenandoahGeneration::record_success_concurrent(bool abbreviated) {
   heuristics()->record_success_concurrent(abbreviated);
-  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent(is_young());
-}
-
-void ShenandoahGeneration::record_success_degenerated(bool abbreviated) {
-  heuristics()->record_success_degenerated();
-  ShenandoahHeap::heap()->shenandoah_policy()->record_success_degenerated(is_young(), false);
+  ShenandoahHeap::heap()->shenandoah_policy()->record_success_concurrent(is_young(), abbreviated);
 }

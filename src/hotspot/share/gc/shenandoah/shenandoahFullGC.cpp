@@ -34,6 +34,7 @@
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
@@ -182,6 +183,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
     heap->mmu_tracker()->record_full(GCId::current());
     heap->log_heap_status("At end of Full GC");
 
+    assert(heap->old_generation()->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP,
+           "After full GC, old generation should be waiting for bootstrap.");
+
     // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
     // made valid by the time Full GC completes.
     assert(heap->old_generation()->used_regions_size() <= heap->old_generation()->max_capacity(),
@@ -205,6 +209,10 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
     // progress, and it can finally fail.
     ShenandoahHeap::heap()->notify_gc_no_progress();
   }
+
+  // Regardless if progress was made, we record that we completed a "successful" full GC.
+  heap->global_generation()->heuristics()->record_success_full();
+  heap->shenandoah_policy()->record_success_full();
 }
 
 void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {

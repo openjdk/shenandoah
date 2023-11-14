@@ -708,7 +708,6 @@ void ShenandoahControlThread::service_concurrent_cycle(ShenandoahHeap* heap,
         msg = (do_old_gc_bootstrap) ? "At end of Concurrent Bootstrap GC":
                                       "At end of Concurrent Young GC";
         if (heap->collection_set()->has_old_regions()) {
-          bool mixed_is_done = (heap->old_heuristics()->unprocessed_old_collection_candidates() == 0);
           mmu_tracker->record_mixed(get_gc_id());
         } else if (do_old_gc_bootstrap) {
           mmu_tracker->record_bootstrap(get_gc_id());
@@ -783,12 +782,9 @@ void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
 
   ShenandoahFullGC gc;
   gc.collect(cause);
-
-  heap->global_generation()->heuristics()->record_success_full();
-  heap->shenandoah_policy()->record_success_full();
 }
 
-bool ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause,
+void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause,
                                                             ShenandoahGC::ShenandoahDegenPoint point) {
   assert(point != ShenandoahGC::_degenerated_unset, "Degenerated point should be set");
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -806,18 +802,10 @@ bool ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
   } else {
     assert(_degen_generation->is_young(), "Expected degenerated young cycle, if not global.");
     ShenandoahOldGeneration* old = heap->old_generation();
-    // TODO: upgrade to full GC should reset old generation state
-    if (gc.upgraded_to_full()) {
-      assert(old->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP, "Full GC should have reset old collection");
-    }
-    if (old->state() == ShenandoahOldGeneration::BOOTSTRAPPING && !gc.upgraded_to_full()) {
+    if (old->state() == ShenandoahOldGeneration::BOOTSTRAPPING) {
       old->transition_to(ShenandoahOldGeneration::MARKING);
     }
   }
-
-  _degen_generation->heuristics()->record_success_degenerated();
-  heap->shenandoah_policy()->record_success_degenerated(_degen_generation->is_young(), gc.upgraded_to_full());
-  return !gc.upgraded_to_full();
 }
 
 void ShenandoahControlThread::service_uncommit(double shrink_before, size_t shrink_until) {

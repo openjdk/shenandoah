@@ -599,7 +599,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _promoted_reserve(0),
   _old_evac_reserve(0),
   _young_evac_reserve(0),
-  _upgraded_to_full(false),
   _age_census(nullptr),
   _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
@@ -2530,9 +2529,6 @@ void ShenandoahHeap::cancel_gc(GCCause::Cause cause) {
     log_info(gc)("%s", msg.buffer());
     Events::log(Thread::current(), "%s", msg.buffer());
     _cancel_requested_time = os::elapsedTime();
-    if (cause == GCCause::_shenandoah_upgrade_to_full_gc) {
-      _upgraded_to_full = true;
-    }
   }
 }
 
