@@ -91,7 +91,6 @@ public:
   // free set, invoke this to recalibrate the triggering heuristic.
   void resume_idle_span(size_t mutator_available);
 
-  // 
   void start_evac_span(size_t mutator_available);
 
   // How much memory is available for mutator allocations?
@@ -213,6 +212,9 @@ protected:
   double* const _spike_acceleration_rate_timestamps;
 
   size_t _most_recent_headroom_at_start_of_idle;
+
+  double _acceleration_goodness_ratio;
+  size_t _consecutive_goodness;
 
   size_t min_free_threshold();
 };

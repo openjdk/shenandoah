@@ -95,7 +95,9 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
   _spike_acceleration_num_samples(0),
   _spike_acceleration_rate_samples(NEW_C_HEAP_ARRAY(double, ShenandoahRateAccelerationSampleSize, mtGC)),
   _spike_acceleration_rate_timestamps(NEW_C_HEAP_ARRAY(double, ShenandoahRateAccelerationSampleSize, mtGC)),
-  _most_recent_headroom_at_start_of_idle(0) { }
+  _most_recent_headroom_at_start_of_idle(0),
+  _acceleration_goodness_ratio(ShenandoahInitialAcceleratedAllocationRateGoodnessRatio),
+  _consecutive_goodness(0) { }
 
 ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {
   FREE_C_HEAP_ARRAY(double, _spike_acceleration_rate_samples);
@@ -422,6 +424,18 @@ void ShenandoahAdaptiveHeuristics::start_evac_span(size_t mutator_free) {
 void ShenandoahAdaptiveHeuristics::adjust_penalty(intx step) {
   assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
          "In range before adjustment: " INTX_FORMAT, _gc_time_penalties);
+
+  if (step > 0) {
+    // Something bad happened.  Let's make acceleration triggers more sensitive.
+    _acceleration_goodness_ratio *= 1.15;
+    _consecutive_goodness = 0;
+  } else {
+    if (_consecutive_goodness++ >= 15) {
+      // We've seen 16 good cycles in a row.  Let's make acceleration triggers slightly less sensitive.
+      _acceleration_goodness_ratio *= 0.95;
+      _consecutive_goodness = 0;
+    }
+  }
 
   intx new_val = _gc_time_penalties + step;
   if (step > 0) {
@@ -795,7 +809,7 @@ size_t ShenandoahAdaptiveHeuristics::accelerated_consumption(double& acceleratio
       // This representation of goodness is not exactly standard deviation or chi-square value, but is similar.
       double goodness = sqrt(sum_of_squared_differences / ShenandoahRateAccelerationSampleSize);
       assert(goodness / proposed_current_rate > 0, "proposed_current_rate should be positive because m is positive");
-      bool is_good_predictor = (goodness / proposed_current_rate) <= ShenandoahAcceleratedAllocationRateGoodnessRatio;
+      bool is_good_predictor = (goodness / proposed_current_rate) <= _acceleration_goodness_ratio;
 #ifdef KELVIN_NEEDS_TO_SEE
       log_info(gc)("goodness is: %.3f which is %s predictor because ratio is %.1f out of proposed rate: %.3f",
                    goodness, is_good_predictor? "good": "not good", (goodness / proposed_current_rate), proposed_current_rate);

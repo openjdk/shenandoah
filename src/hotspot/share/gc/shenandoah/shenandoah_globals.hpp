@@ -48,8 +48,8 @@
           "noise to be perceived as acceleration of allocation rate, "      \
           "triggering excess collections.")                                 \
                                                                             \
-  product(double, ShenandoahAcceleratedAllocationRateGoodnessRatio,         \
-          0.20, EXPERIMENTAL,                                               \
+  product(double, ShenandoahInitialAcceleratedAllocationRateGoodnessRatio,  \
+          0.08, EXPERIMENTAL,                                               \
           "(Generational mode only) "                                       \
           "If the allocation rate predicted by an acceleration trend "      \
           "analysis divided by the most recently measured allocation "      \
