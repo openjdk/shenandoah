@@ -263,7 +263,7 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
       tenuring_threshold = i;
       continue;
     }
-    return tenuring_threshold;
+    return i;
   }
   return tenuring_threshold;
 }
