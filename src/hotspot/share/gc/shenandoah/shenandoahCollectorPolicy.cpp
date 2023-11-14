@@ -31,24 +31,24 @@
 #include "runtime/os.hpp"
 
 ShenandoahCollectorPolicy::ShenandoahCollectorPolicy() :
-        _success_concurrent_gcs(0),
-        _mixed_gcs(0),
-        _abbreviated_concurrent_gcs(0),
-        _abbreviated_degenerated_gcs(0),
-        _success_old_gcs(0),
-        _interrupted_old_gcs(0),
-        _success_degenerated_gcs(0),
-        _success_full_gcs(0),
-        _consecutive_young_gcs(0),
-        _consecutive_degenerated_gcs(0),
-        _alloc_failure_degenerated(0),
-        _alloc_failure_degenerated_upgrade_to_full(0),
-        _alloc_failure_full(0),
-        _explicit_concurrent(0),
-        _explicit_full(0),
-        _implicit_concurrent(0),
-        _implicit_full(0),
-        _cycle_counter(0) {
+  _success_concurrent_gcs(0),
+  _mixed_gcs(0),
+  _abbreviated_concurrent_gcs(0),
+  _abbreviated_degenerated_gcs(0),
+  _success_old_gcs(0),
+  _interrupted_old_gcs(0),
+  _success_degenerated_gcs(0),
+  _success_full_gcs(0),
+  _consecutive_young_gcs(0),
+  _consecutive_degenerated_gcs(0),
+  _alloc_failure_degenerated(0),
+  _alloc_failure_degenerated_upgrade_to_full(0),
+  _alloc_failure_full(0),
+  _explicit_concurrent(0),
+  _explicit_full(0),
+  _implicit_concurrent(0),
+  _implicit_full(0),
+  _cycle_counter(0) {
 
   Copy::zero_to_bytes(_degen_points, sizeof(size_t) * ShenandoahGC::_DEGENERATED_LIMIT);
 
