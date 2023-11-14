@@ -546,9 +546,10 @@
           "before going to a Full GC.  Note that Degenerated GCs that are " \
           "not productive will immediately upgraded to Full GC.")           \
                                                                             \
-  product(uintx, ShenandoahOOMGCRetries, 3, EXPERIMENTAL,                   \
-          "How many GCs should happen before we throw OutOfMemoryException "\
-          "for allocation request, including at least one Full GC.")        \
+  product(uintx, ShenandoahNoProgressThreshold, 5, EXPERIMENTAL,            \
+          "After this number of consecutive Full GCs fail to make "         \
+          "progress, Shenandoah will raise out of memory errors. Note "     \
+          "that progress is determined by ShenandoahCriticalFreeThreshold") \
                                                                             \
   product(bool, ShenandoahImplicitGCInvokesConcurrent, false, EXPERIMENTAL, \
           "Should internally-caused GC requests invoke concurrent cycles, " \
@@ -649,7 +650,7 @@
           "With generational mode, increment the age of objects and"        \
           "regions each time this many young-gen GC cycles are completed.") \
                                                                             \
-  notproduct(bool, ShenandoahEnableCardStats, trueInDebug,                  \
+  notproduct(bool, ShenandoahEnableCardStats, false,                        \
           "Enable statistics collection related to clean & dirty cards")    \
                                                                             \
   notproduct(int, ShenandoahCardStatsLogInterval, 50,                       \

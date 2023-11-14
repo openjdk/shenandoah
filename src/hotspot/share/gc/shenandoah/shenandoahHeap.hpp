@@ -162,9 +162,6 @@ private:
   ShenandoahHeapLock _lock;
   ShenandoahGeneration* _gc_generation;
 
-  // true iff we are concurrently coalescing and filling old-gen HeapRegions
-  bool _prepare_for_old_mark;
-
 public:
   ShenandoahHeapLock* lock() {
     return &_lock;
@@ -352,8 +349,9 @@ private:
   ShenandoahSharedFlag   _degenerated_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_move_in_progress;
-  ShenandoahSharedFlag   _progress_last_gc;
   ShenandoahSharedFlag   _concurrent_strong_root_in_progress;
+
+  size_t _gc_no_progress_count;
 
   // TODO: Revisit the following comment.  It may not accurately represent the true behavior when evacuations fail due to
   // difficulty finding memory to hold evacuated objects.
@@ -393,7 +391,6 @@ private:
 
 public:
   char gc_state() const;
-  static address gc_state_addr();
 
   void set_evacuation_reserve_quantities(bool is_valid);
   void set_concurrent_young_mark_in_progress(bool in_progress);
@@ -406,7 +403,7 @@ public:
   void set_has_forwarded_objects(bool cond);
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
-  void set_prepare_for_old_mark_in_progress(bool cond);
+
   void set_aging_cycle(bool cond);
 
   inline bool is_stable() const;
@@ -421,11 +418,11 @@ public:
   inline bool is_full_gc_in_progress() const;
   inline bool is_full_gc_move_in_progress() const;
   inline bool has_forwarded_objects() const;
-  inline bool is_gc_in_progress_mask(uint mask) const;
+
   inline bool is_stw_gc_in_progress() const;
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
-  inline bool is_prepare_for_old_mark_in_progress() const;
+  bool is_prepare_for_old_mark_in_progress() const;
   inline bool is_aging_cycle() const;
   inline bool upgraded_to_full() { return _upgraded_to_full; }
   inline void start_conc_gc() { _upgraded_to_full = false; }
@@ -521,8 +518,9 @@ private:
   void recycle_trash();
 public:
   void rebuild_free_set(bool concurrent);
-  void notify_gc_progress()    { _progress_last_gc.set();   }
-  void notify_gc_no_progress() { _progress_last_gc.unset(); }
+  void notify_gc_progress();
+  void notify_gc_no_progress();
+  size_t get_gc_no_progress_count() const;
 
 //
 // Mark support
@@ -863,14 +861,10 @@ public:
 
   static inline void increase_object_age(oop obj, uint additional_age);
 
-  // Return the object's age (at a safepoint or when object isn't
-  // mutable by the mutator)
-  static inline uint get_object_age(oop obj);
-
   // Return the object's age, or a sentinel value when the age can't
   // necessarily be determined because of concurrent locking by the
   // mutator
-  static inline uint get_object_age_concurrent(oop obj);
+  static inline uint get_object_age(oop obj);
 
   void transfer_old_pointers_from_satb();
 
