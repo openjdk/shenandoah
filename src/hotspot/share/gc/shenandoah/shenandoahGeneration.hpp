@@ -213,7 +213,7 @@ private:
   void confirm_heuristics_mode();
 
   virtual void record_success_concurrent(bool abbreviated);
-  virtual void record_success_degenerated();
+  virtual void record_success_degenerated(bool abbreviated);
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
