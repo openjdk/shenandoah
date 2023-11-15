@@ -81,17 +81,20 @@
   product(bool, ShenandoahGenerationalCensusIgnoreOlderCohorts, true,       \
                                                                EXPERIMENTAL,\
           "(Generational mode only) Ignore mortality rates older than the " \
-          " oldest cohort under the tenuring age for the last cycle." )     \
+          "oldest cohort under the tenuring age for the last cycle." )      \
                                                                             \
   product(uintx, ShenandoahGenerationalMinTenuringAge, 1, EXPERIMENTAL,     \
-          "(Generational mode only) Floor for adaptive tenuring age.")      \
+          "(Generational mode only) Floor for adaptive tenuring age. "      \
+          "Setting floor and ceiling to the same value fixes the tenuring " \
+          "age; setting both to 0 simulates AlwaysTenure, and setting "     \
+          "both to 16 simulates NeverTenure.")                              \
           range(0,16)                                                       \
                                                                             \
   product(uintx, ShenandoahGenerationalMaxTenuringAge, 15, EXPERIMENTAL,    \
           "(Generational mode only) Ceiling for adaptive tenuring age. "    \
-          "Setting min and max to the same value fixes the tenuring age, "  \
-          "setting both to 0 simulates Always Tenure, and setting both to " \
-          "16 simulates Never Tenure.")                                     \
+          "Setting floor and ceiling to the same value fixes the tenuring " \
+          "age; setting both to 0 simulates AlwaysTenure, and setting "     \
+          "both to 16 simulates NeverTenure.")                              \
           range(0,16)                                                       \
                                                                             \
   product(double, ShenandoahGenerationalTenuringMortalityRateThreshold,     \
