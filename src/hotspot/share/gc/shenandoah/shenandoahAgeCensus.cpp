@@ -30,6 +30,12 @@
 
 ShenandoahAgeCensus::ShenandoahAgeCensus() {
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only in generational mode");
+  if (ShenandoahGenerationalMinTenuringAge > ShenandoahGenerationalMaxTenuringAge) {
+    vm_exit_during_initialization(
+      err_msg("ShenandoahGenerationalMinTenuringAge=" SIZE_FORMAT
+              " should be no more than ShenandoahGenerationalMaxTenuringAge=" SIZE_FORMAT,
+              ShenandoahGenerationalMinTenuringAge, ShenandoahGenerationalMaxTenuringAge));
+  }
 
   _global_age_table = NEW_C_HEAP_ARRAY(AgeTable*, MAX_SNAPSHOTS, mtGC);
   CENSUS_NOISE(_global_noise = NEW_C_HEAP_ARRAY(ShenandoahNoiseStats, MAX_SNAPSHOTS, mtGC);)
@@ -221,6 +227,13 @@ void ShenandoahAgeCensus::update_tenuring_threshold() {
 }
 
 uint ShenandoahAgeCensus::compute_tenuring_threshold() {
+  // Dispose of the extremal cases early so the loop below
+  // is less fragile.
+  if (ShenandoahGenerationalMaxTenuringAge == ShenandoahGenerationalMinTenuringAge) {
+    return ShenandoahGenerationalMaxTenuringAge; // Any value in [0,16]
+  }
+  assert(ShenandoahGenerationalMinTenuringAge < ShenandoahGenerationalMaxTenuringAge, "Error");
+
   // Starting with the oldest cohort with a non-trivial population
   // (as specified by ShenandoahGenerationalTenuringCohortPopulationThreshold) in the
   // previous epoch, and working down the cohorts by age, find the
@@ -243,9 +256,11 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
      // We stay below the computed tenuring threshold for the last cycle plus 1,
      // ignoring the mortality rates of any older cohorts.
      upper_bound = MIN2(upper_bound, prev_tt + 1);
-     upper_bound = MIN2(upper_bound, markWord::max_age);
   }
+  upper_bound = MIN2(upper_bound, markWord::max_age);
+
   const uint lower_bound = MAX2((uint)ShenandoahGenerationalMinTenuringAge, (uint)1);
+
   uint tenuring_threshold = upper_bound;
   for (uint i = upper_bound; i >= lower_bound; i--) {
     assert(i > 0, "Index (i-1) would underflow/wrap");
@@ -254,18 +269,21 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
     const size_t cur_pop = cur_pv->sizes[i];
     const size_t prev_pop = prev_pv->sizes[i-1];
     const double mr = mortality_rate(prev_pop, cur_pop);
-    // We ignore any cohorts that had a very low population count, or
-    // that have a lower mortality rate than we care to age in young; these
-    // cohorts are considered eligible for tenuring when all older
-    // cohorts are.
-    if (prev_pop < ShenandoahGenerationalTenuringCohortPopulationThreshold ||
-        mr < ShenandoahGenerationalTenuringMortalityRateThreshold) {
-      tenuring_threshold = i;
-      continue;
+    if (prev_pop > ShenandoahGenerationalTenuringCohortPopulationThreshold &&
+        mr > ShenandoahGenerationalTenuringMortalityRateThreshold) {
+      // This is the oldest cohort that has high mortality.
+      // We ignore any cohorts that had a very low population count, or
+      // that have a lower mortality rate than we care to age in young; these
+      // cohorts are considered eligible for tenuring when all older
+      // cohorts are.
+      return i;
     }
-    return i;
+    // Remember that we passed over this cohort, looking for younger cohorts
+    // showing high mortality. We want to tenure cohorts of this age.
+    tenuring_threshold = i;
   }
-  return tenuring_threshold;
+  assert(tenuring_threshold > 0 && tenuring_threshold <= markWord::max_age, "Error");
+  return tenuring_threshold - 1;  // Any value in [0, 15]
 }
 
 // Mortality rate of a cohort, given its previous and current population
