@@ -276,14 +276,14 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
       // that have a lower mortality rate than we care to age in young; these
       // cohorts are considered eligible for tenuring when all older
       // cohorts are.
-      return i;
+      return i; // Any value in [1,15]
     }
     // Remember that we passed over this cohort, looking for younger cohorts
     // showing high mortality. We want to tenure cohorts of this age.
     tenuring_threshold = i;
   }
   assert(tenuring_threshold > 0 && tenuring_threshold <= markWord::max_age, "Error");
-  return tenuring_threshold - 1;  // Any value in [0, 15]
+  return tenuring_threshold - 1;  // Any value in [0, 14]
 }
 
 // Mortality rate of a cohort, given its previous and current population
