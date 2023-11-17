@@ -76,7 +76,7 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
-        if (_young_heuristics->should_start_gc()) {
+        if (should_start_young()) {
           if (start_old_cycle()) {
             log_info(gc)("Heuristics request for old collection accepted");
           } else if (request_concurrent_gc(YOUNG)) {
@@ -92,6 +92,16 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
 
     regulator_sleep();
   }
+}
+
+bool ShenandoahRegulatorThread::should_start_young() {
+  if (ShenandoahMinimumOldMarkTimeMs > 0 && ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress()) {
+    size_t old_mark_elapsed = size_t(_old_heuristics->elapsed_cycle_time() * 1000);
+    if (old_mark_elapsed < ShenandoahMinimumOldMarkTimeMs) {
+      return false;
+    }
+  }
+  return _young_heuristics->should_start_gc();
 }
 
 void ShenandoahRegulatorThread::regulate_interleaved_cycles() {
