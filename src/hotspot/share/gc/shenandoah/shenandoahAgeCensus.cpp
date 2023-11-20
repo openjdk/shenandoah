@@ -227,8 +227,7 @@ void ShenandoahAgeCensus::update_tenuring_threshold() {
 }
 
 // Currently Shenandoah{Min,Max}TenuringAge have a floor of 1 because we
-// aren't set up to promote age 0 objects without some fixes to our promotion
-// code; JDK-<TBD>
+// aren't set up to promote age 0 objects.
 uint ShenandoahAgeCensus::compute_tenuring_threshold() {
   // Dispose of the extremal cases early so the loop below
   // is less fragile.
@@ -278,17 +277,18 @@ uint ShenandoahAgeCensus::compute_tenuring_threshold() {
       // We ignore any cohorts that had a very low population count, or
       // that have a lower mortality rate than we care to age in young; these
       // cohorts are considered eligible for tenuring when all older
-      // cohorts are.
-      return i; // Any value in [lower_bound=max(min,1),upper_bound=min(max,ptt+1,15]
+      // cohorts are. We return the next higher age as the tenuring threshold
+      // so that we do not prematurely promote objects of this age.
+      assert(tenuring_threshold == i+1 || tenuring_threshold == upper_bound, "Error");
+      assert(tenuring_threshold >= lower_bound && tenuring_threshold <= upper_bound, "Error");
+      return tenuring_threshold;
     }
     // Remember that we passed over this cohort, looking for younger cohorts
     // showing high mortality. We want to tenure cohorts of this age.
-    tenuring_threshold = i; // Any value in [lower_bound=max(min,1),upper_bound=min(max,ptt+1,15]
+    tenuring_threshold = i;
   }
-  assert(tenuring_threshold > 0 && tenuring_threshold <= markWord::max_age, "Error");
-  // We need to place a floor because of the subtraction.
-  // This yields a range [lower_bound-1=max(min,0), upper_bound=min(max-1,ptt,14)]
-  return MAX2((uint)ShenandoahGenerationalMinTenuringAge, tenuring_threshold - 1);
+  assert(tenuring_threshold >= lower_bound && tenuring_threshold <= upper_bound, "Error");
+  return tenuring_threshold;
 }
 
 // Mortality rate of a cohort, given its previous and current population
