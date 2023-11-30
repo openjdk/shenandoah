@@ -207,6 +207,10 @@ public:
     assert(used() <= capacity(), "must use less than capacity");
     return capacity() - used();
   }
+  inline size_t collector_free() const { return _free_sets.capacity_of(Collector) - _free_sets.used_by(Collector); }
+  inline size_t old_collector_free() const {
+    return _free_sets.capacity_of(OldCollector) - _free_sets.used_by(OldCollector);
+  }
 
   HeapWord* allocate(ShenandoahAllocRequest& req, bool& in_new_region);
   size_t unsafe_peek_free() const;
