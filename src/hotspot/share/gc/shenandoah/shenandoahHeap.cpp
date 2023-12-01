@@ -3267,6 +3267,7 @@ void ShenandoahHeap::entry_uncommit(double shrink_before, size_t shrink_until) {
   op_uncommit(shrink_before, shrink_until);
 }
 
+#ifndef PRODUCT
 void ShenandoahHeap::try_inject_alloc_failure() {
   if (ShenandoahAllocFailureALot && !cancelled_gc() && ((os::random() % 1000) > 950)) {
     _inject_alloc_failure.set();
@@ -3280,6 +3281,7 @@ void ShenandoahHeap::try_inject_alloc_failure() {
 bool ShenandoahHeap::should_inject_alloc_failure() {
   return _inject_alloc_failure.is_set() && _inject_alloc_failure.try_unset();
 }
+#endif  // !PRODUCT
 
 void ShenandoahHeap::initialize_serviceability() {
   if (mode()->is_generational()) {

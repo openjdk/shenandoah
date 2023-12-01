@@ -866,10 +866,10 @@ private:
 // ---------- Testing helpers functions
 //
 private:
-  ShenandoahSharedFlag _inject_alloc_failure;
+  NOT_PRODUCT(ShenandoahSharedFlag _inject_alloc_failure;)
 
-  void try_inject_alloc_failure();
-  bool should_inject_alloc_failure();
+  void try_inject_alloc_failure() PRODUCT_RETURN;
+  bool should_inject_alloc_failure() PRODUCT_RETURN0;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP

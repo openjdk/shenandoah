@@ -235,11 +235,11 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 }
 
 bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
-#ifdef ASSERT
+#ifndef PRODUCT
   if (uint(os::random()) % 100 < ShenandoahCoalesceChance) {
     return true;
   }
-#endif
+#endif // !PRODUCT
 
   for (uint i = _next_old_collection_candidate; i < _last_old_collection_candidate; ++i) {
     ShenandoahHeapRegion* region = _region_data[i]._region;
