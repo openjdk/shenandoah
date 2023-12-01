@@ -522,13 +522,13 @@
           "humongous allocations, at the expense of higher GC copying "     \
           "costs. Currently affects stop-the-world (Full) cycle only.")     \
                                                                             \
-  product(bool, ShenandoahOOMDuringEvacALot, false, DIAGNOSTIC,             \
+  notproduct(bool, ShenandoahOOMDuringEvacALot, false,                      \
           "Testing: simulate OOM during evacuation.")                       \
                                                                             \
-  product(bool, ShenandoahAllocFailureALot, false, DIAGNOSTIC,              \
+  notproduct(bool, ShenandoahAllocFailureALot, false,                       \
           "Testing: make lots of artificial allocation failures.")          \
                                                                             \
-  product(uintx, ShenandoahCoalesceChance, 0, DIAGNOSTIC,                   \
+  notproduct(uintx, ShenandoahCoalesceChance, 0,                            \
           "Testing: Abandon remaining mixed collections with this "         \
           "likelihood. Following each mixed collection, abandon all "       \
           "remaining mixed collection candidate regions with likelihood "   \
