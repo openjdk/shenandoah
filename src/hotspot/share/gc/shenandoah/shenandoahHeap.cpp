@@ -1334,6 +1334,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
+#ifdef KELVIN_BROKEN
     // Check that gc overhead is not exceeded.
     //
     // Shenandoah will grind along for quite a while allocating one
@@ -1345,6 +1346,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
       control_thread()->handle_alloc_failure(req, false);
       return nullptr;
     }
+#endif
 
     // Block until control thread reacted, then retry allocation.
     //
@@ -1423,6 +1425,8 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     if (mode()->is_generational()) {
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
+          // TODO: this should query free_set->mutator_free() rather than young_gen()->available().
+          // We care not
           size_t young_words_available = young_generation()->available() / HeapWordSize;
           if (ShenandoahElasticTLAB && req.is_lab_alloc() && (req.min_size() < young_words_available)) {
             // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
