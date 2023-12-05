@@ -1412,7 +1412,9 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
           // TODO: this should query free_set->mutator_free() rather than young_gen()->available().
-          // We care not
+          // This mutator allocation cannot access memory that is reserved for Collector.  Should probably
+          // entirely remove the "try_smaller_lab_size control path".  The original motivation for this
+          // path is no longer relevant.
           size_t young_words_available = young_generation()->available() / HeapWordSize;
           if (ShenandoahElasticTLAB && req.is_lab_alloc() && (req.min_size() < young_words_available)) {
             // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
