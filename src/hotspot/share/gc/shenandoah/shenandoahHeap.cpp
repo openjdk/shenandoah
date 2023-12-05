@@ -599,7 +599,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _promoted_reserve(0),
   _old_evac_reserve(0),
   _young_evac_reserve(0),
-  _upgraded_to_full(false),
   _age_census(nullptr),
   _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
@@ -1880,7 +1879,7 @@ public:
     assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
 
     // There are two reasons to retire all plabs between old-gen evacuation passes.
-    //  1. We need to make the plab memory parseable by remembered-set scanning.
+    //  1. We need to make the plab memory parsable by remembered-set scanning.
     //  2. We need to establish a trustworthy UpdateWaterMark value within each old-gen heap region
     ShenandoahHeap::heap()->retire_plab(plab, thread);
     if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
@@ -2039,7 +2038,7 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
   generation->heuristics()->record_cycle_end();
-  if (mode()->is_generational() && (generation->is_global() || upgraded_to_full())) {
+  if (mode()->is_generational() && generation->is_global()) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
     young_generation()->heuristics()->record_cycle_end();
     old_generation()->heuristics()->record_cycle_end();
@@ -2530,9 +2529,6 @@ void ShenandoahHeap::cancel_gc(GCCause::Cause cause) {
     log_info(gc)("%s", msg.buffer());
     Events::log(Thread::current(), "%s", msg.buffer());
     _cancel_requested_time = os::elapsedTime();
-    if (cause == GCCause::_shenandoah_upgrade_to_full_gc) {
-      _upgraded_to_full = true;
-    }
   }
 }
 
@@ -3126,16 +3122,19 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild(young_cset_regions, old_cset_regions);
 
-  if (mode()->is_generational()) {
+  if (mode()->is_generational() && (ShenandoahGenerationalHumongousReserve > 0)) {
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
     size_t allowed_old_gen_span = num_regions() - (ShenandoahGenerationalHumongousReserve * num_regions() / 100);
 
     // Tolerate lower density if total span is small.  Here's the implementation:
-    //   if old_gen spans more than 100% and density < 87.5%, trigger old-defrag
-    //   else if old_gen spans more than 87.5% and density < 75%, trigger old-defrag
-    //   else if old_gen spans more than 75% and density < 62.5%, trigger old-defrag
-    //   else if old_gen spans more than 62.5% and density < 50%, trigger old-defrag
-    //   else if old_gen spans more than 50% and density < 37.5%, trigger old-defrag
+    //   if old_gen spans more than 100% and density < 75%, trigger old-defrag
+    //   else if old_gen spans more than 87.5% and density < 62.5%, trigger old-defrag
+    //   else if old_gen spans more than 75% and density < 50%, trigger old-defrag
+    //   else if old_gen spans more than 62.5% and density < 37.5%, trigger old-defrag
+    //   else if old_gen spans more than 50% and density < 25%, trigger old-defrag
+    //
+    // A previous implementation was more aggressive in triggering, resulting in degraded throughput when
+    // humongous allocation was not required.
 
     ShenandoahGeneration* old_gen = old_generation();
     size_t old_available = old_gen->available();
@@ -3151,12 +3150,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     uint eighths = 8;
     for (uint i = 0; i < 5; i++) {
       size_t span_threshold = eighths * allowed_old_gen_span / 8;
-      eighths--;
-      double density_threshold = eighths / 8.0;
+      double density_threshold = (eighths - 2) / 8.0;
       if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
         old_heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
         break;
       }
+      eighths--;
     }
 
     size_t old_used = old_generation()->used() + old_generation()->get_humongous_waste();
