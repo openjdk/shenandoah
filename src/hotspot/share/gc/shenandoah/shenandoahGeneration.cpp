@@ -263,7 +263,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   //     OE = old evac,
   //     YE = young evac, and
   //     TE = total evac = OE + YE
-  // By definition: 
+  // By definition:
   //            SOEP/100 = OE/TE
   //                     = OE/(OE+YE)
   //  => SOEP/(100-SOEP) = OE/((OE+YE)-OE)

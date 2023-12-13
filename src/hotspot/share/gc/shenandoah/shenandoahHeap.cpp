@@ -1197,13 +1197,13 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   //     OE = old evac,
   //     YE = young evac, and
   //     TE = total evac = OE + YE
-  // By definition: 
+  // By definition:
   //            SOEP/100 = OE/TE
   //                     = OE/(OE+YE)
   //  => SOEP/(100-SOEP) = OE/((OE+YE)-OE)
   //                     = OE/YE
   //  =>              OE = YE*SOEP/(100-SOEP)
-  
+
   // We have to be careful in the event that SOEP is set to 100 by the user.
   assert(ShenandoahOldEvacRatioPercent <= 100, "Error");
   const size_t old_available = old_generation()->available();
@@ -1214,7 +1214,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
                           old_available);
 
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-  
+
   // Decide how much old space we should reserve for a mixed collection
   size_t reserve_for_mixed = 0;
   const size_t mixed_candidates = old_heuristics()->unprocessed_old_collection_candidates();
