@@ -1256,7 +1256,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   if (max_old_available >= old_reserve) {
     // We are running a surplus, so the old region surplus can go to young
     const size_t old_surplus = max_old_available - old_reserve;
-    size_t old_region_surplus = old_surplus / region_size_bytes;
+    old_region_surplus = old_surplus / region_size_bytes;
     const size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions() + old_cset_regions;
     old_region_surplus = MIN2(old_region_surplus, unaffiliated_old_regions);
   } else {
