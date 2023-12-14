@@ -45,12 +45,10 @@ void ShenandoahGenerationalMode::initialize_flags() const {
   FLAG_SET_DEFAULT(ShenandoahCardBarrier, true);
 
   if (ClassUnloading) {
-    FLAG_SET_DEFAULT(ShenandoahSuspendibleWorkers, true);
     FLAG_SET_DEFAULT(VerifyBeforeExit, false);
   }
 
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(GCTimeRatio, 70);
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahUnloadClassesFrequency, 0);
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
 

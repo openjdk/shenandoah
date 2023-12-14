@@ -168,11 +168,6 @@
           "When there are this many old regions waiting to be collected, "  \
           "trigger a mixed collection immediately.")                        \
                                                                             \
-  product(uintx, ShenandoahUnloadClassesFrequency, 1, EXPERIMENTAL,         \
-          "Unload the classes every Nth cycle. Normally affects concurrent "\
-          "GC cycles, as degenerated and full GCs would try to unload "     \
-          "classes regardless. Set to zero to disable class unloading.")    \
-                                                                            \
   product(uintx, ShenandoahGarbageThreshold, 25, EXPERIMENTAL,              \
           "How much garbage a region has to contain before it would be "    \
           "taken for collection. This a guideline only, as GC heuristics "  \
@@ -349,10 +344,6 @@
           " 2 = previous level, plus all roots; "                           \
           " 3 = previous level, plus all reachable objects; "               \
           " 4 = previous level, plus all marked objects")                   \
-                                                                            \
-  product(bool, ShenandoahElasticTLAB, true, DIAGNOSTIC,                    \
-          "Use Elastic TLABs with Shenandoah. This allows Shenandoah to "   \
-          "decrease the size of a TLAB to fit in a region's remaining space") \
                                                                             \
   product(uintx, ShenandoahEvacReserve, 5, EXPERIMENTAL,                    \
           "How much of (young-generation) heap to reserve for "             \
@@ -559,9 +550,6 @@
           "How many times to maximum attempt to flush SATB buffers at the " \
           "end of concurrent marking.")                                     \
                                                                             \
-  product(bool, ShenandoahSuspendibleWorkers, true, EXPERIMENTAL,           \
-          "Suspend concurrent GC worker threads at safepoints")             \
-                                                                            \
   product(bool, ShenandoahSATBBarrier, true, DIAGNOSTIC,                    \
           "Turn on/off SATB barriers in Shenandoah")                        \
                                                                             \
@@ -584,15 +572,8 @@
   product(bool, ShenandoahStackWatermarkBarrier, true, DIAGNOSTIC,          \
           "Turn on/off stack watermark barriers in Shenandoah")             \
                                                                             \
-  develop(bool, ShenandoahVerifyOptoBarriers, false,                        \
+  develop(bool, ShenandoahVerifyOptoBarriers, trueInDebug,                  \
           "Verify no missing barriers in C2.")                              \
-                                                                            \
-  product(bool, ShenandoahLoopOptsAfterExpansion, true, DIAGNOSTIC,         \
-          "Attempt more loop opts after barrier expansion.")                \
-                                                                            \
-  product(bool, ShenandoahSelfFixing, true, DIAGNOSTIC,                     \
-          "Fix references with load reference barrier. Disabling this "     \
-          "might degrade performance.")                                     \
                                                                             \
   product(uintx, ShenandoahOldCompactionReserve, 8, EXPERIMENTAL,           \
           "During generational GC, prevent promotions from filling "        \
