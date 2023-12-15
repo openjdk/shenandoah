@@ -53,18 +53,18 @@ ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahControlThread* co
 void ShenandoahRegulatorThread::run_service() {
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
     if (ShenandoahAllowOldMarkingPreemption) {
-      regulate_concurrent_cycles();
+      regulate_young_and_old_cycles();
     } else {
-      regulate_interleaved_cycles();
+      regulate_young_and_global_cycles();
     }
   } else {
-    regulate_heap();
+    regulate_global_cycles();
   }
 
   log_info(gc)("%s: Done.", name());
 }
 
-void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
+void ShenandoahRegulatorThread::regulate_young_and_old_cycles() {
   assert(_young_heuristics != nullptr, "Need young heuristics.");
   assert(_old_heuristics != nullptr, "Need old heuristics.");
 
@@ -76,7 +76,9 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
       } else {
-        if (should_start_young()) {
+        if (_young_heuristics->should_start_gc()) {
+          // Give the old generation a chance to run. The old generation cycle
+          // begins with a 'bootstrap' cycle that will also collect young.
           if (start_old_cycle()) {
             log_info(gc)("Heuristics request for old collection accepted");
           } else if (request_concurrent_gc(YOUNG)) {
@@ -94,17 +96,8 @@ void ShenandoahRegulatorThread::regulate_concurrent_cycles() {
   }
 }
 
-bool ShenandoahRegulatorThread::should_start_young() {
-  if (ShenandoahMinimumOldMarkTimeMs > 0 && ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress()) {
-    size_t old_mark_elapsed = size_t(_old_heuristics->elapsed_cycle_time() * 1000);
-    if (old_mark_elapsed < ShenandoahMinimumOldMarkTimeMs) {
-      return false;
-    }
-  }
-  return _young_heuristics->should_start_gc();
-}
 
-void ShenandoahRegulatorThread::regulate_interleaved_cycles() {
+void ShenandoahRegulatorThread::regulate_young_and_global_cycles() {
   assert(_young_heuristics != nullptr, "Need young heuristics.");
   assert(_global_heuristics != nullptr, "Need global heuristics.");
 
@@ -121,7 +114,7 @@ void ShenandoahRegulatorThread::regulate_interleaved_cycles() {
   }
 }
 
-void ShenandoahRegulatorThread::regulate_heap() {
+void ShenandoahRegulatorThread::regulate_global_cycles() {
   assert(_global_heuristics != nullptr, "Need global heuristics.");
 
   while (!should_terminate()) {
@@ -159,11 +152,15 @@ void ShenandoahRegulatorThread::regulator_sleep() {
 }
 
 bool ShenandoahRegulatorThread::start_old_cycle() {
-  // TODO: These first two checks might be vestigial
-  return !ShenandoahHeap::heap()->doing_mixed_evacuations()
-      && !ShenandoahHeap::heap()->collection_set()->has_old_regions()
-      && _old_heuristics->should_start_gc()
-      && request_concurrent_gc(OLD);
+  return _old_heuristics->should_start_gc() && request_concurrent_gc(OLD);
+}
+
+bool ShenandoahRegulatorThread::start_young_cycle() {
+  return _young_heuristics->should_start_gc() && request_concurrent_gc(YOUNG);
+}
+
+bool ShenandoahRegulatorThread::start_global_cycle() {
+  return _global_heuristics->should_start_gc() && request_concurrent_gc(ShenandoahControlThread::select_global_generation());
 }
 
 bool ShenandoahRegulatorThread::request_concurrent_gc(ShenandoahGenerationType generation) {
@@ -176,14 +173,6 @@ bool ShenandoahRegulatorThread::request_concurrent_gc(ShenandoahGenerationType g
     }
   }
   return accepted;
-}
-
-bool ShenandoahRegulatorThread::start_young_cycle() {
-  return _young_heuristics->should_start_gc() && request_concurrent_gc(YOUNG);
-}
-
-bool ShenandoahRegulatorThread::start_global_cycle() {
-  return _global_heuristics->should_start_gc() && request_concurrent_gc(ShenandoahControlThread::select_global_generation());
 }
 
 void ShenandoahRegulatorThread::stop_service() {
