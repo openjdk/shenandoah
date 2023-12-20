@@ -182,6 +182,6 @@ void ShenandoahRegulatorThread::stop_service() {
 bool ShenandoahRegulatorThread::should_unload_classes() {
   // The heuristics delegate this decision to the collector policy, which is based on the number
   // of cycles started.
-  return _global_heuristics->should_unload_classes();
+  return _global_heuristics->has_metaspace_oom();
 }
 
