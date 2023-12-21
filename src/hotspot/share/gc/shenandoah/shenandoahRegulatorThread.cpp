@@ -71,7 +71,7 @@ void ShenandoahRegulatorThread::regulate_young_and_old_cycles() {
   while (!should_terminate()) {
     ShenandoahControlThread::GCMode mode = _control_thread->gc_mode();
     if (mode == ShenandoahControlThread::none) {
-      if (should_unload_classes()) {
+      if (should_start_metaspace_gc()) {
         if (request_concurrent_gc(ShenandoahControlThread::select_global_generation())) {
           log_info(gc)("Heuristics request for global (unload classes) accepted.");
         }
@@ -179,10 +179,13 @@ void ShenandoahRegulatorThread::stop_service() {
   log_info(gc)("%s: Stop requested.", name());
 }
 
-bool ShenandoahRegulatorThread::should_unload_classes() {
+bool ShenandoahRegulatorThread::should_start_metaspace_gc() {
   // The generational mode can, at present, only unload classes during a global
   // cycle. For this reason, we treat an oom in metaspace as a _trigger_ for a
-  // global cycle.
-  return _global_heuristics->has_metaspace_oom();
+  // global cycle. But, we check other prerequisites before starting a gc that won't
+  // unload anything.
+  return ClassUnloadingWithConcurrentMark
+      && _global_heuristics->can_unload_classes()
+      && _global_heuristics->has_metaspace_oom();
 }
 
