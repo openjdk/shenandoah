@@ -180,8 +180,9 @@ void ShenandoahRegulatorThread::stop_service() {
 }
 
 bool ShenandoahRegulatorThread::should_unload_classes() {
-  // The heuristics delegate this decision to the collector policy, which is based on the number
-  // of cycles started.
+  // The generational mode can, at present, only unload classes during a global
+  // cycle. For this reason, we treat an oom in metaspace as a _trigger_ for a
+  // global cycle.
   return _global_heuristics->has_metaspace_oom();
 }
 
