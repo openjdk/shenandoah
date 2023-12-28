@@ -266,7 +266,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   // By definition:
   //            SOEP/100 = OE/TE
   //                     = OE/(OE+YE)
-  //  => SOEP/(100-SOEP) = OE/((OE+YE)-OE)
+  //  => SOEP/(100-SOEP) = OE/((OE+YE)-OE)         // componendo-dividendo: If a/b = c/d, then a/(b-a) = c/(d-c)
   //                     = OE/YE
   //  =>              OE = YE*SOEP/(100-SOEP)
 

@@ -1201,7 +1201,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   // By definition:
   //            SOEP/100 = OE/TE
   //                     = OE/(OE+YE)
-  //  => SOEP/(100-SOEP) = OE/((OE+YE)-OE)
+  //  => SOEP/(100-SOEP) = OE/((OE+YE)-OE)      // componendo-dividendo: If a/b = c/d, then a/(b-a) = c/(d-c)
   //                     = OE/YE
   //  =>              OE = YE*SOEP/(100-SOEP)
 
@@ -1240,7 +1240,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   const size_t promo_load = get_promotion_potential();
   const bool doing_promotions = promo_load > 0;
   if (doing_promotions) {
-    // We're only promoting and we have a maximum bound on the amount to be promoted
+    // We're promoting and have a bound on the maximum amount that can be promoted
     const size_t available_for_promotions = max_old_reserve - reserve_for_mixed;
     reserve_for_promo = MIN2((size_t)(promo_load * ShenandoahPromoEvacWaste), available_for_promotions);
   }
