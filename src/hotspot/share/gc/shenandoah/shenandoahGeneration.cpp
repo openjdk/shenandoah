@@ -225,7 +225,7 @@ void ShenandoahGeneration::prepare_gc() {
 
 void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool* preselected_regions,
                                                       ShenandoahCollectionSet* collection_set) {
-                                                      
+
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t regions_available_to_loan = 0;
   size_t minimum_evacuation_reserve = ShenandoahOldCompactionReserve * region_size_bytes;
