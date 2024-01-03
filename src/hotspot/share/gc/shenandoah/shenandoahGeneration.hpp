@@ -88,9 +88,7 @@ private:
   // amounts of garbage.
   //
   // Returns bytes of old-gen memory consumed by selected aged regions
-  size_t select_aged_regions(size_t old_available,
-                             size_t num_regions, bool
-                             candidate_regions_for_promotion_by_copy[]);
+  size_t select_aged_regions(size_t old_available, bool candidate_regions_for_promotion_by_copy[]);
 
   size_t available(size_t capacity) const;
 
