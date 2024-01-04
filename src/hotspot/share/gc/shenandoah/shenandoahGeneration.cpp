@@ -326,13 +326,18 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
       old_promo_reserve += delta;
     }
   }
-  collection_set->establish_preselected(preselected_regions);
+
+  // Preselect regions for promotion by evacuation (obtaining the live data to seed promoted_reserve),
+  // and identify regions that will promote in place. These use the tenuring threshold.
   size_t consumed_by_advance_promotion = select_aged_regions(old_promo_reserve, preselected_regions);
   assert(consumed_by_advance_promotion <= maximum_old_evacuation_reserve, "Cannot promote more than available old-gen memory");
 
+  // Pass the preselected regions to the collection set
+  collection_set->set_preselected(preselected_regions);
+
   // Note that unused old_promo_reserve might not be entirely consumed_by_advance_promotion.  Do not transfer this
   // to old_evacuation_reserve because this memory is likely very fragmented, and we do not want to increase the likelihood
-  // of old evacuatino failure.
+  // of old evacuation failure.
 
   heap->set_young_evac_reserve(young_evacuation_reserve);
   heap->set_old_evac_reserve(old_evacuation_reserve);
@@ -344,7 +349,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
 
 // Having chosen the collection set, adjust the budgets for generational mode based on its composition.  Note
 // that young_generation->available() now knows about recently discovered immediate garbage.
-
+//
 void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, ShenandoahCollectionSet* collection_set) {
   // We may find that old_evacuation_reserve and/or loaned_for_young_evacuation are not fully consumed, in which case we may
   //  be able to increase regions_available_to_loan
@@ -622,6 +627,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, bool cand
         // We rejected this promotable region from the collection set because we had no room to hold its copy.
         // Add this region to promo potential for next GC.
         promo_potential += region_live_data;
+        assert(!candidate_regions_for_promotion_by_copy[region->index()], "Shouldn't be selected");
       }
       // We keep going even if one region is excluded from selection because we need to accumulate all eligible
       // regions that are not preselected into promo_potential
@@ -696,8 +702,12 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
       // GC is evacuating and updating references.
 
-      // Budgeting parameters to compute_evacuation_budgets are passed by reference.
+      // Find the amount that will be promoted, regions that will be promoted in
+      // place, and preselect older regions that will be promoted by evacuation.
       compute_evacuation_budgets(heap, preselected_regions, collection_set);
+
+      // Choose the collection set, including the regions preselected above for
+      // promotion into the old generation.
       _heuristics->choose_collection_set(collection_set);
       if (!collection_set->is_empty()) {
         // only make use of evacuation budgets when we are evacuating

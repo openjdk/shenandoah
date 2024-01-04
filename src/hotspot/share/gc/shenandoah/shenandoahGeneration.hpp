@@ -83,13 +83,22 @@ private:
   void adjust_evacuation_budgets(ShenandoahHeap* heap,
                                  ShenandoahCollectionSet* collection_set);
 
-  // A helper method used by compute_evacuation_budgets() to preselect
-  // for inclusion into the collection set regions satisfying both of the
-  // following criteria:
-  // 1. region age >= tenuring threshold
-  // 2. region garbage percentage > ShenandoahOldGarbageThreshold
+  // Preselect for possible inclusion into the collection set exactly the most
+  // garbage-dense regions, including those that satisfy criteria 1 & 2 below,
+  // and whose live bytes will fit within old_available budget:
+  // Criterion 1. region age >= tenuring threshold
+  // Criterion 2. region garbage percentage > ShenandoahOldGarbageThreshold
   //
-  // Returns bytes of live object memory in such regions
+  // Identifies regions eligible for promotion in place,
+  // being those of at least tenuring_threshold age that have lower garbage
+  // density.
+  //
+  // Updates promotion_potential and pad_for_promote_in_place fields
+  // of the heap, and the candidate_regions_for_promotion_by_copy[] array.
+  //
+  // Returns bytes of live object memory in the preselected regions,
+  // which are marked in the candidate_regions_for_promotion_by_copy[] indicator
+  // array.
   size_t select_aged_regions(size_t old_available, bool candidate_regions_for_promotion_by_copy[]);
 
   size_t available(size_t capacity) const;
