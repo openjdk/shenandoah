@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
+#include "gc/shenandoah/shenandoahCollectionSetPreselector.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
@@ -332,9 +333,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* heap, bool
   size_t consumed_by_advance_promotion = select_aged_regions(old_promo_reserve, preselected_regions);
   assert(consumed_by_advance_promotion <= maximum_old_evacuation_reserve, "Cannot promote more than available old-gen memory");
 
-  // Pass the preselected regions to the collection set
-  collection_set->set_preselected(preselected_regions);
-
   // Note that unused old_promo_reserve might not be entirely consumed_by_advance_promotion.  Do not transfer this
   // to old_evacuation_reserve because this memory is likely very fragmented, and we do not want to increase the likelihood
   // of old evacuation failure.
@@ -369,9 +367,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* heap, Shena
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahYoungGeneration* young_generation = heap->young_generation();
-
-  // Preselected regions have been inserted into the collection set, so we no longer need the preselected array.
-  collection_set->abandon_preselected();
 
   size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
   size_t old_evacuated_committed = (size_t) (ShenandoahOldEvacWaste * old_evacuated);
@@ -615,10 +610,10 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, bool cand
     size_t selected_live = 0;
     QuickSort::sort<AgedRegionData>(sorted_regions, candidates, compare_by_aged_live, false);
     for (size_t i = 0; i < candidates; i++) {
+      ShenandoahHeapRegion* region = sorted_regions[i]._region;
       size_t region_live_data = sorted_regions[i]._live_data;
       size_t promotion_need = (size_t) (region_live_data * ShenandoahPromoEvacWaste);
       if (old_consumed + promotion_need <= old_available) {
-        ShenandoahHeapRegion* region = sorted_regions[i]._region;
         old_consumed += promotion_need;
         candidate_regions_for_promotion_by_copy[region->index()] = true;
         selected_regions++;
@@ -693,6 +688,11 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       for (unsigned int i = 0; i < num_regions; i++) {
         preselected_regions[i] = false;
       }
+
+      // Seed the collection set with the preselected regions;
+      // the preselected regions are removed from the collection set
+      // when we exit this scope.
+      ShenandoahCollectionSetPreselector preselector(collection_set, preselected_regions);
 
       // TODO: young_available can include available (between top() and end()) within each young region that is not
       // part of the collection set.  Making this memory available to the young_evacuation_reserve allows a larger
