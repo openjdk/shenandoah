@@ -33,19 +33,11 @@
  *      TestShenandoahRegionLogging
  */
 import java.io.File;
-import java.util.Arrays;
-import java.nio.file.Files;
 
 public class TestShenandoahRegionLogging {
-    private static final long TARGET_MB = Long.getLong("target", 1);
-    private static Object sink;
-
     public static void main(String[] args) throws Exception {
-        long count = TARGET_MB * 1024 * 1024 / 16;
-        for (long c = 0; c < count; c++) {
-            sink = new Object();
-            Thread.sleep(1);
-        }
+        System.gc();
+
         File directory = new File(".");
         File[] files = directory.listFiles((dir, name) -> name.startsWith("region-snapshots"));
 
