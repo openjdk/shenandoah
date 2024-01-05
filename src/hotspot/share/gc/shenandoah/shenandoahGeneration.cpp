@@ -527,7 +527,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available, bool cand
   // less evacuation effort.  This prioritizes garbage first, expanding the allocation pool early before we reclaim regions that
   // have more live data.
   const size_t num_regions = heap->num_regions();
-  AgedRegionData* sorted_regions = (AgedRegionData*) alloca(num_regions * sizeof(AgedRegionData));
+  AgedRegionData sorted_regions[num_regions];
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* r = heap->get_region(i);
     if (r->is_empty() || !r->has_live() || !r->is_young() || !r->is_regular()) {
@@ -684,7 +684,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     ShenandoahHeapLocker locker(heap->lock());
     if (is_generational) {
       const size_t num_regions = heap->num_regions();
-      bool* preselected_regions = (bool*) alloca(num_regions * sizeof(bool));
+      bool preselected_regions[num_regions];
       for (unsigned int i = 0; i < num_regions; i++) {
         preselected_regions[i] = false;
       }
