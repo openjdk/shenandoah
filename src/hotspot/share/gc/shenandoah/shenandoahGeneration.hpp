@@ -71,12 +71,9 @@ protected:
 
 private:
   // Compute evacuation budgets prior to choosing collection set.
-  // preselected_regions is an array of indicator bits for regions that will
-  // be preselected for inclusion into the collection set by this method.
   // collection_set is the set of regions to be collected that is maintained
   // for the heap as a whole.
   void compute_evacuation_budgets(ShenandoahHeap* heap,
-                                  bool* preselected_regions,
                                   ShenandoahCollectionSet* collection_set);
 
   // Adjust evacuation budgets after choosing collection set.
@@ -97,9 +94,10 @@ private:
   // of the heap, and the candidate_regions_for_promotion_by_copy[] array.
   //
   // Returns bytes of live object memory in the preselected regions,
-  // which are marked in the candidate_regions_for_promotion_by_copy[] indicator
-  // array.
-  size_t select_aged_regions(size_t old_available, bool candidate_regions_for_promotion_by_copy[]);
+  // which are marked in the preselected_regions() indicator
+  // array of the heap's collection set, which should be initialized
+  // to false.
+  size_t select_aged_regions(size_t old_available);
 
   size_t available(size_t capacity) const;
 

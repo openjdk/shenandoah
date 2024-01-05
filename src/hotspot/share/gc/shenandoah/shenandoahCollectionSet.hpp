@@ -119,6 +119,11 @@ public:
     return _preselected_regions[region_idx];
   }
 
+  bool* preselected_regions() {
+    assert(_preselected_regions != nullptr, "Null ptr");
+    return _preselected_regions;
+  }
+
   bool has_old_regions() const { return _has_old_regions; }
   size_t used()          const { return _used; }
   size_t live()          const { return _live; }
