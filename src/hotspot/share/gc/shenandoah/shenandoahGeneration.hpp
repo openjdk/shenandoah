@@ -71,10 +71,7 @@ protected:
 
 private:
   // Compute evacuation budgets prior to choosing collection set.
-  // collection_set is the set of regions to be collected that is maintained
-  // for the heap as a whole.
-  void compute_evacuation_budgets(ShenandoahHeap* heap,
-                                  ShenandoahCollectionSet* collection_set);
+  void compute_evacuation_budgets(ShenandoahHeap* heap);
 
   // Adjust evacuation budgets after choosing collection set.
   void adjust_evacuation_budgets(ShenandoahHeap* heap,
@@ -91,10 +88,8 @@ private:
   // density.
   //
   // Updates promotion_potential and pad_for_promote_in_place fields
-  // of the heap, and the candidate_regions_for_promotion_by_copy[] array.
-  //
-  // Returns bytes of live object memory in the preselected regions,
-  // which are marked in the preselected_regions() indicator
+  // of the heap. Returns bytes of live object memory in the preselected
+  // regions, which are marked in the preselected_regions() indicator
   // array of the heap's collection set, which should be initialized
   // to false.
   size_t select_aged_regions(size_t old_available);

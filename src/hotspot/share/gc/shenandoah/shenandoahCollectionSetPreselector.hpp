@@ -29,10 +29,15 @@
 
 class ShenandoahCollectionSetPreselector : public StackObj {
   ShenandoahCollectionSet* _cset;
+  bool* _pset;
 public:
-  ShenandoahCollectionSetPreselector(ShenandoahCollectionSet* cset, bool* pset):
+  ShenandoahCollectionSetPreselector(ShenandoahCollectionSet* cset, size_t num_regions):
     _cset(cset) {
-    cset->establish_preselected(pset);
+    _pset = NEW_RESOURCE_ARRAY(bool, num_regions);
+    for (unsigned int i = 0; i < num_regions; i++) {
+        _pset[i] = false;
+    }
+    _cset->establish_preselected(_pset);
   }
 
   ~ShenandoahCollectionSetPreselector() {
