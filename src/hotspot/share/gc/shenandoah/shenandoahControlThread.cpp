@@ -62,7 +62,7 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _control_lock(Mutex::nosafepoint - 2, "ShenandoahControlGC_lock", true),
   _regulator_lock(Mutex::nosafepoint - 2, "ShenandoahRegulatorGC_lock", true),
   _periodic_task(this),
-  _requested_gc_cause(GCCause::_no_cause_specified),
+  _requested_gc_cause(GCCause::_no_gc),
   _requested_generation(select_global_generation()),
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
   _degen_generation(nullptr),
@@ -117,8 +117,7 @@ void ShenandoahControlThread::run_service() {
     // Figure out if we have pending requests.
     bool alloc_failure_pending = _alloc_failure_gc.is_set();
     bool humongous_alloc_failure_pending = _humongous_alloc_failure_gc.is_set();
-    GCCause::Cause cause = _requested_gc_cause;
-    _requested_gc_cause = GCCause::_no_gc;
+    GCCause::Cause cause = Atomic::xchg(&_requested_gc_cause, GCCause::_no_gc);
 
     bool explicit_gc_requested = is_explicit_gc(cause);
     bool implicit_gc_requested = is_implicit_gc(cause);
@@ -866,7 +865,12 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
   }
 
   if (gc_mode() == none) {
-    _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
+    GCCause::Cause existing = Atomic::cmpxchg(&_requested_gc_cause, GCCause::_no_gc, GCCause::_shenandoah_concurrent_gc);
+    if (existing != GCCause::_no_gc) {
+      log_debug(gc, thread)("Reject request for concurrent gc because another gc is pending: %s", GCCause::to_string(existing));
+      return false;
+    }
+
     _requested_generation = generation;
     notify_control_thread();
 
@@ -878,10 +882,14 @@ bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType gen
   }
 
   if (preempt_old_marking(generation)) {
-    log_info(gc)("Preempting old generation mark to allow %s GC", shenandoah_generation_name(generation));
     assert(gc_mode() == servicing_old, "Expected to be servicing old, but was: %s.", gc_mode_name(gc_mode()));
-    _requested_gc_cause = GCCause::_shenandoah_concurrent_gc;
-    _requested_generation = generation;
+    GCCause::Cause existing = Atomic::cmpxchg(&_requested_gc_cause, GCCause::_no_gc, GCCause::_shenandoah_concurrent_gc);
+    if (existing != GCCause::_no_gc) {
+      log_debug(gc, thread)("Reject request to interrupt old gc because another gc is pending: %s", GCCause::to_string(existing));
+      return false;
+    }
+
+    log_info(gc)("Preempting old generation mark to allow %s GC", shenandoah_generation_name(generation));
     _preemption_requested.set();
     ShenandoahHeap::heap()->cancel_gc(GCCause::_shenandoah_concurrent_gc);
     notify_control_thread();
@@ -925,7 +933,11 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
     // Although setting gc request is under _gc_waiters_lock, but read side (run_service())
     // does not take the lock. This races with the regulator thread to start a concurrent gc
     // and the control thread to clear it at the start of a cycle.
-    _requested_gc_cause = cause;
+    GCCause::Cause existing = Atomic::xchg(&_requested_gc_cause, cause);
+    if (existing != GCCause::_no_gc) {
+      log_debug(gc, thread)("GC request supersedes existing request: %s", GCCause::to_string(existing));
+    }
+
     notify_control_thread();
     if (cause != GCCause::_wb_breakpoint) {
       ml.wait();
