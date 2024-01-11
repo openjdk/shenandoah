@@ -96,7 +96,6 @@ void ShenandoahControlThread::run_service() {
 
   GCMode default_mode = concurrent_normal;
   ShenandoahGenerationType generation = select_global_generation();
-  GCCause::Cause default_cause = GCCause::_shenandoah_concurrent_gc;
 
   double last_shrink_time = os::elapsedTime();
   uint age_period = 0;
@@ -118,10 +117,11 @@ void ShenandoahControlThread::run_service() {
     // Figure out if we have pending requests.
     bool alloc_failure_pending = _alloc_failure_gc.is_set();
     bool humongous_alloc_failure_pending = _humongous_alloc_failure_gc.is_set();
-    bool is_gc_requested = _gc_requested.is_set();
-    GCCause::Cause requested_gc_cause = _requested_gc_cause;
-    bool explicit_gc_requested = is_gc_requested && is_explicit_gc(requested_gc_cause);
-    bool implicit_gc_requested = is_gc_requested && is_implicit_gc(requested_gc_cause);
+    GCCause::Cause cause = _requested_gc_cause;
+    _requested_gc_cause = GCCause::_no_gc;
+
+    bool explicit_gc_requested = is_explicit_gc(cause);
+    bool implicit_gc_requested = is_implicit_gc(cause);
 
     // This control loop iteration have seen this much allocations.
     size_t allocs_seen = Atomic::xchg(&_allocs_seen, (size_t)0, memory_order_relaxed);
@@ -131,7 +131,6 @@ void ShenandoahControlThread::run_service() {
 
     // Choose which GC mode to run in. The block below should select a single mode.
     set_gc_mode(none);
-    GCCause::Cause cause = GCCause::_last_gc_cause;
     ShenandoahGC::ShenandoahDegenPoint degen_point = ShenandoahGC::_degenerated_unset;
 
     if (alloc_failure_pending) {
@@ -175,7 +174,6 @@ void ShenandoahControlThread::run_service() {
         set_gc_mode(stw_full);
       }
     } else if (explicit_gc_requested) {
-      cause = requested_gc_cause;
       generation = select_global_generation();
       log_info(gc)("Trigger: Explicit GC request (%s)", GCCause::to_string(cause));
 
@@ -191,7 +189,6 @@ void ShenandoahControlThread::run_service() {
         set_gc_mode(stw_full);
       }
     } else if (implicit_gc_requested) {
-      cause = requested_gc_cause;
       generation = select_global_generation();
       log_info(gc)("Trigger: Implicit GC request (%s)", GCCause::to_string(cause));
 
@@ -210,7 +207,7 @@ void ShenandoahControlThread::run_service() {
     } else {
       // We should only be here if the regulator requested a cycle or if
       // there is an old generation mark in progress.
-      if (_requested_gc_cause == GCCause::_shenandoah_concurrent_gc) {
+      if (cause == GCCause::_shenandoah_concurrent_gc) {
         if (_requested_generation == OLD && heap->doing_mixed_evacuations()) {
           // If a request to start an old cycle arrived while an old cycle was running, but _before_
           // it chose any regions for evacuation we don't want to start a new old cycle. Rather, we want
@@ -220,8 +217,8 @@ void ShenandoahControlThread::run_service() {
         } else {
           generation = _requested_generation;
         }
+
         // preemption was requested or this is a regular cycle
-        cause = GCCause::_shenandoah_concurrent_gc;
         set_gc_mode(default_mode);
 
         // Don't start a new old marking if there is one already in progress
@@ -234,12 +231,6 @@ void ShenandoahControlThread::run_service() {
         } else {
           heap->set_unload_classes(false);
         }
-
-        // Don't want to spin in this loop and start a cycle every time, so
-        // clear requested gc cause. This creates a race with callers of the
-        // blocking 'request_gc' method, but there it loops and resets the
-        // '_requested_gc_cause' until a full cycle is completed.
-        _requested_gc_cause = GCCause::_no_gc;
       } else if (heap->is_concurrent_old_mark_in_progress() || heap->is_prepare_for_old_mark_in_progress()) {
         // Nobody asked us to do anything, but we have an old-generation mark or old-generation preparation for
         // mixed evacuation in progress, so resume working on that.
@@ -254,16 +245,16 @@ void ShenandoahControlThread::run_service() {
       }
     }
 
-    // Blow all soft references on this cycle, if handling allocation failure,
-    // either implicit or explicit GC request, or we are requested to do so unconditionally.
-    if (generation == select_global_generation() && (alloc_failure_pending || implicit_gc_requested || explicit_gc_requested || ShenandoahAlwaysClearSoftRefs)) {
-      heap->soft_ref_policy()->set_should_clear_all_soft_refs(true);
-    }
-
     bool gc_requested = (gc_mode() != none);
-    assert (!gc_requested || cause != GCCause::_last_gc_cause, "GC cause should be set");
+    assert (!gc_requested || cause != GCCause::_no_gc, "GC cause should be set");
 
     if (gc_requested) {
+      // Blow away all soft references on this cycle, if handling allocation failure,
+      // either implicit or explicit GC request, or we are requested to do so unconditionally.
+      if (generation == select_global_generation() && (alloc_failure_pending || implicit_gc_requested || explicit_gc_requested || ShenandoahAlwaysClearSoftRefs)) {
+        heap->soft_ref_policy()->set_should_clear_all_soft_refs(true);
+      }
+
       // GC is starting, bump the internal ID
       update_gc_id();
 
@@ -369,7 +360,7 @@ void ShenandoahControlThread::run_service() {
         heap->pacer()->setup_for_idle();
       }
     } else {
-      // Allow allocators to know we have seen this much regions
+      // Allow pacer to know we have seen this many allocations
       if (ShenandoahPacing && (allocs_seen > 0)) {
         heap->pacer()->report_alloc(allocs_seen);
       }
@@ -395,8 +386,8 @@ void ShenandoahControlThread::run_service() {
       last_shrink_time = current;
     }
 
-    // Don't wait around if there was an allocation failure - start the next cycle immediately.
-    if (!is_alloc_failure_gc()) {
+    // Don't wait if there was an allocation failure or another request was made mid-cycle.
+    if (!is_alloc_failure_gc() && _requested_gc_cause == GCCause::_no_gc) {
       // The timed wait is necessary because this thread has a responsibility to send
       // 'alloc_words' to the pacer when it does not perform a GC.
       MonitorLocker lock(&_control_lock, Mutex::_no_safepoint_check_flag);
@@ -865,11 +856,11 @@ void ShenandoahControlThread::request_gc(GCCause::Cause cause) {
 }
 
 bool ShenandoahControlThread::request_concurrent_gc(ShenandoahGenerationType generation) {
-  if (_preemption_requested.is_set() || _gc_requested.is_set() || ShenandoahHeap::heap()->cancelled_gc()) {
+  if (_preemption_requested.is_set() || _requested_gc_cause != GCCause::_no_gc || ShenandoahHeap::heap()->cancelled_gc()) {
     // Ignore subsequent requests from the heuristics
     log_debug(gc, thread)("Reject request for concurrent gc: preemption_requested: %s, gc_requested: %s, gc_cancelled: %s",
                           BOOL_TO_STR(_preemption_requested.is_set()),
-                          BOOL_TO_STR(_gc_requested.is_set()),
+                          GCCause::to_string(_requested_gc_cause),
                           BOOL_TO_STR(ShenandoahHeap::heap()->cancelled_gc()));
     return false;
   }
@@ -932,10 +923,9 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
   size_t required_gc_id = current_gc_id + 1;
   while (current_gc_id < required_gc_id) {
     // Although setting gc request is under _gc_waiters_lock, but read side (run_service())
-    // does not take the lock. We need to enforce following order, so that read side sees
-    // latest requested gc cause when the flag is set.
+    // does not take the lock. This races with the regulator thread to start a concurrent gc
+    // and the control thread to clear it at the start of a cycle.
     _requested_gc_cause = cause;
-    _gc_requested.set();
     notify_control_thread();
     if (cause != GCCause::_wb_breakpoint) {
       ml.wait();
@@ -1000,12 +990,7 @@ bool ShenandoahControlThread::is_alloc_failure_gc() {
   return _alloc_failure_gc.is_set();
 }
 
-bool ShenandoahControlThread::is_humongous_alloc_failure_gc() {
-  return _humongous_alloc_failure_gc.is_set();
-}
-
 void ShenandoahControlThread::notify_gc_waiters() {
-  _gc_requested.unset();
   MonitorLocker ml(&_gc_waiters_lock);
   ml.notify_all();
 }
