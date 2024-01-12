@@ -931,9 +931,9 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
   size_t current_gc_id = get_gc_id();
   size_t required_gc_id = current_gc_id + 1;
   while (current_gc_id < required_gc_id) {
-    // Although setting gc request is under _gc_waiters_lock, but read side (run_service())
-    // does not take the lock. This races with the regulator thread to start a concurrent gc
-    // and the control thread to clear it at the start of a cycle.
+    // This races with the regulator thread to start a concurrent gc and the
+    // control thread to clear it at the start of a cycle. Threads here are
+    // allowed to escalate a heuristic's request for concurrent gc.
     GCCause::Cause existing = Atomic::xchg(&_requested_gc_cause, cause);
     if (existing != GCCause::_no_gc) {
       log_debug(gc, thread)("GC request supersedes existing request: %s", GCCause::to_string(existing));
