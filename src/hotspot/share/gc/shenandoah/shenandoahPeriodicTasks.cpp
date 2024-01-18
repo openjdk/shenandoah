@@ -23,7 +23,7 @@
  */
 #include "precompiled.hpp"
 
-#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahPacer.hpp"
 #include "gc/shenandoah/shenandoahPeriodicTasks.hpp"

@@ -276,6 +276,7 @@ private:
   ShenandoahWorkerThreads* _safepoint_workers;
 
   virtual void initialize_control_thread();
+  virtual void notify_control_thread_heap_changed();
 
 public:
   uint max_workers();
@@ -548,7 +549,6 @@ private:
   ShenandoahOldGeneration*   _old_generation;
 
   ShenandoahGenerationalControlThread*  _control_thread;
-  ShenandoahRegulatorThread*            _regulator_thread;
 
   ShenandoahCollectorPolicy* _shenandoah_policy;
   ShenandoahMode*            _gc_mode;
@@ -560,8 +560,6 @@ private:
   ShenandoahEvacuationTracker*  _evac_tracker;
   ShenandoahMmuTracker          _mmu_tracker;
   ShenandoahGenerationSizer     _generation_sizer;
-
-  ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
 
 public:
   ShenandoahGenerationalControlThread*   control_thread() { return _control_thread; }

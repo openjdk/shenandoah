@@ -104,6 +104,8 @@
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
+#include "shenandoahHeap.hpp"
+
 
 class ShenandoahPretouchHeapTask : public WorkerTask {
 private:
@@ -501,8 +503,13 @@ jint ShenandoahHeap::initialize() {
 
 void ShenandoahHeap::initialize_control_thread() {
   _control_thread = new ShenandoahGenerationalControlThread();
-  _regulator_thread = new ShenandoahRegulatorThread(_control_thread);
 }
+
+
+void ShenandoahHeap::notify_control_thread_heap_changed() {
+  control_thread()->notify_heap_changed();
+}
+
 
 void ShenandoahHeap::print_init_logger() const {
   ShenandoahInitLogger::print();
@@ -618,7 +625,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _global_generation(nullptr),
   _old_generation(nullptr),
   _control_thread(nullptr),
-  _regulator_thread(nullptr),
   _shenandoah_policy(policy),
   _free_set(nullptr),
   _pacer(nullptr),
@@ -928,8 +934,7 @@ void ShenandoahHeap::notify_heap_changed() {
   // update costs on slow path.
   _periodic_task.notify_heap_changed();
 
-  control_thread()->notify_heap_changed();
-  regulator_thread()->notify_heap_changed();
+  notify_control_thread_heap_changed();
 }
 
 void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool promotion) {
@@ -2021,8 +2026,10 @@ void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
     return;
   }
 
-  tcl->do_thread(_control_thread);
-  tcl->do_thread(_regulator_thread);
+  if (_control_thread != nullptr) {
+    tcl->do_thread(_control_thread);
+  }
+
   workers()->threads_do(tcl);
   if (_safepoint_workers != nullptr) {
     _safepoint_workers->threads_do(tcl);
@@ -2569,9 +2576,6 @@ void ShenandoahHeap::stop() {
 
   // Step 1. Notify policy to disable event recording and prevent visiting gc threads during shutdown
   _shenandoah_policy->record_shutdown();
-
-  // Step 2. Stop requesting collections.
-  regulator_thread()->stop();
 
   // Step 3. Notify control thread that we are in shutdown.
   // Note that we cannot do that with stop(), because stop() is blocking and waits for the actual shutdown.
