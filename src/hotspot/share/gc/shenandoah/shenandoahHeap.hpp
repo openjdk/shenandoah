@@ -42,6 +42,7 @@
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
+#include "gc/shenandoah/shenandoahPeriodicTasks.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
@@ -54,7 +55,7 @@ class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
 class PLAB;
 class ShenandoahCollectorPolicy;
-class ShenandoahControlThread;
+class ShenandoahGenerationalControlThread;
 class ShenandoahRegulatorThread;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
@@ -256,12 +257,25 @@ public:
 
   void set_soft_max_capacity(size_t v);
 
+// ---------- Periodic Tasks
+//
+private:
+  ShenandoahPeriodicTask _periodic_task;
+  ShenandoahPeriodicPacerNotify _periodic_pacer_notify_task;
+
+public:
+
+  void set_forced_counters_update(bool value) { _periodic_task.set_forced_counters_update(value); }
+  void handle_force_counters_update() { _periodic_task.handle_force_counters_update(); }
+
 // ---------- Workers handling
 //
 private:
   uint _max_workers;
   ShenandoahWorkerThreads* _workers;
   ShenandoahWorkerThreads* _safepoint_workers;
+
+  virtual void initialize_control_thread();
 
 public:
   uint max_workers();
@@ -533,8 +547,9 @@ private:
   ShenandoahGeneration*      _global_generation;
   ShenandoahOldGeneration*   _old_generation;
 
-  ShenandoahControlThread*   _control_thread;
-  ShenandoahRegulatorThread* _regulator_thread;
+  ShenandoahGenerationalControlThread*  _control_thread;
+  ShenandoahRegulatorThread*            _regulator_thread;
+
   ShenandoahCollectorPolicy* _shenandoah_policy;
   ShenandoahMode*            _gc_mode;
   ShenandoahFreeSet*         _free_set;
@@ -549,7 +564,8 @@ private:
   ShenandoahRegulatorThread* regulator_thread()        { return _regulator_thread;  }
 
 public:
-  ShenandoahControlThread*   control_thread()          { return _control_thread;    }
+  ShenandoahGenerationalControlThread*   control_thread() { return _control_thread; }
+
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
   ShenandoahOldGeneration*   old_generation()    const { return _old_generation;    }
@@ -880,6 +896,8 @@ private:
 
   void try_inject_alloc_failure();
   bool should_inject_alloc_failure();
+
+  void notify_heap_changed();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP

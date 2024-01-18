@@ -48,7 +48,7 @@
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahConcurrentMark.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
-#include "gc/shenandoah/shenandoahControlThread.hpp"
+#include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
@@ -486,12 +486,22 @@ jint ShenandoahHeap::initialize() {
     _pacer = nullptr;
   }
 
-  _control_thread = new ShenandoahControlThread();
-  _regulator_thread = new ShenandoahRegulatorThread(_control_thread);
+
+  _periodic_task.enroll();
+  if (ShenandoahPacing) {
+    _periodic_pacer_notify_task.enroll();
+  }
+
+  initialize_control_thread();
 
   print_init_logger();
 
   return JNI_OK;
+}
+
+void ShenandoahHeap::initialize_control_thread() {
+  _control_thread = new ShenandoahGenerationalControlThread();
+  _regulator_thread = new ShenandoahRegulatorThread(_control_thread);
 }
 
 void ShenandoahHeap::print_init_logger() const {
@@ -909,9 +919,17 @@ void ShenandoahHeap::op_uncommit(double shrink_before, size_t shrink_until) {
   }
 
   if (count > 0) {
-    control_thread()->notify_heap_changed();
-    regulator_thread()->notify_heap_changed();
+    notify_heap_changed();
   }
+}
+
+void ShenandoahHeap::notify_heap_changed() {
+  // Update monitoring counters when we took a new region. This amortizes the
+  // update costs on slow path.
+  _periodic_task.notify_heap_changed();
+
+  control_thread()->notify_heap_changed();
+  regulator_thread()->notify_heap_changed();
 }
 
 void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool promotion) {
@@ -1385,8 +1403,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
   }
 
   if (in_new_region) {
-    control_thread()->notify_heap_changed();
-    regulator_thread()->notify_heap_changed();
+    notify_heap_changed();
   }
 
   if (result == nullptr) {

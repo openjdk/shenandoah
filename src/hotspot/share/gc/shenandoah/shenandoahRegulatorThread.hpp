@@ -30,7 +30,7 @@
 #include "runtime/mutex.hpp"
 
 class ShenandoahHeuristics;
-class ShenandoahControlThread;
+class ShenandoahGenerationalControlThread;
 
 /*
  * The purpose of this class (and thread) is to allow us to continue
@@ -48,7 +48,7 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
   friend class VMStructs;
 
  public:
-  explicit ShenandoahRegulatorThread(ShenandoahControlThread* control_thread);
+  explicit ShenandoahRegulatorThread(ShenandoahGenerationalControlThread* control_thread);
 
   const char* name() const { return "ShenandoahRegulatorThread";}
 
@@ -88,7 +88,7 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
   bool request_concurrent_gc(ShenandoahGenerationType generation);
 
   ShenandoahSharedFlag _heap_changed;
-  ShenandoahControlThread* _control_thread;
+  ShenandoahGenerationalControlThread* _control_thread;
   ShenandoahHeuristics* _young_heuristics;
   ShenandoahHeuristics* _old_heuristics;
   ShenandoahHeuristics* _global_heuristics;
