@@ -56,7 +56,7 @@
 #include "runtime/atomic.hpp"
 
 ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
-  ConcurrentGCThread(),
+  ShenandoahController(),
   _alloc_failure_waiters_lock(Mutex::safepoint - 2, "ShenandoahAllocFailureGC_lock", true),
   _gc_waiters_lock(Mutex::safepoint - 2, "ShenandoahRequestedGC_lock", true),
   _control_lock(Mutex::nosafepoint - 2, "ShenandoahControlGC_lock", true),

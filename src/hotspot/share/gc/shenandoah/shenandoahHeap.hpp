@@ -36,6 +36,7 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
+#include "gc/shenandoah/shenandoahController.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
@@ -548,8 +549,10 @@ private:
   ShenandoahGeneration*      _global_generation;
   ShenandoahOldGeneration*   _old_generation;
 
-  ShenandoahGenerationalControlThread*  _control_thread;
+protected:
+  ShenandoahController*  _control_thread;
 
+private:
   ShenandoahCollectorPolicy* _shenandoah_policy;
   ShenandoahMode*            _gc_mode;
   ShenandoahFreeSet*         _free_set;
@@ -562,7 +565,7 @@ private:
   ShenandoahGenerationSizer     _generation_sizer;
 
 public:
-  ShenandoahGenerationalControlThread*   control_thread() { return _control_thread; }
+  ShenandoahController*   control_thread() { return _control_thread; }
 
   ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }

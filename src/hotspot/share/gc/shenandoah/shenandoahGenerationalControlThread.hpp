@@ -27,8 +27,7 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALCONTROLTHREAD_HPP
 
 #include "gc/shared/gcCause.hpp"
-#include "gc/shared/concurrentGCThread.hpp"
-#include "gc/shenandoah/shenandoahControlThread.hpp"
+#include "gc/shenandoah/shenandoahController.hpp"
 #include "gc/shenandoah/shenandoahGC.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
@@ -36,7 +35,7 @@
 #include "runtime/task.hpp"
 #include "utilities/ostream.hpp"
 
-class ShenandoahGenerationalControlThread: public ConcurrentGCThread {
+class ShenandoahGenerationalControlThread: public ShenandoahController {
   friend class VMStructs;
 
 private:

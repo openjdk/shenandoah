@@ -33,7 +33,7 @@
 #include "runtime/task.hpp"
 #include "utilities/ostream.hpp"
 
-class ShenandoahControlThread: public ConcurrentGCThread {
+class ShenandoahControlThread: public ShenandoahController {
   friend class VMStructs;
 
 private:

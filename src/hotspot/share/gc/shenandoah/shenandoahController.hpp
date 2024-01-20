@@ -22,34 +22,23 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALHEAP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALHEAP
+#ifndef LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHCONTROLLER_HPP
+#define LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHCONTROLLER_HPP
 
-#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shared/gcCause.hpp"
+#include "gc/shared/concurrentGCThread.hpp"
+#include "gc/shenandoah/shenandoahAllocRequest.hpp"
 
-class ShenandoahRegulatorThread;
-class ShenandoahGenerationalControlThread;
-
-class ShenandoahGenerationalHeap : public ShenandoahHeap {
+class ShenandoahController: public ConcurrentGCThread {
 public:
-  explicit ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy);
+  ShenandoahController() : ConcurrentGCThread() { }
 
-  static ShenandoahGenerationalHeap* heap();
-
-  void print_init_logger() const override;
-
-  ShenandoahRegulatorThread* regulator_thread() const             { return _regulator_thread;  }
-
-  void gc_threads_do(ThreadClosure* tcl) const override;
-
-  void stop() override;
-
-private:
-  void initialize_control_thread() override;
-  void notify_control_thread_heap_changed() override;
-
-private:
-  ShenandoahRegulatorThread* _regulator_thread;
+  virtual void notify_heap_changed() = 0;
+  virtual void handle_alloc_failure_evac(size_t words) = 0;
+  virtual void handle_alloc_failure(ShenandoahAllocRequest& req, bool block) = 0;
+  virtual void pacing_notify_alloc(size_t words) = 0;
+  virtual void request_gc(GCCause::Cause cause) = 0;
+  virtual void prepare_for_graceful_shutdown() = 0;
+  virtual size_t get_gc_id() = 0;
 };
-
-#endif //SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALHEAP
+#endif //LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHCONTROLLER_HPP

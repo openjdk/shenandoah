@@ -48,8 +48,7 @@
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahConcurrentMark.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
-#include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
-#include "gc/shenandoah/shenandoahRegulatorThread.hpp"
+#include "gc/shenandoah/shenandoahControlThread.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
@@ -105,6 +104,7 @@
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
 #include "shenandoahHeap.hpp"
+#include "shenandoahControlThread.hpp"
 
 
 class ShenandoahPretouchHeapTask : public WorkerTask {
@@ -502,7 +502,7 @@ jint ShenandoahHeap::initialize() {
 }
 
 void ShenandoahHeap::initialize_control_thread() {
-  _control_thread = new ShenandoahGenerationalControlThread();
+  _control_thread = new ShenandoahControlThread();
 }
 
 
@@ -1390,7 +1390,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     size_t original_count = shenandoah_policy()->full_gc_count();
     while (result == nullptr
         && (get_gc_no_progress_count() == 0 || original_count == shenandoah_policy()->full_gc_count())) {
-      control_thread()->handle_alloc_failure(req);
+      control_thread()->handle_alloc_failure(req, true);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
