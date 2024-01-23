@@ -103,9 +103,6 @@
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
-#include "shenandoahHeap.hpp"
-#include "shenandoahControlThread.hpp"
-
 
 class ShenandoahPretouchHeapTask : public WorkerTask {
 private:

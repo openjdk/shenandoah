@@ -50,7 +50,6 @@ private:
   Monitor _alloc_failure_waiters_lock;
   Monitor _gc_waiters_lock;
 
-
 public:
   void run_service();
   void stop_service();
@@ -60,7 +59,6 @@ private:
   ShenandoahSharedFlag _alloc_failure_gc;
   ShenandoahSharedFlag _graceful_shutdown;
   ShenandoahSharedFlag _heap_changed;
-
   GCCause::Cause       _requested_gc_cause;
   ShenandoahGC::ShenandoahDegenPoint _degen_point;
 
