@@ -59,11 +59,6 @@ ShenandoahControlThread::ShenandoahControlThread() :
   create_and_start();
 }
 
-ShenandoahControlThread::~ShenandoahControlThread() {
-  // This is here so that super is called.
-}
-
-
 void ShenandoahControlThread::run_service() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 

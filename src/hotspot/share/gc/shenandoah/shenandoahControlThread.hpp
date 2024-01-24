@@ -30,7 +30,6 @@
 #include "gc/shenandoah/shenandoahGC.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
-#include "runtime/task.hpp"
 #include "utilities/ostream.hpp"
 
 class ShenandoahControlThread: public ShenandoahController {
@@ -95,7 +94,6 @@ private:
 public:
   // Constructor
   ShenandoahControlThread();
-  ~ShenandoahControlThread();
 
   // Handle allocation failure from a mutator allocation.
   // Optionally blocks while collector is handling the failure. If the GC

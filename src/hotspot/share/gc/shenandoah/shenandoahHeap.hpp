@@ -261,13 +261,11 @@ public:
 // ---------- Periodic Tasks
 //
 private:
-  ShenandoahPeriodicTask _periodic_task;
-  ShenandoahPeriodicPacerNotify _periodic_pacer_notify_task;
+  void notify_heap_changed();
 
 public:
-
-  void set_forced_counters_update(bool value) { _periodic_task.set_forced_counters_update(value); }
-  void handle_force_counters_update() { _periodic_task.handle_force_counters_update(); }
+  void set_forced_counters_update(bool value);
+  void handle_force_counters_update();
 
 // ---------- Workers handling
 //
@@ -897,8 +895,6 @@ private:
 
   void try_inject_alloc_failure();
   bool should_inject_alloc_failure();
-
-  void notify_heap_changed();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
