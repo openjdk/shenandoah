@@ -2059,7 +2059,6 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
   set_gc_cause(cause);
   set_gc_generation(generation);
 
-  shenandoah_policy()->record_cycle_start();
   generation->heuristics()->record_cycle_start();
 }
 

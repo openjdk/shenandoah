@@ -32,6 +32,7 @@
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shared/workerThread.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
@@ -203,11 +204,11 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
                                                            heap->old_generation()->get_humongous_waste());
   }
   if (metrics.is_good_progress()) {
-    ShenandoahHeap::heap()->notify_gc_progress();
+    heap->notify_gc_progress();
   } else {
     // Nothing to do. Tell the allocation path that we have failed to make
     // progress, and it can finally fail.
-    ShenandoahHeap::heap()->notify_gc_no_progress();
+    heap->notify_gc_no_progress();
   }
 
   // Regardless if progress was made, we record that we completed a "successful" full GC.

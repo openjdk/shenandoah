@@ -57,7 +57,6 @@ private:
   size_t _explicit_full;
   size_t _implicit_concurrent;
   size_t _implicit_full;
-  size_t _cycle_counter;
   size_t _degen_points[ShenandoahGC::_DEGENERATED_LIMIT];
 
   ShenandoahSharedFlag _in_shutdown;
@@ -66,10 +65,6 @@ private:
 
 public:
   ShenandoahCollectorPolicy();
-
-  // TODO: This is different from gc_end: that one encompasses one VM operation.
-  // These two encompass the entire cycle.
-  void record_cycle_start();
 
   void record_mixed_cycle();
 
@@ -90,8 +85,6 @@ public:
   bool is_at_shutdown();
 
   ShenandoahTracer* tracer() {return _tracer;}
-
-  size_t cycle_counter() const;
 
   void print_gc_stats(outputStream* out) const;
 

@@ -30,6 +30,7 @@
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
@@ -382,8 +383,8 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(GCCause::Cause cau
   ShenandoahConcurrentGC gc(heap->global_generation(), false);
   if (gc.collect(cause)) {
     // Cycle is complete
-    heap->heuristics()->record_success_concurrent(false);
-    heap->shenandoah_policy()->record_success_concurrent(false, false);
+    heap->global_generation()->heuristics()->record_success_concurrent(gc.abbreviated());
+    heap->shenandoah_policy()->record_success_concurrent(false, gc.abbreviated());
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
@@ -415,9 +416,6 @@ void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
 
   ShenandoahFullGC gc;
   gc.collect(cause);
-
-  heap->heuristics()->record_success_full();
-  heap->shenandoah_policy()->record_success_full();
 }
 
 void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point) {
@@ -428,9 +426,6 @@ void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause
 
   ShenandoahDegenGC gc(point, heap->global_generation());
   gc.collect(cause);
-
-  heap->heuristics()->record_success_degenerated();
-  heap->shenandoah_policy()->record_success_degenerated(false, false);
 }
 
 void ShenandoahControlThread::service_uncommit(double shrink_before, size_t shrink_until) {
