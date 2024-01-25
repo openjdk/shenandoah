@@ -29,16 +29,43 @@
 #include "gc/shared/concurrentGCThread.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 
+/**
+ * This interface exposes methods necessary for the heap to interact
+ * with the threads responsible for driving the collection cycle.
+ */
 class ShenandoahController: public ConcurrentGCThread {
 public:
   ShenandoahController() : ConcurrentGCThread() { }
 
+  // This is invoked by the heap when it allocates an object
+  // in a region for the first time. It is also called when regions
+  // are uncommitted.
   virtual void notify_heap_changed() = 0;
+
+  // Invoked for allocation failures during evacuation. This cancels
+  // the collection cycle without blocking.
   virtual void handle_alloc_failure_evac(size_t words) = 0;
+
+  // This cancels the collection cycle and has an option to block
+  // until another cycle runs and clears the alloc failure gc flag.
   virtual void handle_alloc_failure(ShenandoahAllocRequest& req, bool block) = 0;
+
+  // This is called for every allocation. The control thread accumulates
+  // this value when idle. During the gc cycle, the control resets it
+  // and reports it to the pacer.
   virtual void pacing_notify_alloc(size_t words) = 0;
+
+  // Request a collection cycle. This handles "explicit" gc requests
+  // like System.gc and "implicit" gc requests, like metaspace oom.
   virtual void request_gc(GCCause::Cause cause) = 0;
+
+  // This essentially allows to cancel a collection cycle for the
+  // purpose of shutting down the JVM, without trying to start a degenerated
+  // cycle.
   virtual void prepare_for_graceful_shutdown() = 0;
+
+  // Returns the internal gc count used by the control thread. Probably
+  // doesn't need to be exposed.
   virtual size_t get_gc_id() = 0;
 };
 #endif //LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHCONTROLLER_HPP

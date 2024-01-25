@@ -72,11 +72,6 @@ ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
   create_and_start();
 }
 
-ShenandoahGenerationalControlThread::~ShenandoahGenerationalControlThread() {
-  // This is here so that super is called.
-}
-
-
 void ShenandoahGenerationalControlThread::run_service() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 

@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahInitLogger.hpp"
@@ -85,8 +86,10 @@ void ShenandoahGenerationalHeap::initialize_control_thread() {
 }
 
 void ShenandoahGenerationalHeap::gc_threads_do(ThreadClosure* tcl) const {
-  ShenandoahHeap::gc_threads_do(tcl);
-  tcl->do_thread(regulator_thread());
+  if (!shenandoah_policy()->is_at_shutdown()) {
+    ShenandoahHeap::gc_threads_do(tcl);
+    tcl->do_thread(regulator_thread());
+  }
 }
 
 void ShenandoahGenerationalHeap::notify_control_thread_heap_changed() {
@@ -96,6 +99,5 @@ void ShenandoahGenerationalHeap::notify_control_thread_heap_changed() {
 
 void ShenandoahGenerationalHeap::stop() {
   regulator_thread()->stop();
-
   ShenandoahHeap::stop();
 }

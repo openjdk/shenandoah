@@ -124,7 +124,6 @@ private:
 public:
   // Constructor
   ShenandoahGenerationalControlThread();
-  ~ShenandoahGenerationalControlThread();
 
   // Handle allocation failure from a mutator allocation.
   // Optionally blocks while collector is handling the failure. If the GC
