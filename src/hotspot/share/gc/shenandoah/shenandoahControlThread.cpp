@@ -52,10 +52,8 @@ ShenandoahControlThread::ShenandoahControlThread() :
   _alloc_failure_waiters_lock(Mutex::safepoint-2, "ShenandoahAllocFailureGC_lock", true),
   _gc_waiters_lock(Mutex::safepoint-2, "ShenandoahRequestedGC_lock", true),
   _requested_gc_cause(GCCause::_no_cause_specified),
-  _degen_point(ShenandoahGC::_degenerated_outside_cycle),
-  _allocs_seen(0) {
+  _degen_point(ShenandoahGC::_degenerated_outside_cycle) {
   set_name("Shenandoah Control Thread");
-  reset_gc_id();
   create_and_start();
 }
 
@@ -86,7 +84,7 @@ void ShenandoahControlThread::run_service() {
     bool implicit_gc_requested = is_gc_requested && !is_explicit_gc(requested_gc_cause);
 
     // This control loop iteration have seen this much allocations.
-    size_t allocs_seen = Atomic::xchg(&_allocs_seen, (size_t)0, memory_order_relaxed);
+    size_t allocs_seen = reset_allocs_seen();
 
     // Check if we have seen a new target for soft max heap size.
     bool soft_max_changed = check_soft_max_changed();
@@ -565,31 +563,6 @@ void ShenandoahControlThread::notify_heap_changed() {
   }
 }
 
-void ShenandoahControlThread::pacing_notify_alloc(size_t words) {
-  assert(ShenandoahPacing, "should only call when pacing is enabled");
-  Atomic::add(&_allocs_seen, words, memory_order_relaxed);
-}
-
-void ShenandoahControlThread::reset_gc_id() {
-  Atomic::store(&_gc_id, (size_t)0);
-}
-
-void ShenandoahControlThread::update_gc_id() {
-  Atomic::inc(&_gc_id);
-}
-
-size_t ShenandoahControlThread::get_gc_id() {
-  return Atomic::load(&_gc_id);
-}
-
 void ShenandoahControlThread::start() {
   create_and_start();
-}
-
-void ShenandoahControlThread::prepare_for_graceful_shutdown() {
-  _graceful_shutdown.set();
-}
-
-bool ShenandoahControlThread::in_graceful_shutdown() {
-  return _graceful_shutdown.is_set();
 }

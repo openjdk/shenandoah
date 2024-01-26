@@ -60,14 +60,11 @@ public:
   void run_service();
   void stop_service();
 
-  size_t get_gc_id();
-
 private:
   ShenandoahSharedFlag _allow_old_preemption;
   ShenandoahSharedFlag _preemption_requested;
   ShenandoahSharedFlag _alloc_failure_gc;
   ShenandoahSharedFlag _humongous_alloc_failure_gc;
-  ShenandoahSharedFlag _graceful_shutdown;
 
   GCCause::Cause  _requested_gc_cause;
   volatile ShenandoahGenerationType _requested_generation;
@@ -75,12 +72,8 @@ private:
   ShenandoahGeneration* _degen_generation;
 
   shenandoah_padding(0);
-  volatile size_t _allocs_seen;
-  shenandoah_padding(1);
-  volatile size_t _gc_id;
-  shenandoah_padding(2);
   volatile GCMode _mode;
-  shenandoah_padding(3);
+  shenandoah_padding();
 
   // Returns true if the cycle has been cancelled or degenerated.
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
@@ -100,9 +93,6 @@ private:
 
   // True if allocation failure flag has been set.
   bool is_alloc_failure_gc();
-
-  void reset_gc_id();
-  void update_gc_id();
 
   void notify_gc_waiters();
 
@@ -140,11 +130,7 @@ public:
 
   void notify_heap_changed();
 
-  void pacing_notify_alloc(size_t words);
-
   void start();
-  void prepare_for_graceful_shutdown();
-  bool in_graceful_shutdown();
 
   void service_concurrent_normal_cycle(ShenandoahHeap* heap,
                                        const ShenandoahGenerationType generation,

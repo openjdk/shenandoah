@@ -65,10 +65,8 @@ ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
   _requested_generation(select_global_generation()),
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
   _degen_generation(nullptr),
-  _allocs_seen(0),
   _mode(none) {
   set_name("Shenandoah Control Thread");
-  reset_gc_id();
   create_and_start();
 }
 
@@ -105,7 +103,7 @@ void ShenandoahGenerationalControlThread::run_service() {
     const bool implicit_gc_requested = is_implicit_gc(cause);
 
     // This control loop iteration have seen this much allocations.
-    const size_t allocs_seen = Atomic::xchg(&_allocs_seen, (size_t)0, memory_order_relaxed);
+    const size_t allocs_seen = reset_allocs_seen();
 
     // Check if we have seen a new target for soft max heap size.
     const bool soft_max_changed = check_soft_max_changed();
@@ -993,33 +991,8 @@ void ShenandoahGenerationalControlThread::notify_gc_waiters() {
 void ShenandoahGenerationalControlThread::notify_heap_changed() {
 }
 
-void ShenandoahGenerationalControlThread::pacing_notify_alloc(size_t words) {
-  assert(ShenandoahPacing, "should only call when pacing is enabled");
-  Atomic::add(&_allocs_seen, words, memory_order_relaxed);
-}
-
-void ShenandoahGenerationalControlThread::reset_gc_id() {
-  Atomic::store(&_gc_id, (size_t)0);
-}
-
-void ShenandoahGenerationalControlThread::update_gc_id() {
-  Atomic::inc(&_gc_id);
-}
-
-size_t ShenandoahGenerationalControlThread::get_gc_id() {
-  return Atomic::load(&_gc_id);
-}
-
 void ShenandoahGenerationalControlThread::start() {
   create_and_start();
-}
-
-void ShenandoahGenerationalControlThread::prepare_for_graceful_shutdown() {
-  _graceful_shutdown.set();
-}
-
-bool ShenandoahGenerationalControlThread::in_graceful_shutdown() {
-  return _graceful_shutdown.is_set();
 }
 
 const char* ShenandoahGenerationalControlThread::gc_mode_name(ShenandoahGenerationalControlThread::GCMode mode) {
