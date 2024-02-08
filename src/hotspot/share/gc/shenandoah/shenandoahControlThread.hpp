@@ -43,15 +43,19 @@ private:
     stw_full
   } GCMode;
 
+  ShenandoahSharedFlag _gc_requested;
+  GCCause::Cause       _requested_gc_cause;
+  ShenandoahGC::ShenandoahDegenPoint _degen_point;
+
 public:
+  ShenandoahControlThread();
+
   void run_service() override;
   void stop_service() override;
 
+  void request_gc(GCCause::Cause cause) override;
+
 private:
-  ShenandoahSharedFlag _gc_requested;
-  ShenandoahSharedFlag _heap_changed;
-  GCCause::Cause       _requested_gc_cause;
-  ShenandoahGC::ShenandoahDegenPoint _degen_point;
 
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
   void service_concurrent_normal_cycle(GCCause::Cause cause);
@@ -65,16 +69,6 @@ private:
   void handle_requested_gc(GCCause::Cause cause);
 
   bool is_explicit_gc(GCCause::Cause cause) const;
-
-public:
-  // Constructor
-  ShenandoahControlThread();
-
-  void request_gc(GCCause::Cause cause);
-
-  void notify_heap_changed();
-
-  void start();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONTROLTHREAD_HPP

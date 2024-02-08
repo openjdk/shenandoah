@@ -63,11 +63,6 @@ public:
     _gc_waiters_lock(Mutex::safepoint-2, "ShenandoahRequestedGC_lock", true)
   { }
 
-  // This is invoked by the heap when it allocates an object
-  // in a region for the first time. It is also called when regions
-  // are uncommitted.
-  virtual void notify_heap_changed() = 0;
-
   // Request a collection cycle. This handles "explicit" gc requests
   // like System.gc and "implicit" gc requests, like metaspace oom.
   virtual void request_gc(GCCause::Cause cause) = 0;

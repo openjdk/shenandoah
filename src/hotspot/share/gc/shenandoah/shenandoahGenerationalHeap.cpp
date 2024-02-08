@@ -79,7 +79,7 @@ ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy
   ShenandoahHeap(policy),
   _regulator_thread(nullptr) { }
 
-void ShenandoahGenerationalHeap::initialize_control_thread() {
+void ShenandoahGenerationalHeap::initialize_controller() {
   auto control_thread = new ShenandoahGenerationalControlThread();
   _control_thread = control_thread;
   _regulator_thread = new ShenandoahRegulatorThread(control_thread);
@@ -90,11 +90,6 @@ void ShenandoahGenerationalHeap::gc_threads_do(ThreadClosure* tcl) const {
     ShenandoahHeap::gc_threads_do(tcl);
     tcl->do_thread(regulator_thread());
   }
-}
-
-void ShenandoahGenerationalHeap::notify_control_thread_heap_changed() {
-  control_thread()->notify_heap_changed();
-  regulator_thread()->notify_heap_changed();
 }
 
 void ShenandoahGenerationalHeap::stop() {

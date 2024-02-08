@@ -39,11 +39,6 @@ class ShenandoahGenerationalControlThread: public ShenandoahController {
   friend class VMStructs;
 
 private:
-
-  Monitor _control_lock;
-  Monitor _regulator_lock;
-
-public:
   typedef enum {
     none,
     concurrent_normal,
@@ -53,10 +48,9 @@ public:
     servicing_old
   } GCMode;
 
-  void run_service();
-  void stop_service();
+  Monitor _control_lock;
+  Monitor _regulator_lock;
 
-private:
   ShenandoahSharedFlag _allow_old_preemption;
   ShenandoahSharedFlag _preemption_requested;
 
@@ -67,7 +61,20 @@ private:
 
   shenandoah_padding(0);
   volatile GCMode _mode;
-  shenandoah_padding();
+  shenandoah_padding(1);
+
+public:
+  ShenandoahGenerationalControlThread();
+
+  void run_service() override;
+  void stop_service() override;
+
+  void request_gc(GCCause::Cause cause) override;
+
+  // Return true if the request to start a concurrent GC for the given generation succeeded.
+  bool request_concurrent_gc(ShenandoahGenerationType generation);
+
+private:
 
   // Returns true if the cycle has been cancelled or degenerated.
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
@@ -92,18 +99,6 @@ private:
 
   void process_phase_timings(const ShenandoahHeap* heap);
 
-public:
-  // Constructor
-  ShenandoahGenerationalControlThread();
-
-  void request_gc(GCCause::Cause cause);
-  // Return true if the request to start a concurrent GC for the given generation succeeded.
-  bool request_concurrent_gc(ShenandoahGenerationType generation);
-
-  void notify_heap_changed();
-
-  void start();
-
   void service_concurrent_normal_cycle(ShenandoahHeap* heap,
                                        const ShenandoahGenerationType generation,
                                        GCCause::Cause cause);
@@ -118,8 +113,8 @@ public:
 
   static ShenandoahGenerationType select_global_generation();
 
- private:
   static const char* gc_mode_name(GCMode mode);
+
   void notify_control_thread();
 
   void service_concurrent_cycle(ShenandoahHeap* heap,

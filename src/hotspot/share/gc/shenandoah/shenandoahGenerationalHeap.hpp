@@ -45,8 +45,7 @@ public:
   void stop() override;
 
 private:
-  void initialize_control_thread() override;
-  void notify_control_thread_heap_changed() override;
+  void initialize_controller() override;
 
 private:
   ShenandoahRegulatorThread* _regulator_thread;

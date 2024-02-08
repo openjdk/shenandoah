@@ -880,13 +880,6 @@ void ShenandoahGenerationalControlThread::notify_gc_waiters() {
   ml.notify_all();
 }
 
-void ShenandoahGenerationalControlThread::notify_heap_changed() {
-}
-
-void ShenandoahGenerationalControlThread::start() {
-  create_and_start();
-}
-
 const char* ShenandoahGenerationalControlThread::gc_mode_name(ShenandoahGenerationalControlThread::GCMode mode) {
   switch (mode) {
     case none:              return "idle";

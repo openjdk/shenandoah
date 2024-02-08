@@ -483,22 +483,16 @@ jint ShenandoahHeap::initialize() {
     _pacer->setup_for_idle();
   }
 
-  initialize_control_thread();
+  initialize_controller();
 
   print_init_logger();
 
   return JNI_OK;
 }
 
-void ShenandoahHeap::initialize_control_thread() {
+void ShenandoahHeap::initialize_controller() {
   _control_thread = new ShenandoahControlThread();
 }
-
-
-void ShenandoahHeap::notify_control_thread_heap_changed() {
-  control_thread()->notify_heap_changed();
-}
-
 
 void ShenandoahHeap::print_init_logger() const {
   ShenandoahInitLogger::print();
@@ -967,7 +961,7 @@ void ShenandoahHeap::notify_heap_changed() {
   // Update monitoring counters when we took a new region. This amortizes the
   // update costs on slow path.
   monitoring_support()->notify_heap_changed();
-  notify_control_thread_heap_changed();
+  _heap_changed.set();
 }
 
 void ShenandoahHeap::set_forced_counters_update(bool value) {

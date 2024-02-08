@@ -274,8 +274,7 @@ private:
   ShenandoahWorkerThreads* _workers;
   ShenandoahWorkerThreads* _safepoint_workers;
 
-  virtual void initialize_control_thread();
-  virtual void notify_control_thread_heap_changed();
+  virtual void initialize_controller();
 
 public:
   uint max_workers();
@@ -361,6 +360,7 @@ public:
 private:
   bool _gc_state_changed;
   ShenandoahSharedBitmap _gc_state;
+  ShenandoahSharedFlag   _heap_changed;
   ShenandoahSharedFlag   _degenerated_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_move_in_progress;
@@ -412,6 +412,12 @@ public:
   // This is public to support assertions that the state hasn't been changed off of
   // a safepoint and that any changes were propagated to java threads after the safepoint.
   bool has_gc_state_changed() const { return _gc_state_changed; }
+
+  // Returns true if allocations have occurred in new regions or if regions have been
+  // uncommitted since the previous calls. This call will reset the flag to false.
+  bool has_changed() {
+    return _heap_changed.try_unset();
+  }
 
   void set_evacuation_reserve_quantities(bool is_valid);
   void set_concurrent_young_mark_in_progress(bool in_progress);
