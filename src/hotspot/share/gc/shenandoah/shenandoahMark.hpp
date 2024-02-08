@@ -29,8 +29,9 @@
 #include "gc/shared/ageTable.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "gc/shared/taskTerminator.hpp"
-#include "gc/shenandoah/shenandoahOopClosures.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 
 // Base class for mark
 // Mark class does not maintain states. Instead, mark states are
