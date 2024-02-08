@@ -32,10 +32,6 @@
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
 
-static ShenandoahHeuristics* get_heuristics(ShenandoahGeneration* nullable) {
-  return nullable != nullptr ? nullable->heuristics() : nullptr;
-}
-
 ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahGenerationalControlThread* control_thread) :
   ConcurrentGCThread(),
   _control_thread(control_thread),
@@ -45,9 +41,9 @@ ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahGenerationalContr
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   assert(heap->mode()->is_generational(), "Only generational mode here.");
 
-  _old_heuristics = get_heuristics(heap->old_generation());
-  _young_heuristics = get_heuristics(heap->young_generation());
-  _global_heuristics = get_heuristics(heap->global_generation());
+  _old_heuristics = heap->old_generation()->heuristics();
+  _young_heuristics = heap->young_generation()->heuristics();
+  _global_heuristics = heap->global_generation()->heuristics();
 
   create_and_start();
 }
@@ -63,9 +59,6 @@ void ShenandoahRegulatorThread::run_service() {
 }
 
 void ShenandoahRegulatorThread::regulate_young_and_old_cycles() {
-  assert(_young_heuristics != nullptr, "Need young heuristics.");
-  assert(_old_heuristics != nullptr, "Need old heuristics.");
-
   while (!should_terminate()) {
     ShenandoahGenerationalControlThread::GCMode mode = _control_thread->gc_mode();
     if (mode == ShenandoahGenerationalControlThread::none) {
@@ -96,9 +89,6 @@ void ShenandoahRegulatorThread::regulate_young_and_old_cycles() {
 
 
 void ShenandoahRegulatorThread::regulate_young_and_global_cycles() {
-  assert(_young_heuristics != nullptr, "Need young heuristics.");
-  assert(_global_heuristics != nullptr, "Need global heuristics.");
-
   while (!should_terminate()) {
     if (_control_thread->gc_mode() == ShenandoahGenerationalControlThread::none) {
       if (start_global_cycle()) {

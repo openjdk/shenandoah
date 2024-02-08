@@ -32,8 +32,6 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
-#include "runtime/task.hpp"
-#include "utilities/ostream.hpp"
 
 class ShenandoahGenerationalControlThread: public ShenandoahController {
   friend class VMStructs;

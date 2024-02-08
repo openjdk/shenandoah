@@ -25,9 +25,6 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHREGULATORTHREAD_HPP
 
 #include "gc/shared/concurrentGCThread.hpp"
-#include "gc/shared/gcCause.hpp"
-#include "gc/shenandoah/shenandoahSharedVariables.hpp"
-#include "runtime/mutex.hpp"
 
 class ShenandoahHeuristics;
 class ShenandoahGenerationalControlThread;
