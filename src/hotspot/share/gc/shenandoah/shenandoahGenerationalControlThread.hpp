@@ -38,7 +38,7 @@
 class ShenandoahGenerationalControlThread: public ShenandoahController {
   friend class VMStructs;
 
-private:
+public:
   typedef enum {
     none,
     concurrent_normal,
@@ -48,6 +48,7 @@ private:
     servicing_old
   } GCMode;
 
+private:
   Monitor _control_lock;
   Monitor _regulator_lock;
 
@@ -74,6 +75,9 @@ public:
   // Return true if the request to start a concurrent GC for the given generation succeeded.
   bool request_concurrent_gc(ShenandoahGenerationType generation);
 
+  GCMode gc_mode() {
+    return _mode;
+  }
 private:
 
   // Returns true if the cycle has been cancelled or degenerated.
@@ -100,16 +104,13 @@ private:
   void process_phase_timings(const ShenandoahHeap* heap);
 
   void service_concurrent_normal_cycle(ShenandoahHeap* heap,
-                                       const ShenandoahGenerationType generation,
+                                       ShenandoahGenerationType generation,
                                        GCCause::Cause cause);
 
   void service_concurrent_old_cycle(ShenandoahHeap* heap,
                                     GCCause::Cause &cause);
 
   void set_gc_mode(GCMode new_mode);
-  GCMode gc_mode() {
-    return _mode;
-  }
 
   static ShenandoahGenerationType select_global_generation();
 

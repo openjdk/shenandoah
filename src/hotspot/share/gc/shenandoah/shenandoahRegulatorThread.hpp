@@ -61,8 +61,6 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
   void regulate_young_and_old_cycles();
   // When mode is generational, but ShenandoahAllowOldMarkingPreemption is false
   void regulate_young_and_global_cycles();
-  // Default behavior for other modes (single generation).
-  void regulate_global_cycles();
 
   // These return true if a cycle was started.
   bool start_old_cycle();
@@ -84,7 +82,7 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
   ShenandoahHeuristics* _old_heuristics;
   ShenandoahHeuristics* _global_heuristics;
 
-  int _sleep;
+  uint _sleep;
   double _last_sleep_adjust_time;
 };
 
