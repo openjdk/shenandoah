@@ -351,9 +351,11 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(GCCause::Cause cau
     // Cycle is complete
     heap->global_generation()->heuristics()->record_success_concurrent(gc.abbreviated());
     heap->shenandoah_policy()->record_success_concurrent(false, gc.abbreviated());
+    heap->log_heap_status("At end of GC");
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
+    heap->log_heap_status("At end of cancelled GC");
   }
 }
 

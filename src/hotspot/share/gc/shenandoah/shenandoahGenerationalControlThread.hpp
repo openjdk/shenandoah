@@ -112,8 +112,6 @@ private:
 
   void set_gc_mode(GCMode new_mode);
 
-  static ShenandoahGenerationType select_global_generation();
-
   static const char* gc_mode_name(GCMode mode);
 
   void notify_control_thread();
