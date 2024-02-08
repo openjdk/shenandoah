@@ -25,6 +25,8 @@
 
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shenandoah/shenandoahController.hpp"
+#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 
 void ShenandoahController::pacing_notify_alloc(size_t words) {
   assert(ShenandoahPacing, "should only call when pacing is enabled");
@@ -50,3 +52,61 @@ void ShenandoahController::update_gc_id() {
 size_t ShenandoahController::get_gc_id() {
   return Atomic::load(&_gc_id);
 }
+
+void ShenandoahController::handle_alloc_failure(ShenandoahAllocRequest& req, bool block) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+
+  assert(current()->is_Java_thread(), "expect Java thread here");
+  bool is_humongous = req.size() > ShenandoahHeapRegion::humongous_threshold_words();
+
+  if (try_set_alloc_failure_gc(is_humongous)) {
+    // Only report the first allocation failure
+    log_info(gc)("Failed to allocate %s, " SIZE_FORMAT "%s",
+                 req.type_string(),
+                 byte_size_in_proper_unit(req.size() * HeapWordSize), proper_unit_for_byte_size(req.size() * HeapWordSize));
+
+    // Now that alloc failure GC is scheduled, we can abort everything else
+    heap->cancel_gc(GCCause::_allocation_failure);
+  }
+
+
+  if (block) {
+    MonitorLocker ml(&_alloc_failure_waiters_lock);
+    while (is_alloc_failure_gc()) {
+      ml.wait();
+    }
+  }
+}
+
+void ShenandoahController::handle_alloc_failure_evac(size_t words) {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  bool is_humongous = (words > ShenandoahHeapRegion::region_size_words());
+
+  if (try_set_alloc_failure_gc(is_humongous)) {
+    // Only report the first allocation failure
+    log_info(gc)("Failed to allocate " SIZE_FORMAT "%s for evacuation",
+                 byte_size_in_proper_unit(words * HeapWordSize), proper_unit_for_byte_size(words * HeapWordSize));
+  }
+
+  // Forcefully report allocation failure
+  heap->cancel_gc(GCCause::_shenandoah_allocation_failure_evac);
+}
+
+void ShenandoahController::notify_alloc_failure_waiters() {
+  _alloc_failure_gc.unset();
+  _humongous_alloc_failure_gc.unset();
+  MonitorLocker ml(&_alloc_failure_waiters_lock);
+  ml.notify_all();
+}
+
+bool ShenandoahController::try_set_alloc_failure_gc(bool is_humongous) {
+  if (is_humongous) {
+    _humongous_alloc_failure_gc.try_set();
+  }
+  return _alloc_failure_gc.try_set();
+}
+
+bool ShenandoahController::is_alloc_failure_gc() {
+  return _alloc_failure_gc.is_set();
+}
+

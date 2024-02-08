@@ -44,11 +44,24 @@ private:
   volatile size_t _gc_id;
   shenandoah_padding(2);
 
+protected:
+  ShenandoahSharedFlag _alloc_failure_gc;
+  ShenandoahSharedFlag _humongous_alloc_failure_gc;
+
+  // While we could have a single lock for these, it may risk unblocking
+  // GC waiters when alloc failure GC cycle finishes. We want instead
+  // to make complete explicit cycle for demanding customers.
+  Monitor _alloc_failure_waiters_lock;
+  Monitor _gc_waiters_lock;
+
 public:
   ShenandoahController():
     ConcurrentGCThread(),
     _allocs_seen(0),
-    _gc_id(0) { }
+    _gc_id(0),
+    _alloc_failure_waiters_lock(Mutex::safepoint-2, "ShenandoahAllocFailureGC_lock", true),
+    _gc_waiters_lock(Mutex::safepoint-2, "ShenandoahRequestedGC_lock", true)
+  { }
 
   // This is invoked by the heap when it allocates an object
   // in a region for the first time. It is also called when regions
@@ -59,13 +72,22 @@ public:
   // like System.gc and "implicit" gc requests, like metaspace oom.
   virtual void request_gc(GCCause::Cause cause) = 0;
 
-  // Invoked for allocation failures during evacuation. This cancels
-  // the collection cycle without blocking.
-  virtual void handle_alloc_failure_evac(size_t words) = 0;
-
   // This cancels the collection cycle and has an option to block
   // until another cycle runs and clears the alloc failure gc flag.
-  virtual void handle_alloc_failure(ShenandoahAllocRequest& req, bool block) = 0;
+  void handle_alloc_failure(ShenandoahAllocRequest& req, bool block);
+
+  // Invoked for allocation failures during evacuation. This cancels
+  // the collection cycle without blocking.
+  void handle_alloc_failure_evac(size_t words);
+
+  // Return true if setting the flag which indicates allocation failure succeeds.
+  bool try_set_alloc_failure_gc(bool is_humongous);
+
+  // Notify threads waiting for GC to complete.
+  void notify_alloc_failure_waiters();
+
+  // True if allocation failure flag has been set.
+  bool is_alloc_failure_gc();
 
   // This is called for every allocation. The control thread accumulates
   // this value when idle. During the gc cycle, the control resets it

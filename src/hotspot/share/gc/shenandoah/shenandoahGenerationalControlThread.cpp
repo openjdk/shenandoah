@@ -57,8 +57,6 @@
 
 ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
   ShenandoahController(),
-  _alloc_failure_waiters_lock(Mutex::safepoint - 2, "ShenandoahAllocFailureGC_lock", true),
-  _gc_waiters_lock(Mutex::safepoint - 2, "ShenandoahRequestedGC_lock", true),
   _control_lock(Mutex::nosafepoint - 2, "ShenandoahControlGC_lock", true),
   _regulator_lock(Mutex::nosafepoint - 2, "ShenandoahRegulatorGC_lock", true),
   _requested_gc_cause(GCCause::_no_gc),
@@ -884,62 +882,6 @@ void ShenandoahGenerationalControlThread::handle_requested_gc(GCCause::Cause cau
     }
     current_gc_id = get_gc_id();
   }
-}
-
-void ShenandoahGenerationalControlThread::handle_alloc_failure(ShenandoahAllocRequest& req, bool block) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-
-  assert(current()->is_Java_thread(), "expect Java thread here");
-  bool is_humongous = req.size() > ShenandoahHeapRegion::region_size_words();
-
-  if (try_set_alloc_failure_gc(is_humongous)) {
-    // Only report the first allocation failure
-    log_info(gc)("Failed to allocate %s, " SIZE_FORMAT "%s",
-                 req.type_string(),
-                 byte_size_in_proper_unit(req.size() * HeapWordSize), proper_unit_for_byte_size(req.size() * HeapWordSize));
-    // Now that alloc failure GC is scheduled, we can abort everything else
-    heap->cancel_gc(GCCause::_allocation_failure);
-  }
-
-
-  if (block) {
-    MonitorLocker ml(&_alloc_failure_waiters_lock);
-    while (is_alloc_failure_gc()) {
-      ml.wait();
-    }
-  }
-}
-
-void ShenandoahGenerationalControlThread::handle_alloc_failure_evac(size_t words) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  bool is_humongous = (words > ShenandoahHeapRegion::region_size_words());
-
-  if (try_set_alloc_failure_gc(is_humongous)) {
-    // Only report the first allocation failure
-    log_info(gc)("Failed to allocate " SIZE_FORMAT "%s for evacuation",
-                 byte_size_in_proper_unit(words * HeapWordSize), proper_unit_for_byte_size(words * HeapWordSize));
-  }
-
-  // Forcefully report allocation failure
-  heap->cancel_gc(GCCause::_shenandoah_allocation_failure_evac);
-}
-
-void ShenandoahGenerationalControlThread::notify_alloc_failure_waiters() {
-  _alloc_failure_gc.unset();
-  _humongous_alloc_failure_gc.unset();
-  MonitorLocker ml(&_alloc_failure_waiters_lock);
-  ml.notify_all();
-}
-
-bool ShenandoahGenerationalControlThread::try_set_alloc_failure_gc(bool is_humongous) {
-  if (is_humongous) {
-    _humongous_alloc_failure_gc.try_set();
-  }
-  return _alloc_failure_gc.try_set();
-}
-
-bool ShenandoahGenerationalControlThread::is_alloc_failure_gc() {
-  return _alloc_failure_gc.is_set();
 }
 
 void ShenandoahGenerationalControlThread::notify_gc_waiters() {

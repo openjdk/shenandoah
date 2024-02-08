@@ -39,11 +39,7 @@ class ShenandoahGenerationalControlThread: public ShenandoahController {
   friend class VMStructs;
 
 private:
-  // While we could have a single lock for these, it may risk unblocking
-  // GC waiters when alloc failure GC cycle finishes. We want instead
-  // to make complete explicit cycle for demanding customers.
-  Monitor _alloc_failure_waiters_lock;
-  Monitor _gc_waiters_lock;
+
   Monitor _control_lock;
   Monitor _regulator_lock;
 
@@ -63,8 +59,6 @@ public:
 private:
   ShenandoahSharedFlag _allow_old_preemption;
   ShenandoahSharedFlag _preemption_requested;
-  ShenandoahSharedFlag _alloc_failure_gc;
-  ShenandoahSharedFlag _humongous_alloc_failure_gc;
 
   GCCause::Cause  _requested_gc_cause;
   volatile ShenandoahGenerationType _requested_generation;
@@ -84,15 +78,6 @@ private:
   void service_stw_full_cycle(GCCause::Cause cause);
   void service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point);
 
-  // Return true if setting the flag which indicates allocation failure succeeds.
-  bool try_set_alloc_failure_gc(bool is_humongous);
-
-  // Notify threads waiting for GC to complete.
-  void notify_alloc_failure_waiters();
-
-  // True if allocation failure flag has been set.
-  bool is_alloc_failure_gc();
-
   void notify_gc_waiters();
 
   // Handle GC request.
@@ -110,15 +95,6 @@ private:
 public:
   // Constructor
   ShenandoahGenerationalControlThread();
-
-  // Handle allocation failure from a mutator allocation.
-  // Optionally blocks while collector is handling the failure. If the GC
-  // threshold has been exceeded, the mutator allocation will not block so
-  // that the out of memory error can be raised promptly.
-  void handle_alloc_failure(ShenandoahAllocRequest& req, bool block = true);
-
-  // Handle allocation failure from evacuation path.
-  void handle_alloc_failure_evac(size_t words);
 
   void request_gc(GCCause::Cause cause);
   // Return true if the request to start a concurrent GC for the given generation succeeded.
