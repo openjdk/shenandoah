@@ -43,7 +43,6 @@
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
-#include "gc/shenandoah/shenandoahPeriodicTasks.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
