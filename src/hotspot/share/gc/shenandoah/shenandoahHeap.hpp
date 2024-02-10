@@ -56,7 +56,6 @@ class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
 class PLAB;
 class ShenandoahCollectorPolicy;
-class ShenandoahGenerationalControlThread;
 class ShenandoahRegulatorThread;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
