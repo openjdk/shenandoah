@@ -1243,10 +1243,11 @@ void ShenandoahHeap::cancel_old_gc() {
 
 // Make sure old-generation is large enough, but no larger than is necessary, to hold mixed evacuations
 // and promotions, if we anticipate either. Any deficit is provided by the young generation, subject to
-// xfer_limit, and any excess is transferred to the young generation.
-// xfer_limit is the maximum we're able to transfer from young to old.
+// xfer_limit_mutator and planned collector reserves.  Any excess is transferred to the young generation.
+// xfer_limit_mutator is the maximum we're able to transfer from the young mutator budget to old.  We may
+// also xfer memory from the young Collector Reserve to the Old Collector Reserve.
 void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
-  size_t xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
+  size_t mutator_xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
 
   // We can limit the old reserve to the size of anticipated promotions:
   // max_old_reserve is an upper bound on memory evacuated from old and promoted to old,
@@ -1268,7 +1269,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   assert(ShenandoahOldEvacRatioPercent <= 100, "Error");
   const size_t old_available = old_generation()->available();
   // The free set will reserve this amount of memory to hold young evacuations
-  const size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
+  size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
   const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100) ?
      old_available : MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                           old_available);
@@ -1320,21 +1321,34 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
     const size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions() + old_cset_regions;
     old_region_surplus = MIN2(old_region_surplus, unaffiliated_old_regions);
   } else {
-    // We are running a deficit which we'd like to fill from young.
+    // We are running a deficit which we will try to fill from young.
     // Ignore that this will directly impact young_generation()->max_capacity(),
     // indirectly impacting young_reserve and old_reserve.  These computations are conservative.
     const size_t old_need = old_reserve - max_old_available;
     // The old region deficit (rounded up) will come from young
     old_region_deficit = (old_need + region_size_bytes - 1) / region_size_bytes;
 
-    // Round down the regions we can transfer from young to old. If we're running short
-    // on young-gen memory, we restrict the xfer. Old-gen collection activities will be
-    // curtailed if the budget is restricted.
-    const size_t max_old_region_xfer = xfer_limit / region_size_bytes;
-    old_region_deficit = MIN2(old_region_deficit, max_old_region_xfer);
+    const size_t max_mutator_xfer = mutator_xfer_limit / region_size_bytes;
+    if (max_mutator_xfer < old_region_deficit) {
+      const size_t collector_reserve_sum = young_reserve + max_old_reserve;
+      const size_t intended_memory_for_old = (collector_reserve_sum * ShenandoahOldEvacRatioPercent) / 100;
+      assert(intended_memory_for_old > max_old_reserve, "Sanity");
+      const size_t old_shortfall = intended_memory_for_old - max_old_reserve;
+      // round down
+      size_t reserve_xfer_regions = old_shortfall / region_size_bytes;
+      if (max_mutator_xfer + reserve_xfer_regions > old_region_deficit) {
+        reserve_xfer_regions = old_region_deficit - max_mutator_xfer;
+      }
+      old_region_deficit = max_mutator_xfer + reserve_xfer_regions;
+
+      // Shrink the young evac reserve for subsequent GC
+      young_reserve -= reserve_xfer_regions * region_size_bytes;
+    }
+    // else, max_mutator_transfer is large enough to support the known deficit
   }
   assert(old_region_deficit == 0 || old_region_surplus == 0, "Only surplus or deficit, never both");
 
+  set_young_evac_reserve(young_reserve);
   set_old_region_surplus(old_region_surplus);
   set_old_region_deficit(old_region_deficit);
 }

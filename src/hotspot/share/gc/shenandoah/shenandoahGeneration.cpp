@@ -249,8 +249,9 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap
 
   // First priority is to reclaim the easy garbage out of young-gen.
 
-  // maximum_young_evacuation_reserve is upper bound on memory to be evacuated out of young
-  const size_t maximum_young_evacuation_reserve = (young_generation->max_capacity() * ShenandoahEvacReserve) / 100;
+  // maximum_young_evacuation_reserve is upper bound on memory to be evacuated into young Collector Reserve.  This is
+  // bounded at the end of previous GC cycle, based on available memory and balancing of evacuation to old and young.
+  const size_t maximum_young_evacuation_reserve = heap->get_young_evac_reserve();
   const size_t young_evacuation_reserve = MIN2(maximum_young_evacuation_reserve, young_generation->available_with_reserve());
 
   // maximum_old_evacuation_reserve is an upper bound on memory evacuated from old and evacuated to old (promoted),
