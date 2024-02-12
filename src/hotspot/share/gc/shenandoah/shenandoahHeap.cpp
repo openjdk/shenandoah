@@ -1275,11 +1275,11 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   assert(ShenandoahOldEvacRatioPercent <= 100, "Error");
   const size_t old_available = old_generation()->available();
   // The free set will reserve this amount of memory to hold young evacuations
-  size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
-  const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100) ?
-     old_available : MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
-                          old_available);
+  const size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
 
+  // In the case that ShenandoahOldEvacRatioPercent equals 100, max_old_reserve is limited only by xfer_limit.
+  const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100) ?
+    old_available + xfer_limit: (young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent);
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
   // Decide how much old space we should reserve for a mixed collection
@@ -1307,6 +1307,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   const bool doing_promotions = promo_load > 0;
   if (doing_promotions) {
     // We're promoting and have a bound on the maximum amount that can be promoted
+    assert(max_old_reserve >= reserve_for_mixed, "Sanity");
     const size_t available_for_promotions = max_old_reserve - reserve_for_mixed;
     reserve_for_promo = MIN2((size_t)(promo_load * ShenandoahPromoEvacWaste), available_for_promotions);
   }
