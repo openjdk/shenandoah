@@ -47,8 +47,6 @@ class ShenandoahRegulatorThread: public ConcurrentGCThread {
  public:
   explicit ShenandoahRegulatorThread(ShenandoahGenerationalControlThread* control_thread);
 
-  const char* name() const { return "ShenandoahRegulatorThread";}
-
  protected:
   void run_service() override;
   void stop_service() override;

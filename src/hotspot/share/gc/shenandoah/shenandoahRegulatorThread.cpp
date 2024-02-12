@@ -45,6 +45,7 @@ ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahGenerationalContr
   _young_heuristics = heap->young_generation()->heuristics();
   _global_heuristics = heap->global_generation()->heuristics();
 
+  set_name("Shenandoah Regulator Thread");
   create_and_start();
 }
 
