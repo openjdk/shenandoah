@@ -25,7 +25,7 @@
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shenandoah/shenandoahGenerationalFullGC.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.hpp"
 
 ShenandoahPrepareForGenerationalCompactionObjectClosure::ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,
                                                           GrowableArray<ShenandoahHeapRegion*>& empty_regions,
@@ -92,10 +92,6 @@ void ShenandoahPrepareForGenerationalCompactionObjectClosure::finish_young_regio
 
 bool ShenandoahPrepareForGenerationalCompactionObjectClosure::is_compact_same_region() {
   return (_from_region == _old_to_region) || (_from_region == _young_to_region);
-}
-
-int ShenandoahPrepareForGenerationalCompactionObjectClosure::empty_regions_pos() {
-  return _empty_regions_pos;
 }
 
 void ShenandoahPrepareForGenerationalCompactionObjectClosure::do_object(oop p) {
@@ -174,9 +170,9 @@ void ShenandoahPrepareForGenerationalCompactionObjectClosure::do_object(oop p) {
     // After full gc compaction, all regions have age 0.  Embed the region's age into the object's age in order to preserve
     // tenuring progress.
     if (_heap->is_aging_cycle()) {
-      _heap->increase_object_age(p, from_region_age + 1);
+      ShenandoahHeap::increase_object_age(p, from_region_age + 1);
     } else {
-      _heap->increase_object_age(p, from_region_age);
+      ShenandoahHeap::increase_object_age(p, from_region_age);
     }
 
     if (_young_compact_point + obj_size > _young_to_region->end()) {

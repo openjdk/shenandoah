@@ -22,8 +22,8 @@
  *
  */
 
-#ifndef LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHGENERATIONALFULLGC_HPP
-#define LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHGENERATIONALFULLGC_HPP
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALFULLGC_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALFULLGC_HPP
 
 #include "gc/shared/preservedMarks.hpp"
 #include "memory/iterator.hpp"
@@ -67,8 +67,9 @@ public:
   void finish_old_region();
   void finish_young_region();
   bool is_compact_same_region();
-  int empty_regions_pos();
-  void do_object(oop p);
+  int empty_regions_pos() const { return _empty_regions_pos; }
+
+  void do_object(oop p) override;
 };
 
-#endif //LINUX_X86_64_SERVER_SLOWDEBUG_SHENANDOAHGENERATIONALFULLGC_HPP
+#endif //SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALFULLGC_HPP
