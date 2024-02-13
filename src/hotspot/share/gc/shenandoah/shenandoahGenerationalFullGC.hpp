@@ -35,6 +35,7 @@ class ShenandoahHeapRegion;
 
 class ShenandoahGenerationalFullGC {
 public:
+  static void prepare(ShenandoahHeap* heap);
   static void handle_completion(ShenandoahHeap* heap);
   static void rebuild_remembered_set(ShenandoahHeap* heap);
   static void balance_old_generation(ShenandoahHeap* heap);

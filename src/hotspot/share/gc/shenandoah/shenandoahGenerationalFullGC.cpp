@@ -22,44 +22,8 @@
  *
  */
 
-#include "shenandoahGenerationalFullGC.hpp"
-#include "utilities/growableArray.hpp"
-#include "utilities/events.hpp"
-#include "utilities/copy.hpp"
-#include "runtime/vmThread.hpp"
-#include "runtime/orderAccess.hpp"
-#include "runtime/javaThread.hpp"
-#include "oops/oop.inline.hpp"
-#include "oops/compressedOops.inline.hpp"
-#include "memory/universe.hpp"
-#include "memory/metaspaceUtils.hpp"
-#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
-#include "gc/shenandoah/shenandoahVMOperations.hpp"
-#include "gc/shenandoah/shenandoahVerifier.hpp"
-#include "gc/shenandoah/shenandoahSTWMark.hpp"
-#include "gc/shenandoah/shenandoahRootProcessor.inline.hpp"
-#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
-#include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
-#include "gc/shenandoah/shenandoahMetrics.hpp"
-#include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
-#include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
-#include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
-#include "gc/shenandoah/shenandoahMark.inline.hpp"
-#include "gc/shenandoah/shenandoahPhaseTimings.hpp"
-#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
-#include "gc/shenandoah/shenandoahFullGC.hpp"
-#include "gc/shenandoah/shenandoahFreeSet.hpp"
-#include "gc/shenandoah/shenandoahCollectionSet.hpp"
-#include "gc/shenandoah/shenandoahConcurrentGC.hpp"
-#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
-#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
-#include "gc/shared/workerThread.hpp"
-#include "gc/shared/tlab_globals.hpp"
-#include "gc/shared/gcTraceTime.inline.hpp"
-#include "gc/shared/continuationGCSupport.hpp"
-#include "compiler/oopMap.hpp"
 #include "precompiled.hpp"
+
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shenandoah/shenandoahGenerationalFullGC.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
@@ -83,6 +47,18 @@ void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {
 void assert_regions_used_not_more_than_capacity(ShenandoahGeneration* generation) {}
 void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation)
 #endif
+
+
+void ShenandoahGenerationalFullGC::prepare(ShenandoahHeap* heap) {
+  // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
+  heap->set_gc_generation(heap->global_generation());
+
+  // No need for old_gen->increase_used() as this was done when plabs were allocated.
+  heap->reset_generation_reserves();
+
+  // Full GC supersedes any marking or coalescing in old generation.
+  heap->cancel_old_gc();
+}
 
 void ShenandoahGenerationalFullGC::handle_completion(ShenandoahHeap* heap) {
   // Full GC should reset time since last gc for young and old heuristics

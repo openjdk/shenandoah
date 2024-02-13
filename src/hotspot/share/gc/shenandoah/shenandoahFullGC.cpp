@@ -48,7 +48,6 @@
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahMetrics.hpp"
-#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.inline.hpp"
@@ -57,12 +56,10 @@
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 #include "gc/shenandoah/shenandoahVMOperations.hpp"
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
-#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "memory/metaspaceUtils.hpp"
 #include "memory/universe.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
-#include "runtime/javaThread.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/copy.hpp"
@@ -134,17 +131,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
 void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  // TODO: Is it necessary to set this in non-generational modes?
-  //    In non-generational modes, we should always and only be using the global generation
-  // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
-  heap->set_gc_generation(heap->global_generation());
 
   if (heap->mode()->is_generational()) {
-    // No need for old_gen->increase_used() as this was done when plabs were allocated.
-    heap->reset_generation_reserves();
-
-    // Full GC supersedes any marking or coalescing in old generation.
-    heap->cancel_old_gc();
+    ShenandoahGenerationalFullGC::prepare(heap);
   }
 
   if (ShenandoahVerify) {
@@ -264,17 +253,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
 
     // TODO: Add this upstream.
     phase5_epilog();
-  }
-
-  {
-    // Epilogue
-    // TODO: Merge with phase5_epilog?
-    _preserved_marks->restore(heap->workers());
-    _preserved_marks->reclaim();
-
-    if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
-    }
   }
 
   // Resize metaspace
@@ -481,6 +459,7 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
   }
 }
 
+// TODO: Also include this upstream
 template<typename ClosureType>
 void ShenandoahPrepareForCompactionTask::prepare_for_compaction(ClosureType& cl,
                                                                 GrowableArray<ShenandoahHeapRegion*>& empty_regions,
@@ -1224,7 +1203,11 @@ void ShenandoahFullGC::phase5_epilog() {
     // abbreviated cycle.
     if (heap->mode()->is_generational()) {
       ShenandoahGenerationalFullGC::balance_generations(heap);
+      ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
     }
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }
+
+  _preserved_marks->restore(heap->workers());
+  _preserved_marks->reclaim();
 }
