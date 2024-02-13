@@ -25,8 +25,9 @@
 
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
-#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
@@ -37,10 +38,8 @@ ShenandoahRegulatorThread::ShenandoahRegulatorThread(ShenandoahGenerationalContr
   _control_thread(control_thread),
   _sleep(ShenandoahControlIntervalMin),
   _last_sleep_adjust_time(os::elapsedTime()) {
-
+  shenandoah_assert_generational();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  assert(heap->mode()->is_generational(), "Only generational mode here.");
-
   _old_heuristics = heap->old_generation()->heuristics();
   _young_heuristics = heap->young_generation()->heuristics();
   _global_heuristics = heap->global_generation()->heuristics();

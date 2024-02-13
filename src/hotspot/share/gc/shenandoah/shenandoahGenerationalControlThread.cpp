@@ -26,6 +26,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
@@ -35,8 +36,9 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahOldGC.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
+#include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
@@ -53,7 +55,7 @@ ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
   _degen_point(ShenandoahGC::_degenerated_outside_cycle),
   _degen_generation(nullptr),
   _mode(none) {
-  assert(ShenandoahHeap::heap()->mode()->is_generational(), "Only generational mode here");
+  shenandoah_assert_generational();
   set_name("Shenandoah Control Thread");
   create_and_start();
 }
