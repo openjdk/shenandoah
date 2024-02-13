@@ -482,6 +482,8 @@ public:
   inline size_t set_young_evac_reserve(size_t new_val);
   inline size_t get_young_evac_reserve() const;
 
+  inline void reset_generation_reserves();
+
   // Return the age census object for young gen (in generational mode)
   inline ShenandoahAgeCensus* age_census() const;
 

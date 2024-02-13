@@ -34,7 +34,15 @@ class ShenandoahHeap;
 class ShenandoahHeapRegion;
 
 class ShenandoahGenerationalFullGC {
-
+public:
+  static void handle_completion(ShenandoahHeap* heap);
+  static void rebuild_remembered_set(ShenandoahHeap* heap);
+  static void balance_old_generation(ShenandoahHeap* heap);
+  static void balance_generations(ShenandoahHeap* heap);
+  static void log_live_in_old(ShenandoahHeap* heap);
+  static void account_for_region(ShenandoahHeapRegion* r, size_t &region_count, size_t &region_usage, size_t &humongous_waste);
+  static void restore_top_before_promote(ShenandoahHeap* heap);
+  static void maybe_coalesce_and_fill_region(ShenandoahHeapRegion* r);
 };
 
 class ShenandoahPrepareForGenerationalCompactionObjectClosure : public ObjectClosure {
@@ -59,8 +67,7 @@ private:
 public:
   ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,
                                                           GrowableArray<ShenandoahHeapRegion*>& empty_regions,
-                                                          ShenandoahHeapRegion* old_to_region,
-                                                          ShenandoahHeapRegion* young_to_region, uint worker_id);
+                                                          ShenandoahHeapRegion* from_region, uint worker_id);
 
   void set_from_region(ShenandoahHeapRegion* from_region);
   void finish();

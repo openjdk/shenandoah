@@ -22,33 +22,237 @@
  *
  */
 
+#include "shenandoahGenerationalFullGC.hpp"
+#include "utilities/growableArray.hpp"
+#include "utilities/events.hpp"
+#include "utilities/copy.hpp"
+#include "runtime/vmThread.hpp"
+#include "runtime/orderAccess.hpp"
+#include "runtime/javaThread.hpp"
+#include "oops/oop.inline.hpp"
+#include "oops/compressedOops.inline.hpp"
+#include "memory/universe.hpp"
+#include "memory/metaspaceUtils.hpp"
+#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
+#include "gc/shenandoah/shenandoahVMOperations.hpp"
+#include "gc/shenandoah/shenandoahVerifier.hpp"
+#include "gc/shenandoah/shenandoahSTWMark.hpp"
+#include "gc/shenandoah/shenandoahRootProcessor.inline.hpp"
+#include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
+#include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
+#include "gc/shenandoah/shenandoahMetrics.hpp"
+#include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
+#include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
+#include "gc/shenandoah/shenandoahMark.inline.hpp"
+#include "gc/shenandoah/shenandoahPhaseTimings.hpp"
+#include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
+#include "gc/shenandoah/shenandoahFullGC.hpp"
+#include "gc/shenandoah/shenandoahFreeSet.hpp"
+#include "gc/shenandoah/shenandoahCollectionSet.hpp"
+#include "gc/shenandoah/shenandoahConcurrentGC.hpp"
+#include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shared/workerThread.hpp"
+#include "gc/shared/tlab_globals.hpp"
+#include "gc/shared/gcTraceTime.inline.hpp"
+#include "gc/shared/continuationGCSupport.hpp"
+#include "compiler/oopMap.hpp"
+#include "precompiled.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shenandoah/shenandoahGenerationalFullGC.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
+
+#ifdef ASSERT
+void assert_regions_used_not_more_than_capacity(ShenandoahGeneration* generation) {
+  assert(generation->used_regions_size() <= generation->max_capacity(),
+         "%s generation affiliated regions must be less than capacity", generation->name());
+}
+
+void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {
+  assert(generation->used_and_wasted() <= generation->used_regions_size(),
+         "%s consumed can be no larger than span of affiliated regions", generation->name());
+}
+#else
+void assert_regions_used_not_more_than_capacity(ShenandoahGeneration* generation) {}
+void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation)
+#endif
+
+void ShenandoahGenerationalFullGC::handle_completion(ShenandoahHeap* heap) {
+  // Full GC should reset time since last gc for young and old heuristics
+  ShenandoahYoungGeneration* young = heap->young_generation();
+  ShenandoahOldGeneration* old = heap->old_generation();
+  young->heuristics()->record_cycle_end();
+  old->heuristics()->record_cycle_end();
+
+  heap->mmu_tracker()->record_full(GCId::current());
+  heap->log_heap_status("At end of Full GC");
+
+  assert(old->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP,
+         "After full GC, old generation should be waiting for bootstrap.");
+
+  // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
+  // made valid by the time Full GC completes.
+  assert_regions_used_not_more_than_capacity(old);
+  assert_regions_used_not_more_than_capacity(young);
+  assert_usage_not_more_than_regions_used(old);
+  assert_usage_not_more_than_regions_used(young);
+
+  // Establish baseline for next old-has-grown trigger.
+  old->set_live_bytes_after_last_mark(old->used_and_wasted());
+}
+
+void ShenandoahGenerationalFullGC::rebuild_remembered_set(ShenandoahHeap* heap) {
+  ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_reconstruct_remembered_set);
+  ShenandoahRegionIterator regions;
+  ShenandoahReconstructRememberedSetTask task(&regions);
+  heap->workers()->run_task(&task);
+}
+
+void ShenandoahGenerationalFullGC::balance_old_generation(ShenandoahHeap* heap) {
+  size_t old_usage = heap->old_generation()->used_regions_size();
+  size_t old_capacity = heap->old_generation()->max_capacity();
+
+  assert(old_usage % ShenandoahHeapRegion::region_size_bytes() == 0, "Old usage must align with region size");
+  assert(old_capacity % ShenandoahHeapRegion::region_size_bytes() == 0, "Old capacity must align with region size");
+
+  if (old_capacity > old_usage) {
+    size_t excess_old_regions = (old_capacity - old_usage) / ShenandoahHeapRegion::region_size_bytes();
+    heap->generation_sizer()->transfer_to_young(excess_old_regions);
+  } else if (old_capacity < old_usage) {
+    size_t old_regions_deficit = (old_usage - old_capacity) / ShenandoahHeapRegion::region_size_bytes();
+    heap->generation_sizer()->force_transfer_to_old(old_regions_deficit);
+  }
+
+  log_info(gc)("FullGC done: young usage: " PROPERFMT ", old usage: " PROPERFMT,
+               PROPERFMTARGS(heap->young_generation()->used()),
+               PROPERFMTARGS(heap->old_generation()->used()));
+}
+
+void ShenandoahGenerationalFullGC::balance_generations(ShenandoahHeap* heap) {
+  bool success;
+  size_t region_xfer;
+  const char* region_destination;
+  ShenandoahYoungGeneration* young_gen = heap->young_generation();
+  ShenandoahGeneration* old_gen = heap->old_generation();
+
+  size_t old_region_surplus = heap->get_old_region_surplus();
+  size_t old_region_deficit = heap->get_old_region_deficit();
+  if (old_region_surplus) {
+    success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
+    region_destination = "young";
+    region_xfer = old_region_surplus;
+  } else if (old_region_deficit) {
+    success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
+    region_destination = "old";
+    region_xfer = old_region_deficit;
+    if (!success) {
+      ((ShenandoahOldHeuristics *) old_gen->heuristics())->trigger_cannot_expand();
+    }
+  } else {
+    region_destination = "none";
+    region_xfer = 0;
+    success = true;
+  }
+  heap->set_old_region_surplus(0);
+  heap->set_old_region_deficit(0);
+  size_t young_available = young_gen->available();
+  size_t old_available = old_gen->available();
+  log_info(gc, ergo)("After cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
+                     PROPERFMT ", young_available: " PROPERFMT,
+                     success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
+                     PROPERFMTARGS(old_available), PROPERFMTARGS(young_available));
+}
+
+void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {
+  LogTarget(Info, gc) lt;
+  if (lt.is_enabled()) {
+    size_t live_bytes_in_old = 0;
+    for (size_t i = 0; i < heap->num_regions(); i++) {
+      ShenandoahHeapRegion* r = heap->get_region(i);
+      if (r->is_old()) {
+        live_bytes_in_old += r->get_live_data_bytes();
+      }
+    }
+    log_info(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));
+  }
+}
+
+void ShenandoahGenerationalFullGC::restore_top_before_promote(ShenandoahHeap* heap) {
+  for (size_t i = 0; i < heap->num_regions(); i++) {
+    ShenandoahHeapRegion* r = heap->get_region(i);
+    if (r->get_top_before_promote() != nullptr) {
+      r->restore_top_before_promote();
+    }
+  }
+}
+
+void ShenandoahGenerationalFullGC::account_for_region(ShenandoahHeapRegion* r, size_t &region_count, size_t &region_usage, size_t &humongous_waste) {
+  region_count++;
+  region_usage += r->used();
+  if (r->is_humongous_start()) {
+    // For each humongous object, we take this path once regardless of how many regions it spans.
+    HeapWord* obj_addr = r->bottom();
+    oop obj = cast_to_oop(obj_addr);
+    size_t word_size = obj->size();
+    size_t region_size_words = ShenandoahHeapRegion::region_size_words();
+    size_t overreach = word_size % region_size_words;
+    if (overreach != 0) {
+      humongous_waste += (region_size_words - overreach) * HeapWordSize;
+    }
+    // else, this humongous object aligns exactly on region size, so no waste.
+  }
+}
+
+void ShenandoahGenerationalFullGC::maybe_coalesce_and_fill_region(ShenandoahHeapRegion* r) {
+  if (r->is_pinned() && r->is_old() && r->is_active() && !r->is_humongous()) {
+    // Pinned regions are not compacted so they may still hold unmarked objects with
+    // reference to reclaimed memory. Remembered set scanning will crash if it attempts
+    // to iterate the oops in these objects.
+    r->begin_preemptible_coalesce_and_fill();
+    r->oop_fill_and_coalesce_without_cancel();
+  }
+}
 
 ShenandoahPrepareForGenerationalCompactionObjectClosure::ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,
                                                           GrowableArray<ShenandoahHeapRegion*>& empty_regions,
-                                                          ShenandoahHeapRegion* old_to_region,
-                                                          ShenandoahHeapRegion* young_to_region, uint worker_id) :
+                                                          ShenandoahHeapRegion* from_region, uint worker_id) :
         _preserved_marks(preserved_marks),
         _heap(ShenandoahHeap::heap()),
         _tenuring_threshold(0),
         _empty_regions(empty_regions),
         _empty_regions_pos(0),
-        _old_to_region(old_to_region),
-        _young_to_region(young_to_region),
+        _old_to_region(nullptr),
+        _young_to_region(nullptr),
         _from_region(nullptr),
         _from_affiliation(ShenandoahAffiliation::FREE),
-        _old_compact_point((old_to_region != nullptr)? old_to_region->bottom(): nullptr),
-        _young_compact_point((young_to_region != nullptr)? young_to_region->bottom(): nullptr),
+        _old_compact_point(nullptr),
+        _young_compact_point(nullptr),
         _worker_id(worker_id) {
-  if (_heap->mode()->is_generational()) {
-    _tenuring_threshold = _heap->age_census()->tenuring_threshold();
+  assert(from_region != nullptr, "Worker needs from_region");
+  // assert from_region has live?
+  if (from_region->is_old()) {
+    _old_to_region = from_region;
+    _old_compact_point = from_region->bottom();
+  } else if (from_region->is_young()) {
+    _young_to_region = from_region;
+    _young_compact_point = from_region->bottom();
   }
+
+  _tenuring_threshold = _heap->age_census()->tenuring_threshold();
 }
 
 void ShenandoahPrepareForGenerationalCompactionObjectClosure::set_from_region(ShenandoahHeapRegion* from_region) {
+  log_debug(gc)("Worker %u compacting %s Region " SIZE_FORMAT " which had used " SIZE_FORMAT " and %s live",
+                _worker_id, from_region->affiliation_name(),
+                from_region->index(), from_region->used(), from_region->has_live()? "has": "does not have");
+
   _from_region = from_region;
   _from_affiliation = from_region->affiliation();
   if (_from_region->has_live()) {
