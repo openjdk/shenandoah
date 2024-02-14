@@ -251,7 +251,6 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
 
     phase4_compact_objects(worker_slices);
 
-    // TODO: Add this upstream.
     phase5_epilog();
   }
 
@@ -297,7 +296,6 @@ public:
     }
   }
 
-  // TODO: Send this upstream
   bool is_thread_safe() { return true; }
 };
 
@@ -351,7 +349,6 @@ public:
     _from_region = from_region;
   }
 
-  // TODO: Rename this upstream.
   void finish() {
     assert(_to_region != nullptr, "should not happen");
     _to_region->set_new_top(_compact_point);
@@ -459,7 +456,6 @@ void ShenandoahPrepareForCompactionTask::work(uint worker_id) {
   }
 }
 
-// TODO: Also include this upstream
 template<typename ClosureType>
 void ShenandoahPrepareForCompactionTask::prepare_for_compaction(ClosureType& cl,
                                                                 GrowableArray<ShenandoahHeapRegion*>& empty_regions,
@@ -1153,7 +1149,6 @@ void ShenandoahFullGC::phase4_compact_objects(ShenandoahHeapRegionSet** worker_s
   }
 }
 
-// TODO: Introduce phase5_epilog upstream
 void ShenandoahFullGC::phase5_epilog() {
   GCTraceTime(Info, gc, phases) time("Phase 5: Full GC epilog", _gc_timer);
   ShenandoahHeap* heap = ShenandoahHeap::heap();

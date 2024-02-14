@@ -45,7 +45,7 @@ void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {
 }
 #else
 void assert_regions_used_not_more_than_capacity(ShenandoahGeneration* generation) {}
-void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation)
+void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {}
 #endif
 
 
