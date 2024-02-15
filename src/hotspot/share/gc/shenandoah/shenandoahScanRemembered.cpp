@@ -400,7 +400,8 @@ void ShenandoahRegionChunkIterator::reset() {
 }
 
 ShenandoahReconstructRememberedSetTask::ShenandoahReconstructRememberedSetTask(ShenandoahRegionIterator* regions)
-  : WorkerTask("Shenandoah Reset Bitmap") { }
+  : WorkerTask("Shenandoah Reset Bitmap")
+  , _regions(regions) { }
 
 void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
   ShenandoahParallelWorkerSession worker_session(worker_id);
