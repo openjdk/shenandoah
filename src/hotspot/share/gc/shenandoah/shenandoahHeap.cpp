@@ -2093,6 +2093,8 @@ void ShenandoahHeap::print_tracing_info() const {
 }
 
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
+  shenandoah_policy()->record_collection_cause(cause);
+
   set_gc_cause(cause);
   set_gc_generation(generation);
 
