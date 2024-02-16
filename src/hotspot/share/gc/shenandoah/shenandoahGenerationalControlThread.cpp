@@ -308,7 +308,7 @@ void ShenandoahGenerationalControlThread::run_service() {
         heap->pacer()->setup_for_idle();
       }
     } else {
-      // Allow pacer to know we have seen this many allocations
+      // Report to pacer that we have seen this many words allocated
       if (ShenandoahPacing && (allocs_seen > 0)) {
         heap->pacer()->report_alloc(allocs_seen);
       }
