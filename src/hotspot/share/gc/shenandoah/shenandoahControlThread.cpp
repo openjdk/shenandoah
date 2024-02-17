@@ -71,7 +71,7 @@ void ShenandoahControlThread::run_service() {
     // Figure out if we have pending requests.
     const bool alloc_failure_pending = _alloc_failure_gc.is_set();
     const bool is_gc_requested = _gc_requested.is_set();
-    GCCause::Cause requested_gc_cause = _requested_gc_cause;
+    const GCCause::Cause requested_gc_cause = _requested_gc_cause;
 
     // This control loop iteration has seen this much allocation.
     const size_t allocs_seen = reset_allocs_seen();
@@ -104,6 +104,7 @@ void ShenandoahControlThread::run_service() {
         mode = stw_full;
       }
     } else if (is_gc_requested) {
+      cause = requested_gc_cause;
       log_info(gc)("Trigger: GC request (%s)", GCCause::to_string(cause));
       heuristics->record_requested_gc();
 
