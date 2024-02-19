@@ -1275,11 +1275,11 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   assert(ShenandoahOldEvacRatioPercent <= 100, "Error");
   const size_t old_available = old_generation()->available();
   // The free set will reserve this amount of memory to hold young evacuations
-  const size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
+  size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
 
   // In the case that ShenandoahOldEvacRatioPercent equals 100, max_old_reserve is limited only by xfer_limit.
   const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100) ?
-    old_available + xfer_limit: (young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent);
+    old_available + mutator_xfer_limit: (young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent);
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
   // Decide how much old space we should reserve for a mixed collection
