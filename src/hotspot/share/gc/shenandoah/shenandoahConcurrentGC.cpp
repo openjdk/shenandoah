@@ -53,6 +53,8 @@
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 
+#define KELVIN_DEBUG
+
 // Breakpoint support
 class ShenandoahBreakpointGCScope : public StackObj {
 private:
@@ -200,6 +202,10 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     }
   }
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN done with evacuation");
+#endif
+
   if (heap->has_forwarded_objects()) {
     // Perform update-refs phase.
     vmop_entry_init_updaterefs();
@@ -225,6 +231,11 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
+
+#ifdef KELVIN_DEBUG
+    log_info(gc)("KELVIN says we're no longer missing rebuild after abbreviated cycle");
+#endif
+    heap->rebuild_free_set(true /*concurrent*/);
   }
 
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
@@ -240,6 +251,9 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
       size_t old_region_surplus = heap->get_old_region_surplus();
       size_t old_region_deficit = heap->get_old_region_deficit();
+#ifdef KELVIN_DEBUG
+      log_info(gc)("KELVIN Fetching old surplus: " SIZE_FORMAT " and deficit: " SIZE_FORMAT, old_region_surplus, old_region_deficit);
+#endif
       if (old_region_surplus) {
         success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
         region_destination = "young";
@@ -258,9 +272,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       }
       heap->set_old_region_surplus(0);
       heap->set_old_region_deficit(0);
-      heap->set_young_evac_reserve(0);
-      heap->set_old_evac_reserve(0);
-      heap->set_promoted_reserve(0);
     }
 
     // Report outside the heap lock
@@ -272,6 +283,14 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
                        byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
                        byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
   }
+#ifdef KELVIN_DEBUG
+  {
+    log_info(gc)("KELVIN finished resizing generations");
+    ShenandoahHeapLocker locker(heap->lock());
+    heap->free_set()->log_status();
+  }
+#endif
+
   return true;
 }
 
@@ -1267,6 +1286,9 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
     Universe::verify();
   }
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN: op_final_updaterefs() invokes rebuild");
+#endif
   heap->rebuild_free_set(true /*concurrent*/);
 }
 

@@ -328,14 +328,6 @@ void ShenandoahDegenGC::op_degenerated() {
       ShouldNotReachHere();
   }
 
-  if (heap->mode()->is_generational()) {
-    // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
-    // Otherwise, these actions have no effect.
-    heap->set_young_evac_reserve(0);
-    heap->set_old_evac_reserve(0);
-    heap->set_promoted_reserve(0);
-  }
-
   if (ShenandoahVerify) {
     heap->verifier()->verify_after_degenerated();
   }
@@ -466,6 +458,10 @@ void ShenandoahDegenGC::op_update_roots() {
     Universe::verify();
   }
 
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN: Degen:op_update_roots() invokes rebuild");
+#endif
   heap->rebuild_free_set(false /*concurrent*/);
 }
 

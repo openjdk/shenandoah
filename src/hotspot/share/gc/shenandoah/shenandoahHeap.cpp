@@ -1249,6 +1249,12 @@ void ShenandoahHeap::cancel_old_gc() {
 void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t mutator_xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
 
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN adjust_generation_sizes_for_next_cycle(xfer_limit: " SIZE_FORMAT ", young_cset_regions: " SIZE_FORMAT
+               ", old_cset_regions: " SIZE_FORMAT ")", mutator_xfer_limit, young_cset_regions, old_cset_regions);
+#endif
+
   // We can limit the old reserve to the size of anticipated promotions:
   // max_old_reserve is an upper bound on memory evacuated from old and promoted to old,
   // clamped by the old generation space available.
@@ -1325,32 +1331,55 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
     // Ignore that this will directly impact young_generation()->max_capacity(),
     // indirectly impacting young_reserve and old_reserve.  These computations are conservative.
     const size_t old_need = old_reserve - max_old_available;
-    // The old region deficit (rounded up) will come from young
-    old_region_deficit = (old_need + region_size_bytes - 1) / region_size_bytes;
 
-    const size_t max_mutator_xfer = mutator_xfer_limit / region_size_bytes;
-    if (max_mutator_xfer < old_region_deficit) {
+    old_region_deficit = (old_need + region_size_bytes - 1) / region_size_bytes;
+    size_t mutator_region_xfer = mutator_xfer_limit / region_size_bytes;
+    if (mutator_region_xfer < old_region_deficit) {
       const size_t collector_reserve_sum = young_reserve + max_old_reserve;
       const size_t intended_memory_for_old = (collector_reserve_sum * ShenandoahOldEvacRatioPercent) / 100;
       assert(intended_memory_for_old > max_old_reserve, "Sanity");
       const size_t old_shortfall = intended_memory_for_old - max_old_reserve;
       // round down
       size_t reserve_xfer_regions = old_shortfall / region_size_bytes;
-      if (max_mutator_xfer + reserve_xfer_regions > old_region_deficit) {
-        reserve_xfer_regions = old_region_deficit - max_mutator_xfer;
+      if (mutator_region_xfer + reserve_xfer_regions > old_region_deficit) {
+        reserve_xfer_regions = old_region_deficit - mutator_region_xfer;
       }
-      old_region_deficit = max_mutator_xfer + reserve_xfer_regions;
-
-      // Shrink the young evac reserve for subsequent GC
+      old_region_deficit = mutator_region_xfer + reserve_xfer_regions;
+      if (old_region_deficit > young_generation()->free_unaffiliated_regions() + young_cset_regions) {
+        size_t delta = old_region_deficit - (young_generation()->free_unaffiliated_regions() + young_cset_regions);
+        old_region_deficit -= delta;
+        if (delta > reserve_xfer_regions) {
+          delta -= reserve_xfer_regions;
+          reserve_xfer_regions = 0;
+        }
+        assert(delta <= mutator_region_xfer, "Sanity");
+        mutator_region_xfer -= delta;
+      }
+#ifdef KELVIN_DEBUG
+      log_info(gc)("KELVIN transferring " SIZE_FORMAT " regions from Mutator to Old Collector reserve", mutator_region_xfer);
+      log_info(gc)("KELVIN transferring " SIZE_FORMAT " regions from Collector reserve to Old Collector reserve",
+                   reserve_xfer_regions);
+#endif
       young_reserve -= reserve_xfer_regions * region_size_bytes;
     }
     // else, max_mutator_transfer is large enough to support the known deficit
   }
   assert(old_region_deficit == 0 || old_region_surplus == 0, "Only surplus or deficit, never both");
 
-  set_young_evac_reserve(young_reserve);
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN setting old surplus;  " SIZE_FORMAT ", deficiit: " SIZE_FORMAT, old_region_surplus, old_region_deficit);
+  log_info(gc)("KELVIN setting young_evac_reserve: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT ", promoted_reserve: " SIZE_FORMAT,
+                young_reserve, reserve_for_mixed, reserve_for_promo);
+#endif
+
   set_old_region_surplus(old_region_surplus);
   set_old_region_deficit(old_region_deficit);
+
+  // deficit/surplus adjustments to generation sizes will precede rebuild
+  set_young_evac_reserve(young_reserve);
+  set_old_evac_reserve(reserve_for_mixed);
+  set_promoted_reserve(reserve_for_promo);
+  set_evacuation_reserve_quantities(true);
 }
 
 // Called from stubs in JIT code or interpreter
@@ -3170,6 +3199,12 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   ShenandoahHeapLocker locker(lock());
   size_t young_cset_regions, old_cset_regions;
   size_t first_old_region, last_old_region, old_region_count;
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN ShenHeap::rebuild_free_set(%s)", concurrent? "true": "false");
+#endif
+
+
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
   // If there are no old regions, first_old_region will be greater than last_old_region
   assert((first_old_region > last_old_region) ||
@@ -3188,6 +3223,8 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // The computation of bytes_of_allocation_runway_before_gc_trigger is quite conservative so consider all of this
     // available for transfer to old. Note that transfer of humongous regions does not impact available.
     size_t allocation_runway = young_heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
+
+    // adjust_generation_sizes_for_next_cycle sets evacuation_reserve_quantities
     adjust_generation_sizes_for_next_cycle(allocation_runway, young_cset_regions, old_cset_regions);
 
     // Total old_available may have been expanded to hold anticipated promotions.  We trigger if the fragmented available
@@ -3200,6 +3237,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   }
   // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild(young_cset_regions, old_cset_regions);
+  set_evacuation_reserve_quantities(false);
 
   if (mode()->is_generational() && (ShenandoahGenerationalHumongousReserve > 0)) {
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
