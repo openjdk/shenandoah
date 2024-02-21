@@ -254,7 +254,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap
   const size_t maximum_young_evacuation_reserve = heap->get_young_evac_reserve();
   const size_t young_evacuation_reserve = MIN2(maximum_young_evacuation_reserve, young_generation->available_with_reserve());
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("KELVIN compute_evac_budgets: max_young_evac_reserve: " SIZE_FORMAT ", young avail: " SIZE_FORMAT
                ", young_evac_reserve: " SIZE_FORMAT, maximum_young_evacuation_reserve,

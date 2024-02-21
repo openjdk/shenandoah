@@ -168,7 +168,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
 
   if (regions_transferred_to_old > 0) {
     heap->generation_sizer()->force_transfer_to_old(regions_transferred_to_old);
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
     log_info(gc)("choose_global_cset setting young_evac_reserve: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT,
                  heap->get_young_evac_reserve() - regions_transferred_to_old * region_size_bytes,

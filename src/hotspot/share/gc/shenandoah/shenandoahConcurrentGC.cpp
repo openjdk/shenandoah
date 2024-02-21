@@ -53,7 +53,7 @@
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 
 // Breakpoint support
 class ShenandoahBreakpointGCScope : public StackObj {

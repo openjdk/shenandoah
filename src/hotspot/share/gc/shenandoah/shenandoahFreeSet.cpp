@@ -1181,11 +1181,6 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   size_t young_available = _heap->young_generation()->available();
   size_t young_unaffiliated_regions = _heap->young_generation()->free_unaffiliated_regions();
 
-#define KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN rebuild(" SIZE_FORMAT ", " SIZE_FORMAT ")", young_cset_regions, old_cset_regions);
-#endif
-
   old_unaffiliated_regions += old_cset_regions;
   old_available += old_cset_regions * region_size_bytes;
   young_unaffiliated_regions += young_cset_regions;
@@ -1230,7 +1225,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
       // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
       young_reserve = _heap->get_young_evac_reserve();
       old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
       log_info(gc)("KELVIN rebuild has reserve quantities for YOUNG: " SIZE_FORMAT ", OLD: " SIZE_FORMAT,
                    young_reserve, old_reserve);
@@ -1251,7 +1246,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 #endif
 #ifdef KELVIN_DEBUG
       log_info(gc)("KELVIN rebuild setting young_evac_reserve: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT
-                   ", promo_reserve: " SIZE_FORMAT, young_reserve, old_reserve, (size_t) 0);
+                   ", promo_reserve: " SIZE_FORMAT, young_reserve, old_reserve, 0);
 #endif
       _heap->set_young_evac_reserve(young_reserve);
       _heap->set_old_evac_reserve(old_reserve);

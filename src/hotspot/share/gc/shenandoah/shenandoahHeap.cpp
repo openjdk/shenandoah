@@ -1249,7 +1249,7 @@ void ShenandoahHeap::cancel_old_gc() {
 void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t mutator_xfer_limit, size_t young_cset_regions, size_t old_cset_regions) {
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("KELVIN adjust_generation_sizes_for_next_cycle(xfer_limit: " SIZE_FORMAT ", young_cset_regions: " SIZE_FORMAT
                ", old_cset_regions: " SIZE_FORMAT ")", mutator_xfer_limit, young_cset_regions, old_cset_regions);
@@ -1278,7 +1278,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
 
   // In the case that ShenandoahOldEvacRatioPercent equals 100, max_old_reserve is limited only by xfer_limit and young_reserve
-  const size_t bound_on_old_reserve = old_available + xfer_limit + young_reserve;
+  const size_t bound_on_old_reserve = old_available + mutator_xfer_limit + young_reserve;
   const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100)?
     bound_on_old_reserve: MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                                bound_on_old_reserve);

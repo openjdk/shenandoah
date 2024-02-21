@@ -458,7 +458,7 @@ void ShenandoahDegenGC::op_update_roots() {
     Universe::verify();
   }
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("KELVIN: Degen:op_update_roots() invokes rebuild");
 #endif

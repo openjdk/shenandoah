@@ -224,7 +224,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
 
   if (heap->mode()->is_generational()) {
     // No need for old_gen->increase_used() as this was done when plabs were allocated.
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
     log_info(gc)("KELVIN at start of full gc, clearing young_evac_reserve, old_evac_reserve, promoted_reserve");
 #endif
