@@ -1221,37 +1221,29 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
     // which is reserved for promotion is enforced using thread-local variables that prescribe intentons for
     // each PLAB's available memory.
-    if (_heap->has_evacuation_reserve_quantities()) {
-      // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
-      young_reserve = _heap->get_young_evac_reserve();
-      old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
+
+    // At end of final mark, evacuation reserve quantities are defined by choose_collection_set().  At end of update refs,
+    // evacuation reserve quantities are established by adjust_generation_sizes_for_next_cycle().
+
+    assert(_heap->has_evacuation_reserve_quantities(), "Always prepare reserve quantities before rebuild");
+
+    young_reserve = _heap->get_young_evac_reserve();
+    old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
 #undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
-      log_info(gc)("KELVIN rebuild has reserve quantities for YOUNG: " SIZE_FORMAT ", OLD: " SIZE_FORMAT,
-                   young_reserve, old_reserve);
+    size_t xfer_bytes = old_region_deficit * region_size_bytes;
+    log_info(gc)("KELVIN rebuild has reserve quantities for YOUNG: " SIZE_FORMAT ", OLD: " SIZE_FORMAT,
+                 young_reserve, old_reserve);
+    log_info(gc)(" old_reserve is mixed_reserve: " SIZE_FORMAT " + evac_reserve: " SIZE_FORMAT,
+                 _heap->get_promoted_reserve(), _heap->get_old_evac_reserve());
+    log_info(gc)(" Old available is current: " SIZE_FORMAT " + old cset: " SIZE_FORMAT
+                 " + xfer_bytes: " SIZE_FORMAT " equals: " SIZE_FORMAT,
+                 _heap->old_generation()->available(), old_cset_regions * region_size_bytes,
+                 xfer_bytes, _heap->old_generation()->available() + old_cset_regions*region_size_bytes + xfer_bytes);
 #endif
-      assert(old_reserve <= old_available,
-             "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
-             _heap->get_promoted_reserve(), _heap->get_old_evac_reserve(), old_available);
-    } else {
-      // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
-      young_reserve = (young_capacity * ShenandoahEvacReserve) / 100;
-      // The auto-sizer has already made old-gen large enough to hold all anticipated evacuations and promotions.
-      // Affiliated old-gen regions are already in the OldCollector free set.  Add in the relevant number of
-      // unaffiliated regions.
-      old_reserve = old_available;
-#ifdef KELVIN_DEBUG
-      log_info(gc)("KELVIN rebuild has no reserve quantities for YOUNG: " SIZE_FORMAT ", OLD: " SIZE_FORMAT,
-                   young_reserve, old_reserve);
-#endif
-#ifdef KELVIN_DEBUG
-      log_info(gc)("KELVIN rebuild setting young_evac_reserve: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT
-                   ", promo_reserve: " SIZE_FORMAT, young_reserve, old_reserve, 0);
-#endif
-      _heap->set_young_evac_reserve(young_reserve);
-      _heap->set_old_evac_reserve(old_reserve);
-      _heap->set_promoted_reserve(0);
-    }
+    assert(old_reserve <= old_available,
+           "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
+           _heap->get_promoted_reserve(), _heap->get_old_evac_reserve(), old_available);
   }
 
   // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector

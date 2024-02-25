@@ -231,11 +231,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
-
-#ifdef KELVIN_DEBUG
-    log_info(gc)("KELVIN says we're no longer missing rebuild after abbreviated cycle");
-#endif
-    heap->rebuild_free_set(true /*concurrent*/);
   }
 
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
@@ -396,6 +391,11 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   EventMark em("%s", msg);
 
   op_final_roots();
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("KELVIN says we're no longer missing rebuild after abbreviated cycle");
+#endif
+  ShenandoahHeap::heap()->rebuild_free_set(true /*concurrent*/);
 }
 
 void ShenandoahConcurrentGC::entry_reset() {
