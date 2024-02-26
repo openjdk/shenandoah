@@ -112,9 +112,6 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
   metrics.snap_after();
-  if (heap->mode()->is_generational()) {
-    ShenandoahGenerationalFullGC::handle_completion(heap);
-  }
 
   if (metrics.is_good_progress()) {
     heap->notify_gc_progress();
@@ -1169,7 +1166,7 @@ void ShenandoahFullGC::phase5_epilog() {
     post_compact.update_generation_usage();
 
     if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::balance_old_generation(heap);
+      ShenandoahGenerationalFullGC::balance_generations_before_rebuilding_free_set(heap);
     }
 
     heap->collection_set()->clear();
@@ -1197,8 +1194,9 @@ void ShenandoahFullGC::phase5_epilog() {
     // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
     // abbreviated cycle.
     if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::balance_generations(heap);
+      ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set(heap);
       ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
+      ShenandoahGenerationalFullGC::handle_completion(heap);
     }
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }

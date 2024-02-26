@@ -123,7 +123,7 @@ private:
   size_t used() const override { return _used; }
   size_t available() const override;
   size_t available_with_reserve() const;
-  size_t used_and_wasted() const {
+  size_t used_including_humongous_waste() const {
     return used() + get_humongous_waste();
   }
 

@@ -31,24 +31,27 @@
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "logging/log.hpp"
 
-
-class ShenandoahSetRememberedCardsToDirtyClosure : public BasicOopIterateClosure {
+// A closure that takes an oop in the old generation and, if it's pointing
+// into the young generation, dirties the corresponding remembered set entry.
+// This is only used to rebuild the remembered set after a full GC.
+class ShenandoahDirtyRememberedSetClosure : public BasicOopIterateClosure {
 protected:
   ShenandoahHeap*    const _heap;
   RememberedScanner* const _scanner;
 
 public:
-  ShenandoahSetRememberedCardsToDirtyClosure() :
+  ShenandoahDirtyRememberedSetClosure() :
           _heap(ShenandoahHeap::heap()),
           _scanner(_heap->card_scan()) {}
 
   template<class T>
   inline void work(T* p) {
+    assert(_heap->is_in_old(p), "Expecting to get an old gen address");
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
       oop obj = CompressedOops::decode_not_null(o);
       if (_heap->is_in_young(obj)) {
-        // Found interesting pointer.  Mark the containing card as dirty.
+        // Dirty the card containing the cross-generational pointer.
         _scanner->mark_card_as_dirty((HeapWord*) p);
       }
     }
@@ -408,7 +411,7 @@ void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
   ShenandoahHeapRegion* r = _regions->next();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   RememberedScanner* scanner = heap->card_scan();
-  ShenandoahSetRememberedCardsToDirtyClosure dirty_cards_for_interesting_pointers;
+  ShenandoahDirtyRememberedSetClosure dirty_cards_for_cross_generational_pointers;
 
   while (r != nullptr) {
     if (r->is_old() && r->is_active()) {
@@ -432,7 +435,7 @@ void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
 
         // Then register the humongous object and DIRTY relevant remembered set cards
         scanner->register_object_without_lock(obj_addr);
-        obj->oop_iterate(&dirty_cards_for_interesting_pointers);
+        obj->oop_iterate(&dirty_cards_for_cross_generational_pointers);
       } else if (!r->is_humongous()) {
         // First, clear the remembered set
         scanner->reset_remset(r->bottom(), ShenandoahHeapRegion::region_size_words());
@@ -444,12 +447,11 @@ void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
           oop obj = cast_to_oop(obj_addr);
           size_t size = obj->size();
           scanner->register_object_without_lock(obj_addr);
-          obj_addr += obj->oop_iterate_size(&dirty_cards_for_interesting_pointers);
+          obj_addr += obj->oop_iterate_size(&dirty_cards_for_cross_generational_pointers);
         }
       } // else, ignore humongous continuation region
     }
     // else, this region is FREE or YOUNG or inactive and we can ignore it.
-    // TODO: Assert this.
     r = _regions->next();
   }
 }

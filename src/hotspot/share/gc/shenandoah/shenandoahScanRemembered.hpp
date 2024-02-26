@@ -1047,8 +1047,8 @@ class ShenandoahScanRememberedTask : public WorkerTask {
 };
 
 // After Full GC is done, reconstruct the remembered set by iterating over OLD regions,
-// registering all objects between bottom() and top(), and setting remembered set cards to
-// DIRTY if they hold interesting pointers.
+// registering all objects between bottom() and top(), and dirtying the cards containing
+// cross-generational pointers.
 class ShenandoahReconstructRememberedSetTask : public WorkerTask {
 private:
   ShenandoahRegionIterator* _regions;

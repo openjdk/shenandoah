@@ -35,14 +35,37 @@ class ShenandoahHeapRegion;
 
 class ShenandoahGenerationalFullGC {
 public:
+  // Prepares the generational mode heap for a full collection.
   static void prepare(ShenandoahHeap* heap);
-  static void handle_completion(ShenandoahHeap* heap);
+
+  // Full GC may have compacted objects in the old generation, so we need to rebuild the card tables.
   static void rebuild_remembered_set(ShenandoahHeap* heap);
-  static void balance_old_generation(ShenandoahHeap* heap);
-  static void balance_generations(ShenandoahHeap* heap);
+
+  // Records end of cycle for young and old and establishes size of live bytes in old
+  static void handle_completion(ShenandoahHeap* heap);
+
+  static void balance_generations_before_rebuilding_free_set(ShenandoahHeap* heap);
+  static void balance_generations_after_rebuilding_free_set(ShenandoahHeap* heap);
+
+  // Logs the number of live bytes marked in the old generation. This is _not_ the same
+  // value used as the baseline for the old generation _after_ the full gc is complete.
+  // The value reported in the logs does not include objects and regions that may be
+  // promoted during the full gc.
   static void log_live_in_old(ShenandoahHeap* heap);
+
+  // This is used to tally the number, usage and space wasted by humongous objects for each generation.
   static void account_for_region(ShenandoahHeapRegion* r, size_t &region_count, size_t &region_usage, size_t &humongous_waste);
+
+  // Regions which are scheduled for in-place promotion during evacuation temporarily
+  // have their top set to their end to prevent new objects from being allocated in them
+  // before they are promoted. If the full GC encounters such a region, it means the
+  // in-place promotion did not happen, and we must restore the original value of top.
   static void restore_top_before_promote(ShenandoahHeap* heap);
+
+  // Pinned regions are not compacted, so they may still hold unmarked objects with
+  // references to reclaimed memory. Remembered set scanning will crash if it attempts
+  // to iterate the oops in these objects. This method fills in dead objects for pinned,
+  // old regions.
   static void maybe_coalesce_and_fill_region(ShenandoahHeapRegion* r);
 };
 

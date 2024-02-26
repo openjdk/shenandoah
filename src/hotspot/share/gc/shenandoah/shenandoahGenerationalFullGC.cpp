@@ -40,7 +40,7 @@ void assert_regions_used_not_more_than_capacity(ShenandoahGeneration* generation
 }
 
 void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {
-  assert(generation->used_and_wasted() <= generation->used_regions_size(),
+  assert(generation->used_including_humongous_waste() <= generation->used_regions_size(),
          "%s consumed can be no larger than span of affiliated regions", generation->name());
 }
 #else
@@ -81,7 +81,7 @@ void ShenandoahGenerationalFullGC::handle_completion(ShenandoahHeap* heap) {
   assert_usage_not_more_than_regions_used(young);
 
   // Establish baseline for next old-has-grown trigger.
-  old->set_live_bytes_after_last_mark(old->used_and_wasted());
+  old->set_live_bytes_after_last_mark(old->used_including_humongous_waste());
 }
 
 void ShenandoahGenerationalFullGC::rebuild_remembered_set(ShenandoahHeap* heap) {
@@ -91,7 +91,7 @@ void ShenandoahGenerationalFullGC::rebuild_remembered_set(ShenandoahHeap* heap) 
   heap->workers()->run_task(&task);
 }
 
-void ShenandoahGenerationalFullGC::balance_old_generation(ShenandoahHeap* heap) {
+void ShenandoahGenerationalFullGC::balance_generations_before_rebuilding_free_set(ShenandoahHeap* heap) {
   size_t old_usage = heap->old_generation()->used_regions_size();
   size_t old_capacity = heap->old_generation()->max_capacity();
 
@@ -111,7 +111,7 @@ void ShenandoahGenerationalFullGC::balance_old_generation(ShenandoahHeap* heap) 
                PROPERFMTARGS(heap->old_generation()->used()));
 }
 
-void ShenandoahGenerationalFullGC::balance_generations(ShenandoahHeap* heap) {
+void ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set(ShenandoahHeap* heap) {
   bool success;
   size_t region_xfer;
   const char* region_destination;
@@ -188,9 +188,6 @@ void ShenandoahGenerationalFullGC::account_for_region(ShenandoahHeapRegion* r, s
 
 void ShenandoahGenerationalFullGC::maybe_coalesce_and_fill_region(ShenandoahHeapRegion* r) {
   if (r->is_pinned() && r->is_old() && r->is_active() && !r->is_humongous()) {
-    // Pinned regions are not compacted so they may still hold unmarked objects with
-    // reference to reclaimed memory. Remembered set scanning will crash if it attempts
-    // to iterate the oops in these objects.
     r->begin_preemptible_coalesce_and_fill();
     r->oop_fill_and_coalesce_without_cancel();
   }
