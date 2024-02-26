@@ -1115,7 +1115,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   size_t unalignment = future_size % CardTable::card_size_in_words();
   if (unalignment != 0) {
-    future_size -= unalignment;
+    future_size = future_size - unalignment + CardTable::card_size_in_words();
   }
 
   // Record new heuristic value even if we take any shortcut. This captures
@@ -1172,12 +1172,6 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     }
     return plab->allocate(size);
   } else {
-    // TODO: Add smarts here, or at minimum, a command-line option to reduce the need for shared allocations.  For example,
-    // maybe we should go ahead and retire the PLAB if:
-    //
-    //   (used within the PLAB) * MIN2(ShenandoahPromoEvacWaste, ShenandoahOldEvacWaste) >= PLAB size.
-    //
-
     // If there's still at least min_size() words available within the current plab, don't retire it.  Let's gnaw
     // away on this plab as long as we can.  Meanwhile, return nullptr to force this particular allocation request
     // to be satisfied with a shared allocation.  By packing more promotions into the previously allocated PLAB, we
@@ -1378,12 +1372,8 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   // Align requested sizes to card sized multiples
   size_t words_in_card = CardTable::card_size_in_words();
   size_t align_mask = ~(words_in_card - 1);
-
-  // Need to round down rather than rounding up.  Otherwise, might overrun max size.
-  min_size = min_size & align_mask;
-  word_size = word_size & align_mask;
-  assert(word_size >= min_size, "Requested PLAB is too small");
-
+  min_size = (min_size + words_in_card - 1) & align_mask;
+  word_size = (word_size + words_in_card - 1) & align_mask;
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
   // Note that allocate_memory() sets a thread-local flag to prohibit further promotions by this thread
   // if we are at risk of infringing on the old-gen evacuation budget.
