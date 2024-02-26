@@ -28,9 +28,14 @@
 
 #include "gc/shared/gcCause.hpp"
 #include "gc/shared/concurrentGCThread.hpp"
+#include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahGC.hpp"
+#include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
+
+class ShenandoahGeneration;
+class ShenandoahHeap;
 
 class ShenandoahControlThread: public ConcurrentGCThread {
   friend class VMStructs;
