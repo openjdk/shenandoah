@@ -194,7 +194,7 @@ import jdk.test.lib.Utils;
 public class TestHumongousThreshold {
 
     static final long TARGET_MB = Long.getLong("target", 20_000); // 20 Gb allocation
-    static final boolean WeightLargerAllocations = true;
+    static final bool WeightLargerAllocations = true;
 
     static volatile Object sink;
 
