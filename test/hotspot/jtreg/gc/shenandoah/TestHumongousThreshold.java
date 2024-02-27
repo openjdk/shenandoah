@@ -194,77 +194,17 @@ import jdk.test.lib.Utils;
 public class TestHumongousThreshold {
 
     static final long TARGET_MB = Long.getLong("target", 20_000); // 20 Gb allocation
-    static final bool WeightLargerAllocations = true;
 
     static volatile Object sink;
-
-    public static int random_int(Random r, int max) {
-      if (WeightLargerAllocations) {
-        int n = r.nextInt(max * 8);
-        if (n >= max * 6) {
-          return n / 8;
-        } else if (n >= max * 4) {
-          return n / 6;
-        } else if (n >= max * 2) {
-          return n / 4;
-        } else if (n >= max) {
-          return n/2;
-        } else if (n >= max / 2) {
-          return n;
-        } else {
-          return n * 2;
-        }
-      } else {
-        return r.nextInt(max);
-      }
-    }
 
     public static void main(String[] args) throws Exception {
         final int min = 0;
         final int max = 384 * 1024;
-
-        // Total number of arrays to be allocated is count = TARGET_NUMBER_OF_BYTES / AVERAGE_ARRAY_SIZE
-        long count;
-        if (WeightLargerAllocations) {
-          // With non-uniform distribution of array sizes, the goal is for allocated arrays to still span the
-          // full range of sizes spanned with uniform distribution of sizes, but to allocate more arrays of a
-          // larger size, so that we can satisfy the target size more quickly.  If not WeightLargerAllocations,
-          // this test frequently violated timetous.
-          //
-          // Let N represent the range of sizes (max - min).  Randomly generate a number n between 0 and 8N
-          //  if (n >= 6N), array_size is n/8         (1/4 of samples will average 0.875N)    (aka 7/8)
-          //  else if (n >= 4N), array_size is n/6    (1/4 of samples will average 0.833333N) (aka 5/6)
-          //  else if (n >= 2N), array_size is n/4    (1/4 of samples will average 0.75N)     (aka 3/4)
-          //  else if (n >= N), array size is n/2     (1/8 of samples will average 0.75N)     (aka 3/4)
-          //  else if (n >= .5N, array size is n     (1/16 of samples will average 0.75N)     (aka 3/4)
-          //  else, array size is 2n                 (1/16 of samples will average 0.5N)      (aka 1/2)
-          // The weighted average array size is 0.7865.                                     (aka 151/192)
-
-          //  The smallest allocated array has min elements
-          //  The largest allocated array has max elements
-          //  The average number of elements in allocated array is:  min + 0.7865 * (max - min)
-          //  Assuming 4 bytes to represent each integer, the bytes consumed by an average array are 4*(min + .7685*(max-min))
-          //  With 16 bytes for each array header, the total bytes consumed by an average array are 16 + 4*(min + .7685*(max-min))
-          //  1 MB equals 1024 * 1024
-
-          count = TARGET_MB * 1024 * 1025 / (16 + 4 * (min + 151 * (max - min) / 192));
-        } else {
-          // With uniform distribution of array sizes:
-          //
-          //  The smallest allocated array has min elements
-          //  The largest allocated array has max elements
-          //  Assuming uniform distribution of sizes, the average number of elements in allocated array is:  min + (max - min) / 2
-          //  Assuming 4 bytes to represent each integer, the bytes consumed by an average array are 4 * (min + (max - min) / 2)
-          //  Assume 16 bytes for each array header,
-          //     the total bytes consumed by an average array are 16 + 4 * (min + (max - min) / 2)
-          //  1 MB equals 1024 * 1024
-          
-          count = TARGET_MB * 1024 * 1024 / (16 + 4 * (min + (max - min) / 2));
-        }
+        long count = TARGET_MB * 1024 * 1024 / (16 + 4 * (min + (max - min) / 2));
 
         Random r = Utils.getRandomInstance();
         for (long c = 0; c < count; c++) {
-            sink = new int[min + random_int(r, max - min)];
+            sink = new int[min + r.nextInt(max - min)];
         }
     }
 
