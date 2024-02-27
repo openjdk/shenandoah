@@ -1148,7 +1148,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     } else {
       ShenandoahThreadLocalData::enable_plab_retries(thread);
     }
-    assert (size <= actual_size, "allocation should fit");
+    // Since the allocated PLAB may have been down-sized for alignment, plab->allocate(size) below may still fail.
     if (ZeroTLAB) {
       // ..and clear it.
       Copy::zero_to_words(plab_buf, actual_size);
