@@ -433,14 +433,14 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(ShenandoahHeap* he
       service_concurrent_old_cycle(heap, cause);
       break;
     }
-    case GLOBAL_GEN: {
+    case GLOBAL: {
       log_info(gc, ergo)("Start GC cycle (GLOBAL)");
       the_generation = heap->global_generation();
       service_concurrent_cycle(the_generation, cause, false);
       break;
     }
-    case GLOBAL_NON_GEN: {
-      log_info(gc, ergo)("Start GC cycle");
+    case NON_GEN: {
+      log_info(gc, ergo)("Start GC cycle (NON-GENERATIONAL)");
       the_generation = heap->global_generation();
       service_concurrent_cycle(the_generation, cause, false);
       break;
@@ -947,8 +947,8 @@ void ShenandoahControlThread::set_gc_mode(ShenandoahControlThread::GCMode new_mo
 
 ShenandoahGenerationType ShenandoahControlThread::select_global_generation() {
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    return GLOBAL_GEN;
+    return GLOBAL;
   } else {
-    return GLOBAL_NON_GEN;
+    return NON_GEN;
   }
 }
