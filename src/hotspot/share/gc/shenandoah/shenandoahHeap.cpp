@@ -1112,11 +1112,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   }
   future_size = MIN2(future_size, PLAB::max_size());
   future_size = MAX2(future_size, PLAB::min_size());
-
-  size_t unalignment = future_size % CardTable::card_size_in_words();
-  if (unalignment != 0) {
-    future_size -= unalignment;
-  }
+  future_size = align_down(future_size, CardTable::card_size_in_words());
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
@@ -1375,13 +1371,10 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t word_size,
                                             size_t* actual_size) {
-  // Align requested sizes to card sized multiples
-  size_t words_in_card = CardTable::card_size_in_words();
-  size_t align_mask = ~(words_in_card - 1);
 
-  // Need to round down rather than rounding up.  Otherwise, might overrun max size.
-  min_size = min_size & align_mask;
-  word_size = word_size & align_mask;
+  // Align requested sizes to card-sized multiples.  Align down so that we don't violate max size of TLAB.
+  min_size = align_down(min_size, CardTable::card_size_in_words());
+  word_size = align_down(word_size, CardTable::card_size_in_words());
   assert(word_size >= min_size, "Requested PLAB is too small");
 
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
