@@ -49,7 +49,6 @@
 #include "gc/shenandoah/shenandoahConcurrentMark.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahControlThread.hpp"
-#include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
@@ -484,12 +483,15 @@ jint ShenandoahHeap::initialize() {
     _pacer->setup_for_idle();
   }
 
-  _control_thread = new ShenandoahControlThread();
-  _regulator_thread = new ShenandoahRegulatorThread(_control_thread);
+  initialize_controller();
 
   print_init_logger();
 
   return JNI_OK;
+}
+
+void ShenandoahHeap::initialize_controller() {
+  _control_thread = new ShenandoahControlThread();
 }
 
 void ShenandoahHeap::print_init_logger() const {
@@ -606,7 +608,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _global_generation(nullptr),
   _old_generation(nullptr),
   _control_thread(nullptr),
-  _regulator_thread(nullptr),
   _shenandoah_policy(policy),
   _free_set(nullptr),
   _pacer(nullptr),
@@ -955,6 +956,21 @@ bool ShenandoahHeap::check_soft_max_changed() {
   return false;
 }
 
+void ShenandoahHeap::notify_heap_changed() {
+  // Update monitoring counters when we took a new region. This amortizes the
+  // update costs on slow path.
+  monitoring_support()->notify_heap_changed();
+  _heap_changed.set();
+}
+
+void ShenandoahHeap::set_forced_counters_update(bool value) {
+  monitoring_support()->set_forced_counters_update(value);
+}
+
+void ShenandoahHeap::handle_force_counters_update() {
+  monitoring_support()->handle_force_counters_update();
+}
+
 void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool promotion) {
   // Only register the copy of the object that won the evacuation race.
   card_scan()->register_object_without_lock(obj);
@@ -1017,23 +1033,6 @@ void ShenandoahHeap::report_promotion_failure(Thread* thread, size_t size) {
       epoch_report_count = 1;
     }
   }
-}
-
-void ShenandoahHeap::notify_heap_changed() {
-  // Update monitoring counters when we took a new region. This amortizes the
-  // update costs on slow path.
-  monitoring_support()->notify_heap_changed();
-
-  // This is called from allocation path, and thus should be fast.
-  _heap_changed.try_set();
-}
-
-void ShenandoahHeap::set_forced_counters_update(bool value) {
-  monitoring_support()->set_forced_counters_update(value);
-}
-
-void ShenandoahHeap::handle_force_counters_update() {
-  monitoring_support()->handle_force_counters_update();
 }
 
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
@@ -1168,12 +1167,6 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     }
     return plab->allocate(size);
   } else {
-    // TODO: Add smarts here, or at minimum, a command-line option to reduce the need for shared allocations.  For example,
-    // maybe we should go ahead and retire the PLAB if:
-    //
-    //   (used within the PLAB) * MIN2(ShenandoahPromoEvacWaste, ShenandoahOldEvacWaste) >= PLAB size.
-    //
-
     // If there's still at least min_size() words available within the current plab, don't retire it.  Let's gnaw
     // away on this plab as long as we can.  Meanwhile, return nullptr to force this particular allocation request
     // to be satisfied with a shared allocation.  By packing more promotions into the previously allocated PLAB, we
@@ -1271,9 +1264,13 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   const size_t old_available = old_generation()->available();
   // The free set will reserve this amount of memory to hold young evacuations
   const size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
-  const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100) ?
-     old_available : MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
-                          old_available);
+
+  // In the case that ShenandoahOldEvacRatioPercent equals 100, max_old_reserve is limited only by xfer_limit.
+
+  const size_t bound_on_old_reserve = old_available + xfer_limit + young_reserve;
+  const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100)?
+    bound_on_old_reserve: MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
+                               bound_on_old_reserve);
 
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
@@ -1302,6 +1299,7 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   const bool doing_promotions = promo_load > 0;
   if (doing_promotions) {
     // We're promoting and have a bound on the maximum amount that can be promoted
+    assert(max_old_reserve >= reserve_for_mixed, "Sanity");
     const size_t available_for_promotions = max_old_reserve - reserve_for_mixed;
     reserve_for_promo = MIN2((size_t)(promo_load * ShenandoahPromoEvacWaste), available_for_promotions);
   }
@@ -1371,7 +1369,6 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t word_size,
                                             size_t* actual_size) {
-
   // Align requested sizes to card-sized multiples.  Align down so that we don't violate max size of TLAB.
   min_size = align_down(min_size, CardTable::card_size_in_words());
   word_size = align_down(word_size, CardTable::card_size_in_words());
@@ -1428,7 +1425,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     size_t original_count = shenandoah_policy()->full_gc_count();
     while (result == nullptr
         && (get_gc_no_progress_count() == 0 || original_count == shenandoah_policy()->full_gc_count())) {
-      control_thread()->handle_alloc_failure(req);
+      control_thread()->handle_alloc_failure(req, true);
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
@@ -2064,8 +2061,10 @@ void ShenandoahHeap::gc_threads_do(ThreadClosure* tcl) const {
     return;
   }
 
-  tcl->do_thread(_control_thread);
-  tcl->do_thread(_regulator_thread);
+  if (_control_thread != nullptr) {
+    tcl->do_thread(_control_thread);
+  }
+
   workers()->threads_do(tcl);
   if (_safepoint_workers != nullptr) {
     _safepoint_workers->threads_do(tcl);
@@ -2614,18 +2613,15 @@ void ShenandoahHeap::stop() {
   // Step 1. Notify policy to disable event recording and prevent visiting gc threads during shutdown
   _shenandoah_policy->record_shutdown();
 
-  // Step 2. Stop requesting collections.
-  regulator_thread()->stop();
-
-  // Step 3. Notify control thread that we are in shutdown.
+  // Step 2. Notify control thread that we are in shutdown.
   // Note that we cannot do that with stop(), because stop() is blocking and waits for the actual shutdown.
   // Doing stop() here would wait for the normal GC cycle to complete, never falling through to cancel below.
   control_thread()->prepare_for_graceful_shutdown();
 
-  // Step 4. Notify GC workers that we are cancelling GC.
+  // Step 3. Notify GC workers that we are cancelling GC.
   cancel_gc(GCCause::_shenandoah_stop_vm);
 
-  // Step 5. Wait until GC worker exits normally.
+  // Step 4. Wait until GC worker exits normally.
   control_thread()->stop();
 }
 
