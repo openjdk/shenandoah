@@ -91,7 +91,7 @@ void ShenandoahGenerationalFullGC::rebuild_remembered_set(ShenandoahHeap* heap) 
   heap->workers()->run_task(&task);
 }
 
-void ShenandoahGenerationalFullGC::balance_generations_before_rebuilding_free_set(ShenandoahHeap* heap) {
+void ShenandoahGenerationalFullGC::balance_generations_after_gc(ShenandoahHeap* heap) {
   size_t old_usage = heap->old_generation()->used_regions_size();
   size_t old_capacity = heap->old_generation()->max_capacity();
 

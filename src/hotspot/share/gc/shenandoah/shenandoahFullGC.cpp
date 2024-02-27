@@ -1166,7 +1166,7 @@ void ShenandoahFullGC::phase5_epilog() {
     post_compact.update_generation_usage();
 
     if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::balance_generations_before_rebuilding_free_set(heap);
+      ShenandoahGenerationalFullGC::balance_generations_after_gc(heap);
     }
 
     heap->collection_set()->clear();
@@ -1187,7 +1187,7 @@ void ShenandoahFullGC::phase5_epilog() {
       // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
       heap->clear_promotion_potential();
       // Invoke this in case we are able to transfer memory from OLD to YOUNG.
-      heap->adjust_generation_sizes_for_next_cycle(0, 0, 0);
+      heap->compute_old_generation_balance(0, 0);
     }
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
 
