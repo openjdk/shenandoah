@@ -709,9 +709,11 @@ inline bool ShenandoahHeap::is_stable() const {
   return _gc_state.is_clear();
 }
 
+#ifdef KELVIN_DEPRECATE
 inline bool ShenandoahHeap::has_evacuation_reserve_quantities() const {
   return _has_evacuation_reserve_quantities;
 }
+#endif
 
 inline bool ShenandoahHeap::is_idle() const {
   return _gc_state.is_unset(MARKING | EVACUATION | UPDATEREFS);

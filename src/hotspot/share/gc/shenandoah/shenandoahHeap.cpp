@@ -428,7 +428,9 @@ jint ShenandoahHeap::initialize() {
     set_young_evac_reserve(young_reserve);
     set_old_evac_reserve((size_t) 0);
     set_promoted_reserve((size_t) 0);
+#ifdef KELVIN_DEPRECATE
     set_evacuation_reserve_quantities(true);
+#endif
     _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
     _free_set->rebuild(young_cset_regions, old_cset_regions);
   }
@@ -605,7 +607,9 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _old_evac_reserve(0),
   _young_evac_reserve(0),
   _age_census(nullptr),
+#ifdef KELVIN_DEPRECATE
   _has_evacuation_reserve_quantities(false),
+#endif
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -1412,7 +1416,9 @@ void ShenandoahHeap::adjust_generation_sizes_for_next_cycle(
   set_young_evac_reserve(young_reserve);
   set_old_evac_reserve(reserve_for_mixed);
   set_promoted_reserve(reserve_for_promo);
+#ifdef KELVIN_DEPRECATE
   set_evacuation_reserve_quantities(true);
+#endif
 }
 
 // Called from stubs in JIT code or interpreter
@@ -2566,9 +2572,11 @@ void ShenandoahHeap::set_gc_state(uint mask, bool value) {
   _gc_state_changed = true;
 }
 
+#ifdef KELVIN_DEPRECATE
 void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
   _has_evacuation_reserve_quantities = is_valid;
 }
+#endif
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
   uint mask;

@@ -1225,8 +1225,9 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     // At end of final mark, evacuation reserve quantities are defined by choose_collection_set().  At end of update refs,
     // evacuation reserve quantities are established by adjust_generation_sizes_for_next_cycle().
 
+#ifdef KELVIN_DEPRECATE
     assert(_heap->has_evacuation_reserve_quantities(), "Always prepare reserve quantities before rebuild");
-
+#endif
     young_reserve = _heap->get_young_evac_reserve();
     old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
 #undef KELVIN_DEBUG

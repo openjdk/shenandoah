@@ -752,7 +752,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   }
 
   // Freeset construction uses reserve quantities if they are valid
+#ifdef KELVIN_DEPRECATE
   heap->set_evacuation_reserve_quantities(true);
+#endif
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
                             ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
@@ -764,7 +766,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
   }
+#ifdef KELVIN_DEPRECATE
   heap->set_evacuation_reserve_quantities(false);
+#endif
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {
