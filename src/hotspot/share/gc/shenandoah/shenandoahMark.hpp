@@ -31,6 +31,7 @@
 #include "gc/shared/taskTerminator.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 
 enum StringDedupMode {
