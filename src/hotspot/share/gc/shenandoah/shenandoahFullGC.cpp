@@ -111,6 +111,10 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
+  if (heap->mode()->is_generational()) {
+    ShenandoahGenerationalFullGC::handle_completion(heap);
+  }
+
   metrics.snap_after();
 
   if (metrics.is_good_progress()) {
@@ -1196,7 +1200,6 @@ void ShenandoahFullGC::phase5_epilog() {
     if (heap->mode()->is_generational()) {
       ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set(heap);
       ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
-      ShenandoahGenerationalFullGC::handle_completion(heap);
     }
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }
