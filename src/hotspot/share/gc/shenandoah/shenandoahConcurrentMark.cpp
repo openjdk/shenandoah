@@ -240,14 +240,18 @@ void ShenandoahConcurrentMark::concurrent_mark() {
   uint nworkers = workers->active_workers();
   task_queues()->reserve(nworkers);
 
+  ShenandoahGenerationType gen_type = _generation->type();
+  if (gen_type == YOUNG || gen_type == GLOBAL_GEN) {
+    // Clear any stale/partial local census data before the start of marking
+    heap->age_census()->reset_local();
+    assert(heap->age_census()->is_clear_local(), "Error");
+  }
+
   ShenandoahSATBMarkQueueSet& qset = ShenandoahBarrierSet::satb_mark_queue_set();
   ShenandoahFlushSATBHandshakeClosure flush_satb(qset);
   for (uint flushes = 0; flushes < ShenandoahMaxSATBBufferFlushes; flushes++) {
-    switch (_generation->type()) {
+    switch (gen_type) {
       case YOUNG: {
-        // Clear any old/partial local census data before the start of marking.
-        heap->age_census()->reset_local();
-        assert(heap->age_census()->is_clear_local(), "Error");
         TaskTerminator terminator(nworkers, task_queues());
         ShenandoahConcurrentMarkingTask<YOUNG> task(this, &terminator);
         workers->run_task(&task);
@@ -260,9 +264,6 @@ void ShenandoahConcurrentMark::concurrent_mark() {
         break;
       }
       case GLOBAL_GEN: {
-        // Clear any old/partial local census data before the start of marking.
-        heap->age_census()->reset_local();
-        assert(heap->age_census()->is_clear_local(), "Error");
         TaskTerminator terminator(nworkers, task_queues());
         ShenandoahConcurrentMarkingTask<GLOBAL_GEN> task(this, &terminator);
         workers->run_task(&task);
