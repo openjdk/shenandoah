@@ -91,7 +91,7 @@ gc/TestAllocHumongousFragment.java#iu-aggressive 8298781 generic-all
 gc/TestAllocHumongousFragment.java#g1 8298781 generic-all
 gc/TestAllocHumongousFragment.java#static 8298781 generic-all
 gc/stress/gclocker/TestExcessGCLockerCollections.java 8229120 generic-all
-gc/shenandoah/TestHumongousThreshold.java 832700 macos-aarch64
+gc/shenandoah/TestHumongousThreshold.java 8327000 macosx-aarch64
 
 #############################################################################
 
