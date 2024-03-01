@@ -41,7 +41,7 @@
 #include "gc/shenandoah/shenandoahWorkGroup.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
-#include "gc/shenandoah/shenandoahControlThread.hpp"
+#include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
@@ -817,6 +817,12 @@ inline size_t ShenandoahHeap::set_young_evac_reserve(size_t new_val) {
 
 inline size_t ShenandoahHeap::get_young_evac_reserve() const {
   return _young_evac_reserve;
+}
+
+inline void ShenandoahHeap::reset_generation_reserves() {
+  set_young_evac_reserve(0);
+  set_old_evac_reserve(0);
+  set_promoted_reserve(0);
 }
 
 template<class T>
