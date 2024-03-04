@@ -241,12 +241,6 @@ void ShenandoahConcurrentMark::concurrent_mark() {
   task_queues()->reserve(nworkers);
 
   ShenandoahGenerationType gen_type = _generation->type();
-  if (gen_type == YOUNG || gen_type == GLOBAL_GEN) {
-    // Clear any stale/partial local census data before the start of marking
-    heap->age_census()->reset_local();
-    assert(heap->age_census()->is_clear_local(), "Error");
-  }
-
   ShenandoahSATBMarkQueueSet& qset = ShenandoahBarrierSet::satb_mark_queue_set();
   ShenandoahFlushSATBHandshakeClosure flush_satb(qset);
   for (uint flushes = 0; flushes < ShenandoahMaxSATBBufferFlushes; flushes++) {

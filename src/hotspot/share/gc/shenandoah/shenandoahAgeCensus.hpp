@@ -115,13 +115,13 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   void prepare_for_census_update();
 
   // Update the tenuring threshold, calling
-  // compute_tenuring_threshold to calculate the new
+  // compute_tenuring_threshold() to calculate the new
   // value
   void update_tenuring_threshold();
 
-  // This uses the data in the ShenandoahAgeCensus object's _global_age_table and the
-  // current _epoch to compute a new tenuring threshold, which will be remembered
-  // until the next invocation of compute_tenuring_threshold.
+  // Use _global_age_table and the current _epoch to compute a new tenuring
+  // threshold, which will be remembered until the next invocation of
+  // compute_tenuring_threshold.
   uint compute_tenuring_threshold();
 
   // Return the tenuring threshold computed for the previous epoch
@@ -166,21 +166,27 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
 #endif // SHENANDOAH_CENSUS_NOISE
 
   // Update the census data, and compute the new tenuring threshold.
+  // This method should be called at the end of each marking (or optionally
+  // evacuation) cycle to update the tenuring threshold to be used in
+  // the next cycle.
   // age0_pop is the population of Cohort 0 that may have been missed in
-  // the regular census.
+  // the regular census during the marking cycle, corresponding to objects
+  // allocated when the concurrent marking was in progress.
   // Optional parameters, pv1 and pv2 are population vectors that together
   // provide object census data (only) for the case when
-  // ShenandoahGenerationalCensusAtEvac.
+  // ShenandoahGenerationalCensusAtEvac. In this case, the age0_pop
+  // is 0, because the evacuated objects have all had their ages incremented.
   void update_census(size_t age0_pop, AgeTable* pv1 = nullptr, AgeTable* pv2 = nullptr);
 
   // Return the most recently computed tenuring threshold
   uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }
 
   // Reset the epoch, clearing accumulated census history
-  // Note: this isn't currently used, bur reserved for planned
+  // Note: this isn't currently used, but reserved for planned
   // future usage.
   void reset_global();
-  // Reset any partial census information
+
+  // Reset any (potentially partial) census information in worker-local age tables
   void reset_local();
 
 #ifndef PRODUCT
