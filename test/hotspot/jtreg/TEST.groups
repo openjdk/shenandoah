@@ -359,7 +359,6 @@ tier2_gc_shenandoah = \
   runtime/Metaspace/DefineClass.java \
   gc/shenandoah/ \
   serviceability/sa/TestHeapDumpForInvokeDynamic.java \
-  -gc/shenandoah/TestHumongousThreshold.java \
   -gc/shenandoah/TestStringDedupStress.java \
   -:tier1_gc_shenandoah
 
