@@ -125,9 +125,7 @@ void ShenandoahAgeCensus::prepare_for_census_update() {
 // Update the census data from appropriate sources,
 // and compute the new tenuring threshold.
 void ShenandoahAgeCensus::update_census(size_t age0_pop, AgeTable* pv1, AgeTable* pv2) {
-  // Check that we won't overwrite existing data: caller is
-  // responsible for explicitly clearing the slot via calling
-  // prepare_for_census_update().
+  prepare_for_census_update();
   assert(_global_age_table[_epoch]->is_clear(), "Dirty decks");
   CENSUS_NOISE(assert(_global_noise[_epoch].is_clear(), "Dirty decks");)
   if (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {

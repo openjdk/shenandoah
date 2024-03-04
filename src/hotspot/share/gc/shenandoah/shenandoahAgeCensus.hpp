@@ -111,6 +111,9 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // previous and current epochs
   double mortality_rate(size_t prev_pop, size_t cur_pop);
 
+  // Update to a new epoch, creating a slot for new census.
+  void prepare_for_census_update();
+
   // Update the tenuring threshold, calling
   // compute_tenuring_threshold to calculate the new
   // value
@@ -120,6 +123,17 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // current _epoch to compute a new tenuring threshold, which will be remembered
   // until the next invocation of compute_tenuring_threshold.
   uint compute_tenuring_threshold();
+
+  // Return the tenuring threshold computed for the previous epoch
+  uint previous_tenuring_threshold() const {
+    assert(_epoch < MAX_SNAPSHOTS, "Error");
+    uint prev = _epoch - 1;
+    if (prev >= MAX_SNAPSHOTS) {
+      // _epoch is 0
+      prev = MAX_SNAPSHOTS - 1;
+    }
+    return _tenuring_threshold[prev];
+  }
 
  public:
   enum {
@@ -151,29 +165,20 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   void add_young(size_t size, uint worker_id);
 #endif // SHENANDOAH_CENSUS_NOISE
 
-  // Update to a new epoch, creating a slot for new census.
-  void prepare_for_census_update();
-
   // Update the census data, and compute the new tenuring threshold.
   // age0_pop is the population of Cohort 0 that may have been missed in
   // the regular census.
+  // Optional parameters, pv1 and pv2 are population vectors that together
+  // provide object census data (only) for the case when
+  // ShenandoahGenerationalCensusAtEvac.
   void update_census(size_t age0_pop, AgeTable* pv1 = nullptr, AgeTable* pv2 = nullptr);
 
   // Return the most recently computed tenuring threshold
   uint tenuring_threshold() const { return _tenuring_threshold[_epoch]; }
 
-  // Return the tenuring threshold computed for the previous epoch
-  uint previous_tenuring_threshold() const {
-    assert(_epoch < MAX_SNAPSHOTS, "Error");
-    uint prev = _epoch - 1;
-    if (prev >= MAX_SNAPSHOTS) {
-      // _epoch is 0
-      prev = MAX_SNAPSHOTS - 1;
-    }
-    return _tenuring_threshold[prev];
-  }
-
   // Reset the epoch, clearing accumulated census history
+  // Note: this isn't currently used, bur reserved for planned
+  // future usage.
   void reset_global();
   // Reset any partial census information
   void reset_local();

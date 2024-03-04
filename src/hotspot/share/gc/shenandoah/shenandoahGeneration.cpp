@@ -671,12 +671,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     heap->young_generation()->heap_region_iterate(&age0_cl);
     size_t age0_pop = age0_cl.get_population();
 
-    // Age table updates
-    ShenandoahAgeCensus* census = heap->age_census();
-    census->prepare_for_census_update();
     // Update the global census, including the missed age 0 cohort above,
-    // along with the census during marking, and compute the tenuring threshold
-    census->update_census(age0_pop);
+    // along with the census done during marking, and compute the tenuring threshold.
+    heap->age_census()->update_census(age0_pop);
   }
 
   {
