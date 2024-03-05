@@ -156,7 +156,7 @@ void ShenandoahAgeCensus::update_census(size_t age0_pop, AgeTable* pv1, AgeTable
 
   // used for checking reasonableness of census coverage, non-product
   // only.
-  update_total();
+  NOT_PRODUCT(update_total();)
 }
 
 
