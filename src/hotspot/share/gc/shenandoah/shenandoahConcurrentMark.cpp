@@ -241,8 +241,6 @@ void ShenandoahConcurrentMark::concurrent_mark() {
   ShenandoahSATBMarkQueueSet& qset = ShenandoahBarrierSet::satb_mark_queue_set();
   ShenandoahFlushSATBHandshakeClosure flush_satb(qset);
   for (uint flushes = 0; flushes < ShenandoahMaxSATBBufferFlushes; flushes++) {
-    // TODO: ysr : hoist this switch out of the loop & refactor ?? How may
-    // typical calls do we do in this loop?
     switch (_generation->type()) {
       case YOUNG: {
         // Clear any old/partial local census data before the start of marking.
