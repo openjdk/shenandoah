@@ -101,12 +101,20 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
 #ifdef SHENANDOAH_CENSUS_NOISE
   ShenandoahNoiseStats* _global_noise; // Noise stats, one per snapshot
   ShenandoahNoiseStats* _local_noise;  // Local scratch table for noise stats, one per worker
+
+  size_t _skipped;                   // net size of objects encountered, but skipped during census,
+                                     // because their age was indeterminate
 #endif // SHENANDOAH_CENSUS_NOISE
+
+#ifndef PRODUCT
+  size_t _counted;                   // net size of objects counted in census
+  size_t _total;                     // net size of objects encountered (counted or skipped) in census
+#endif
 
   uint _epoch;                       // Current epoch (modulo max age)
   uint *_tenuring_threshold;         // An array of the last N tenuring threshold values we
                                      // computed.
-
+                                    
   // Mortality rate of a cohort, given its population in
   // previous and current epochs
   double mortality_rate(size_t prev_pop, size_t cur_pop);
@@ -134,6 +142,20 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
     }
     return _tenuring_threshold[prev];
   }
+
+#ifndef PRODUCT
+  // Return the sum of size of objects of all ages recorded in the
+  // census at snapshot indexed by snap.
+  size_t get_all_ages(uint snap);
+
+  // Return the size of all objects that were encountered, but skipped,
+  // during the census, because their age was indeterminate.
+  size_t get_skipped(uint snap);
+
+  // Update the total size of objects counted or skipped at the census for
+  // the most recent epoch.
+  void update_total();
+#endif // !PRODUCT
 
  public:
   enum {
@@ -193,6 +215,10 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   // Check whether census information is clear
   bool is_clear_global();
   bool is_clear_local();
+
+  // Return the net size of objects encountered (counted or skipped) in census
+  // at most recent epoch.
+  size_t get_total() { return _total; }
 #endif // !PRODUCT
 
   // Print the age census information
