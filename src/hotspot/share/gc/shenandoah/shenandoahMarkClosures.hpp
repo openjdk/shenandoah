@@ -50,7 +50,8 @@ public:
 class ShenandoahUpdateCensusZeroCohortClosure : public ShenandoahHeapRegionClosure {
 private:
   ShenandoahMarkingContext* const _ctx;
-  size_t _age0_pop;                // running tally of age0 population sie3
+  // Population size units are words (not bytes)
+  size_t _age0_pop;                // running tally of age0 population size
   size_t _total_pop;               // total live population size
 public:
   ShenandoahUpdateCensusZeroCohortClosure(ShenandoahMarkingContext* ctx);

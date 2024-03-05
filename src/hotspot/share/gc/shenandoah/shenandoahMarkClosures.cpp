@@ -93,6 +93,6 @@ void ShenandoahUpdateCensusZeroCohortClosure::heap_region_do(ShenandoahHeapRegio
     }
     // TODO: check significance of _ctx != nullptr above, can that
     // spoof _total_pop in some corner cases?
-    NOT_PRODUCT(_total_pop += r->get_live_data_bytes();)
+    NOT_PRODUCT(_total_pop += r->get_live_data_words();)
   }
 }
