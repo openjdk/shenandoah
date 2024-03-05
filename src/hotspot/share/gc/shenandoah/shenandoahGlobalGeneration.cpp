@@ -127,11 +127,11 @@ void ShenandoahGlobalGeneration::prepare_gc() {
   ShenandoahGeneration::prepare_gc();
 
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    assert(type() == GLOBAL_GEN, "Error");
+    assert(type() == GLOBAL, "Unexpected generation type");
     // Clear any stale/partial local census data before the start of a
     // new marking cycle
     ShenandoahHeap::heap()->age_census()->reset_local();
   } else {
-    assert(type() == GLOBAL_NON_GEN, "Error");
+    assert(type() == NON_GEN, "Unexpected generation type");
   }
 }

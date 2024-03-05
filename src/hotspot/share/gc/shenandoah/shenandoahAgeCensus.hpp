@@ -114,7 +114,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
   uint _epoch;                       // Current epoch (modulo max age)
   uint *_tenuring_threshold;         // An array of the last N tenuring threshold values we
                                      // computed.
-                                    
+
   // Mortality rate of a cohort, given its population in
   // previous and current epochs
   double mortality_rate(size_t prev_pop, size_t cur_pop);
