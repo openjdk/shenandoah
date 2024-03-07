@@ -138,6 +138,7 @@ class ShenandoahAgeCensus: public CHeapObj<mtGC> {
     uint prev = _epoch - 1;
     if (prev >= MAX_SNAPSHOTS) {
       // _epoch is 0
+      assert(_epoch == 0, "Error");
       prev = MAX_SNAPSHOTS - 1;
     }
     return _tenuring_threshold[prev];

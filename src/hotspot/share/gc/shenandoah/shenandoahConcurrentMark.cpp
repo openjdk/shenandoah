@@ -256,9 +256,6 @@ void ShenandoahConcurrentMark::concurrent_mark() {
         break;
       }
       case GLOBAL: {
-        // Clear any old/partial local census data before the start of marking.
-        heap->age_census()->reset_local();
-        assert(heap->age_census()->is_clear_local(), "Error");
         TaskTerminator terminator(nworkers, task_queues());
         ShenandoahConcurrentMarkingTask<GLOBAL> task(this, &terminator);
         workers->run_task(&task);
