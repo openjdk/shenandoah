@@ -368,21 +368,6 @@ private:
   // This updates the singlular, global gc state. This must happen on a safepoint.
   void set_gc_state(uint mask, bool value);
 
-  // TODO: Revisit the following comment.  It may not accurately represent the true behavior when evacuations fail due to
-  // difficulty finding memory to hold evacuated objects.
-  //
-  // Note that the typical total expenditure on evacuation is less than the associated evacuation reserve because we generally
-  // reserve ShenandoahEvacWaste (> 1.0) times the anticipated evacuation need.  In the case that there is an excessive amount
-  // of waste, it may be that one thread fails to grab a new GCLAB, this does not necessarily doom the associated evacuation
-  // effort.  If this happens, the requesting thread blocks until some other thread manages to evacuate the offending object.
-  // Only after "all" threads fail to evacuate an object do we consider the evacuation effort to have failed.
-
-  size_t _promoted_reserve;            // Bytes reserved within old-gen to hold the results of promotion
-  volatile size_t _promoted_expended;  // Bytes of old-gen memory expended on promotions
-
-  size_t _old_evac_reserve;            // Bytes reserved within old-gen to hold evacuated objects from old-gen collection set
-  size_t _young_evac_reserve;          // Bytes reserved within young-gen to hold evacuated objects from young-gen collection set
-
   ShenandoahAgeCensus* _age_census;    // Age census used for adapting tenuring threshold in generational mode
 
   // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
@@ -451,27 +436,6 @@ public:
 
 
   ShenandoahCollectionSetParameters* collection_set_parameters() { return &_collection_set_parameters; }
-
-  // Returns previous value
-  inline size_t set_promoted_reserve(size_t new_val);
-  inline size_t get_promoted_reserve() const;
-  inline void augment_promo_reserve(size_t increment);
-
-  inline void reset_promoted_expended();
-  inline size_t expend_promoted(size_t increment);
-  inline size_t unexpend_promoted(size_t decrement);
-  inline size_t get_promoted_expended();
-
-  // Returns previous value
-  inline size_t set_old_evac_reserve(size_t new_val);
-  inline size_t get_old_evac_reserve() const;
-  inline void augment_old_evac_reserve(size_t increment);
-
-  // Returns previous value
-  inline size_t set_young_evac_reserve(size_t new_val);
-  inline size_t get_young_evac_reserve() const;
-
-  inline void reset_generation_reserves();
 
   // Return the age census object for young gen (in generational mode)
   inline ShenandoahAgeCensus* age_census() const;

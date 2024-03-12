@@ -765,66 +765,6 @@ inline bool ShenandoahHeap::is_aging_cycle() const {
   return _is_aging_cycle.is_set();
 }
 
-inline size_t ShenandoahHeap::set_promoted_reserve(size_t new_val) {
-  size_t orig = _promoted_reserve;
-  _promoted_reserve = new_val;
-  return orig;
-}
-
-inline size_t ShenandoahHeap::get_promoted_reserve() const {
-  return _promoted_reserve;
-}
-
-inline size_t ShenandoahHeap::set_old_evac_reserve(size_t new_val) {
-  size_t orig = _old_evac_reserve;
-  _old_evac_reserve = new_val;
-  return orig;
-}
-
-inline size_t ShenandoahHeap::get_old_evac_reserve() const {
-  return _old_evac_reserve;
-}
-
-inline void ShenandoahHeap::augment_old_evac_reserve(size_t increment) {
-  _old_evac_reserve += increment;
-}
-
-inline void ShenandoahHeap::augment_promo_reserve(size_t increment) {
-  _promoted_reserve += increment;
-}
-
-inline void ShenandoahHeap::reset_promoted_expended() {
-  Atomic::store(&_promoted_expended, (size_t) 0);
-}
-
-inline size_t ShenandoahHeap::expend_promoted(size_t increment) {
-  return Atomic::add(&_promoted_expended, increment);
-}
-
-inline size_t ShenandoahHeap::unexpend_promoted(size_t decrement) {
-  return Atomic::sub(&_promoted_expended, decrement);
-}
-
-inline size_t ShenandoahHeap::get_promoted_expended() {
-  return Atomic::load(&_promoted_expended);
-}
-
-inline size_t ShenandoahHeap::set_young_evac_reserve(size_t new_val) {
-  size_t orig = _young_evac_reserve;
-  _young_evac_reserve = new_val;
-  return orig;
-}
-
-inline size_t ShenandoahHeap::get_young_evac_reserve() const {
-  return _young_evac_reserve;
-}
-
-inline void ShenandoahHeap::reset_generation_reserves() {
-  set_young_evac_reserve(0);
-  set_old_evac_reserve(0);
-  set_promoted_reserve(0);
-}
-
 template<class T>
 inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, T* cl) {
   marked_object_iterate(region, cl, region->top());

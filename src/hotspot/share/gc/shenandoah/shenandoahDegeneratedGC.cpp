@@ -331,9 +331,10 @@ void ShenandoahDegenGC::op_degenerated() {
   if (heap->mode()->is_generational()) {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
-    heap->set_young_evac_reserve(0);
-    heap->set_old_evac_reserve(0);
-    heap->set_promoted_reserve(0);
+    auto collection_set_parameters = heap->collection_set_parameters();
+    collection_set_parameters->set_young_evac_reserve(0);
+    collection_set_parameters->set_old_evac_reserve(0);
+    collection_set_parameters->set_promoted_reserve(0);
   }
 
   if (ShenandoahVerify) {

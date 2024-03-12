@@ -258,9 +258,11 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       }
       heap->set_old_region_surplus(0);
       heap->set_old_region_deficit(0);
-      heap->set_young_evac_reserve(0);
-      heap->set_old_evac_reserve(0);
-      heap->set_promoted_reserve(0);
+
+      auto collection_set_parameters = heap->collection_set_parameters();
+      collection_set_parameters->set_young_evac_reserve(0);
+      collection_set_parameters->set_old_evac_reserve(0);
+      collection_set_parameters->set_promoted_reserve(0);
     }
 
     // Report outside the heap lock

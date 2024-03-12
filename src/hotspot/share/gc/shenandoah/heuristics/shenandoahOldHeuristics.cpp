@@ -88,7 +88,8 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
-  size_t old_evacuation_budget = (size_t) ((double) heap->get_old_evac_reserve() / ShenandoahOldEvacWaste);
+  size_t old_evacuation_reserve = heap->collection_set_parameters()->get_old_evac_reserve();
+  size_t old_evacuation_budget = (size_t) ((double) old_evacuation_reserve / ShenandoahOldEvacWaste);
   size_t unfragmented_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
   size_t fragmented_available;
   size_t excess_fragmented_available;
@@ -224,7 +225,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
                    "Old evacuation budget: " BYTES_FORMAT ", Remaining evacuation budget: " BYTES_FORMAT
                    ", Lost capacity: " BYTES_FORMAT
                    ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
-                   FORMAT_BYTES(heap->get_old_evac_reserve()),
+                   FORMAT_BYTES(old_evacuation_reserve),
                    FORMAT_BYTES(remaining_old_evacuation_budget),
                    FORMAT_BYTES(lost_evacuation_capacity),
                    _next_old_collection_candidate, _last_old_collection_candidate);

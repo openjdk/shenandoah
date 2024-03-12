@@ -54,7 +54,7 @@ void ShenandoahGenerationalFullGC::prepare(ShenandoahHeap* heap) {
   heap->set_gc_generation(heap->global_generation());
 
   // No need for old_gen->increase_used() as this was done when plabs were allocated.
-  heap->reset_generation_reserves();
+  heap->collection_set_parameters()->reset_generation_reserves();
 
   // Full GC supersedes any marking or coalescing in old generation.
   heap->cancel_old_gc();

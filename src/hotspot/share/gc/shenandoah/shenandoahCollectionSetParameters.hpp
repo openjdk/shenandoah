@@ -34,6 +34,18 @@ private:
   size_t _promotable_humongous_regions;
   size_t _regular_regions_promoted_in_place;
 
+  // Bytes reserved within old-gen to hold the results of promotion
+  size_t _promoted_reserve;
+
+  // Bytes of old-gen memory expended on promotions (is volatile necessary?)
+  volatile size_t _promoted_expended;
+
+  // Bytes reserved within old-gen to hold evacuated objects from old-gen collection set
+  size_t _old_evac_reserve;
+
+  // Bytes reserved within young-gen to hold evacuated objects from young-gen collection set
+  size_t _young_evac_reserve;
+
 public:
   ShenandoahCollectionSetParameters();
 
@@ -61,6 +73,68 @@ public:
   // to initiate promote in place during evacuation of concurrent and degenerated cycles
   size_t get_promotable_humongous_regions() const { return _promotable_humongous_regions; }
   size_t get_regular_regions_promoted_in_place() const  { return _regular_regions_promoted_in_place; }
+
+  // Returns previous value
+  // Used in shGeneration::adjust_evacuation_budgets
+  // Used in shGeneration::compute_evacuation_budgets
+  // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
+  // Used in ShenandoahConcurrentGC::collect (zero'd out)
+  size_t set_promoted_reserve(size_t new_val);
+
+  // Used in ShenandoahHeap::report_promotion_failure (under the heap lock)
+  // Used (heavily) in ShenandoahHeap::allocate_memory_under_lock
+  // Used in ShenandoahFreeSet::rebuild
+  size_t get_promoted_reserve() const;
+
+  // Used in ShenandoahFreeSet::add_old_collector_free_region
+  void augment_promo_reserve(size_t increment);
+
+  // Used in shGeneration::adjust_evacuation_budgets
+  void reset_promoted_expended();
+  size_t expend_promoted(size_t increment);
+
+  // ShenandoahHeap::retire_plab
+  size_t unexpend_promoted(size_t decrement);
+
+  // Used in ShenandoahHeap::report_promotion_failure (under the heap lock)
+  // Used (heavily) in ShenandoahHeap::allocate_memory_under_lock
+  size_t get_promoted_expended();
+
+  // Returns previous value
+  // Used in shGeneration::compute_evacuation_budgets
+  // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
+  // Used in ShenandoahConcurrentGC::collect (zero'd out)
+  // Used in ShenandoahGeneration::adjust_evacuation_budgets
+  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set (if regions transferred to old)
+  // Used in ShenandoahOldHeuristicTest (this test is a burden at this point)
+  size_t set_old_evac_reserve(size_t new_val);
+
+  // Used in ShenandoahFreeSet::rebuild
+  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set
+  // Used in ShenandoahGeneration::adjust_evacuation_budgets
+  // Used in ShenandoahOldHeuristics::prime_collection_set
+  // Used in ShenandoahHeap::allocate_memory_under_lock
+  size_t get_old_evac_reserve() const;
+
+  // Used in ShenandoahFreeSet::add_old_collector_free_region
+  // Used in ShenandoahFreeSet::flip_to_old_gc
+  void augment_old_evac_reserve(size_t increment);
+
+  // Returns previous value
+  // Used in shGeneration::compute_evacuation_budgets
+  // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
+  // Used in ShenandoahConcurrentGC::collect (zero'd out)
+  // Used in ShenandoahGeneration::adjust_evacuation_budgets
+  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set  (if regions transferred to old)
+  size_t set_young_evac_reserve(size_t new_val);
+
+  // Used in ShenandoahFreeSet::rebuild
+  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set
+  // Used in ShenandoahYoungHeuristics::choose_young_collection_set
+  size_t get_young_evac_reserve() const;
+
+  // Used in ShenandoahGenerationalFullGC::prepare
+  void reset_generation_reserves();
 };
 
 

@@ -464,7 +464,7 @@ void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* regi
   assert(_free_sets.membership(idx) == NotFree, "Regions promoted in place should not be in any free set");
   if (capacity >= PLAB::min_size() * HeapWordSize) {
     _free_sets.make_free(idx, OldCollector, capacity);
-    _heap->augment_promo_reserve(capacity);
+    _heap->collection_set_parameters()->augment_promo_reserve(capacity);
   }
 }
 
@@ -999,7 +999,7 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   size_t region_capacity = alloc_capacity(r);
   _free_sets.move_to_set(idx, OldCollector, region_capacity);
   _free_sets.assert_bounds();
-  _heap->augment_old_evac_reserve(region_capacity);
+  _heap->collection_set_parameters()->augment_old_evac_reserve(region_capacity);
   bool transferred = _heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
     log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
@@ -1215,11 +1215,14 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     // each PLAB's available memory.
     if (_heap->has_evacuation_reserve_quantities()) {
       // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
-      young_reserve = _heap->get_young_evac_reserve();
-      old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
+      auto collection_set_parameters = _heap->collection_set_parameters();
+      size_t promoted_reserve = collection_set_parameters->get_promoted_reserve();
+      size_t old_evac_reserve = collection_set_parameters->get_old_evac_reserve();
+      young_reserve = collection_set_parameters->get_young_evac_reserve();
+      old_reserve = promoted_reserve + old_evac_reserve;
       assert(old_reserve <= old_available,
              "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
-             _heap->get_promoted_reserve(), _heap->get_old_evac_reserve(), old_available);
+             promoted_reserve, old_evac_reserve, old_available);
     } else {
       // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
       young_reserve = (young_capacity * ShenandoahEvacReserve) / 100;

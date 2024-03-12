@@ -335,10 +335,10 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap
   // Note that unused old_promo_reserve might not be entirely consumed_by_advance_promotion.  Do not transfer this
   // to old_evacuation_reserve because this memory is likely very fragmented, and we do not want to increase the likelihood
   // of old evacuation failure.
-
-  heap->set_young_evac_reserve(young_evacuation_reserve);
-  heap->set_old_evac_reserve(old_evacuation_reserve);
-  heap->set_promoted_reserve(consumed_by_advance_promotion);
+  auto collection_set_parameters = heap->collection_set_parameters();
+  collection_set_parameters->set_young_evac_reserve(young_evacuation_reserve);
+  collection_set_parameters->set_old_evac_reserve(old_evacuation_reserve);
+  collection_set_parameters->set_promoted_reserve(consumed_by_advance_promotion);
 
   // There is no need to expand OLD because all memory used here was set aside at end of previous GC, except in the
   // case of a GLOBAL gc.  During choose_collection_set() of GLOBAL, old will be expanded on demand.
@@ -366,10 +366,11 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   const ShenandoahOldGeneration* const old_generation = heap->old_generation();
   const ShenandoahYoungGeneration* const young_generation = heap->young_generation();
+  auto collection_set_parameters = heap->collection_set_parameters();
 
   size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
   size_t old_evacuated_committed = (size_t) (ShenandoahOldEvacWaste * old_evacuated);
-  size_t old_evacuation_reserve = heap->get_old_evac_reserve();
+  size_t old_evacuation_reserve = collection_set_parameters->get_old_evac_reserve();
 
   if (old_evacuated_committed > old_evacuation_reserve) {
     // This should only happen due to round-off errors when enforcing ShenandoahOldEvacWaste
@@ -381,7 +382,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   } else if (old_evacuated_committed < old_evacuation_reserve) {
     // This happens if the old-gen collection consumes less than full budget.
     old_evacuation_reserve = old_evacuated_committed;
-    heap->set_old_evac_reserve(old_evacuation_reserve);
+    collection_set_parameters->set_old_evac_reserve(old_evacuation_reserve);
   }
 
   size_t young_advance_promoted = collection_set->get_young_bytes_to_be_promoted();
@@ -392,7 +393,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
 
   size_t total_young_available = young_generation->available_with_reserve();
   assert(young_evacuated_reserve_used <= total_young_available, "Cannot evacuate more than is available in young");
-  heap->set_young_evac_reserve(young_evacuated_reserve_used);
+  collection_set_parameters->set_young_evac_reserve(young_evacuated_reserve_used);
 
   size_t old_available = old_generation->available();
   // Now that we've established the collection set, we know how much memory is really required by old-gen for evacuation
@@ -457,8 +458,8 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   // Add in the excess_old memory to hold unanticipated promotions, if any.  If there are more unanticipated
   // promotions than fit in reserved memory, they will be deferred until a future GC pass.
   size_t total_promotion_reserve = young_advance_promoted_reserve_used + excess_old;
-  heap->set_promoted_reserve(total_promotion_reserve);
-  heap->reset_promoted_expended();
+  collection_set_parameters->set_promoted_reserve(total_promotion_reserve);
+  collection_set_parameters->reset_promoted_expended();
 }
 
 typedef struct {
