@@ -136,7 +136,7 @@ public:
   void augment_old_evac_reserve(size_t increment);
 
   // Returns previous value
-  // Used in shGeneration::compute_evacuation_budgets
+  // Used in ShenandoahGeneration::compute_evacuation_budgets
   // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
   // Used in ShenandoahConcurrentGC::collect (zero'd out)
   // Used in ShenandoahGeneration::adjust_evacuation_budgets
@@ -153,6 +153,9 @@ public:
 
   // Used in ShenandoahFreeSet::rebuild
   bool has_evacuation_reserve_quantities() const;
+
+  // Used in ShenandoahGeneration::prepare_regions_and_collection_set to setup for free set rebuild
+  void set_evacuation_reserve_quantities(bool is_valid);
 };
 
 

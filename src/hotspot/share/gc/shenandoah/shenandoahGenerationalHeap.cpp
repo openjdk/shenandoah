@@ -96,3 +96,45 @@ void ShenandoahGenerationalHeap::stop() {
   regulator_thread()->stop();
   ShenandoahHeap::stop();
 }
+
+ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_generations() {
+  shenandoah_assert_heaplocked();
+
+  ShenandoahOldGeneration* old_gen = old_generation();
+  size_t old_region_surplus = old_gen->get_region_surplus();
+  size_t old_region_deficit = old_gen->get_region_deficit();
+  old_gen->set_region_surplus(0);
+  old_gen->set_region_deficit(0);
+
+  if (old_region_surplus) {
+    bool success = generation_sizer()->transfer_to_young(old_region_surplus);
+    return TransferResult {
+      success, old_region_surplus, "young"
+    };
+  }
+
+  if (old_region_deficit) {
+    bool success = generation_sizer()->transfer_to_old(old_region_deficit);
+    if (!success) {
+      old_gen->handle_failed_transfer();
+    }
+    return TransferResult {
+      success, old_region_deficit, "old"
+    };
+  }
+
+  return TransferResult {true, 0, "none"};
+}
+
+void ShenandoahGenerationalHeap::TransferResult::print_on(const char* when, outputStream* ss) const {
+  auto heap = ShenandoahGenerationalHeap::heap();
+  ShenandoahYoungGeneration* young_gen = heap->young_generation();
+  ShenandoahOldGeneration* old_gen = heap->old_generation();
+  size_t young_available = young_gen->available();
+  size_t old_available = old_gen->available();
+  ss->print_cr("After %s, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
+                     PROPERFMT ", young_available: " PROPERFMT,
+                     when,
+                     success? "successfully transferred": "failed to transfer", region_count, region_destination,
+                     PROPERFMTARGS(old_available), PROPERFMTARGS(young_available));
+}

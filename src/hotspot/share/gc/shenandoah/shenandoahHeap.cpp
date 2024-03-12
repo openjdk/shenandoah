@@ -598,7 +598,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_state_changed(false),
   _gc_no_progress_count(0),
   _age_census(nullptr),
-  _has_evacuation_reserve_quantities(false),
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -620,8 +619,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _cycle_memory_manager("Shenandoah Cycles"),
   _gc_timer(new ConcurrentGCTimer()),
   _log_min_obj_alignment_in_bytes(LogMinObjAlignmentInBytes),
-  _old_regions_surplus(0),
-  _old_regions_deficit(0),
   _marking_context(nullptr),
   _bitmap_size(0),
   _bitmap_regions_per_slice(0),
@@ -1334,8 +1331,8 @@ void ShenandoahHeap::compute_old_generation_balance(size_t old_xfer_limit, size_
   }
   assert(old_region_deficit == 0 || old_region_surplus == 0, "Only surplus or deficit, never both");
 
-  set_old_region_surplus(old_region_surplus);
-  set_old_region_deficit(old_region_deficit);
+  old_generation()->set_region_surplus(old_region_surplus);
+  old_generation()->set_region_deficit(old_region_deficit);
 }
 
 // Called from stubs in JIT code or interpreter
@@ -2490,10 +2487,6 @@ void ShenandoahHeap::set_gc_state(uint mask, bool value) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
   _gc_state.set_cond(mask, value);
   _gc_state_changed = true;
-}
-
-void ShenandoahHeap::set_evacuation_reserve_quantities(bool is_valid) {
-  _has_evacuation_reserve_quantities = is_valid;
 }
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {

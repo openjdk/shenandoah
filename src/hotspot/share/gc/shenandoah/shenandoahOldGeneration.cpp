@@ -195,6 +195,10 @@ void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
   }
 }
 
+void ShenandoahOldGeneration::handle_failed_transfer() {
+  _old_heuristics->trigger_cannot_expand();
+}
+
 size_t ShenandoahOldGeneration::usage_trigger_threshold() const {
   size_t result = _live_bytes_after_last_mark + (_live_bytes_after_last_mark * _growth_before_compaction) / FRACTIONAL_DENOMINATOR;
   return result;

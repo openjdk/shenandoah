@@ -387,7 +387,6 @@ public:
     return _heap_changed.try_unset();
   }
 
-  void set_evacuation_reserve_quantities(bool is_valid);
   void set_concurrent_young_mark_in_progress(bool in_progress);
   void set_concurrent_old_mark_in_progress(bool in_progress);
   void set_evacuation_in_progress(bool in_progress);
@@ -529,7 +528,7 @@ public:
   ShenandoahPacer*           pacer()             const { return _pacer;             }
 
   ShenandoahPhaseTimings*      phase_timings()   const { return _phase_timings;     }
-  ShenandoahEvacuationTracker* evac_tracker()    const { return  _evac_tracker;     }
+  ShenandoahEvacuationTracker* evac_tracker()    const { return _evac_tracker;      }
 
   void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation);
   void on_cycle_end(ShenandoahGeneration* generation);
@@ -659,9 +658,6 @@ public:
 // ---------- Allocation support
 //
 private:
-  // How many bytes to transfer between old and young after we have finished recycling collection set regions?
-  size_t _old_regions_surplus;
-  size_t _old_regions_deficit;
 
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region, bool is_promotion);
 
@@ -693,12 +689,6 @@ public:
   void labs_make_parsable();
   void tlabs_retire(bool resize);
   void gclabs_retire(bool resize);
-
-  inline void set_old_region_surplus(size_t surplus) { _old_regions_surplus = surplus; };
-  inline void set_old_region_deficit(size_t deficit) { _old_regions_deficit = deficit; };
-
-  inline size_t get_old_region_surplus() { return _old_regions_surplus; };
-  inline size_t get_old_region_deficit() { return _old_regions_deficit; };
 
 // ---------- Marking support
 //

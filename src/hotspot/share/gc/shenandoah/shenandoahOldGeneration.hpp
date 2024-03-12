@@ -36,6 +36,10 @@ private:
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   ShenandoahOldHeuristics* _old_heuristics;
 
+  // How many bytes to transfer between old and young after we have finished recycling collection set regions?
+  size_t _region_surplus;
+  size_t _region_deficit;
+
   bool coalesce_and_fill();
 
 public:
@@ -46,6 +50,14 @@ public:
   const char* name() const override {
     return "OLD";
   }
+
+  void set_region_surplus(size_t surplus) { _region_surplus = surplus; };
+  void set_region_deficit(size_t deficit) { _region_deficit = deficit; };
+
+  size_t get_region_surplus() const { return _region_surplus; };
+  size_t get_region_deficit() const { return _region_deficit; };
+
+  void handle_failed_transfer();
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;

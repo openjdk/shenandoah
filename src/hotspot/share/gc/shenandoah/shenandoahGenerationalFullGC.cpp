@@ -26,6 +26,7 @@
 
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shenandoah/shenandoahGenerationalFullGC.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
@@ -111,39 +112,13 @@ void ShenandoahGenerationalFullGC::balance_generations_after_gc(ShenandoahHeap* 
                PROPERFMTARGS(heap->old_generation()->used()));
 }
 
-void ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set(ShenandoahHeap* heap) {
-  bool success;
-  size_t region_xfer;
-  const char* region_destination;
-  ShenandoahYoungGeneration* young_gen = heap->young_generation();
-  ShenandoahGeneration* old_gen = heap->old_generation();
-
-  size_t old_region_surplus = heap->get_old_region_surplus();
-  size_t old_region_deficit = heap->get_old_region_deficit();
-  if (old_region_surplus) {
-    success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
-    region_destination = "young";
-    region_xfer = old_region_surplus;
-  } else if (old_region_deficit) {
-    success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
-    region_destination = "old";
-    region_xfer = old_region_deficit;
-    if (!success) {
-      ((ShenandoahOldHeuristics *) old_gen->heuristics())->trigger_cannot_expand();
-    }
-  } else {
-    region_destination = "none";
-    region_xfer = 0;
-    success = true;
+void ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set() {
+  auto result = ShenandoahGenerationalHeap::heap()->balance_generations();
+  LogTarget(Info, gc, ergo) lt;
+  if (lt.is_enabled()) {
+    LogStream ls(lt);
+    result.print_on("Full GC", &ls);
   }
-  heap->set_old_region_surplus(0);
-  heap->set_old_region_deficit(0);
-  size_t young_available = young_gen->available();
-  size_t old_available = old_gen->available();
-  log_info(gc, ergo)("After cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
-                     PROPERFMT ", young_available: " PROPERFMT,
-                     success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
-                     PROPERFMTARGS(old_available), PROPERFMTARGS(young_available));
 }
 
 void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {

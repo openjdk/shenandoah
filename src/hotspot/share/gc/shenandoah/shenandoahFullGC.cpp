@@ -1198,7 +1198,7 @@ void ShenandoahFullGC::phase5_epilog() {
     // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
     // abbreviated cycle.
     if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set(heap);
+      ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set();
       ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
     }
     heap->clear_cancelled_gc(true /* clear oom handler */);

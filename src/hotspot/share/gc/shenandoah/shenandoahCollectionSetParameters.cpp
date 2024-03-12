@@ -100,7 +100,10 @@ void ShenandoahCollectionSetParameters::reset_generation_reserves() {
   set_promoted_reserve(0);
 }
 
-
 bool ShenandoahCollectionSetParameters::has_evacuation_reserve_quantities() const {
   return _has_evacuation_reserve_quantities;
+}
+
+void ShenandoahCollectionSetParameters::set_evacuation_reserve_quantities(bool is_valid) {
+  _has_evacuation_reserve_quantities = is_valid;
 }

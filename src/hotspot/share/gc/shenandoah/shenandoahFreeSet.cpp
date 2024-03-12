@@ -1166,9 +1166,10 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   size_t young_reserve, old_reserve;
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
-  size_t old_capacity = _heap->old_generation()->max_capacity();
-  size_t old_available = _heap->old_generation()->available();
-  size_t old_unaffiliated_regions = _heap->old_generation()->free_unaffiliated_regions();
+  ShenandoahOldGeneration* old_generation = _heap->old_generation();
+  size_t old_capacity = old_generation->max_capacity();
+  size_t old_available = old_generation->available();
+  size_t old_unaffiliated_regions = old_generation->free_unaffiliated_regions();
   size_t young_capacity = _heap->young_generation()->max_capacity();
   size_t young_available = _heap->young_generation()->available();
   size_t young_unaffiliated_regions = _heap->young_generation()->free_unaffiliated_regions();
@@ -1180,8 +1181,8 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 
   // Consult old-region surplus and deficit to make adjustments to current generation capacities and availability.
   // The generation region transfers take place after we rebuild.
-  size_t old_region_surplus = _heap->get_old_region_surplus();
-  size_t old_region_deficit = _heap->get_old_region_deficit();
+  size_t old_region_surplus = old_generation->get_region_surplus();
+  size_t old_region_deficit = old_generation->get_region_deficit();
 
   if (old_region_surplus > 0) {
     size_t xfer_bytes = old_region_surplus * region_size_bytes;
