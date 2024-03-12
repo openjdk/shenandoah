@@ -148,8 +148,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
       immediate_garbage += garbage;
     }
   }
-  heap->reserve_promotable_humongous_regions(humongous_regions_promoted);
-  heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
+  heap->collection_set_parameters()->reserve_promotable_humongous_regions(humongous_regions_promoted);
+  heap->collection_set_parameters()->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
   log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
                      " regular regions, spanning a total of " SIZE_FORMAT " used bytes",
                      humongous_regions_promoted, regular_regions_promoted_in_place,

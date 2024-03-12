@@ -765,8 +765,8 @@ void ShenandoahConcurrentGC::op_final_mark() {
     heap->prepare_concurrent_roots();
 
     if (heap->mode()->is_generational()) {
-      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
-      size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
+      size_t humongous_regions_promoted = heap->collection_set_parameters()->get_promotable_humongous_regions();
+      size_t regular_regions_promoted_in_place = heap->collection_set_parameters()->get_regular_regions_promoted_in_place();
       if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.

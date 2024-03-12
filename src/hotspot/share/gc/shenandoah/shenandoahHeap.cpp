@@ -586,7 +586,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(nullptr),
   _initial_size(0),
-  _promotion_potential(0),
   _committed(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
   _workers(nullptr),
@@ -1298,7 +1297,7 @@ void ShenandoahHeap::compute_old_generation_balance(size_t old_xfer_limit, size_
 
   // Decide how much space we should reserve for promotions from young
   size_t reserve_for_promo = 0;
-  const size_t promo_load = get_promotion_potential();
+  const size_t promo_load = collection_set_parameters()->get_promotion_potential();
   const bool doing_promotions = promo_load > 0;
   if (doing_promotions) {
     // We're promoting and have a bound on the maximum amount that can be promoted

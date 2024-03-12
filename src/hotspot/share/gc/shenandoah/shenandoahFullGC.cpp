@@ -1189,7 +1189,7 @@ void ShenandoahFullGC::phase5_epilog() {
 
     if (heap->mode()->is_generational()) {
       // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
-      heap->clear_promotion_potential();
+      heap->collection_set_parameters()->clear_promotion_potential();
       // Invoke this in case we are able to transfer memory from OLD to YOUNG.
       heap->compute_old_generation_balance(0, 0);
     }

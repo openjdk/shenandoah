@@ -37,6 +37,7 @@
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahController.hpp"
+#include "gc/shenandoah/shenandoahCollectionSetParameters.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
@@ -223,10 +224,8 @@ public:
 private:
   size_t _initial_size;
   size_t _minimum_size;
-  size_t _promotion_potential;
-  size_t _pad_for_promote_in_place;    // bytes of filler
-  size_t _promotable_humongous_regions;
-  size_t _regular_regions_promoted_in_place;
+
+  ShenandoahCollectionSetParameters _collection_set_parameters;
 
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
@@ -450,18 +449,8 @@ public:
   bool is_prepare_for_old_mark_in_progress() const;
   inline bool is_aging_cycle() const;
 
-  inline void clear_promotion_potential() { _promotion_potential = 0; };
-  inline void set_promotion_potential(size_t val) { _promotion_potential = val; };
-  inline size_t get_promotion_potential() { return _promotion_potential; };
 
-  inline void set_pad_for_promote_in_place(size_t pad) { _pad_for_promote_in_place = pad; }
-  inline size_t get_pad_for_promote_in_place() { return _pad_for_promote_in_place; }
-
-  inline void reserve_promotable_humongous_regions(size_t region_count) { _promotable_humongous_regions = region_count; }
-  inline void reserve_promotable_regular_regions(size_t region_count) { _regular_regions_promoted_in_place = region_count; }
-
-  inline size_t get_promotable_humongous_regions() { return _promotable_humongous_regions; }
-  inline size_t get_regular_regions_promoted_in_place() { return _regular_regions_promoted_in_place; }
+  ShenandoahCollectionSetParameters* collection_set_parameters() { return &_collection_set_parameters; }
 
   // Returns previous value
   inline size_t set_promoted_reserve(size_t new_val);

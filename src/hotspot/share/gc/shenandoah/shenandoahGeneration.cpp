@@ -634,8 +634,9 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
                  " consuming: " SIZE_FORMAT " of budgeted: " SIZE_FORMAT,
                  selected_regions, selected_live, old_consumed, old_available);
   }
-  heap->set_pad_for_promote_in_place(promote_in_place_pad);
-  heap->set_promotion_potential(promo_potential);
+
+  heap->collection_set_parameters()->set_pad_for_promote_in_place(promote_in_place_pad);
+  heap->collection_set_parameters()->set_promotion_potential(promo_potential);
   return old_consumed;
 }
 
