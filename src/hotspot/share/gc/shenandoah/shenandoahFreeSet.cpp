@@ -1213,9 +1213,10 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
     // which is reserved for promotion is enforced using thread-local variables that prescribe intentons for
     // each PLAB's available memory.
-    if (_heap->has_evacuation_reserve_quantities()) {
+    auto collection_set_parameters = _heap->collection_set_parameters();
+    if (collection_set_parameters->has_evacuation_reserve_quantities()) {
       // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
-      auto collection_set_parameters = _heap->collection_set_parameters();
+
       size_t promoted_reserve = collection_set_parameters->get_promoted_reserve();
       size_t old_evac_reserve = collection_set_parameters->get_old_evac_reserve();
       young_reserve = collection_set_parameters->get_young_evac_reserve();

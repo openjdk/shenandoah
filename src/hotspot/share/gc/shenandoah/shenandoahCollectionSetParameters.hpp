@@ -46,6 +46,21 @@ private:
   // Bytes reserved within young-gen to hold evacuated objects from young-gen collection set
   size_t _young_evac_reserve;
 
+
+  // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
+  // hold the results of evacuating to young-gen and to old-gen.  These quantitites, stored in _promoted_reserve,
+  // _old_evac_reserve, and _young_evac_reserve, are consulted prior to rebuilding the free set (ShenandoahFreeSet)
+  // in preparation for evacuation.  When the free set is rebuilt, we make sure to reserve sufficient memory in the
+  // collector and old_collector sets to hold if _has_evacuation_reserve_quantities is true.  The other time we
+  // rebuild the freeset is at the end of GC, as we prepare to idle GC until the next trigger.  In this case,
+  // _has_evacuation_reserve_quantities is false because we don't yet know how much memory will need to be evacuated
+  // in the next GC cycle.  When _has_evacuation_reserve_quantities is false, the free set rebuild operation reserves
+  // for the collector and old_collector sets based on alternative mechanisms, such as ShenandoahEvacReserve,
+  // ShenandoahOldEvacReserve, and ShenandoahOldCompactionReserve.  In a future planned enhancement, the reserve
+  // for old_collector set when not _has_evacuation_reserve_quantities is based in part on anticipated promotion as
+  // determined by analysis of live data found during the previous GC pass which is one less than the current tenure age.
+  bool _has_evacuation_reserve_quantities;
+
 public:
   ShenandoahCollectionSetParameters();
 
@@ -135,6 +150,9 @@ public:
 
   // Used in ShenandoahGenerationalFullGC::prepare
   void reset_generation_reserves();
+
+  // Used in ShenandoahFreeSet::rebuild
+  bool has_evacuation_reserve_quantities() const;
 };
 
 
