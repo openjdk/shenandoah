@@ -49,8 +49,6 @@ public:
     size_t region_count;
     const char* region_destination;
 
-    TransferResult() : success(false), region_count(0), region_destination("none") {}
-
     void print_on(const char* when, outputStream* ss) const;
   };
 

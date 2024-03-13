@@ -163,4 +163,5 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     LogStream ls(lt);
     result.print_on("Old Mark", &ls);
   }
+  return true;
 }

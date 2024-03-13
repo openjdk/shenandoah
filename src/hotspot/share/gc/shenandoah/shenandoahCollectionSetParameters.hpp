@@ -67,7 +67,7 @@ public:
   // Used only by shFullGC.cpp
   void clear_promotion_potential() { _promotion_potential = 0; };
 
-  // Used only by shGeneration::select_aged_regions
+  // Used only by ShenandoahGeneration::select_aged_regions
   void set_promotion_potential(size_t val) { _promotion_potential = val; };
 
   // Used:
@@ -75,7 +75,7 @@ public:
   // ShenandoahYoungHeuristics::should_start_gc - to expedite promotions
   size_t get_promotion_potential() const { return _promotion_potential; };
 
-  // Used only by shGeneration::select_aged_regions
+  // Used only by ShenandoahGeneration::select_aged_regions
   void set_pad_for_promote_in_place(size_t pad) { _pad_for_promote_in_place = pad; }
   // Used during verification only
   size_t get_pad_for_promote_in_place() const { return _pad_for_promote_in_place; }
@@ -90,8 +90,8 @@ public:
   size_t get_regular_regions_promoted_in_place() const  { return _regular_regions_promoted_in_place; }
 
   // Returns previous value
-  // Used in shGeneration::adjust_evacuation_budgets
-  // Used in shGeneration::compute_evacuation_budgets
+  // Used in ShenandoahGeneration::adjust_evacuation_budgets
+  // Used in ShenandoahGeneration::compute_evacuation_budgets
   // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
   // Used in ShenandoahConcurrentGC::collect (zero'd out)
   size_t set_promoted_reserve(size_t new_val);
@@ -116,7 +116,7 @@ public:
   size_t get_promoted_expended();
 
   // Returns previous value
-  // Used in shGeneration::compute_evacuation_budgets
+  // Used in ShenandoahGeneration::compute_evacuation_budgets
   // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
   // Used in ShenandoahConcurrentGC::collect (zero'd out)
   // Used in ShenandoahGeneration::adjust_evacuation_budgets

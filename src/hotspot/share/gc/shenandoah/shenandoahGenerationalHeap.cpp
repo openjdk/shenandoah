@@ -98,7 +98,7 @@ void ShenandoahGenerationalHeap::stop() {
 }
 
 ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_generations() {
-  shenandoah_assert_heaplocked();
+  shenandoah_assert_heaplocked_or_safepoint();
 
   ShenandoahOldGeneration* old_gen = old_generation();
   size_t old_region_surplus = old_gen->get_region_surplus();
