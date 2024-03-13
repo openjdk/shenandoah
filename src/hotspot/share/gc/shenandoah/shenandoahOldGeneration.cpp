@@ -34,6 +34,7 @@
 #include "gc/shenandoah/heuristics/shenandoahStaticHeuristics.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
@@ -477,5 +478,44 @@ void ShenandoahOldGeneration::record_success_concurrent(bool abbreviated) {
 void ShenandoahOldGeneration::handle_failed_evacuation() {
   if (_failed_evacuation.try_set()) {
     log_info(gc)("Old gen evac failure.");
+  }
+}
+
+void ShenandoahOldGeneration::handle_failed_promotion(Thread* thread, size_t size) {
+  // We squelch excessive reports to reduce noise in logs.
+  const size_t MaxReportsPerEpoch = 4;
+  static size_t last_report_epoch = 0;
+  static size_t epoch_report_count = 0;
+  auto heap = ShenandoahGenerationalHeap::heap();
+
+  size_t promotion_reserve;
+  size_t promotion_expended;
+
+  size_t gc_id = heap->control_thread()->get_gc_id();
+
+  if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
+    {
+      // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
+      ShenandoahHeapLocker locker(heap->lock());
+      promotion_reserve = heap->collection_set_parameters()->get_promoted_reserve();
+      promotion_expended = heap->collection_set_parameters()->get_promoted_expended();
+    }
+    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+    size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
+    const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
+
+    log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT
+                       ", plab promotions %s, promotion reserve: " SIZE_FORMAT ", promotion expended: " SIZE_FORMAT
+                       ", old capacity: " SIZE_FORMAT ", old_used: " SIZE_FORMAT ", old unaffiliated regions: " SIZE_FORMAT,
+                       size * HeapWordSize, plab == nullptr? "no": "yes",
+                       words_remaining * HeapWordSize, promote_enabled, promotion_reserve, promotion_expended,
+                       max_capacity(), used(), free_unaffiliated_regions());
+
+    if ((gc_id == last_report_epoch) && (epoch_report_count >= MaxReportsPerEpoch)) {
+      log_info(gc, ergo)("Squelching additional promotion failure reports for current epoch");
+    } else if (gc_id != last_report_epoch) {
+      last_report_epoch = gc_id;
+      epoch_report_count = 1;
+    }
   }
 }

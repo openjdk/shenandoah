@@ -748,7 +748,6 @@ private:
   void handle_old_evacuation(HeapWord* obj, size_t words, bool promotion);
 
 public:
-  void report_promotion_failure(Thread* thread, size_t size);
 
   static address in_cset_fast_test_addr();
 
