@@ -69,6 +69,7 @@ public:
   void handle_failed_transfer();
   void handle_failed_evacuation();
   void handle_failed_promotion(Thread* thread, size_t size);
+  void handle_evacuation(HeapWord* obj, size_t words, bool promotion);
 
   bool clear_failed_evacuation() {
     return _failed_evacuation.try_unset();

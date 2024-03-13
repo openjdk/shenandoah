@@ -519,3 +519,22 @@ void ShenandoahOldGeneration::handle_failed_promotion(Thread* thread, size_t siz
     }
   }
 }
+
+void ShenandoahOldGeneration::handle_evacuation(HeapWord* obj, size_t words, bool promotion) {
+  auto heap = ShenandoahGenerationalHeap::heap();
+  auto card_scan = heap->card_scan();
+
+  // Only register the copy of the object that won the evacuation race.
+  card_scan->register_object_without_lock(obj);
+
+  // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
+  // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
+  // do this in batch, in a background GC thread than to try to carefully dirty only cards
+  // that hold interesting pointers right now.
+  card_scan->mark_range_as_dirty(obj, words);
+
+  if (promotion) {
+    // This evacuation was a promotion, track this as allocation against old gen
+    increase_allocated(words * HeapWordSize);
+  }
+}

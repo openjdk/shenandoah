@@ -964,22 +964,6 @@ void ShenandoahHeap::handle_force_counters_update() {
   monitoring_support()->handle_force_counters_update();
 }
 
-void ShenandoahHeap::handle_old_evacuation(HeapWord* obj, size_t words, bool promotion) {
-  // Only register the copy of the object that won the evacuation race.
-  card_scan()->register_object_without_lock(obj);
-
-  // Mark the entire range of the evacuated object as dirty.  At next remembered set scan,
-  // we will clear dirty bits that do not hold interesting pointers.  It's more efficient to
-  // do this in batch, in a background GC thread than to try to carefully dirty only cards
-  // that hold interesting pointers right now.
-  card_scan()->mark_range_as_dirty(obj, words);
-
-  if (promotion) {
-    // This evacuation was a promotion, track this as allocation against old gen
-    old_generation()->increase_allocated(words * HeapWordSize);
-  }
-}
-
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
   // New object should fit the GCLAB size
   size_t min_size = MAX2(size, PLAB::min_size());
@@ -1933,7 +1917,7 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
     _evac_tracker->end_evacuation(thread, size * HeapWordSize);
     if (mode()->is_generational()) {
       if (target_gen == OLD_GENERATION) {
-        handle_old_evacuation(copy, size, from_region->is_young());
+        old_generation()->handle_evacuation(copy, size, from_region->is_young());
       } else {
         // When copying to the old generation above, we don't care
         // about recording object age in the census stats.
