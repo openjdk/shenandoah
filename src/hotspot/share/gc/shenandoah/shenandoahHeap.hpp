@@ -743,11 +743,9 @@ public:
 private:
   ShenandoahCollectionSet* _collection_set;
   ShenandoahEvacOOMHandler _oom_evac_handler;
-  ShenandoahSharedFlag _old_gen_oom_evac;
 
-  inline oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
+  oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
   void handle_old_evacuation(HeapWord* obj, size_t words, bool promotion);
-  void handle_old_evacuation_failure();
 
 public:
   void report_promotion_failure(Thread* thread, size_t size);
@@ -769,8 +767,6 @@ public:
   // Call before/after evacuation.
   inline void enter_evacuation(Thread* t);
   inline void leave_evacuation(Thread* t);
-
-  inline bool clear_old_evacuation_failure();
 
 // ---------- Generational support
 //

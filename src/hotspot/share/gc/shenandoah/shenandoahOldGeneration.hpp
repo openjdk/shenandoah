@@ -26,6 +26,7 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
@@ -40,6 +41,10 @@ private:
   size_t _region_surplus;
   size_t _region_deficit;
 
+  // Set when evacuation in the old generation fails. When this is set, the control thread will initiate a
+  // full GC instead of a futile degenerated cycle.
+  ShenandoahSharedFlag _failed_evacuation;
+
   bool coalesce_and_fill();
 
 public:
@@ -51,13 +56,22 @@ public:
     return "OLD";
   }
 
+  // Used in ShenandoahHeap::compute_old_generation_balance
+  // Used in ShenandoahGenerationalHeap::balance_generations
   void set_region_surplus(size_t surplus) { _region_surplus = surplus; };
   void set_region_deficit(size_t deficit) { _region_deficit = deficit; };
 
+  // Used in ShenandoahFreeSet::rebuild
+  // Used in ShenandoahGenerationalHeap::balance_generations
   size_t get_region_surplus() const { return _region_surplus; };
   size_t get_region_deficit() const { return _region_deficit; };
 
   void handle_failed_transfer();
+  void handle_failed_evacuation();
+
+  bool clear_failed_evacuation() {
+    return _failed_evacuation.try_unset();
+  }
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;

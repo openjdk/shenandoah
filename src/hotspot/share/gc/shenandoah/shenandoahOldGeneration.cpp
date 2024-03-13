@@ -473,3 +473,9 @@ void ShenandoahOldGeneration::record_success_concurrent(bool abbreviated) {
   heuristics()->record_success_concurrent(abbreviated);
   ShenandoahHeap::heap()->shenandoah_policy()->record_success_old();
 }
+
+void ShenandoahOldGeneration::handle_failed_evacuation() {
+  if (_failed_evacuation.try_set()) {
+    log_info(gc)("Old gen evac failure.");
+  }
+}
