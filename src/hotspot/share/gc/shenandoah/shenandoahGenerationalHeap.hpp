@@ -53,10 +53,11 @@ public:
   };
 
   TransferResult balance_generations();
+  void compute_old_generation_balance(size_t old_xfer_limit, size_t old_cset_regions);
+
 private:
   void initialize_controller() override;
 
-private:
   ShenandoahRegulatorThread* _regulator_thread;
 };
 

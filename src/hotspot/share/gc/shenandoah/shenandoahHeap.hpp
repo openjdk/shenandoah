@@ -778,8 +778,6 @@ public:
   void retire_plab(PLAB* plab, Thread* thread);
   void cancel_old_gc();
 
-  void compute_old_generation_balance(size_t old_xfer_limit, size_t old_cset_regions);
-
 // ---------- Helper functions
 //
 public:

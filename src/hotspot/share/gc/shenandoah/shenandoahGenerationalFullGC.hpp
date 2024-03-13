@@ -50,6 +50,11 @@ public:
   // when rebuilding the free sets.
   static void balance_generations_after_gc(ShenandoahHeap* heap);
 
+  // This will compute the target size for the old generation. It will be expressed in terms of
+  // a region surplus and deficit, which will be redistributed accordingly after rebuilding the
+  // free set.
+  static void compute_balances();
+
   // Rebuilding the free set may have resulted in regions being pulled in to the old generation
   // evacuation reserve. For this reason, we must update the usage and capacity of the generations
   // again. In the distant past, the free set did not know anything about generations, so we had
