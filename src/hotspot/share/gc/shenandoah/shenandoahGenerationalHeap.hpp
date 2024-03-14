@@ -38,7 +38,12 @@ public:
 
   void print_init_logger() const override;
 
-  ShenandoahRegulatorThread* regulator_thread() const             { return _regulator_thread;  }
+  // ---------- Serviceability
+  //
+  void initialize_serviceability() override;
+  GrowableArray<MemoryPool*> memory_pools() override;
+
+  ShenandoahRegulatorThread* regulator_thread() const { return _regulator_thread;  }
 
   void gc_threads_do(ThreadClosure* tcl) const override;
 
@@ -59,6 +64,9 @@ private:
   void initialize_controller() override;
 
   ShenandoahRegulatorThread* _regulator_thread;
+
+  MemoryPool* _young_gen_memory_pool;
+  MemoryPool* _old_gen_memory_pool;
 };
 
 #endif //SHARE_GC_SHENANDOAH_SHENANDOAHGENERATIONALHEAP

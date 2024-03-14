@@ -28,6 +28,7 @@
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahInitLogger.hpp"
+#include "gc/shenandoah/shenandoahMemoryPool.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
@@ -70,14 +71,32 @@ ShenandoahGenerationalHeap* ShenandoahGenerationalHeap::heap() {
   return checked_cast<ShenandoahGenerationalHeap*>(heap);
 }
 
+ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy) :
+  ShenandoahHeap(policy),
+  _regulator_thread(nullptr) { }
+
 void ShenandoahGenerationalHeap::print_init_logger() const {
   ShenandoahGenerationalInitLogger logger;
   logger.print_all();
 }
 
-ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy) :
-  ShenandoahHeap(policy),
-  _regulator_thread(nullptr) { }
+void ShenandoahGenerationalHeap::initialize_serviceability() {
+  assert(mode()->is_generational(), "Only for the generational mode");
+  _young_gen_memory_pool = new ShenandoahYoungGenMemoryPool(this);
+  _old_gen_memory_pool = new ShenandoahOldGenMemoryPool(this);
+  cycle_memory_manager()->add_pool(_young_gen_memory_pool);
+  cycle_memory_manager()->add_pool(_old_gen_memory_pool);
+  stw_memory_manager()->add_pool(_young_gen_memory_pool);
+  stw_memory_manager()->add_pool(_old_gen_memory_pool);
+}
+
+GrowableArray<MemoryPool*> ShenandoahGenerationalHeap::memory_pools() {
+  assert(mode()->is_generational(), "Only for the generational mode");
+  GrowableArray<MemoryPool*> memory_pools(2);
+  memory_pools.append(_young_gen_memory_pool);
+  memory_pools.append(_old_gen_memory_pool);
+  return memory_pools;
+}
 
 void ShenandoahGenerationalHeap::initialize_controller() {
   auto control_thread = new ShenandoahGenerationalControlThread();
