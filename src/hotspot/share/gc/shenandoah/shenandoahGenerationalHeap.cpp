@@ -67,6 +67,7 @@ protected:
 };
 
 ShenandoahGenerationalHeap* ShenandoahGenerationalHeap::heap() {
+  shenandoah_assert_generational();
   CollectedHeap* heap = Universe::heap();
   return checked_cast<ShenandoahGenerationalHeap*>(heap);
 }
@@ -245,6 +246,12 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t old_xfer_
 
   old_generation()->set_region_surplus(old_region_surplus);
   old_generation()->set_region_deficit(old_region_deficit);
+}
+
+void ShenandoahGenerationalHeap::reset_generation_reserves() {
+  young_generation()->set_evacuation_reserve(0);
+  old_generation()->set_evacuation_reserve(0);
+  old_generation()->set_promoted_reserve(0);
 }
 
 void ShenandoahGenerationalHeap::TransferResult::print_on(const char* when, outputStream* ss) const {

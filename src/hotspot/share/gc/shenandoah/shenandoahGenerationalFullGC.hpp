@@ -36,7 +36,7 @@ class ShenandoahHeapRegion;
 class ShenandoahGenerationalFullGC {
 public:
   // Prepares the generational mode heap for a full collection.
-  static void prepare(ShenandoahHeap* heap);
+  static void prepare();
 
   // Full GC may have compacted objects in the old generation, so we need to rebuild the card tables.
   static void rebuild_remembered_set(ShenandoahHeap* heap);

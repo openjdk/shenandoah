@@ -27,7 +27,7 @@
 #include "gc/shenandoah/heuristics/shenandoahGlobalHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 
 #include "utilities/quickSort.hpp"
@@ -79,16 +79,15 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
                                                               const ShenandoahHeuristics::RegionData* data,
                                                               size_t size, size_t actual_free,
                                                               size_t cur_young_garbage) const {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  auto heap = ShenandoahGenerationalHeap::heap();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t capacity = heap->young_generation()->max_capacity();
   size_t garbage_threshold = region_size_bytes * ShenandoahGarbageThreshold / 100;
   size_t ignore_threshold = region_size_bytes * ShenandoahIgnoreGarbageThreshold / 100;
   const uint tenuring_threshold = heap->age_census()->tenuring_threshold();
 
-  auto collection_set_parameters = heap->collection_set_parameters();
-  size_t young_evac_reserve = collection_set_parameters->get_young_evac_reserve();
-  size_t old_evac_reserve = collection_set_parameters->get_old_evac_reserve();
+  size_t young_evac_reserve = heap->young_generation()->get_evacuation_reserve();
+  size_t old_evac_reserve = heap->old_generation()->get_evacuation_reserve();
   size_t max_young_cset = (size_t) (young_evac_reserve / ShenandoahEvacWaste);
   size_t young_cur_cset = 0;
   size_t max_old_cset = (size_t) (old_evac_reserve / ShenandoahOldEvacWaste);
@@ -171,7 +170,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
 
   if (regions_transferred_to_old > 0) {
     heap->generation_sizer()->force_transfer_to_old(regions_transferred_to_old);
-    collection_set_parameters->set_young_evac_reserve(young_evac_reserve - regions_transferred_to_old * region_size_bytes);
-    collection_set_parameters->set_old_evac_reserve(old_evac_reserve + regions_transferred_to_old * region_size_bytes);
+    heap->young_generation()->set_evacuation_reserve(young_evac_reserve - regions_transferred_to_old * region_size_bytes);
+    heap->old_generation()->set_evacuation_reserve(old_evac_reserve + regions_transferred_to_old * region_size_bytes);
   }
 }

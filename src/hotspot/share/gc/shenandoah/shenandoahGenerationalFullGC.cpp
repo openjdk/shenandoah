@@ -50,12 +50,13 @@ void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {
 #endif
 
 
-void ShenandoahGenerationalFullGC::prepare(ShenandoahHeap* heap) {
+void ShenandoahGenerationalFullGC::prepare() {
+  auto heap = ShenandoahGenerationalHeap::heap();
   // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
   heap->set_gc_generation(heap->global_generation());
 
   // No need for old_gen->increase_used() as this was done when plabs were allocated.
-  heap->collection_set_parameters()->reset_generation_reserves();
+  heap->reset_generation_reserves();
 
   // Full GC supersedes any marking or coalescing in old generation.
   heap->cancel_old_gc();
@@ -172,7 +173,7 @@ void ShenandoahGenerationalFullGC::compute_balances() {
   auto heap = ShenandoahGenerationalHeap::heap();
 
   // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
-  heap->collection_set_parameters()->clear_promotion_potential();
+  heap->collection_set_parameters()->set_promotion_potential(0);
   // Invoke this in case we are able to transfer memory from OLD to YOUNG.
   heap->compute_old_generation_balance(0, 0);
 }

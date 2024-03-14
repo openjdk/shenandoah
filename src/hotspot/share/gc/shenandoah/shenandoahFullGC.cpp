@@ -134,7 +134,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   if (heap->mode()->is_generational()) {
-    ShenandoahGenerationalFullGC::prepare(heap);
+    ShenandoahGenerationalFullGC::prepare();
   }
 
   if (ShenandoahVerify) {

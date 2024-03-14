@@ -306,10 +306,7 @@ void ShenandoahDegenGC::op_degenerated() {
   if (heap->mode()->is_generational()) {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
-    auto collection_set_parameters = heap->collection_set_parameters();
-    collection_set_parameters->set_young_evac_reserve(0);
-    collection_set_parameters->set_old_evac_reserve(0);
-    collection_set_parameters->set_promoted_reserve(0);
+    ShenandoahGenerationalHeap::heap()->reset_generation_reserves();
   }
 
   if (ShenandoahVerify) {
@@ -373,9 +370,7 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
     heap->tlabs_retire(false);
   }
 
-  size_t humongous_regions_promoted = heap->collection_set_parameters()->get_promotable_humongous_regions();
-  size_t regular_regions_promoted_in_place = heap->collection_set_parameters()->get_regular_regions_promoted_in_place();
-  if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
+  if (!heap->collection_set()->is_empty() || heap->collection_set_parameters()->has_in_place_promotions()) {
     // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
     // Degenerated evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 

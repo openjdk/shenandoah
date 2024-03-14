@@ -34,44 +34,15 @@ private:
   size_t _promotable_humongous_regions;
   size_t _regular_regions_promoted_in_place;
 
-  // Bytes reserved within old-gen to hold the results of promotion
-  size_t _promoted_reserve;
-
-  // Bytes of old-gen memory expended on promotions (is volatile necessary?)
-  volatile size_t _promoted_expended;
-
-  // Bytes reserved within old-gen to hold evacuated objects from old-gen collection set
-  size_t _old_evac_reserve;
-
-  // Bytes reserved within young-gen to hold evacuated objects from young-gen collection set
-  size_t _young_evac_reserve;
-
-
-  // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
-  // hold the results of evacuating to young-gen and to old-gen.  These quantitites, stored in _promoted_reserve,
-  // _old_evac_reserve, and _young_evac_reserve, are consulted prior to rebuilding the free set (ShenandoahFreeSet)
-  // in preparation for evacuation.  When the free set is rebuilt, we make sure to reserve sufficient memory in the
-  // collector and old_collector sets to hold if _has_evacuation_reserve_quantities is true.  The other time we
-  // rebuild the freeset is at the end of GC, as we prepare to idle GC until the next trigger.  In this case,
-  // _has_evacuation_reserve_quantities is false because we don't yet know how much memory will need to be evacuated
-  // in the next GC cycle.  When _has_evacuation_reserve_quantities is false, the free set rebuild operation reserves
-  // for the collector and old_collector sets based on alternative mechanisms, such as ShenandoahEvacReserve,
-  // ShenandoahOldEvacReserve, and ShenandoahOldCompactionReserve.  In a future planned enhancement, the reserve
-  // for old_collector set when not _has_evacuation_reserve_quantities is based in part on anticipated promotion as
-  // determined by analysis of live data found during the previous GC pass which is one less than the current tenure age.
-  bool _has_evacuation_reserve_quantities;
-
 public:
   ShenandoahCollectionSetParameters();
 
-  // Used only by shFullGC.cpp
-  void clear_promotion_potential() { _promotion_potential = 0; };
-
-  // Used only by ShenandoahGeneration::select_aged_regions
+  // Used in ShenandoahGeneration::select_aged_regions
+  // Used in ShenandoahGenerationalFullGC::compute_balances (zero'd out)
   void set_promotion_potential(size_t val) { _promotion_potential = val; };
 
   // Used:
-  // ShenandoahHeap::compute_old_generation_balance - should definitely move this (probably to shOldGeneration).
+  // ShenandoahGenerationalHeap::compute_old_generation_balance
   // ShenandoahYoungHeuristics::should_start_gc - to expedite promotions
   size_t get_promotion_potential() const { return _promotion_potential; };
 
@@ -86,76 +57,7 @@ public:
 
   // Used in ShenandoahDegenGC::op_prepare_evacuation and ShenandoahConcurrentGC::op_final_mark
   // to initiate promote in place during evacuation of concurrent and degenerated cycles
-  size_t get_promotable_humongous_regions() const { return _promotable_humongous_regions; }
-  size_t get_regular_regions_promoted_in_place() const  { return _regular_regions_promoted_in_place; }
-
-  // Returns previous value
-  // Used in ShenandoahGeneration::adjust_evacuation_budgets
-  // Used in ShenandoahGeneration::compute_evacuation_budgets
-  // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
-  // Used in ShenandoahConcurrentGC::collect (zero'd out)
-  size_t set_promoted_reserve(size_t new_val);
-
-  // Used in ShenandoahHeap::report_promotion_failure (under the heap lock)
-  // Used (heavily) in ShenandoahHeap::allocate_memory_under_lock
-  // Used in ShenandoahFreeSet::rebuild
-  size_t get_promoted_reserve() const;
-
-  // Used in ShenandoahFreeSet::add_old_collector_free_region
-  void augment_promo_reserve(size_t increment);
-
-  // Used in shGeneration::adjust_evacuation_budgets
-  void reset_promoted_expended();
-  size_t expend_promoted(size_t increment);
-
-  // ShenandoahHeap::retire_plab
-  size_t unexpend_promoted(size_t decrement);
-
-  // Used in ShenandoahHeap::report_promotion_failure (under the heap lock)
-  // Used (heavily) in ShenandoahHeap::allocate_memory_under_lock
-  size_t get_promoted_expended();
-
-  // Returns previous value
-  // Used in ShenandoahGeneration::compute_evacuation_budgets
-  // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
-  // Used in ShenandoahConcurrentGC::collect (zero'd out)
-  // Used in ShenandoahGeneration::adjust_evacuation_budgets
-  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set (if regions transferred to old)
-  // Used in ShenandoahOldHeuristicTest (this test is a burden at this point)
-  size_t set_old_evac_reserve(size_t new_val);
-
-  // Used in ShenandoahFreeSet::rebuild
-  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set
-  // Used in ShenandoahGeneration::adjust_evacuation_budgets
-  // Used in ShenandoahOldHeuristics::prime_collection_set
-  // Used in ShenandoahHeap::allocate_memory_under_lock
-  size_t get_old_evac_reserve() const;
-
-  // Used in ShenandoahFreeSet::add_old_collector_free_region
-  // Used in ShenandoahFreeSet::flip_to_old_gc
-  void augment_old_evac_reserve(size_t increment);
-
-  // Returns previous value
-  // Used in ShenandoahGeneration::compute_evacuation_budgets
-  // Used in ShenandoahDegenGC::op_degenerated (zero'd out)
-  // Used in ShenandoahConcurrentGC::collect (zero'd out)
-  // Used in ShenandoahGeneration::adjust_evacuation_budgets
-  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set  (if regions transferred to old)
-  size_t set_young_evac_reserve(size_t new_val);
-
-  // Used in ShenandoahFreeSet::rebuild
-  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set
-  // Used in ShenandoahYoungHeuristics::choose_young_collection_set
-  size_t get_young_evac_reserve() const;
-
-  // Used in ShenandoahGenerationalFullGC::prepare
-  void reset_generation_reserves();
-
-  // Used in ShenandoahFreeSet::rebuild
-  bool has_evacuation_reserve_quantities() const;
-
-  // Used in ShenandoahGeneration::prepare_regions_and_collection_set to setup for free set rebuild
-  void set_evacuation_reserve_quantities(bool is_valid);
+  bool has_in_place_promotions() const { return (_promotable_humongous_regions + _regular_regions_promoted_in_place) > 0; }
 };
 
 

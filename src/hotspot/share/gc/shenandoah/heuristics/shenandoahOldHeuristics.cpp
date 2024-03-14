@@ -27,8 +27,7 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
-#include "gc/shenandoah/shenandoahHeap.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "utilities/quickSort.hpp"
 
@@ -72,7 +71,7 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
 }
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  auto heap = ShenandoahGenerationalHeap::heap();
   if (unprocessed_old_collection_candidates() == 0) {
     return false;
   }
@@ -88,7 +87,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
-  size_t old_evacuation_reserve = heap->collection_set_parameters()->get_old_evac_reserve();
+  size_t old_evacuation_reserve = heap->old_generation()->get_evacuation_reserve();
   size_t old_evacuation_budget = (size_t) ((double) old_evacuation_reserve / ShenandoahOldEvacWaste);
   size_t unfragmented_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
   size_t fragmented_available;

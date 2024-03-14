@@ -45,6 +45,14 @@ private:
   // full GC instead of a futile degenerated cycle.
   ShenandoahSharedFlag _failed_evacuation;
 
+  // Bytes reserved within old-gen to hold the results of promotion
+  size_t _promoted_reserve;
+
+  // Bytes of old-gen memory expended on promotions. This may be modified concurrently
+  // by mutators and gc workers when promotion LABs are retired during evacuation. It
+  // is therefore always accessed through atomic operations.
+  size_t _promoted_expended;
+
   bool coalesce_and_fill();
 
 public:
@@ -55,6 +63,33 @@ public:
   const char* name() const override {
     return "OLD";
   }
+
+  // Used in ShenandoahGeneration::adjust_evacuation_budgets
+  // Used in ShenandoahGeneration::compute_evacuation_budgets
+  void set_promoted_reserve(size_t new_val);
+
+  // Used in ShenandoahGenerationalHeap::handle_failed_promotion (under the heap lock)
+  // Used (heavily) in ShenandoahHeap::allocate_memory_under_lock
+  // Used in ShenandoahFreeSet::rebuild
+  size_t get_promoted_reserve() const;
+
+  // Used in ShenandoahFreeSet::add_old_collector_free_region
+  void augment_promoted_reserve(size_t increment);
+
+  // Used in shGeneration::adjust_evacuation_budgets to reset the promoted bytes
+  void reset_promoted_expended();
+
+  // This is incremented when allocations are made to copy promotions into the old generation
+  // Used in ShenandoahHeap::allocate_memory_under_lock
+  size_t expend_promoted(size_t increment);
+
+  // This returns unused memory from a retired promotion LAB.
+  // Used in ShenandoahHeap::retire_plab
+  size_t unexpend_promoted(size_t decrement);
+
+  // Used in ShenandoahGenerationalHeap::handle_failed_promotion (under the heap lock)
+  // Used (heavily) in ShenandoahHeap::allocate_memory_under_lock
+  size_t get_promoted_expended();
 
   // Used in ShenandoahHeap::compute_old_generation_balance
   // Used in ShenandoahGenerationalHeap::balance_generations

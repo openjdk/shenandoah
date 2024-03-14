@@ -234,14 +234,11 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     ShenandoahGenerationalHeap::TransferResult result;
     {
-      ShenandoahHeapLocker locker(heap->lock());
+      ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+      ShenandoahHeapLocker locker(gen_heap->lock());
 
-      result = ShenandoahGenerationalHeap::heap()->balance_generations();
-
-      auto collection_set_parameters = heap->collection_set_parameters();
-      collection_set_parameters->set_young_evac_reserve(0);
-      collection_set_parameters->set_old_evac_reserve(0);
-      collection_set_parameters->set_promoted_reserve(0);
+      result = gen_heap->balance_generations();
+      gen_heap->reset_generation_reserves();
     }
 
     LogTarget(Info, gc, ergo) lt;
@@ -743,9 +740,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
     heap->prepare_concurrent_roots();
 
     if (heap->mode()->is_generational()) {
-      size_t humongous_regions_promoted = heap->collection_set_parameters()->get_promotable_humongous_regions();
-      size_t regular_regions_promoted_in_place = heap->collection_set_parameters()->get_regular_regions_promoted_in_place();
-      if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
+      if (!heap->collection_set()->is_empty() || heap->collection_set_parameters()->has_in_place_promotions()) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 

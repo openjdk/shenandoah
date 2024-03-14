@@ -48,7 +48,6 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
-#include "prims/jvmtiTagMap.hpp"
 #include "runtime/threads.hpp"
 #include "utilities/events.hpp"
 
@@ -178,6 +177,8 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
     _old_heuristics(nullptr),
     _region_surplus(0),
     _region_deficit(0),
+    _promoted_reserve(0),
+    _promoted_expended(0),
     _state(WAITING_FOR_BOOTSTRAP),
     _growth_before_compaction(INITIAL_GROWTH_BEFORE_COMPACTION),
     _min_growth_before_compaction ((ShenandoahMinOldGenGrowthPercent * FRACTIONAL_DENOMINATOR) / 100)
@@ -185,6 +186,39 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
   _live_bytes_after_last_mark = ShenandoahHeap::heap()->capacity() * INITIAL_LIVE_FRACTION / FRACTIONAL_DENOMINATOR;
   // Always clear references for old generation
   ref_processor()->set_soft_reference_policy(true);
+}
+
+void ShenandoahOldGeneration::set_promoted_reserve(size_t new_val) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  _promoted_reserve = new_val;
+}
+
+size_t ShenandoahOldGeneration::get_promoted_reserve() const {
+  return _promoted_reserve;
+}
+
+void ShenandoahOldGeneration::augment_promoted_reserve(size_t increment) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  _promoted_reserve += increment;
+}
+
+void ShenandoahOldGeneration::reset_promoted_expended() {
+  shenandoah_assert_heaplocked_or_safepoint();
+  Atomic::store(&_promoted_expended, (size_t) 0);
+}
+
+size_t ShenandoahOldGeneration::expend_promoted(size_t increment) {
+  shenandoah_assert_heaplocked_or_safepoint();
+  assert(get_promoted_expended() + increment <= get_promoted_reserve(), "Do not expend more promotion than budgeted");
+  return Atomic::add(&_promoted_expended, increment);
+}
+
+size_t ShenandoahOldGeneration::unexpend_promoted(size_t decrement) {
+  return Atomic::sub(&_promoted_expended, decrement);
+}
+
+size_t ShenandoahOldGeneration::get_promoted_expended() {
+  return Atomic::load(&_promoted_expended);
 }
 
 size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
@@ -497,8 +531,8 @@ void ShenandoahOldGeneration::handle_failed_promotion(Thread* thread, size_t siz
     {
       // Promotion failures should be very rare.  Invest in providing useful diagnostic info.
       ShenandoahHeapLocker locker(heap->lock());
-      promotion_reserve = heap->collection_set_parameters()->get_promoted_reserve();
-      promotion_expended = heap->collection_set_parameters()->get_promoted_expended();
+      promotion_reserve = get_promoted_reserve();
+      promotion_expended = get_promoted_expended();
     }
     PLAB* plab = ShenandoahThreadLocalData::plab(thread);
     size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();

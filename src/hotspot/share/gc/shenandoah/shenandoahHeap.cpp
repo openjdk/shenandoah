@@ -1127,7 +1127,7 @@ void ShenandoahHeap::retire_plab(PLAB* plab, Thread* thread) {
   ShenandoahThreadLocalData::reset_plab_evacuated(thread);
   ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
   if (not_promoted > 0) {
-    collection_set_parameters()->unexpend_promoted(not_promoted);
+    old_generation()->unexpend_promoted(not_promoted);
   }
   size_t waste = plab->waste();
   HeapWord* top = plab->top();
@@ -1317,7 +1317,6 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     ShenandoahHeapLocker locker(lock());
     Thread* thread = Thread::current();
 
-    auto collection_set_parameters = this->collection_set_parameters();
     if (mode()->is_generational()) {
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
@@ -1339,11 +1338,11 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
         if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
           plab_alloc = true;
-          size_t promotion_avail = collection_set_parameters->get_promoted_reserve();
-          size_t promotion_expended = collection_set_parameters->get_promoted_expended();
+          size_t promotion_avail = old_generation()->get_promoted_reserve();
+          size_t promotion_expended = old_generation()->get_promoted_expended();
           if (promotion_expended + requested_bytes > promotion_avail) {
             promotion_avail = 0;
-            if (collection_set_parameters->get_old_evac_reserve() == 0) {
+            if (old_generation()->get_evacuation_reserve() == 0) {
               // There are no old-gen evacuations in this pass.  There's no value in creating a plab that cannot
               // be used for promotions.
               allow_allocation = false;
@@ -1354,8 +1353,8 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
           }
         } else if (is_promotion) {
           // This is a shared alloc for promotion
-          size_t promotion_avail = collection_set_parameters->get_promoted_reserve();
-          size_t promotion_expended = collection_set_parameters->get_promoted_expended();
+          size_t promotion_avail = old_generation()->get_promoted_reserve();
+          size_t promotion_expended = old_generation()->get_promoted_expended();
           if (promotion_expended + requested_bytes > promotion_avail) {
             promotion_avail = 0;
           } else {
@@ -1386,11 +1385,11 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
               size_t actual_size = req.actual_size() * HeapWordSize;
               // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
               // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
-              if (collection_set_parameters->get_promoted_expended() + actual_size <= collection_set_parameters->get_promoted_reserve()) {
+              if (old_generation()->get_promoted_expended() + actual_size <= old_generation()->get_promoted_reserve()) {
                 // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
                 // When we retire this plab, we'll unexpend what we don't really use.
                 ShenandoahThreadLocalData::enable_plab_promotions(thread);
-                collection_set_parameters->expend_promoted(actual_size);
+                old_generation()->expend_promoted(actual_size);
                 ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
               } else {
                 disable_plab_promotions = true;
@@ -1405,7 +1404,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
             }
           } else if (is_promotion) {
             // Shared promotion.  Assume size is requested_bytes.
-            collection_set_parameters->expend_promoted(requested_bytes);
+            old_generation()->expend_promoted(requested_bytes);
           }
         }
 

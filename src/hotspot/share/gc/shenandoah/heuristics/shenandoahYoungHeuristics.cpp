@@ -27,7 +27,7 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 
@@ -78,7 +78,7 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
                                                             size_t size, size_t actual_free,
                                                             size_t cur_young_garbage) const {
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  auto heap = ShenandoahGenerationalHeap::heap();
 
   size_t capacity = heap->young_generation()->max_capacity();
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
@@ -87,7 +87,7 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
 
   // This is young-gen collection or a mixed evacuation.
   // If this is mixed evacuation, the old-gen candidate regions have already been added.
-  size_t max_cset = (size_t) (heap->collection_set_parameters()->get_young_evac_reserve() / ShenandoahEvacWaste);
+  size_t max_cset = (size_t) (heap->young_generation()->get_evacuation_reserve() / ShenandoahEvacWaste);
   size_t cur_cset = 0;
   size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_cset;
   size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;

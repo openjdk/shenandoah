@@ -57,6 +57,7 @@ public:
     void print_on(const char* when, outputStream* ss) const;
   };
 
+  void reset_generation_reserves();
   TransferResult balance_generations();
   void compute_old_generation_balance(size_t old_xfer_limit, size_t old_cset_regions);
 
