@@ -37,7 +37,10 @@ private:
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   ShenandoahOldHeuristics* _old_heuristics;
 
-  // How many bytes to transfer between old and young after we have finished recycling collection set regions?
+  // After determining the desired size of the old generation (see compute_old_generation_balance), these
+  // quantities represent the number of regions above (surplus) or below (deficit) that size.
+  // These values are computed prior to the actual exchange of any regions. These may never both
+  // be positive simultaneously.
   size_t _region_surplus;
   size_t _region_deficit;
 
