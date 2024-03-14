@@ -33,6 +33,7 @@
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
@@ -52,7 +53,6 @@
 #include "prims/jvmtiTagMap.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
-#include "shenandoahGenerationalHeap.hpp"
 
 // Breakpoint support
 class ShenandoahBreakpointGCScope : public StackObj {

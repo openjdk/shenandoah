@@ -649,7 +649,6 @@ public:
 // ---------- Allocation support
 //
 private:
-
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region, bool is_promotion);
 
   inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);

@@ -49,6 +49,7 @@ public:
 
   void stop() override;
 
+  // Used for logging the result of a region transfer outside of the heap lock
   struct TransferResult {
     bool success;
     size_t region_count;
@@ -57,9 +58,15 @@ public:
     void print_on(const char* when, outputStream* ss) const;
   };
 
+  // Zeros out the evacuation and promotion reserves
   void reset_generation_reserves();
-  TransferResult balance_generations();
+
+  // Computes the optimal size for the old generation, represented as a surplus or deficit of old regions
   void compute_old_generation_balance(size_t old_xfer_limit, size_t old_cset_regions);
+
+  // Transfers surplus old regions to young, or takes regions from young to satisfy old region deficit
+  TransferResult balance_generations();
+
 
 private:
   void initialize_controller() override;

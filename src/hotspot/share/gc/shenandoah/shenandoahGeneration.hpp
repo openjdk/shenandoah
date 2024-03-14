@@ -59,7 +59,7 @@ private:
   // heap lock.
   size_t _humongous_waste;
 
-  // Bytes reserved within this generation to hold evacuated objects the collection set
+  // Bytes reserved within this generation to hold evacuated objects from the collection set
   size_t _evacuation_reserve;
 
 protected:
@@ -110,22 +110,9 @@ private:
   bool is_old() const    { return _type == OLD; }
   bool is_global() const { return _type == GLOBAL || _type == NON_GEN; }
 
-  // Returns previous value
-  // Used in ShenandoahGeneration::compute_evacuation_budgets
-  // Used in ShenandoahGeneration::adjust_evacuation_budgets
-  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set (if regions transferred to old)
-  // Used in ShenandoahOldHeuristicTest (this test is a burden at this point)
+  // see description in field declaration
   void set_evacuation_reserve(size_t new_val);
-
-  // Used in ShenandoahFreeSet::rebuild
-  // Used in ShenandoahGlobalHeuristics::choose_global_collection_set
-  // Used in ShenandoahGeneration::adjust_evacuation_budgets
-  // Used in ShenandoahOldHeuristics::prime_collection_set
-  // Used in ShenandoahHeap::allocate_memory_under_lock
   size_t get_evacuation_reserve() const;
-
-  // Used in ShenandoahFreeSet::add_old_collector_free_region
-  // Used in ShenandoahFreeSet::flip_to_old_gc
   void augment_evacuation_reserve(size_t increment);
 
   inline ShenandoahGenerationType type() const { return _type; }

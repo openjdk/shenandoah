@@ -54,8 +54,6 @@ private:
   bool _left_to_right_bias[NumFreeSets];
   size_t _region_counts[NumFreeSets];
 
-  bool _has_evacuation_reserve_quantities;
-
   inline void shrink_bounds_if_touched(ShenandoahFreeMemoryType set, size_t idx);
   inline void expand_bounds_maybe(ShenandoahFreeMemoryType set, size_t idx, size_t capacity);
 
@@ -65,8 +63,6 @@ private:
 public:
   ShenandoahSetsOfFree(size_t max_regions, ShenandoahFreeSet* free_set);
   ~ShenandoahSetsOfFree();
-
-  void set_use_evacuation_reserves(bool val) { _has_evacuation_reserve_quantities = val; }
 
   // Make all regions NotFree and reset all bounds
   void clear_all();
