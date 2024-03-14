@@ -37,7 +37,6 @@
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahController.hpp"
-#include "gc/shenandoah/shenandoahCollectionSetParameters.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
@@ -224,8 +223,6 @@ public:
 private:
   size_t _initial_size;
   size_t _minimum_size;
-
-  ShenandoahCollectionSetParameters _collection_set_parameters;
 
   volatile size_t _soft_max_size;
   shenandoah_padding(0);
@@ -418,9 +415,6 @@ public:
   inline bool is_concurrent_weak_root_in_progress() const;
   bool is_prepare_for_old_mark_in_progress() const;
   inline bool is_aging_cycle() const;
-
-
-  ShenandoahCollectionSetParameters* collection_set_parameters() { return &_collection_set_parameters; }
 
   // Return the age census object for young gen (in generational mode)
   inline ShenandoahAgeCensus* age_census() const;

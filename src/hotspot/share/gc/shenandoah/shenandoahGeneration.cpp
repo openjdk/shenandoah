@@ -27,7 +27,7 @@
 #include "gc/shenandoah/shenandoahCollectionSetPreselector.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
-#include "gc/shenandoah/shenandoahHeap.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -519,8 +519,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
   // There should be no regions configured for subsequent in-place-promotions carried over from the previous cycle.
   assert_no_in_place_promotions();
 
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  assert(heap->mode()->is_generational(), "Only in generational mode");
+  auto const heap = ShenandoahGenerationalHeap::heap();
   bool* const candidate_regions_for_promotion_by_copy = heap->collection_set()->preselected_regions();
   ShenandoahMarkingContext* const ctx = heap->marking_context();
 
@@ -646,8 +645,8 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
                  selected_regions, selected_live, old_consumed, old_available);
   }
 
-  heap->collection_set_parameters()->set_pad_for_promote_in_place(promote_in_place_pad);
-  heap->collection_set_parameters()->set_promotion_potential(promo_potential);
+  heap->old_generation()->set_pad_for_promote_in_place(promote_in_place_pad);
+  heap->old_generation()->set_promotion_potential(promo_potential);
   return old_consumed;
 }
 

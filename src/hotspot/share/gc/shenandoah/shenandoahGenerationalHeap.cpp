@@ -204,7 +204,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t old_xfer_
 
   // Decide how much space we should reserve for promotions from young
   size_t reserve_for_promo = 0;
-  const size_t promo_load = collection_set_parameters()->get_promotion_potential();
+  const size_t promo_load = old_generation()->get_promotion_potential();
   const bool doing_promotions = promo_load > 0;
   if (doing_promotions) {
     // We're promoting and have a bound on the maximum amount that can be promoted

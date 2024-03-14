@@ -173,7 +173,7 @@ void ShenandoahGenerationalFullGC::compute_balances() {
   auto heap = ShenandoahGenerationalHeap::heap();
 
   // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
-  heap->collection_set_parameters()->set_promotion_potential(0);
+  heap->old_generation()->set_promotion_potential(0);
   // Invoke this in case we are able to transfer memory from OLD to YOUNG.
   heap->compute_old_generation_balance(0, 0);
 }

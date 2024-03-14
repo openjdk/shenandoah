@@ -740,7 +740,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
     heap->prepare_concurrent_roots();
 
     if (heap->mode()->is_generational()) {
-      if (!heap->collection_set()->is_empty() || heap->collection_set_parameters()->has_in_place_promotions()) {
+      if (!heap->collection_set()->is_empty() || heap->old_generation()->has_in_place_promotions()) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 
