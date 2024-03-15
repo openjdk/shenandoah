@@ -2099,6 +2099,14 @@ void ShenandoahHeap::print_tracing_info() const {
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
   shenandoah_policy()->record_collection_cause(cause);
 
+#ifdef ASSERT
+  GCCause::Cause prev_cause = gc_cause();
+  assert(prev_cause == GCCause::_no_gc, "Over-writing cause");
+
+  ShenandoahGeneration* prev_gen = active_generation();
+  assert(prev_gen == nullptr, "Over-writing _gc_generation");
+#endif // ASSERT
+
   set_gc_cause(cause);
   set_gc_generation(generation);
 
@@ -2106,12 +2114,16 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 }
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
+  assert(gc_cause() != GCCause::_no_gc, "cause wasn't set");
+  assert(active_generation() != nullptr, "_gc_generation wasn't set");
+
   generation->heuristics()->record_cycle_end();
   if (mode()->is_generational() && generation->is_global()) {
     // If we just completed a GLOBAL GC, claim credit for completion of young-gen and old-gen GC as well
     young_generation()->heuristics()->record_cycle_end();
     old_generation()->heuristics()->record_cycle_end();
   }
+  set_gc_generation(nullptr);
   set_gc_cause(GCCause::_no_gc);
 }
 
