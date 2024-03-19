@@ -698,13 +698,13 @@ HeapWord* ShenandoahFreeSet::allocate_aligned_plab(size_t size, ShenandoahAllocR
   assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
   assert(r->is_old(), "All PLABs reside in old-gen");
   assert(!req.is_mutator_alloc(), "PLABs should not be allocated by mutators.");
-  assert(size % CardTable::card_size_in_words() == 0, "size must be multiple of card table size, was " SIZE_FORMAT, size);
+  assert(is_aligned(size, CardTable::card_size_in_words()), "Align by design");
 
   HeapWord* result = r->allocate_aligned(size, req, CardTable::card_size());
   assert(result != nullptr, "Allocation cannot fail");
   assert(r->top() <= r->end(), "Allocation cannot span end of region");
   assert(req.actual_size() == size, "Should not have needed to adjust size for PLAB.");
-  assert(((uintptr_t) result) % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
+  assert(is_aligned(result, CardTable::card_size_in_words()), "Align by design");
 
   return result;
 }

@@ -1114,7 +1114,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // Limit growth of PLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
   // available evacuation budget between the many threads that are coordinating in the evacuation effort.
   future_size = MIN2(future_size, generational_heap->plab_max_size());
-  assert (future_size % CardTable::card_size_in_words() == 0, "Should align by design");
+  assert(is_aligned(future_size, CardTable::card_size_in_words()), "Should align by design");
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
@@ -1164,9 +1164,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
       Copy::fill_to_words(plab_buf + hdr_size, actual_size - hdr_size, badHeapWordVal);
 #endif // ASSERT
     }
-    assert (actual_size % CardTable::card_size_in_words() == 0,
-            "actual size " SIZE_FORMAT_X " should be aligned on card size " SIZE_FORMAT_X,
-            actual_size, (size_t) CardTable::card_size_in_words());
+    assert(is_aligned(actual_size, CardTable::card_size_in_words()), "Align by design");
     plab->set_buf(plab_buf, actual_size);
     if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
       return nullptr;
@@ -1372,12 +1370,10 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
   return res;
 }
 
-HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
-                                            size_t word_size,
-                                            size_t* actual_size) {
+HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size, size_t word_size, size_t* actual_size) {
   // Align requested sizes to card-sized multiples.  Align down so that we don't violate max size of TLAB.
-  min_size = align_down(min_size, CardTable::card_size_in_words());
-  word_size = align_down(word_size, CardTable::card_size_in_words());
+  assert(is_aligned(min_size, CardTable::card_size_in_words()), "Align by design");
+  assert(is_aligned(word_size, CardTable::card_size_in_words()), "Align by design");
   assert(word_size >= min_size, "Requested PLAB is too small");
 
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
@@ -1389,6 +1385,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
   } else {
     *actual_size = 0;
   }
+  assert(is_aligned(res, CardTable::card_size_in_words()), "Align by design");
   return res;
 }
 
