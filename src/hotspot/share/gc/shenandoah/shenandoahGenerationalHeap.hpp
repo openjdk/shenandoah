@@ -31,10 +31,18 @@ class ShenandoahRegulatorThread;
 class ShenandoahGenerationalControlThread;
 
 class ShenandoahGenerationalHeap : public ShenandoahHeap {
+private:
+  size_t _min_plab_size;
+  size_t _max_plab_size;
+
 public:
   explicit ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy);
 
   static ShenandoahGenerationalHeap* heap();
+
+  void initialize_plab_min_max(size_t min, size_t max) { _min_plab_size = min; _max_plab_size = max; }
+  inline size_t plab_min_size() { return _min_plab_size; }
+  inline size_t plab_max_size() { return _max_plab_size; }
 
   void print_init_logger() const override;
 

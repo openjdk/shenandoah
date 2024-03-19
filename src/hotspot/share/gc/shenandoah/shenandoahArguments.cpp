@@ -218,7 +218,15 @@ void ShenandoahArguments::initialize_alignments() {
 
 CollectedHeap* ShenandoahArguments::create_heap() {
   if (strcmp(ShenandoahGCMode, "generational") == 0) {
-    return new ShenandoahGenerationalHeap(new ShenandoahCollectorPolicy());
+    ShenandoahGenerationalHeap* heap = new ShenandoahGenerationalHeap(new ShenandoahCollectorPolicy());
+    CollectedHeap* result = heap;
+    size_t MaxTLABSizeWords = ShenandoahHeapRegion::max_tlab_size_words();
+    size_t min_plab_size = align_up(PLAB::min_size(), CardTable::card_size_in_words());
+    size_t max_plab_size = (ShenandoahMaxEvacLABRatio > 0)?
+      align_down(MIN2(MaxTLABSizeWords, PLAB::min_size() * ShenandoahMaxEvacLABRatio), CardTable::card_size_in_words()):
+      align_down(MaxTLABSizeWords, CardTable::card_size_in_words());
+    heap->initialize_plab_min_max(min_plab_size, max_plab_size);
+    return result;
   }
   return new ShenandoahHeap(new ShenandoahCollectorPolicy());
 }

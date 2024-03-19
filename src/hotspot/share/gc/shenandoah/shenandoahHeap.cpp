@@ -50,6 +50,7 @@
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahControlThread.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahGlobalGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -297,7 +298,7 @@ jint ShenandoahHeap::initialize() {
   _bitmap_region_special = bitmap.special();
 
   size_t bitmap_init_commit = _bitmap_bytes_per_slice *
-                              align_up(num_committed_regions, _bitmap_regions_per_slice) / _bitmap_regions_per_slice;
+    align_up(num_committed_regions, _bitmap_regions_per_slice) / _bitmap_regions_per_slice;
   bitmap_init_commit = MIN2(_bitmap_size, bitmap_init_commit);
   if (!_bitmap_region_special) {
     os::commit_memory_or_exit((char *) _bitmap_region.start(), bitmap_init_commit, bitmap_page_size, false,
@@ -1096,22 +1097,22 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
 // Establish a new PLAB and allocate size HeapWords within it.
 HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion) {
   // New object should fit the PLAB size
-  size_t min_size = MAX2(size, PLAB::min_size());
+
+  assert(mode()->is_generational(), "PLABs only relevant to generational GC");
+  ShenandoahGenerationalHeap* generational_heap = (ShenandoahGenerationalHeap*) this;
+  size_t plab_min_size = generational_heap->plab_min_size();
+  size_t min_size = MAX2(size, plab_min_size);
 
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
   size_t cur_size = ShenandoahThreadLocalData::plab_size(thread);
   if (cur_size == 0) {
-    cur_size = PLAB::min_size();
+    cur_size = plab_min_size;
   }
   size_t future_size = cur_size * 2;
   // Limit growth of PLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
-  // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
-  if (ShenandoahMaxEvacLABRatio > 0) {
-    future_size = MIN2(future_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
-  }
-  future_size = MIN2(future_size, PLAB::max_size());
-  future_size = MAX2(future_size, PLAB::min_size());
-  future_size = align_down(future_size, CardTable::card_size_in_words());
+  // available evacuation budget between the many threads that are coordinating in the evacuation effort.
+  future_size = MIN2(future_size, generational_heap->plab_max_size());
+  assert (future_size % CardTable::card_size_in_words() == 0, "Should align by design");
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
@@ -1161,6 +1162,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
       Copy::fill_to_words(plab_buf + hdr_size, actual_size - hdr_size, badHeapWordVal);
 #endif // ASSERT
     }
+    assert (actual_size % CardTable::card_size_in_words() == 0,
+            "actual size " SIZE_FORMAT_X " should be aligned on card size " SIZE_FORMAT_X,
+            actual_size, (size_t) CardTable::card_size_in_words());
     plab->set_buf(plab_buf, actual_size);
     if (is_promotion && !ShenandoahThreadLocalData::allow_plab_promotions(thread)) {
       return nullptr;
