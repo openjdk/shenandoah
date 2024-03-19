@@ -1100,6 +1100,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   assert(mode()->is_generational(), "PLABs only relevant to generational GC");
   ShenandoahGenerationalHeap* generational_heap = (ShenandoahGenerationalHeap*) this;
+  size = align_up(size, CardTable::card_size_in_words());
   size_t plab_min_size = generational_heap->plab_min_size();
   size_t min_size = MAX2(size, plab_min_size);
 
@@ -1114,7 +1115,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // Limit growth of PLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
   // available evacuation budget between the many threads that are coordinating in the evacuation effort.
   future_size = MIN2(future_size, generational_heap->plab_max_size());
-  assert(is_aligned(future_size, CardTable::card_size_in_words()), "Should align by design");
+  assert(is_aligned(future_size, CardTable::card_size_in_words()),
+         "Align by design, future_size: " SIZE_FORMAT ", card_size: " SIZE_FORMAT ", max_size: " SIZE_FORMAT,
+         future_size, (size_t) CardTable::card_size_in_words(), generational_heap->plab_max_size());
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
@@ -1129,7 +1132,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   // Retire current PLAB, and allocate a new one.
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-  if (plab->words_remaining() < PLAB::min_size()) {
+  if (plab->words_remaining() < plab_min_size) {
     // Retire current PLAB, and allocate a new one.
     // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.  This
     // is safe iff it is assured that each PLAB is a whole-number multiple of card-mark memory size and each PLAB is
@@ -1372,7 +1375,9 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size, size_t word_size, size_t* actual_size) {
   // Align requested sizes to card-sized multiples.  Align down so that we don't violate max size of TLAB.
-  assert(is_aligned(min_size, CardTable::card_size_in_words()), "Align by design");
+  assert(is_aligned(min_size, CardTable::card_size_in_words()),
+         "Align by design, min_size: " SIZE_FORMAT ", card_size: " SIZE_FORMAT,
+         min_size, (size_t) CardTable::card_size_in_words());
   assert(is_aligned(word_size, CardTable::card_size_in_words()), "Align by design");
   assert(word_size >= min_size, "Requested PLAB is too small");
 
