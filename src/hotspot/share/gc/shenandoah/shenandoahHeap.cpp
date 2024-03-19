@@ -1103,7 +1103,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   size_t plab_min_size = generational_heap->plab_min_size();
   size_t min_size = MAX2(size, plab_min_size);
 
-  // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.
+  // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.  PLABs must align on size
+  // of card table in order to avoid the need for synchronization when registering newly allocated objects within
+  // the card table.
   size_t cur_size = ShenandoahThreadLocalData::plab_size(thread);
   if (cur_size == 0) {
     cur_size = plab_min_size;
