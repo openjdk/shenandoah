@@ -121,8 +121,8 @@ ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_g
   shenandoah_assert_heaplocked_or_safepoint();
 
   ShenandoahOldGeneration* old_gen = old_generation();
-  size_t old_region_surplus = old_gen->get_region_surplus();
-  size_t old_region_deficit = old_gen->get_region_deficit();
+  const size_t old_region_surplus = old_gen->get_region_surplus();
+  const size_t old_region_deficit = old_gen->get_region_deficit();
   old_gen->set_region_surplus(0);
   old_gen->set_region_deficit(0);
 
@@ -134,7 +134,7 @@ ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_g
   }
 
   if (old_region_deficit) {
-    bool success = generation_sizer()->transfer_to_old(old_region_deficit);
+    const bool success = generation_sizer()->transfer_to_old(old_region_deficit);
     if (!success) {
       old_gen->handle_failed_transfer();
     }
@@ -190,11 +190,11 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t old_xfer_
   if (doing_mixed) {
     // We want this much memory to be unfragmented in order to reliably evacuate old.  This is conservative because we
     // may not evacuate the entirety of unprocessed candidates in a single mixed evacuation.
-    size_t max_evac_need = (size_t)
+    const size_t max_evac_need = (size_t)
             (old_heuristics()->unprocessed_old_collection_candidates_live_memory() * ShenandoahOldEvacWaste);
     assert(old_available >= old_generation()->free_unaffiliated_regions() * region_size_bytes,
            "Unaffiliated available must be less than total available");
-    size_t old_fragmented_available =
+    const size_t old_fragmented_available =
             old_available - old_generation()->free_unaffiliated_regions() * region_size_bytes;
     reserve_for_mixed = max_evac_need + old_fragmented_available;
     if (reserve_for_mixed > max_old_reserve) {
@@ -256,10 +256,10 @@ void ShenandoahGenerationalHeap::reset_generation_reserves() {
 
 void ShenandoahGenerationalHeap::TransferResult::print_on(const char* when, outputStream* ss) const {
   auto heap = ShenandoahGenerationalHeap::heap();
-  ShenandoahYoungGeneration* young_gen = heap->young_generation();
-  ShenandoahOldGeneration* old_gen = heap->old_generation();
-  size_t young_available = young_gen->available();
-  size_t old_available = old_gen->available();
+  ShenandoahYoungGeneration* const young_gen = heap->young_generation();
+  ShenandoahOldGeneration* const old_gen = heap->old_generation();
+  const size_t young_available = young_gen->available();
+  const size_t old_available = old_gen->available();
   ss->print_cr("After %s, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
                      PROPERFMT ", young_available: " PROPERFMT,
                      when,

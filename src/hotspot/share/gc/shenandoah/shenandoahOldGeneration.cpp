@@ -523,7 +523,7 @@ void ShenandoahOldGeneration::handle_failed_promotion(Thread* thread, size_t siz
   size_t promotion_reserve;
   size_t promotion_expended;
 
-  size_t gc_id = heap->control_thread()->get_gc_id();
+  const size_t gc_id = heap->control_thread()->get_gc_id();
 
   if ((gc_id != last_report_epoch) || (epoch_report_count++ < MaxReportsPerEpoch)) {
     {
@@ -532,8 +532,8 @@ void ShenandoahOldGeneration::handle_failed_promotion(Thread* thread, size_t siz
       promotion_reserve = get_promoted_reserve();
       promotion_expended = get_promoted_expended();
     }
-    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-    size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
+    PLAB* const plab = ShenandoahThreadLocalData::plab(thread);
+    const size_t words_remaining = (plab == nullptr)? 0: plab->words_remaining();
     const char* promote_enabled = ShenandoahThreadLocalData::allow_plab_promotions(thread)? "enabled": "disabled";
 
     log_info(gc, ergo)("Promotion failed, size " SIZE_FORMAT ", has plab? %s, PLAB remaining: " SIZE_FORMAT

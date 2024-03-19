@@ -49,12 +49,14 @@ private:
   ShenandoahSharedFlag _failed_evacuation;
 
   // Bytes reserved within old-gen to hold the results of promotion. This is separate from
-  // and in addition to the evacuation reserve for intra-generation evacuations.
+  // and in addition to the evacuation reserve for intra-generation evacuations (ShenandoahGeneration::_evacuation_reserve).
   size_t _promoted_reserve;
 
   // Bytes of old-gen memory expended on promotions. This may be modified concurrently
   // by mutators and gc workers when promotion LABs are retired during evacuation. It
-  // is therefore always accessed through atomic operations.
+  // is therefore always accessed through atomic operations. This is increased when a
+  // PLAB is allocated for promotions. The value is decreased by the amount of memory
+  // remaining in a PLAB when it is retired.
   size_t _promoted_expended;
 
   // Represents the quantity of live bytes we expect to promote in place during the next
