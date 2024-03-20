@@ -1100,9 +1100,13 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   assert(mode()->is_generational(), "PLABs only relevant to generational GC");
   ShenandoahGenerationalHeap* generational_heap = (ShenandoahGenerationalHeap*) this;
-  size = align_up(size, CardTable::card_size_in_words());
   size_t plab_min_size = generational_heap->plab_min_size();
-  size_t min_size = MAX2(size, plab_min_size);
+  size_t min_size;
+  if (size > plab_min_size) {
+    min_size = align_up(size, CardTable::card_size_in_words());
+  } else {
+    min_size = plab_min_size;
+  }
 
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.  PLABs must align on size
   // of card table in order to avoid the need for synchronization when registering newly allocated objects within
@@ -1204,15 +1208,15 @@ void ShenandoahHeap::retire_plab(PLAB* plab, Thread* thread) {
   if (not_promoted > 0) {
     unexpend_promoted(not_promoted);
   }
-  size_t waste = plab->waste();
+  size_t original_waste = plab->waste();
   HeapWord* top = plab->top();
   plab->retire();
-  if (top != nullptr && plab->waste() > waste && is_in_old(top)) {
+  if (top != nullptr && plab->waste() > original_waste && is_in_old(top)) {
     // If retiring the plab created a filler object, then we
     // need to register it with our card scanner so it can
     // safely walk the region backing the plab.
     log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
-                  plab->waste() - waste, p2i(top));
+                  plab->waste() - original_waste, p2i(top));
     card_scan()->register_object_without_lock(top);
   }
 }
