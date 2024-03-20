@@ -1165,9 +1165,6 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   shenandoah_assert_heaplocked();
   size_t young_reserve(0), old_reserve(0);
 
-
-  // Evac reserve: reserve trailing space for evacuations, with regions reserved for old evacuations placed to the right
-  // of regions reserved of young evacuations.
   if (!_heap->mode()->is_generational()) {
     young_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
     old_reserve = 0;
