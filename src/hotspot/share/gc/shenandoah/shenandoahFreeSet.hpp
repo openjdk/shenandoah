@@ -233,6 +233,9 @@ public:
   void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                         size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
   void reserve_regions(size_t young_reserve, size_t old_reserve);
+
+  void compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
+                                      size_t* young_reserve, size_t* old_reserve) const;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
