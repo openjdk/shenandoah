@@ -1182,28 +1182,22 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 
   // Consult old-region surplus and deficit to make adjustments to current generation capacities and availability.
   // The generation region transfers take place after we rebuild.
-  size_t old_region_surplus = old_generation->get_region_surplus();
-  size_t old_region_deficit = old_generation->get_region_deficit();
-
-  if (old_region_surplus > 0) {
-    size_t xfer_bytes = old_region_surplus * region_size_bytes;
-    assert(old_region_surplus <= old_unaffiliated_regions, "Cannot transfer regions that are affiliated");
-    old_capacity -= xfer_bytes;
-    old_available -= xfer_bytes;
-    old_unaffiliated_regions -= old_region_surplus;
-    young_capacity += xfer_bytes;
-    young_available += xfer_bytes;
-    young_unaffiliated_regions += old_region_surplus;
-  } else if (old_region_deficit > 0) {
-    size_t xfer_bytes = old_region_deficit * region_size_bytes;
-    assert(old_region_deficit <= young_unaffiliated_regions, "Cannot transfer regions that are affiliated");
-    old_capacity += xfer_bytes;
-    old_available += xfer_bytes;
-    old_unaffiliated_regions += old_region_deficit;
-    young_capacity -= xfer_bytes;
-    young_available -= xfer_bytes;
-    young_unaffiliated_regions -= old_region_deficit;
+  ssize_t old_region_balance = old_generation->get_region_balance();
+  if (old_region_balance != 0) {
+    if (old_region_balance > 0) {
+      assert(old_region_balance <= checked_cast<ssize_t>(old_unaffiliated_regions), "Cannot transfer regions that are affiliated");
+    } else {
+      assert(-old_region_balance <= checked_cast<ssize_t>(young_unaffiliated_regions), "Cannot transfer regions that are affiliated");
+    }
   }
+
+  ssize_t xfer_bytes = old_region_balance * checked_cast<ssize_t>(region_size_bytes);
+  old_capacity -= xfer_bytes;
+  old_available -= xfer_bytes;
+  old_unaffiliated_regions -= old_region_balance;
+  young_capacity += xfer_bytes;
+  young_available += xfer_bytes;
+  young_unaffiliated_regions += old_region_balance;
 
   // Evac reserve: reserve trailing space for evacuations, with regions reserved for old evacuations placed to the right
   // of regions reserved of young evacuations.
