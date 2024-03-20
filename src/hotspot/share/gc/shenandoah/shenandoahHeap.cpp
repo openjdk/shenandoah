@@ -1210,10 +1210,12 @@ void ShenandoahHeap::retire_plab(PLAB* plab, Thread* thread) {
   }
   size_t original_waste = plab->waste();
   HeapWord* top = plab->top();
+
+  // plab->retire() overwrites unused memory between plab->top() and plab->hard_end() with a dummy object to make memory parsable.
+  // It adds the size of this unused memory, in words, to plab->waste().
   plab->retire();
   if (top != nullptr && plab->waste() > original_waste && is_in_old(top)) {
-    // If retiring the plab created a filler object, then we
-    // need to register it with our card scanner so it can
+    // If retiring the plab created a filler object, then we need to register it with our card scanner so it can
     // safely walk the region backing the plab.
     log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
                   plab->waste() - original_waste, p2i(top));
