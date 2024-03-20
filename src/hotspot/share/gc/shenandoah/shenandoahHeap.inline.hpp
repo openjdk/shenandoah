@@ -613,7 +613,7 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
     return true;
   }
  
-  ShenandoahGeneration* const gen = static_cast<ShenandoahGeneration*>(active_generation());
+  ShenandoahGeneration* const gen = active_generation();
 
   if (gen == nullptr) {
     // no collection is happening, only expect this to be called
@@ -628,18 +628,21 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
          "Active generation must be old, young, or global");
 
   size_t index = heap_region_containing(obj)->index();
+
+#ifdef ASSERT
+  ShenandoahGeneration* const gen_again = active_generation();
+  assert(gen == gen_again, "Race");
+#endif
+
   switch (_affiliations[index]) {
   case ShenandoahAffiliation::FREE:
     // Free regions are in Old, Young, Global
-    assert(gen == (ShenandoahGeneration*)active_generation(), "Race");
     return true;
   case ShenandoahAffiliation::YOUNG_GENERATION:
     // Young regions are in young_generation and global_generation, not in old_generation
-    assert(gen == (ShenandoahGeneration*)active_generation(), "Race");
     return gen != (ShenandoahGeneration*)old_generation();
   case ShenandoahAffiliation::OLD_GENERATION:
     // Old regions are in old_generation and global_generation, not in young_generation
-    assert(gen == (ShenandoahGeneration*)active_generation(), "Race");
     return gen != (ShenandoahGeneration*)young_generation();
   default:
     assert(false, "Bad affiliation (%d) for region " SIZE_FORMAT, _affiliations[index], index);
