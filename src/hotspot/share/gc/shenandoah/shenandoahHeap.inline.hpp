@@ -612,7 +612,7 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
     // everything is the same single generation
     return true;
   }
- 
+
   ShenandoahGeneration* const gen = active_generation();
 
   if (gen == nullptr) {
@@ -640,7 +640,7 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
   // because synchronization between the control thread and the mutators
   // is via individual handshake. We need to check to determine if
   // all uses of `active_generation()` in mutator threads are safe
-  // in the face of such asynchronous changes in its value. 
+  // in the face of such asynchronous changes in its value.
   // Below, we have deliberately weakened the assertion by
   // means of the second disjunct so that it passes for now.
   assert(gen == gen_again || gen_again == nullptr, "Race");
