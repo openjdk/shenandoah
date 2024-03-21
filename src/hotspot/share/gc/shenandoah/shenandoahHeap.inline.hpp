@@ -417,7 +417,8 @@ inline oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, Shenandoah
              // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
              // this particular allocation to be shared.
              if (plab->words_remaining() < PLAB::min_size()) {
-               ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
+               size_t plab_min_size = ((ShenandoahGenerationalHeap*) this)->plab_min_size();
+               ShenandoahThreadLocalData::set_plab_size(thread, plab_min_size);
                copy = allocate_from_plab(thread, size, is_promotion);
                // If we still get nullptr, we'll try a shared allocation below.
                if (copy == nullptr) {

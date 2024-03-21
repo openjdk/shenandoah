@@ -1148,7 +1148,7 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
     // less than the remaining evacuation need.  It also adjusts plab_preallocated and expend_promoted if appropriate.
     HeapWord* plab_buf = allocate_new_plab(min_size, cur_size, &actual_size);
     if (plab_buf == nullptr) {
-      if (min_size == PLAB::min_size()) {
+      if (min_size == plab_min_size) {
         // Disable plab promotions for this thread because we cannot even allocate a plab of minimal size.  This allows us
         // to fail faster on subsequent promotion attempts.
         ShenandoahThreadLocalData::disable_plab_promotions(thread);
