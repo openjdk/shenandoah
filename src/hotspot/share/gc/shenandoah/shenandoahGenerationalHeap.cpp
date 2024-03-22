@@ -75,8 +75,10 @@ void ShenandoahGenerationalHeap::print_init_logger() const {
   logger.print_all();
 }
 
-ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy) :
+ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy, size_t min_plab, size_t max_plab) :
   ShenandoahHeap(policy),
+  _min_plab_size(min_plab),
+  _max_plab_size(max_plab),
   _regulator_thread(nullptr) { }
 
 void ShenandoahGenerationalHeap::initialize_controller() {

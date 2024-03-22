@@ -32,18 +32,14 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
-// If next available memory is not aligned on address that is multiple of alignment, fill the empty space
-// so that returned object is aligned on an address that is a multiple of alignment_in_words.  Requested
-// size is in words.  It is assumed that this->is_old().  A pad object is allocated, filled, and registered
-// if necessary to assure the new allocation is properly aligned.
 HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest &req, size_t alignment_in_bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(req.is_lab_alloc(), "allocate_aligned() only applies to LAB allocations");
   assert(is_object_aligned(size), "alloc size breaks alignment: " SIZE_FORMAT, size);
   assert(is_old(), "aligned allocations are only taken from OLD regions to support PLABs");
+  assert(is_aligned(alignment_in_bytes, HeapWordSize), "Expect hea word alignment");
 
   HeapWord* orig_top = top();
-  size_t addr_as_int = (uintptr_t) orig_top;
   size_t alignment_in_words = alignment_in_bytes / HeapWordSize;
 
   // unalignment_words is the amount by which current top() exceeds the desired alignment point.  We subtract this amount
@@ -51,11 +47,9 @@ HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocReq
 
   HeapWord* aligned_obj = (HeapWord*) align_up(orig_top, alignment_in_bytes);
   size_t pad_words = aligned_obj - orig_top;
-  if (pad_words > 0) {
-    if (pad_words < ShenandoahHeap::min_fill_size()) {
-      pad_words += alignment_in_words;
-      aligned_obj += alignment_in_words;
-    }
+  if ((pad_words > 0) && (pad_words < ShenandoahHeap::min_fill_size())) {
+    pad_words += alignment_in_words;
+    aligned_obj += alignment_in_words;
   }
 
   if (pointer_delta(end(), aligned_obj) < size) {

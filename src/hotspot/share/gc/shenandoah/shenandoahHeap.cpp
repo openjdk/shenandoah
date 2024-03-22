@@ -1100,13 +1100,8 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
 
   assert(mode()->is_generational(), "PLABs only relevant to generational GC");
   ShenandoahGenerationalHeap* generational_heap = (ShenandoahGenerationalHeap*) this;
-  size_t plab_min_size = generational_heap->plab_min_size();
-  size_t min_size;
-  if (size > plab_min_size) {
-    min_size = align_up(size, CardTable::card_size_in_words());
-  } else {
-    min_size = plab_min_size;
-  }
+  const size_t plab_min_size = generational_heap->plab_min_size();
+  const size_t min_size = (size > plab_min_size)? align_up(size, CardTable::card_size_in_words()): plab_min_size;
 
   // Figure out size of new PLAB, looking back at heuristics. Expand aggressively.  PLABs must align on size
   // of card table in order to avoid the need for synchronization when registering newly allocated objects within
@@ -1115,13 +1110,12 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   if (cur_size == 0) {
     cur_size = plab_min_size;
   }
-  size_t future_size = cur_size * 2;
-  // Limit growth of PLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
-  // available evacuation budget between the many threads that are coordinating in the evacuation effort.
-  future_size = MIN2(future_size, generational_heap->plab_max_size());
-  assert(is_aligned(future_size, CardTable::card_size_in_words()),
-         "Align by design, future_size: " SIZE_FORMAT ", card_size: " SIZE_FORMAT ", max_size: " SIZE_FORMAT,
-         future_size, (size_t) CardTable::card_size_in_words(), generational_heap->plab_max_size());
+
+  // Limit growth of PLABs to the smaller of ShenandoahMaxEvacLABRatio * the minimum size and ShenandoahHumongousThreshold.
+  // This minimum value is represented by generational_heap->plab_max_size().  Enforcing this limit enables more equitable
+  // distribution of available evacuation budget between the many threads that are coordinating in the evacuation effort.
+  size_t future_size = MIN2(cur_size * 2, generational_heap->plab_max_size());
+  assert(is_aligned(future_size, CardTable::card_size_in_words()), "Align by design");
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
@@ -1208,8 +1202,8 @@ void ShenandoahHeap::retire_plab(PLAB* plab, Thread* thread) {
   if (not_promoted > 0) {
     unexpend_promoted(not_promoted);
   }
-  size_t original_waste = plab->waste();
-  HeapWord* top = plab->top();
+  const size_t original_waste = plab->waste();
+  HeapWord* const top = plab->top();
 
   // plab->retire() overwrites unused memory between plab->top() and plab->hard_end() with a dummy object to make memory parsable.
   // It adds the size of this unused memory, in words, to plab->waste().
