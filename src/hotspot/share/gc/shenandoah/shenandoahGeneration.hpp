@@ -59,6 +59,9 @@ private:
   // heap lock.
   size_t _humongous_waste;
 
+  // Bytes reserved within this generation to hold evacuated objects from the collection set
+  size_t _evacuation_reserve;
+
 protected:
   // Usage
 
@@ -105,7 +108,12 @@ private:
 
   bool is_young() const  { return _type == YOUNG; }
   bool is_old() const    { return _type == OLD; }
-  bool is_global() const { return _type == GLOBAL_GEN || _type == GLOBAL_NON_GEN; }
+  bool is_global() const { return _type == GLOBAL || _type == NON_GEN; }
+
+  // see description in field declaration
+  void set_evacuation_reserve(size_t new_val);
+  size_t get_evacuation_reserve() const;
+  void augment_evacuation_reserve(size_t increment);
 
   inline ShenandoahGenerationType type() const { return _type; }
 
@@ -123,6 +131,9 @@ private:
   size_t used() const override { return _used; }
   size_t available() const override;
   size_t available_with_reserve() const;
+  size_t used_including_humongous_waste() const {
+    return used() + get_humongous_waste();
+  }
 
   // Returns the memory available based on the _soft_ max heap capacity (soft_max_heap - used).
   // The soft max heap size may be adjusted lower than the max heap size to cause the trigger
