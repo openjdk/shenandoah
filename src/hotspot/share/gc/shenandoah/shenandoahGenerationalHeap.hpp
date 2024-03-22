@@ -35,8 +35,12 @@ private:
   const size_t _min_plab_size;
   const size_t _max_plab_size;
 
+  size_t calculate_min_plab() const;
+  size_t calculate_max_plab() const;
+
 public:
-  explicit ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy, size_t min_plab, size_t max_plab);
+  explicit ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy);
+
 
   static ShenandoahGenerationalHeap* heap();
 

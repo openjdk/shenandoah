@@ -221,11 +221,6 @@ CollectedHeap* ShenandoahArguments::create_heap() {
     // Not generational
     return new ShenandoahHeap(new ShenandoahCollectorPolicy());
   } else {
-    size_t MaxTLABSizeWords = ShenandoahHeapRegion::max_tlab_size_words();
-    size_t min_plab_size = align_up(PLAB::min_size(), CardTable::card_size_in_words());
-    size_t max_plab_size = (ShenandoahMaxEvacLABRatio > 0)?
-      align_down(MIN2(MaxTLABSizeWords, PLAB::min_size() * ShenandoahMaxEvacLABRatio), CardTable::card_size_in_words()):
-      align_down(MaxTLABSizeWords, CardTable::card_size_in_words());
-    return new ShenandoahGenerationalHeap(new ShenandoahCollectorPolicy(), min_plab_size, max_plab_size);
+    return new ShenandoahGenerationalHeap(new ShenandoahCollectorPolicy());
   }
 }
