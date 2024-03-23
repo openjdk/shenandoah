@@ -1043,7 +1043,9 @@ HeapWord* ShenandoahHeap::allocate_from_plab_slow(Thread* thread, size_t size, b
   // This minimum value is represented by generational_heap->plab_max_size().  Enforcing this limit enables more equitable
   // distribution of available evacuation budget between the many threads that are coordinating in the evacuation effort.
   size_t future_size = MIN2(cur_size * 2, generational_heap->plab_max_size());
-  assert(is_aligned(future_size, CardTable::card_size_in_words()), "Align by design");
+  assert(is_aligned(future_size, CardTable::card_size_in_words()), "Align by design, future_size: " SIZE_FORMAT
+         ", alignment: " SIZE_FORMAT ", cur_size: " SIZE_FORMAT ", max: " SIZE_FORMAT,
+         future_size, (size_t) CardTable::card_size_in_words(), cur_size, generational_heap->plab_max_size());
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
