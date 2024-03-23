@@ -88,7 +88,9 @@ ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy
   _min_plab_size(calculate_min_plab()),
   _max_plab_size(calculate_max_plab()),
   _regulator_thread(nullptr) {
- }
+  assert(is_aligned(_min_plab_size, CardTable::card_size_in_words()), "min_plab_size must be aligned");
+  assert(is_aligned(_max_plab_size, CardTable::card_size_in_words()), "max_plab_size must be aligned");
+}
 
 void ShenandoahGenerationalHeap::print_init_logger() const {
   ShenandoahGenerationalInitLogger logger;
