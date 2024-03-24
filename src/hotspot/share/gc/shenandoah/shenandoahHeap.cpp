@@ -1202,10 +1202,7 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
 
 HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size, size_t word_size, size_t* actual_size) {
   // Align requested sizes to card-sized multiples.  Align down so that we don't violate max size of TLAB.
-  assert(is_aligned(min_size, CardTable::card_size_in_words()),
-         "Align by design, min_size: " SIZE_FORMAT ", card_size: " SIZE_FORMAT,
-         min_size, (size_t) CardTable::card_size_in_words());
-  assert(is_aligned(word_size, CardTable::card_size_in_words()), "Align by design");
+  assert(is_aligned(min_size, CardTable::card_size_in_words()), "Align by design");
   assert(word_size >= min_size, "Requested PLAB is too small");
 
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
@@ -1729,6 +1726,8 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
           break;
         }
         case OLD_GENERATION: {
+          assert(mode()->is_generational(), "OLD Generation only exists in generational mode");
+          ShenandoahGenerationalHeap* gen_heap = (ShenandoahGenerationalHeap*) this;
           PLAB* plab = ShenandoahThreadLocalData::plab(thread);
           if (plab != nullptr) {
             has_plab = true;
@@ -1738,13 +1737,13 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
               ShenandoahThreadLocalData::plab_retries_enabled(thread)) {
             // PLAB allocation failed because we are bumping up against the limit on old evacuation reserve or because
             // the requested object does not fit within the current plab but the plab still has an "abundance" of memory,
-            // where abundance is defined as >= PLAB::min_size().  In the former case, we try resetting the desired
+            // where abundance is defined as >= ShenGenHeap::plab_min_size().  In the former case, we try resetting the desired
             // PLAB size and retry PLAB allocation to avoid cascading of shared memory allocations.
 
             // In this situation, PLAB memory is precious.  We'll try to preserve our existing PLAB by forcing
             // this particular allocation to be shared.
-            if (plab->words_remaining() < PLAB::min_size()) {
-              ShenandoahThreadLocalData::set_plab_size(thread, PLAB::min_size());
+            if (plab->words_remaining() < gen_heap->plab_min_size()) {
+              ShenandoahThreadLocalData::set_plab_size(thread, gen_heap->plab_min_size());
               copy = allocate_from_plab(thread, size, is_promotion);
               // If we still get nullptr, we'll try a shared allocation below.
               if (copy == nullptr) {
