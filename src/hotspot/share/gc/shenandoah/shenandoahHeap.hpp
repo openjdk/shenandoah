@@ -161,6 +161,9 @@ class ShenandoahHeap : public CollectedHeap {
 //
 private:
   ShenandoahHeapLock _lock;
+
+  GCCause::Cause _prev_gc_cause;
+  ShenandoahGeneration* _prev_gc_generation;
   ShenandoahGeneration* _gc_generation;
 
 public:
