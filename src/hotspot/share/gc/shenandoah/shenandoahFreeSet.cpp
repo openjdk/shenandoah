@@ -1170,7 +1170,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     old_reserve = 0;
   } else {
     compute_young_and_old_reserves(young_cset_regions, old_cset_regions, have_evacuation_reserves,
-                                   &young_reserve, &old_reserve);
+                                   young_reserve, old_reserve);
 
   }
 
@@ -1180,11 +1180,9 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   log_status();
 }
 
-void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions,
-                                                       bool have_evacuation_reserves, size_t* young_reserve_result,
-                                                       size_t* old_reserve_result) const {
+void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
+                                                       size_t& young_reserve_result, size_t& old_reserve_result) const {
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-  size_t young_reserve(0), old_reserve(0);
 
   ShenandoahOldGeneration* const old_generation = _heap->old_generation();
   size_t old_available = old_generation->available();
@@ -1217,40 +1215,37 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
 
   // All allocations taken from the old collector set are performed by GC, generally using PLABs for both
   // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
-  // which is reserved for promotion is enforced using thread-local variables that prescribe intentons for
+  // which is reserved for promotion is enforced using thread-local variables that prescribe intentions for
   // each PLAB's available memory.
   if (have_evacuation_reserves) {
     // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
     const size_t promoted_reserve = old_generation->get_promoted_reserve();
     const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
-    young_reserve = young_generation->get_evacuation_reserve();
-    old_reserve = promoted_reserve + old_evac_reserve;
-    assert(old_reserve <= old_available,
+    young_reserve_result = young_generation->get_evacuation_reserve();
+    old_reserve_result = promoted_reserve + old_evac_reserve;
+    assert(old_reserve_result <= old_available,
            "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
            promoted_reserve, old_evac_reserve, old_available);
   } else {
     // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
-    young_reserve = (young_capacity * ShenandoahEvacReserve) / 100;
+    young_reserve_result = (young_capacity * ShenandoahEvacReserve) / 100;
     // The auto-sizer has already made old-gen large enough to hold all anticipated evacuations and promotions.
     // Affiliated old-gen regions are already in the OldCollector free set.  Add in the relevant number of
     // unaffiliated regions.
-    old_reserve = old_available;
+    old_reserve_result = old_available;
   }
 
   // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector
   // free set.  Because of this, old_available may not have enough memory to represent the intended reserve.  Adjust
   // the reserve downward to account for this possibility. This loss is part of the reason why the original budget
   // was adjusted with ShenandoahOldEvacWaste and ShenandoahOldPromoWaste multipliers.
-  if (old_reserve > _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes) {
-    old_reserve = _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes;
+  if (old_reserve_result > _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes) {
+    old_reserve_result = _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes;
   }
 
-  if (young_reserve > young_unaffiliated_regions * region_size_bytes) {
-    young_reserve = young_unaffiliated_regions * region_size_bytes;
+  if (old_reserve_result > young_unaffiliated_regions * region_size_bytes) {
+    young_reserve_result = young_unaffiliated_regions * region_size_bytes;
   }
-
-  *young_reserve_result = young_reserve;
-  *old_reserve_result = old_reserve;
 }
 
 // Having placed all regions that have allocation capacity into the mutator set if they identify as is_young()
