@@ -110,7 +110,13 @@ public:
     data(thread)->_gclab = new PLAB(PLAB::min_size());
     data(thread)->_gclab_size = 0;
 
-    // In theory, plabs are only need if heap->mode()->is_generational().  However, some threads are apparently
+    // TODO:
+    //   Only initialize _plab if (!Universe::is_fully_initialized() || ShenandoahHeap::heap()->mode()->is_generational())
+    //   Otherwise, set _plab to nullptr
+    // Problem is there is code sprinkled throughout that asserts (plab != nullptr) that need to be fixed up.  Perhaps
+    // those assertions are overzealous.
+
+    // In theory, plabs are only need if heap->mode()->is_generational().  However, some threads
     // instantiated before we are able to answer that question.
     data(thread)->_plab = new PLAB(align_up(PLAB::min_size(), CardTable::card_size_in_words()));
     data(thread)->_plab_size = 0;
