@@ -221,24 +221,22 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t old_xfer_
   const size_t max_old_available = old_generation()->available() + old_cset_regions * region_size_bytes;
   if (max_old_available >= old_reserve) {
     // We are running a surplus, so the old region surplus can go to young
-    const size_t old_surplus = max_old_available - old_reserve;
+    const size_t old_surplus = (max_old_available - old_reserve) / region_size_bytes;
     const size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions() + old_cset_regions;
-    const size_t old_region_surplus = MIN2(old_surplus / region_size_bytes, unaffiliated_old_regions);
+    const size_t old_region_surplus = MIN2(old_surplus, unaffiliated_old_regions);
     old_generation()->set_region_balance(checked_cast<ssize_t>(old_region_surplus));
   } else {
     // We are running a deficit which we'd like to fill from young.
     // Ignore that this will directly impact young_generation()->max_capacity(),
     // indirectly impacting young_reserve and old_reserve.  These computations are conservative.
-    const size_t old_need = old_reserve - max_old_available;
+    // Note that deficit is rounded up by one region.
+    const size_t old_need = (old_reserve - max_old_available + region_size_bytes - 1) / region_size_bytes;
     const size_t max_old_region_xfer = old_xfer_limit / region_size_bytes;
-
-    // The old region deficit (rounded up) will come from young
-    size_t old_region_deficit = (old_need + region_size_bytes - 1) / region_size_bytes;
 
     // Round down the regions we can transfer from young to old. If we're running short
     // on young-gen memory, we restrict the xfer. Old-gen collection activities will be
     // curtailed if the budget is restricted.
-    old_region_deficit = MIN2(old_region_deficit, max_old_region_xfer);
+    const size_t old_region_deficit = MIN2(old_need, max_old_region_xfer);
     old_generation()->set_region_balance(0 - checked_cast<ssize_t>(old_region_deficit));
   }
 }

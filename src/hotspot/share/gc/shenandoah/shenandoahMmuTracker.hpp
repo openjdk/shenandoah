@@ -125,7 +125,11 @@ private:
   // given the number of heap regions depending on the kind of sizing algorithm.
   void recalculate_min_max_young_length(size_t heap_region_count);
 
-public:
+  bool transfer_regions(ShenandoahGeneration* src, ShenandoahGeneration* dst, size_t regions) const;
+  size_t max_size_for(ShenandoahGeneration* generation) const;
+  size_t min_size_for(ShenandoahGeneration* generation) const;
+
+    public:
   ShenandoahGenerationSizer();
 
   // Calculate the maximum length of the young gen given the number of regions
