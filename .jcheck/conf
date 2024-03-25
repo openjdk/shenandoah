@@ -1,5 +1,5 @@
 [general]
-project=jdk
+project=shenandoah
 jbs=JDK
 version=23
 
@@ -22,7 +22,7 @@ ignore-tabs=.*\.gmk|Makefile
 message=Merge
 
 [checks "reviewers"]
-reviewers=1
+committers=1
 ignore=duke
 
 [checks "committer"]

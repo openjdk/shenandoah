@@ -30,30 +30,27 @@
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahFullGC.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "logging/log.hpp"
 #include "memory/metaspaceUtils.hpp"
 #include "memory/metaspaceStats.hpp"
-#include "memory/resourceArea.hpp"
-#include "runtime/atomic.hpp"
 
 ShenandoahControlThread::ShenandoahControlThread() :
-  ConcurrentGCThread(),
-  _alloc_failure_waiters_lock(Mutex::safepoint-2, "ShenandoahAllocFailureGC_lock", true),
-  _gc_waiters_lock(Mutex::safepoint-2, "ShenandoahRequestedGC_lock", true),
+  ShenandoahController(),
   _requested_gc_cause(GCCause::_no_cause_specified),
-  _degen_point(ShenandoahGC::_degenerated_outside_cycle),
-  _allocs_seen(0) {
+  _degen_point(ShenandoahGC::_degenerated_outside_cycle) {
   set_name("Shenandoah Control Thread");
-  reset_gc_id();
   create_and_start();
 }
 
 void ShenandoahControlThread::run_service() {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
   const GCMode default_mode = concurrent_normal;
   const GCCause::Cause default_cause = GCCause::_shenandoah_concurrent_gc;
@@ -77,7 +74,7 @@ void ShenandoahControlThread::run_service() {
     const GCCause::Cause requested_gc_cause = _requested_gc_cause;
 
     // This control loop iteration has seen this much allocation.
-    const size_t allocs_seen = Atomic::xchg(&_allocs_seen, (size_t)0, memory_order_relaxed);
+    const size_t allocs_seen = reset_allocs_seen();
 
     // Check if we have seen a new target for soft max heap size.
     const bool soft_max_changed = heap->check_soft_max_changed();
@@ -106,7 +103,6 @@ void ShenandoahControlThread::run_service() {
         policy->record_alloc_failure_to_full();
         mode = stw_full;
       }
-
     } else if (is_gc_requested) {
       cause = requested_gc_cause;
       log_info(gc)("Trigger: GC request (%s)", GCCause::to_string(cause));
@@ -239,7 +235,7 @@ void ShenandoahControlThread::run_service() {
         heap->pacer()->setup_for_idle();
       }
     } else {
-      // Allow allocators to know we have seen this much regions
+      // Report to pacer that we have seen this many words allocated
       if (ShenandoahPacing && (allocs_seen > 0)) {
         heap->pacer()->report_alloc(allocs_seen);
       }
@@ -323,18 +319,20 @@ void ShenandoahControlThread::service_concurrent_normal_cycle(GCCause::Cause cau
   if (check_cancellation_or_degen(ShenandoahGC::_degenerated_outside_cycle)) return;
 
   GCIdMark gc_id_mark;
-  ShenandoahGCSession session(cause);
+  ShenandoahGCSession session(cause, heap->global_generation());
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
-  ShenandoahConcurrentGC gc;
+  ShenandoahConcurrentGC gc(heap->global_generation(), false);
   if (gc.collect(cause)) {
     // Cycle is complete
-    heap->heuristics()->record_success_concurrent();
-    heap->shenandoah_policy()->record_success_concurrent(gc.abbreviated());
+    heap->global_generation()->heuristics()->record_success_concurrent(gc.abbreviated());
+    heap->shenandoah_policy()->record_success_concurrent(false, gc.abbreviated());
+    heap->log_heap_status("At end of GC");
   } else {
     assert(heap->cancelled_gc(), "Must have been cancelled");
     check_cancellation_or_degen(gc.degen_point());
+    heap->log_heap_status("At end of cancelled GC");
   }
 }
 
@@ -357,8 +355,9 @@ void ShenandoahControlThread::stop_service() {
 }
 
 void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   GCIdMark gc_id_mark;
-  ShenandoahGCSession session(cause);
+  ShenandoahGCSession session(cause, heap->global_generation());
 
   ShenandoahFullGC gc;
   gc.collect(cause);
@@ -366,11 +365,11 @@ void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
 
 void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point) {
   assert (point != ShenandoahGC::_degenerated_unset, "Degenerated point should be set");
-
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   GCIdMark gc_id_mark;
-  ShenandoahGCSession session(cause);
+  ShenandoahGCSession session(cause, heap->global_generation());
 
-  ShenandoahDegenGC gc(point);
+  ShenandoahDegenGC gc(point, heap->global_generation());
   gc.collect(cause);
 }
 
@@ -407,88 +406,8 @@ void ShenandoahControlThread::handle_requested_gc(GCCause::Cause cause) {
   }
 }
 
-void ShenandoahControlThread::handle_alloc_failure(ShenandoahAllocRequest& req, bool block) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-
-  assert(current()->is_Java_thread(), "expect Java thread here");
-
-  if (try_set_alloc_failure_gc()) {
-    // Only report the first allocation failure
-    log_info(gc)("Failed to allocate %s, " SIZE_FORMAT "%s",
-                 req.type_string(),
-                 byte_size_in_proper_unit(req.size() * HeapWordSize), proper_unit_for_byte_size(req.size() * HeapWordSize));
-
-    // Now that alloc failure GC is scheduled, we can abort everything else
-    heap->cancel_gc(GCCause::_allocation_failure);
-  }
-
-
-  if (block) {
-    MonitorLocker ml(&_alloc_failure_waiters_lock);
-    while (is_alloc_failure_gc()) {
-      ml.wait();
-    }
-  }
-}
-
-void ShenandoahControlThread::handle_alloc_failure_evac(size_t words) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-
-  if (try_set_alloc_failure_gc()) {
-    // Only report the first allocation failure
-    log_info(gc)("Failed to allocate " SIZE_FORMAT "%s for evacuation",
-                 byte_size_in_proper_unit(words * HeapWordSize), proper_unit_for_byte_size(words * HeapWordSize));
-  }
-
-  // Forcefully report allocation failure
-  heap->cancel_gc(GCCause::_shenandoah_allocation_failure_evac);
-}
-
-void ShenandoahControlThread::notify_alloc_failure_waiters() {
-  _alloc_failure_gc.unset();
-  MonitorLocker ml(&_alloc_failure_waiters_lock);
-  ml.notify_all();
-}
-
-bool ShenandoahControlThread::try_set_alloc_failure_gc() {
-  return _alloc_failure_gc.try_set();
-}
-
-bool ShenandoahControlThread::is_alloc_failure_gc() {
-  return _alloc_failure_gc.is_set();
-}
-
 void ShenandoahControlThread::notify_gc_waiters() {
   _gc_requested.unset();
   MonitorLocker ml(&_gc_waiters_lock);
   ml.notify_all();
-}
-
-void ShenandoahControlThread::pacing_notify_alloc(size_t words) {
-  assert(ShenandoahPacing, "should only call when pacing is enabled");
-  Atomic::add(&_allocs_seen, words, memory_order_relaxed);
-}
-
-void ShenandoahControlThread::reset_gc_id() {
-  Atomic::store(&_gc_id, (size_t)0);
-}
-
-void ShenandoahControlThread::update_gc_id() {
-  Atomic::inc(&_gc_id);
-}
-
-size_t ShenandoahControlThread::get_gc_id() {
-  return Atomic::load(&_gc_id);
-}
-
-void ShenandoahControlThread::start() {
-  create_and_start();
-}
-
-void ShenandoahControlThread::prepare_for_graceful_shutdown() {
-  _graceful_shutdown.set();
-}
-
-bool ShenandoahControlThread::in_graceful_shutdown() {
-  return _graceful_shutdown.is_set();
 }
