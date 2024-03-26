@@ -1173,7 +1173,7 @@ HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
                                             size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_tlab(min_size, requested_size);
-  HeapWord* res = allocate_memory(req, false);
+  HeapWord* res = allocate_memory(req);
   if (res != nullptr) {
     *actual_size = req.actual_size();
   } else {
@@ -1186,7 +1186,7 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
                                              size_t word_size,
                                              size_t* actual_size) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_gclab(min_size, word_size);
-  HeapWord* res = allocate_memory(req, false);
+  HeapWord* res = allocate_memory(req);
   if (res != nullptr) {
     *actual_size = req.actual_size();
   } else {
@@ -1199,14 +1199,12 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
                                             size_t word_size,
                                             size_t* actual_size) {
   // Align requested sizes to card sized multiples
-  size_t words_in_card = CardTable::card_size_in_words();
-  size_t align_mask = ~(words_in_card - 1);
-  min_size = (min_size + words_in_card - 1) & align_mask;
-  word_size = (word_size + words_in_card - 1) & align_mask;
+  min_size = align_up(min_size, CardTable::card_size_in_words());
+  word_size = align_up(word_size, CardTable::card_size_in_words());
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_plab(min_size, word_size);
   // Note that allocate_memory() sets a thread-local flag to prohibit further promotions by this thread
   // if we are at risk of infringing on the old-gen evacuation budget.
-  HeapWord* res = allocate_memory(req, false);
+  HeapWord* res = allocate_memory(req);
   if (res != nullptr) {
     *actual_size = req.actual_size();
   } else {
@@ -1217,7 +1215,7 @@ HeapWord* ShenandoahHeap::allocate_new_plab(size_t min_size,
 
 // is_promotion is true iff this allocation is known for sure to hold the result of young-gen evacuation
 // to old-gen.  plab allocates are not known as such, since they may hold old-gen evacuations.
-HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_promotion) {
+HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
   intptr_t pacer_epoch = 0;
   bool in_new_region = false;
   HeapWord* result = nullptr;
@@ -1229,7 +1227,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     }
 
     if (!ShenandoahAllocFailureALot || !should_inject_alloc_failure()) {
-      result = allocate_memory_under_lock(req, in_new_region, is_promotion);
+      result = allocate_memory_under_lock(req, in_new_region);
     }
 
     // Check that gc overhead is not exceeded.
@@ -1255,7 +1253,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
     while (result == nullptr
         && (get_gc_no_progress_count() == 0 || original_count == shenandoah_policy()->full_gc_count())) {
       control_thread()->handle_alloc_failure(req, true);
-      result = allocate_memory_under_lock(req, in_new_region, is_promotion);
+      result = allocate_memory_under_lock(req, in_new_region);
     }
 
     if (log_is_enabled(Debug, gc, alloc)) {
@@ -1266,7 +1264,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
 
   } else {
     assert(req.is_gc_alloc(), "Can only accept GC allocs here");
-    result = allocate_memory_under_lock(req, in_new_region, is_promotion);
+    result = allocate_memory_under_lock(req, in_new_region);
     // Do not call handle_alloc_failure() here, because we cannot block.
     // The allocation failure would be handled by the LRB slowpath with handle_alloc_failure_evac().
   }
@@ -1304,7 +1302,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
   return result;
 }
 
-HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region, bool is_promotion) {
+HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
   bool try_smaller_lab_size = false;
   size_t smaller_lab_size;
   {
@@ -1356,7 +1354,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
             promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
             promotion_eligible = true;
           }
-        } else if (is_promotion) {
+        } else if (req.is_promotion()) {
           // This is a shared alloc for promotion
           size_t promotion_avail = old_generation()->get_promoted_reserve();
           size_t promotion_expended = old_generation()->get_promoted_expended();
@@ -1407,7 +1405,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
               ShenandoahThreadLocalData::disable_plab_promotions(thread);
               ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
             }
-          } else if (is_promotion) {
+          } else if (req.is_promotion()) {
             // Shared promotion.  Assume size is requested_bytes.
             old_generation()->expend_promoted(requested_bytes);
           }
@@ -1431,7 +1429,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
         // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as
         // last-start representing object b while first-start represents object c.  This is why we need to require all
         // register_object() invocations to be "mutually exclusive" with respect to each card's memory range.
-        ShenandoahHeap::heap()->card_scan()->register_object(result);
+        card_scan()->register_object(result);
       }
     } else {
       // The allocation failed.  If this was a plab allocation, We've already retired it and no longer have a plab.
@@ -1484,7 +1482,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   // Note that shrinking the preferred size gets us past the gatekeeper that checks whether there's available memory to
   // satisfy the allocation request.  The reality is the actual TLAB size is likely to be even smaller, because it will
   // depend on how much memory is available within mutator regions that are not yet fully used.
-  HeapWord* result = allocate_memory_under_lock(smaller_req, in_new_region, is_promotion);
+  HeapWord* result = allocate_memory_under_lock(smaller_req, in_new_region);
   if (result != nullptr) {
     req.set_actual_size(smaller_req.actual_size());
   }
@@ -1494,7 +1492,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
 HeapWord* ShenandoahHeap::mem_allocate(size_t size,
                                         bool*  gc_overhead_limit_was_exceeded) {
   ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared(size);
-  return allocate_memory(req, false);
+  return allocate_memory(req);
 }
 
 MetaWord* ShenandoahHeap::satisfy_failed_metadata_allocation(ClassLoaderData* loader_data,
@@ -1765,8 +1763,8 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
     if (copy == nullptr) {
       // If we failed to allocate in LAB, we'll try a shared allocation.
       if (!is_promotion || !has_plab || (size > PLAB::min_size())) {
-        ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
-        copy = allocate_memory(req, is_promotion);
+        ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen, is_promotion);
+        copy = allocate_memory(req);
         alloc_from_lab = false;
       }
       // else, we leave copy equal to nullptr, signaling a promotion failure below if appropriate.
