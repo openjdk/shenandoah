@@ -291,7 +291,7 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion *r) {
     // TODO: Add API to heap to skip free regions
-    if (r->affiliation() != FREE) {
+    if (r->is_affiliated()) {
       _ctx->capture_top_at_mark_start(r);
       r->clear_live_data();
     }
