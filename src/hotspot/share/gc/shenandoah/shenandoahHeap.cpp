@@ -2102,6 +2102,12 @@ void ShenandoahHeap::print_tracing_info() const {
   }
 }
 
+void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
+  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
+  _gc_generation = generation;
+  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
+}
+
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
   // assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
   shenandoah_policy()->record_collection_cause(cause);
@@ -2518,8 +2524,11 @@ void ShenandoahHeap::propagate_gc_state_to_java_threads() {
 
 void ShenandoahHeap::set_gc_state(uint mask, bool value) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
+  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
   _gc_state.set_cond(mask, value);
   _gc_state_changed = true;
+  // ysr: debugging. Check that if concurrent weak root is set then active_gen isn't null
+  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
 }
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {

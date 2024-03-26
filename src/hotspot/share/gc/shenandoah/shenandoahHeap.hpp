@@ -176,9 +176,7 @@ public:
     return _gc_generation;
   }
 
-  void set_gc_generation(ShenandoahGeneration* generation) {
-    _gc_generation = generation;
-  }
+  void set_gc_generation(ShenandoahGeneration* generation);
 
   ShenandoahHeuristics* heuristics();
   ShenandoahOldHeuristics* old_heuristics();
