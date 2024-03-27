@@ -39,10 +39,10 @@ import jdk.test.lib.process.OutputAnalyzer;
 
 public class TestOldGrowthTriggers {
 
-  public static void do_old_allocations() {
+  public static void makeOldAllocations() {
     // Expect most of the BigInteger entries placed into array to be promoted, and most will eventually become garbage within old
 
-    final int array_size = 128 * 1024;   // 128K entries
+    final int array_size = 256 * 1024;   // 256K entries
     BigInteger array[] = new BigInteger[array_size];
     Random r = new Random(46);
 
@@ -50,9 +50,7 @@ public class TestOldGrowthTriggers {
       array[i] = new BigInteger(128, r);
     }
 
-    for (int refill_count = 0; refill_count < 8; refill_count++) {
-      System.out.print("Doing refill: ");
-      System.out.println(Integer.toString(refill_count));
+    for (int refill_count = 0; refill_count < 192; refill_count++) {
       // Each refill repopulates array_size randomly selected elements within array
       for (int i = 0; i < array_size; i++) {
         int replace_index = r.nextInt(array_size);
@@ -61,16 +59,20 @@ public class TestOldGrowthTriggers {
           case 0:
             // 50% chance of creating garbage
             array[replace_index] = array[replace_index].max(array[derive_index]);
+            break;
           case 1:
             // 50% chance of creating garbage
             array[replace_index] = array[replace_index].min(array[derive_index]);
+            break;
           case 2:
             // creates new old BigInteger, releases old BigInteger,
             // may create ephemeral data while computing gcd
             array[replace_index] = array[replace_index].gcd(array[derive_index]);
+            break;
           case 3:
             // creates new old BigInteger, releases old BigInteger
             array[replace_index] = array[replace_index].multiply(array[derive_index]);
+            break;
         }
         if ((i & 0x3) == 0x3) {
         } else {
@@ -93,7 +95,7 @@ public class TestOldGrowthTriggers {
 
   public static void main(String[] args) throws Exception {
     if (args.length > 0 && args[0].equals("test")) {
-      do_old_allocations();
+      makeOldAllocations();
       return;
     }
 

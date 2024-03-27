@@ -3192,52 +3192,10 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   _free_set->rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational()) {
-    if (ShenandoahGenerationalHumongousReserve > 0) {
-      size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
-      size_t allowed_old_gen_span = num_regions() - (ShenandoahGenerationalHumongousReserve * num_regions() / 100);
-
-      // Tolerate lower density if total span is small.  Here's the implementation:
-      //   if old_gen spans more than 100% and density < 75%, trigger old-defrag
-      //   else if old_gen spans more than 87.5% and density < 62.5%, trigger old-defrag
-      //   else if old_gen spans more than 75% and density < 50%, trigger old-defrag
-      //   else if old_gen spans more than 62.5% and density < 37.5%, trigger old-defrag
-      //   else if old_gen spans more than 50% and density < 25%, trigger old-defrag
-      //
-      // A previous implementation was more aggressive in triggering, resulting in degraded throughput when
-      // humongous allocation was not required.
-
-      ShenandoahGeneration* old_gen = old_generation();
-      size_t old_available = old_gen->available();
-      size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-      size_t old_unaffiliated_available = old_gen->free_unaffiliated_regions() * region_size_bytes;
-      assert(old_available >= old_unaffiliated_available, "sanity");
-      size_t old_fragmented_available = old_available - old_unaffiliated_available;
-
-      size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
-      size_t old_bytes_spanned = old_region_span * region_size_bytes;
-      double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
-
-      uint eighths = 8;
-      for (uint i = 0; i < 5; i++) {
-        size_t span_threshold = eighths * allowed_old_gen_span / 8;
-        double density_threshold = (eighths - 2) / 8.0;
-        if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
-          old_heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-          break;
-        }
-        eighths--;
-      }
-    }
-    size_t old_used = old_generation()->used() + old_generation()->get_humongous_waste();
-    size_t trigger_threshold = old_generation()->usage_trigger_threshold();
-    // Detects unsigned arithmetic underflow
-    assert(old_used <= capacity(),
-           "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
-           old_generation()->used(), old_generation()->get_humongous_waste(), capacity());
-
-    if (old_used > trigger_threshold) {
-      old_heuristics()->trigger_old_has_grown();
-    }
+    ShenandoahGenerationalHeap* gen_heap = (ShenandoahGenerationalHeap*) this;
+    ShenandoahOldGeneration* old_gen = old_generation();
+    old_gen->trigger_collection_if_fragmented(gen_heap, first_old_region, last_old_region, old_region_count, num_regions());
+    old_gen->trigger_collection_if_overgrown(gen_heap);
   }
 }
 
