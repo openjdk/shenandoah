@@ -1235,18 +1235,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req, bool is_p
       result = allocate_memory_under_lock(req, in_new_region, is_promotion);
     }
 
-    // Check that gc overhead is not exceeded.
-    //
-    // Shenandoah will grind along for quite a while allocating one
-    // object at a time using shared (non-tlab) allocations. This check
-    // is testing that the GC overhead limit has not been exceeded.
-    // This will notify the collector to start a cycle, but will raise
-    // an OOME to the mutator if the last Full GCs have not made progress.
-    if (result == nullptr && !req.is_lab_alloc() && get_gc_no_progress_count() > ShenandoahNoProgressThreshold) {
-      control_thread()->handle_alloc_failure(req, false);
-      return nullptr;
-    }
-
     // Block until control thread reacted, then retry allocation.
     //
     // It might happen that one of the threads requesting allocation would unblock
@@ -1328,6 +1316,10 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
     if (mode()->is_generational()) {
       if (req.affiliation() == YOUNG_GENERATION) {
         if (req.is_mutator_alloc()) {
+          // TODO: this should query free_set->mutator_free() rather than young_gen()->available().
+          // This mutator allocation cannot access memory that is reserved for Collector.  Should probably
+          // entirely remove the "try_smaller_lab_size control path".  The original motivation for this
+          // path is no longer relevant.
           size_t young_words_available = young_generation()->available() / HeapWordSize;
           if (req.is_lab_alloc() && (req.min_size() < young_words_available)) {
             // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
