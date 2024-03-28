@@ -38,6 +38,45 @@ class ShenandoahReferenceProcessor;
 class ShenandoahHeap;
 class ShenandoahMode;
 
+template<ShenandoahAffiliation AFFILIATION>
+class ShenandoahIncludeRegionClosure : public ShenandoahHeapRegionClosure {
+private:
+  ShenandoahHeapRegionClosure* _closure;
+
+public:
+  explicit ShenandoahIncludeRegionClosure(ShenandoahHeapRegionClosure* closure): _closure(closure) {}
+
+  void heap_region_do(ShenandoahHeapRegion* r) override {
+    if (r->affiliation() == AFFILIATION) {
+      _closure->heap_region_do(r);
+    }
+  }
+
+  bool is_thread_safe() override {
+    return _closure->is_thread_safe();
+  }
+};
+
+template<ShenandoahAffiliation AFFILIATION>
+class ShenandoahExcludeRegionClosure : public ShenandoahHeapRegionClosure {
+private:
+  ShenandoahHeapRegionClosure* _closure;
+
+public:
+  explicit ShenandoahExcludeRegionClosure(ShenandoahHeapRegionClosure* closure): _closure(closure) {}
+
+  void heap_region_do(ShenandoahHeapRegion* r) override {
+    if (r->affiliation() != AFFILIATION) {
+      _closure->heap_region_do(r);
+    }
+  }
+
+  bool is_thread_safe() override {
+    return _closure->is_thread_safe();
+  }
+};
+
+
 class ShenandoahGeneration : public CHeapObj<mtGC>, public ShenandoahSpaceInfo {
   friend class VMStructs;
 private:
@@ -178,6 +217,9 @@ private:
 
   // Apply closure to all regions affiliated with this generation.
   virtual void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;
+
+  // Apply closure to all regions affiliated with this generation (include free regions);
+  virtual void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl);
 
   // Apply closure to all regions affiliated with this generation (single threaded).
   virtual void heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;

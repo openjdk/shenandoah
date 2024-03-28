@@ -56,12 +56,12 @@ bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {
 
 void ShenandoahYoungGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
   // Just iterate over the young generation here.
-  ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
+  ShenandoahIncludeRegionClosure<YOUNG_GENERATION> young_regions(cl);
   ShenandoahHeap::heap()->parallel_heap_region_iterate(&young_regions);
 }
 
 void ShenandoahYoungGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-  ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
+  ShenandoahIncludeRegionClosure<YOUNG_GENERATION> young_regions(cl);
   ShenandoahHeap::heap()->heap_region_iterate(&young_regions);
 }
 
@@ -97,4 +97,9 @@ size_t ShenandoahYoungGeneration::available() const {
 size_t ShenandoahYoungGeneration::soft_available() const {
   size_t available = this->ShenandoahGeneration::soft_available();
   return MIN2(available, ShenandoahHeap::heap()->free_set()->available());
+}
+
+void ShenandoahYoungGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
+  ShenandoahExcludeRegionClosure<OLD_GENERATION> exclude(cl);
+  ShenandoahHeap::heap()->parallel_heap_region_iterate(&exclude);
 }

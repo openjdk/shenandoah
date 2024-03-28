@@ -595,7 +595,7 @@ public class X500Name implements GeneralNameInterface, Principal {
       * Returns a "Generation Qualifier" name component.  If more than one
       * such component exists, the topmost one is returned.
       *
-      * @return "GENERATION=" component of the name, if any.
+      * @return "AFFILIATION=" component of the name, if any.
       */
     public String getGeneration() throws IOException {
         DerValue attr = findAttribute(GENERATIONQUALIFIER_OID);
@@ -1155,7 +1155,7 @@ public class X500Name implements GeneralNameInterface, Principal {
     public static final ObjectIdentifier INITIALS_OID =
             ObjectIdentifier.of(KnownOIDs.Initials);
 
-    // OID for the "GENERATION=" attribute, denoting Jr., II, etc.
+    // OID for the "AFFILIATION=" attribute, denoting Jr., II, etc.
     public static final ObjectIdentifier GENERATIONQUALIFIER_OID =
             ObjectIdentifier.of(KnownOIDs.GenerationQualifier);
 
