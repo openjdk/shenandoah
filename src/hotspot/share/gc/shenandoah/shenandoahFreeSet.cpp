@@ -755,16 +755,12 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
       assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
       assert(_free_sets.in_free_set(r->index(), OldCollector), "PLABS must be allocated in old_collector_free regions");
-
-      size_t adjusted_size = req.size();
-      const size_t adjusted_min_size = req.min_size();
-      const size_t usable_free = get_usable_free_words(r->free());
-
-      // Need to assure that plabs are aligned on multiple of card region. They may be decreased to fit in the usable
+      // Need to assure that plabs are aligned on multiple of card region.
+      // Since we have Elastic TLABs, align sizes up. They may be decreased to fit in the usable
       // memory remaining in the region (which will also be aligned to cards).
-      assert(is_aligned(adjusted_size, CardTable::card_size_in_words()), "PLAB size must be aligned with card table size.");
-      assert(is_aligned(adjusted_min_size, CardTable::card_size_in_words()), "PLAB min size must be aligned with card table size.");
-      assert(is_aligned(usable_free, CardTable::card_size_in_words()), "PLAB usable free must be aligned with card table size.");
+      size_t adjusted_size = align_up(req.size(), CardTable::card_size_in_words());
+      size_t adjusted_min_size = align_up(req.min_size(), CardTable::card_size_in_words());
+      size_t usable_free = get_usable_free_words(r->free());
 
       if (adjusted_size > usable_free) {
         adjusted_size = usable_free;
