@@ -513,7 +513,7 @@ void ShenandoahOldGeneration::trigger_collection_if_overgrown(ShenandoahGenerati
   // Detects unsigned arithmetic underflow
   assert(old_used <= gen_heap->capacity(),
          "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
-         used(), get_humongous_waste(), heap->capacity());
+         used(), get_humongous_waste(), gen_heap->capacity());
   if (old_used > trigger_threshold) {
     gen_heap->old_heuristics()->trigger_old_has_grown();
   }
