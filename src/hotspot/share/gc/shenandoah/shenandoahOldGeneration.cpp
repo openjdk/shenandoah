@@ -531,7 +531,7 @@ void ShenandoahOldGeneration::trigger_collection_if_fragmented(ShenandoahGenerat
     size_t old_fragmented_available = old_available - old_unaffiliated_available;
 
     size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
-y    size_t old_bytes_spanned = old_region_span * region_size_bytes;
+    size_t old_bytes_spanned = old_region_span * region_size_bytes;
     double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
 
     uint eighths = 8;
