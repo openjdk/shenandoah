@@ -1252,7 +1252,7 @@ class AVAKeyword {
         new AVAKeyword("SURNAME",      X500Name.SURNAME_OID,      false, false);
         new AVAKeyword("GIVENNAME",    X500Name.GIVENNAME_OID,    false, false);
         new AVAKeyword("INITIALS",     X500Name.INITIALS_OID,     false, false);
-        new AVAKeyword("AFFILIATION",   X500Name.GENERATIONQUALIFIER_OID,
+        new AVAKeyword("GENERATION",   X500Name.GENERATIONQUALIFIER_OID,
                                                                   false, false);
         new AVAKeyword("EMAIL", PKCS9Attribute.EMAIL_ADDRESS_OID, false, false);
         new AVAKeyword("EMAILADDRESS", PKCS9Attribute.EMAIL_ADDRESS_OID,

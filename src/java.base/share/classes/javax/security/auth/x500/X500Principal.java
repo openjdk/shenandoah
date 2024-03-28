@@ -125,7 +125,7 @@ public final class X500Principal implements Principal, java.io.Serializable {
      * defined in RFC 1779 and RFC 2253
      * (and listed in {@link #getName(String format) getName(String format)}),
      * as well as the T, DNQ or DNQUALIFIER, SURNAME, GIVENNAME, INITIALS,
-     * AFFILIATION, EMAILADDRESS, and SERIALNUMBER keywords whose Object
+     * GENERATION, EMAILADDRESS, and SERIALNUMBER keywords whose Object
      * Identifiers (OIDs) are defined in RFC 5280.
      * Any other attribute type must be specified as an OID.
      *
