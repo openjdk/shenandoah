@@ -693,14 +693,6 @@ ShenandoahHeuristics* ShenandoahHeap::heuristics() {
   return _global_generation->heuristics();
 }
 
-ShenandoahOldHeuristics* ShenandoahHeap::old_heuristics() {
-  return (ShenandoahOldHeuristics*) _old_generation->heuristics();
-}
-
-ShenandoahYoungHeuristics* ShenandoahHeap::young_heuristics() {
-  return (ShenandoahYoungHeuristics*) _young_generation->heuristics();
-}
-
 bool ShenandoahHeap::doing_mixed_evacuations() {
   return _old_generation->state() == ShenandoahOldGeneration::EVACUATING;
 }
@@ -1124,22 +1116,21 @@ void ShenandoahHeap::retire_plab(PLAB* plab) {
 
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
-  assert(_old_generation != nullptr, "Should only have mixed collections in generation mode.");
-  if (_old_generation->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP) {
-    assert(!old_generation()->is_concurrent_mark_in_progress(), "Cannot be marking in IDLE");
-    assert(!old_heuristics()->has_coalesce_and_fill_candidates(), "Cannot have coalesce and fill candidates in IDLE");
-    assert(!old_heuristics()->unprocessed_old_collection_candidates(), "Cannot have mixed collection candidates in IDLE");
-    assert(!young_generation()->is_bootstrap_cycle(), "Cannot have old mark queues if IDLE");
+  assert(old_generation() != nullptr, "Should only have mixed collections in generation mode.");
+  if (old_generation()->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP) {
+#ifdef ASSERT
+    old_generation()->validate_waiting_for_bootstrap();
+#endif
   } else {
     log_info(gc)("Terminating old gc cycle.");
     // Stop marking
     old_generation()->cancel_marking();
     // Stop tracking old regions
-    old_heuristics()->abandon_collection_candidates();
+    old_generation()->abandon_collection_candidates();
     // Remove old generation access to young generation mark queues
     young_generation()->set_old_gen_task_queues(nullptr);
     // Transition to IDLE now.
-    _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+    old_generation()->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
   }
 }
 
@@ -3133,7 +3124,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   ShenandoahGCPhase phase(concurrent ?
                           ShenandoahPhaseTimings::final_update_refs_rebuild_freeset :
                           ShenandoahPhaseTimings::degen_gc_final_update_refs_rebuild_freeset);
-  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahHeapLocker locker(lock());
   size_t young_cset_regions, old_cset_regions;
   size_t first_old_region, last_old_region, old_region_count;
@@ -3154,7 +3144,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
 
     // The computation of bytes_of_allocation_runway_before_gc_trigger is quite conservative so consider all of this
     // available for transfer to old. Note that transfer of humongous regions does not impact available.
-    size_t allocation_runway = young_heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
+    size_t allocation_runway = young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
     ShenandoahGenerationalHeap::heap()->compute_old_generation_balance(allocation_runway, old_cset_regions);
 
     // Total old_available may have been expanded to hold anticipated promotions.  We trigger if the fragmented available
@@ -3169,51 +3159,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   _free_set->rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational() && (ShenandoahGenerationalHumongousReserve > 0)) {
-    size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
-    size_t allowed_old_gen_span = num_regions() - (ShenandoahGenerationalHumongousReserve * num_regions() / 100);
-
-    // Tolerate lower density if total span is small.  Here's the implementation:
-    //   if old_gen spans more than 100% and density < 75%, trigger old-defrag
-    //   else if old_gen spans more than 87.5% and density < 62.5%, trigger old-defrag
-    //   else if old_gen spans more than 75% and density < 50%, trigger old-defrag
-    //   else if old_gen spans more than 62.5% and density < 37.5%, trigger old-defrag
-    //   else if old_gen spans more than 50% and density < 25%, trigger old-defrag
-    //
-    // A previous implementation was more aggressive in triggering, resulting in degraded throughput when
-    // humongous allocation was not required.
-
-    ShenandoahGeneration* old_gen = old_generation();
-    size_t old_available = old_gen->available();
-    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-    size_t old_unaffiliated_available = old_gen->free_unaffiliated_regions() * region_size_bytes;
-    assert(old_available >= old_unaffiliated_available, "sanity");
-    size_t old_fragmented_available = old_available - old_unaffiliated_available;
-
-    size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
-    size_t old_bytes_spanned = old_region_span * region_size_bytes;
-    double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
-
-    uint eighths = 8;
-    for (uint i = 0; i < 5; i++) {
-      size_t span_threshold = eighths * allowed_old_gen_span / 8;
-      double density_threshold = (eighths - 2) / 8.0;
-      if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
-        old_heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-        break;
-      }
-      eighths--;
-    }
-
-    size_t old_used = old_generation()->used() + old_generation()->get_humongous_waste();
-    size_t trigger_threshold = old_generation()->usage_trigger_threshold();
-    // Detects unsigned arithmetic underflow
-    assert(old_used <= capacity(),
-           "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
-           old_generation()->used(), old_generation()->get_humongous_waste(), capacity());
-
-    if (old_used > trigger_threshold) {
-      old_heuristics()->trigger_old_has_grown();
-    }
+    old_generation()->maybe_trigger_collection(first_old_region, last_old_region, old_region_count);
   }
 }
 

@@ -156,7 +156,7 @@ private:
 
   inline ShenandoahGenerationType type() const { return _type; }
 
-  inline ShenandoahHeuristics* heuristics() const { return _heuristics; }
+  virtual ShenandoahHeuristics* heuristics() const { return _heuristics; }
 
   ShenandoahReferenceProcessor* ref_processor() { return _ref_processor; }
 

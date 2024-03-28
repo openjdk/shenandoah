@@ -168,8 +168,6 @@ public:
   }
 
   ShenandoahHeuristics* heuristics();
-  ShenandoahOldHeuristics* old_heuristics();
-  ShenandoahYoungHeuristics* young_heuristics();
 
   bool doing_mixed_evacuations();
   bool is_old_bitmap_stable() const;

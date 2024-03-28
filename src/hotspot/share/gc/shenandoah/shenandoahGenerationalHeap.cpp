@@ -201,13 +201,11 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t old_xfer_
 
   // Decide how much old space we should reserve for a mixed collection
   size_t reserve_for_mixed = 0;
-  const size_t mixed_candidates = old_heuristics()->unprocessed_old_collection_candidates();
-  const bool doing_mixed = (mixed_candidates > 0);
-  if (doing_mixed) {
+  if (old_generation()->has_unprocessed_collection_candidates()) {
     // We want this much memory to be unfragmented in order to reliably evacuate old.  This is conservative because we
     // may not evacuate the entirety of unprocessed candidates in a single mixed evacuation.
     const size_t max_evac_need = (size_t)
-            (old_heuristics()->unprocessed_old_collection_candidates_live_memory() * ShenandoahOldEvacWaste);
+            (old_generation()->unprocessed_collection_candidates_live_memory() * ShenandoahOldEvacWaste);
     assert(old_available >= old_generation()->free_unaffiliated_regions() * region_size_bytes,
            "Unaffiliated available must be less than total available");
     const size_t old_fragmented_available =
