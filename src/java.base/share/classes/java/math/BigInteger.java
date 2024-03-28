@@ -1004,7 +1004,7 @@ public class BigInteger extends Number implements Comparable<BigInteger> {
 
         // The relationship between the certainty and the number of rounds
         // we perform is given in the draft standard ANSI X9.80, "PRIME
-        // NUMBER GENERATION, PRIMALITY TESTING, AND PRIMALITY CERTIFICATES".
+        // NUMBER AFFILIATION, PRIMALITY TESTING, AND PRIMALITY CERTIFICATES".
         int sizeInBits = this.bitLength();
         if (sizeInBits < 100) {
             rounds = 50;
