@@ -449,16 +449,8 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
 
 #ifdef ASSERT
   ShenandoahGeneration* const gen_again = active_generation();
-  // The following assertion:
-  // assert(gen == gen_again, "Race");
-  // checks that the value of active_generation()
-  // doesn't change while executing in this method. However,
-  // it won't hold when a ShenandoahGCScope is exited by the
-  // ControlThread asynchronously wrt mutators that may be executing
-  // executing barriers. This race is benign when we are a mutator
-  // thread that sees the active_generation() flicker below.
-  assert(gen == gen_again || (gen_again == nullptr && Thread::current()->is_Java_thread()),
-         "Not a benign race");
+  // No flickering!
+  assert(gen == gen_again, "Race");
 #endif
 
   switch (_affiliations[index]) {

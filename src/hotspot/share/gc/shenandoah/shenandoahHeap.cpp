@@ -2103,13 +2103,19 @@ void ShenandoahHeap::print_tracing_info() const {
 }
 
 void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
-  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
+  assert(Thread::current() == ShenandoahController::thread(), "Verboten!");
+  assert(!SafepointSynchronize::is_at_safepoint(), "Verboten!");
   _gc_generation = generation;
-  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
+}
+
+void ShenandoahHeap::set_active_generation() {
+  assert(Thread::current()->is_VM_thread(), "Verboten!");
+  assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
+  assert(!is_concurrent_weak_root_in_progress(), "Error?");
+  _active_generation = _gc_generation;
 }
 
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
-  // assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
   shenandoah_policy()->record_collection_cause(cause);
 
 #ifdef ASSERT
@@ -2127,7 +2133,6 @@ void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* 
 }
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
-  // assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
   assert(gc_cause() != GCCause::_no_gc, "cause wasn't set");
   assert(active_generation() != nullptr, "_gc_generation wasn't set");
 
@@ -2137,10 +2142,6 @@ void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
     young_generation()->heuristics()->record_cycle_end();
     old_generation()->heuristics()->record_cycle_end();
   }
-
-  // ysr: delete the next two lines: only for debugging
-  _prev_gc_cause = gc_cause();
-  _prev_gc_generation = active_generation();
 
   set_gc_generation(nullptr);
   set_gc_cause(GCCause::_no_gc);
