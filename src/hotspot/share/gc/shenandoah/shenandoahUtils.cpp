@@ -47,6 +47,7 @@ ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGenerat
   _timer(_heap->gc_timer()),
   _tracer(_heap->tracer()) {
   assert(!ShenandoahGCPhase::is_current_phase_valid(), "No current GC phase");
+  assert(!_heap->is_concurrent_weak_root_in_progress(), "Stronger check of above");
 
   _heap->on_cycle_start(cause, _generation);
 

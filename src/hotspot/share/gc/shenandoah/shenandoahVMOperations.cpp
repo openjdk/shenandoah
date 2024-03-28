@@ -34,15 +34,24 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVMOperations.hpp"
 #include "interpreter/oopMapCache.hpp"
+#include "logging/log.hpp"
 #include "memory/universe.hpp"
 
 bool VM_ShenandoahOperation::doit_prologue() {
+  log_active_generation("Prologue");
   assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State can only be changed on a safepoint.");
   return true;
 }
 
 void VM_ShenandoahOperation::doit_epilogue() {
+  log_active_generation("Epilogue");
   assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State was not synchronized to java threads.");
+}
+
+void VM_ShenandoahOperation::log_active_generation(const char* prefix) {
+  ShenandoahGeneration* agen = ShenandoahHeap::heap()->active_generation();
+  log_info(gc)("%s: active_generation is %s",
+               prefix, agen == nullptr ? "nullptr" : shenandoah_generation_name(agen->type()));
 }
 
 bool VM_ShenandoahReferenceOperation::doit_prologue() {

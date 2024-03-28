@@ -62,6 +62,7 @@ ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
 
 void ShenandoahGenerationalControlThread::run_service() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  set_thread();
 
   const GCMode default_mode = concurrent_normal;
   ShenandoahGenerationType generation = GLOBAL;
@@ -442,6 +443,7 @@ void ShenandoahGenerationalControlThread::service_concurrent_old_cycle(Shenandoa
 
   switch (original_state) {
     case ShenandoahOldGeneration::FILLING: {
+      ShenandoahGCSession session(cause, old_generation);
       _allow_old_preemption.set();
       old_generation->entry_coalesce_and_fill();
       _allow_old_preemption.unset();
