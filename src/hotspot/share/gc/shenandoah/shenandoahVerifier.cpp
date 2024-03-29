@@ -33,6 +33,7 @@
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -1352,9 +1353,10 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
   ShenandoahMarkingContext* ctx;
 
-  log_debug(gc)("Verifying remembered set at %s mark", _heap->doing_mixed_evacuations()? "mixed": "young");
+  ShenandoahOldGeneration* old_generation = _heap->old_generation();
+  log_debug(gc)("Verifying remembered set at %s mark", old_generation->is_doing_mixed_evacuations() ? "mixed" : "young");
 
-  if (_heap->is_old_bitmap_stable() || _heap->active_generation()->is_global()) {
+  if (old_generation->is_mark_complete() || _heap->active_generation()->is_global()) {
     ctx = _heap->complete_marking_context();
   } else {
     ctx = nullptr;
@@ -1446,7 +1448,7 @@ void ShenandoahVerifier::verify_rem_set_before_update_ref() {
   ShenandoahRegionIterator iterator;
   ShenandoahMarkingContext* ctx;
 
-  if (_heap->is_old_bitmap_stable() || _heap->active_generation()->is_global()) {
+  if (_heap->old_generation()->is_mark_complete() || _heap->active_generation()->is_global()) {
     ctx = _heap->complete_marking_context();
   } else {
     ctx = nullptr;

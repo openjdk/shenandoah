@@ -34,6 +34,7 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
+#include "gc/shenandoah/shenandoahHeapRegionClosures.hpp"
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -463,7 +464,7 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
   switch (new_state) {
     case FILLING:
       assert(_state != BOOTSTRAPPING, "Cannot beging making old regions parsable after bootstrapping");
-      assert(heap->is_old_bitmap_stable(), "Cannot begin filling without first completing marking, state is '%s'", state_name(_state));
+      assert(is_mark_complete(), "Cannot begin filling without first completing marking, state is '%s'", state_name(_state));
       assert(_old_heuristics->has_coalesce_and_fill_candidates(), "Cannot begin filling without something to fill.");
       break;
     case WAITING_FOR_BOOTSTRAP:

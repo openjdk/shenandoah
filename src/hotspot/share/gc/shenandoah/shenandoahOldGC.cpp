@@ -38,8 +38,8 @@
 #include "utilities/events.hpp"
 
 
-ShenandoahOldGC::ShenandoahOldGC(ShenandoahGeneration* generation, ShenandoahSharedFlag& allow_preemption) :
-    ShenandoahConcurrentGC(generation, false), _allow_preemption(allow_preemption) {
+ShenandoahOldGC::ShenandoahOldGC(ShenandoahOldGeneration* generation, ShenandoahSharedFlag& allow_preemption) :
+    ShenandoahConcurrentGC(generation, false), _old_generation(generation), _allow_preemption(allow_preemption) {
 }
 
 // Final mark for old-gen is different than for young or old, so we
@@ -85,8 +85,8 @@ void ShenandoahOldGC::op_final_mark() {
 
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   auto heap = ShenandoahGenerationalHeap::heap();
-  assert(!heap->doing_mixed_evacuations(), "Should not start an old gc with pending mixed evacuations");
-  assert(!heap->is_prepare_for_old_mark_in_progress(), "Old regions need to be parsable during concurrent mark.");
+  assert(!_old_generation->is_doing_mixed_evacuations(), "Should not start an old gc with pending mixed evacuations");
+  assert(!_old_generation->is_preparing_for_mark(), "Old regions need to be parsable during concurrent mark.");
 
   // Enable preemption of old generation mark.
   _allow_preemption.set();

@@ -25,12 +25,12 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
-class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
 private:
@@ -184,6 +184,14 @@ public:
 
   // True if there are old regions waiting to be selected for a mixed collection
   bool has_unprocessed_collection_candidates();
+
+  bool is_doing_mixed_evacuations() const {
+    return state() == EVACUATING;
+  }
+
+  bool is_preparing_for_mark() const {
+    return state() == FILLING;
+  }
 
   // Amount of live memory (bytes) in regions waiting for mixed collections
   size_t unprocessed_collection_candidates_live_memory();

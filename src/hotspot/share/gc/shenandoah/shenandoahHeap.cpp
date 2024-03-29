@@ -693,14 +693,6 @@ ShenandoahHeuristics* ShenandoahHeap::heuristics() {
   return _global_generation->heuristics();
 }
 
-bool ShenandoahHeap::doing_mixed_evacuations() {
-  return _old_generation->state() == ShenandoahOldGeneration::EVACUATING;
-}
-
-bool ShenandoahHeap::is_old_bitmap_stable() const {
-  return _old_generation->is_mark_complete();
-}
-
 bool ShenandoahHeap::is_gc_generation_young() const {
   return _gc_generation != nullptr && _gc_generation->is_young();
 }
@@ -2831,7 +2823,8 @@ public:
     _regions(regions),
     _work_chunks(work_chunks)
   {
-    log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(_heap->is_old_bitmap_stable()));
+    bool old_bitmap_stable = _heap->old_generation()->is_mark_complete();
+    log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(old_bitmap_stable));
   }
 
   void work(uint worker_id) {
@@ -3422,5 +3415,17 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
     old_generation()->log_status(msg);
   } else {
     global_generation()->log_status(msg);
+  }
+}
+
+void ShenandoahHeap::clear_cards_for(ShenandoahHeapRegion* region) {
+  if (mode()->is_generational()) {
+    _card_scan->mark_range_as_empty(region->bottom(), pointer_delta(region->end(), region->bottom()));
+  }
+}
+
+void ShenandoahHeap::mark_card_as_dirty(void* location) {
+  if (mode()->is_generational()) {
+    _card_scan->mark_card_as_dirty((HeapWord*)location);
   }
 }
