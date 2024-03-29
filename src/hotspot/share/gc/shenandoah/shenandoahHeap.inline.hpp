@@ -349,23 +349,6 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   assert(!r->is_humongous(), "never evacuate humongous objects");
 
   ShenandoahAffiliation target_gen = r->affiliation();
-  if (mode()->is_generational() && active_generation()->is_young() && target_gen == YOUNG_GENERATION) {
-    markWord mark = p->mark();
-    if (mark.is_marked()) {
-      // Already forwarded.
-      return ShenandoahBarrierSet::resolve_forwarded(p);
-    }
-    if (mark.has_displaced_mark_helper()) {
-      // We don't want to deal with MT here just to ensure we read the right mark word.
-      // Skip the potential promotion attempt for this one.
-    } else if (r->age() + mark.age() >= age_census()->tenuring_threshold()) {
-      oop result = try_evacuate_object(p, thread, r, OLD_GENERATION);
-      if (result != nullptr) {
-        return result;
-      }
-      // If we failed to promote this aged object, we'll fall through to code below and evacuate to young-gen.
-    }
-  }
   return try_evacuate_object(p, thread, r, target_gen);
 }
 

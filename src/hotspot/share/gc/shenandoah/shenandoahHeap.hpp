@@ -505,6 +505,8 @@ public:
   ShenandoahPhaseTimings*      phase_timings()   const { return _phase_timings;     }
   ShenandoahEvacuationTracker* evac_tracker()    const { return _evac_tracker;      }
 
+  ShenandoahEvacOOMHandler* oom_evac_handler() { return &_oom_evac_handler; }
+
   void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation);
   void on_cycle_end(ShenandoahGeneration* generation);
 
@@ -629,14 +631,16 @@ public:
 
 // ---------- Allocation support
 //
+protected:
+  inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);
+  inline HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);
+
 private:
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region);
 
-  inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);
   HeapWord* allocate_from_gclab_slow(Thread* thread, size_t size);
   HeapWord* allocate_new_gclab(size_t min_size, size_t word_size, size_t* actual_size);
 
-  inline HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);
   HeapWord* allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion);
   HeapWord* allocate_new_plab(size_t min_size, size_t word_size, size_t* actual_size);
 
