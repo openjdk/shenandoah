@@ -693,10 +693,6 @@ ShenandoahHeuristics* ShenandoahHeap::heuristics() {
   return _global_generation->heuristics();
 }
 
-bool ShenandoahHeap::is_gc_generation_young() const {
-  return _gc_generation != nullptr && _gc_generation->is_young();
-}
-
 size_t ShenandoahHeap::used() const {
   return global_generation()->used();
 }

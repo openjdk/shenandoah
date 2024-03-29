@@ -41,7 +41,7 @@
 #include "gc/shenandoah/shenandoahWorkGroup.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
-#include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
@@ -349,8 +349,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   assert(!r->is_humongous(), "never evacuate humongous objects");
 
   ShenandoahAffiliation target_gen = r->affiliation();
-  if (mode()->is_generational() && ShenandoahHeap::heap()->is_gc_generation_young() &&
-      target_gen == YOUNG_GENERATION) {
+  if (mode()->is_generational() && active_generation()->is_young() && target_gen == YOUNG_GENERATION) {
     markWord mark = p->mark();
     if (mark.is_marked()) {
       // Already forwarded.
@@ -467,7 +466,7 @@ inline bool ShenandoahHeap::is_in_old(const void* p) const {
 }
 
 inline bool ShenandoahHeap::is_old(oop obj) const {
-  return is_gc_generation_young() && is_in_old(obj);
+  return active_generation()->is_young() && is_in_old(obj);
 }
 
 inline ShenandoahAffiliation ShenandoahHeap::region_affiliation(const ShenandoahHeapRegion *r) {

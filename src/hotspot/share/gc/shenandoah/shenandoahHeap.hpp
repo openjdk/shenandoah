@@ -169,8 +169,6 @@ public:
 
   ShenandoahHeuristics* heuristics();
 
-  bool is_gc_generation_young() const;
-
 // ---------- Initialization, termination, identification, printing routines
 //
 public:
