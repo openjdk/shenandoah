@@ -675,7 +675,7 @@ void ShenandoahHeapRegion::recycle() {
   shenandoah_assert_heaplocked();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahGeneration* generation = heap->generation_for(affiliation());
-  // TODO: Seems like these operations should be in the same method...
+
   heap->decrease_used(generation, used());
   generation->decrement_affiliated_region_count();
 
