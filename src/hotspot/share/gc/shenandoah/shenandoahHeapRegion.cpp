@@ -547,56 +547,6 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   return true;
 }
 
-void ShenandoahHeapRegion::global_oop_iterate_and_fill_dead(OopIterateClosure* blk) {
-  if (!is_active()) return;
-  if (is_humongous()) {
-    // No need to fill dead within humongous regions.  Either the entire region is dead, or the entire region is
-    // unchanged.  A humongous region holds no more than one humongous object.
-    oop_iterate_humongous(blk);
-  } else {
-    global_oop_iterate_objects_and_fill_dead(blk);
-  }
-}
-
-void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateClosure* blk) {
-  assert(!is_humongous(), "no humongous region here");
-  HeapWord* obj_addr = bottom();
-
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  ShenandoahMarkingContext* marking_context = heap->marking_context();
-  RememberedScanner* rem_set_scanner = heap->card_scan();
-  // Objects allocated above TAMS are not marked, but are considered live for purposes of current GC efforts.
-  HeapWord* t = marking_context->top_at_mark_start(this);
-
-  assert(heap->active_generation()->is_mark_complete(), "sanity");
-
-  while (obj_addr < t) {
-    oop obj = cast_to_oop(obj_addr);
-    if (marking_context->is_marked(obj)) {
-      assert(obj->klass() != nullptr, "klass should not be nullptr");
-      // when promoting an entire region, we have to register the marked objects as well
-      obj_addr += obj->oop_iterate_size(blk);
-    } else {
-      // Object is not marked.  Coalesce and fill dead object with dead neighbors.
-      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
-      assert(next_marked_obj <= t, "next marked object cannot exceed top");
-      size_t fill_size = next_marked_obj - obj_addr;
-      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
-      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-      // coalesce_objects() unregisters all but first object subsumed within coalesced range.
-      rem_set_scanner->coalesce_objects(obj_addr, fill_size);
-      obj_addr = next_marked_obj;
-    }
-  }
-
-  // Any object above TAMS and below top() is considered live.
-  t = top();
-  while (obj_addr < t) {
-    oop obj = cast_to_oop(obj_addr);
-    obj_addr += obj->oop_iterate_size(blk);
-  }
-}
-
 // DO NOT CANCEL.  If this worker thread has accepted responsibility for scanning a particular range of addresses, it
 // must finish the work before it can be cancelled.
 void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, bool dirty_only,
@@ -636,24 +586,6 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
     // Scan all data, regardless of whether cards are dirty
     obj->oop_iterate(blk, MemRegion(start, start + num_cards * CardTable::card_size_in_words()));
   }
-}
-
-void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk, HeapWord* start, size_t words) {
-  assert(is_humongous(), "only humongous region here");
-  // Find head.
-  ShenandoahHeapRegion* r = humongous_start_region();
-  assert(r->is_humongous_start(), "need humongous head here");
-  oop obj = cast_to_oop(r->bottom());
-  obj->oop_iterate(blk, MemRegion(start, start + words));
-}
-
-void ShenandoahHeapRegion::oop_iterate_humongous(OopIterateClosure* blk) {
-  assert(is_humongous(), "only humongous region here");
-  // Find head.
-  ShenandoahHeapRegion* r = humongous_start_region();
-  assert(r->is_humongous_start(), "need humongous head here");
-  oop obj = cast_to_oop(r->bottom());
-  obj->oop_iterate(blk, MemRegion(bottom(), top()));
 }
 
 ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {

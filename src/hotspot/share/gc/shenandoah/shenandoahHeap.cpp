@@ -1606,7 +1606,6 @@ private:
           _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
         }
       } else if (r->is_young() && r->is_active() && (r->age() >= _tenuring_threshold)) {
-        HeapWord* tams = ctx->top_at_mark_start(r);
         if (r->is_humongous_start()) {
           // We promote humongous_start regions along with their affiliated continuations during evacuation rather than
           // doing this work during a safepoint.  We cannot put humongous regions into the collection set because that
@@ -1615,7 +1614,7 @@ private:
         } else if (r->is_regular() && (r->get_top_before_promote() != nullptr)) {
           assert(r->garbage_before_padded_for_promote() < old_garbage_threshold,
                  "Region " SIZE_FORMAT " has too much garbage for promotion", r->index());
-          assert(r->get_top_before_promote() == tams,
+          assert(r->get_top_before_promote() == ctx->top_at_mark_start(r),
                  "Region " SIZE_FORMAT " has been used for allocations before promotion", r->index());
           // Likewise, we cannot put promote-in-place regions into the collection set because that would also trigger
           // the LRB to copy on reference fetch.
@@ -1640,7 +1639,7 @@ private:
 };
 
 void ShenandoahHeap::evacuate_collection_set(bool concurrent) {
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+  if (mode()->is_generational()) {
     ShenandoahRegionIterator regions;
     ShenandoahGenerationalEvacuationTask task(this, &regions, concurrent);
     workers()->run_task(&task);
