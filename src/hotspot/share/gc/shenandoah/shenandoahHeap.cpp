@@ -2106,14 +2106,18 @@ void ShenandoahHeap::print_tracing_info() const {
 void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool force) {
   _gc_generation = generation;
   // forcing breaks STW active_generation update protocol by VM Thread ...
+#ifdef ASSERT
+  bool is_ctlr_thrd = (Thread::current() == ShenandoahController::thread());
+  bool is_safept    = SafepointSynchronize::is_at_safepoint();
+#endif // ASSERT
   if (!force) {
-    assert(Thread::current() == ShenandoahController::thread(), "Verboten!");
-    assert(!SafepointSynchronize::is_at_safepoint(), "Verboten!");
+    assert(is_ctlr_thrd, "Controller thread only");
+    assert(!is_safept, "Safepoint only");
   } else {
     // ... and allows the VM thread to force the change immediately at a safepoint,
     // or for the Controller thread to force the change immediately at a non-safepoint.
-    assert((Thread::current()->is_VM_thread() && SafepointSynchronize::is_at_safepoint()) ||
-           (Thread::current() == ShenandoahController::thread() && !ShenandoahController::thread()),
+    assert((Thread::current()->is_VM_thread() && is_safept) ||
+           (is_ctlr_thrd && !is_safept),
            "Unexpected forcing scenario");
     _active_generation = generation;
   }
