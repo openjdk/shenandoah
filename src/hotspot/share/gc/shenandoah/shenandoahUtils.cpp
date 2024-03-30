@@ -41,15 +41,14 @@
 
 ShenandoahPhaseTimings::Phase ShenandoahTimingsTracker::_current_phase = ShenandoahPhaseTimings::_invalid_phase;
 
-ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation) :
+ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation, bool force) :
   _heap(ShenandoahHeap::heap()),
   _generation(generation),
   _timer(_heap->gc_timer()),
   _tracer(_heap->tracer()) {
   assert(!ShenandoahGCPhase::is_current_phase_valid(), "No current GC phase");
-  assert(!_heap->is_concurrent_weak_root_in_progress(), "Stronger check of above");
 
-  _heap->on_cycle_start(cause, _generation);
+  _heap->on_cycle_start(cause, _generation, force);
 
   _timer->register_gc_start();
   _tracer->report_gc_start(cause, _timer->gc_start());

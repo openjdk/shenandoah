@@ -586,6 +586,7 @@ void ShenandoahHeap::initialize_heuristics_generations() {
 ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   CollectedHeap(),
   _gc_generation(nullptr),
+  _active_generation(nullptr),
   _initial_size(0),
   _committed(0),
   _max_workers(MAX3(ConcGCThreads, ParallelGCThreads, 1U)),
@@ -2102,39 +2103,37 @@ void ShenandoahHeap::print_tracing_info() const {
   }
 }
 
-void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
+void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool force) {
   assert(Thread::current() == ShenandoahController::thread(), "Verboten!");
   assert(!SafepointSynchronize::is_at_safepoint(), "Verboten!");
   _gc_generation = generation;
+  if (force) {
+    _active_generation = generation;
+  }
 }
 
 void ShenandoahHeap::set_active_generation() {
   assert(Thread::current()->is_VM_thread(), "Verboten!");
   assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
-  assert(!is_concurrent_weak_root_in_progress(), "Error?");
+  assert(!is_concurrent_weak_root_in_progress() || _active_generation  == _gc_generation, "Flicker");
   _active_generation = _gc_generation;
 }
 
-void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
+void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation, bool force) {
   shenandoah_policy()->record_collection_cause(cause);
 
-#ifdef ASSERT
-  GCCause::Cause prev_cause = gc_cause();
-  assert(prev_cause == GCCause::_no_gc, "Over-writing cause");
-
-  ShenandoahGeneration* prev_gen = active_generation();
-  assert(prev_gen == nullptr, "Over-writing _gc_generation");
-#endif // ASSERT
+  assert(gc_cause()  == GCCause::_no_gc, "Over-writing cause");
+  assert(_gc_generation == nullptr, "Over-writing _gc_generation");
 
   set_gc_cause(cause);
-  set_gc_generation(generation);
+  set_gc_generation(generation, force);
 
   generation->heuristics()->record_cycle_start();
 }
 
 void ShenandoahHeap::on_cycle_end(ShenandoahGeneration* generation) {
   assert(gc_cause() != GCCause::_no_gc, "cause wasn't set");
-  assert(active_generation() != nullptr, "_gc_generation wasn't set");
+  assert(_gc_generation != nullptr, "_gc_generation wasn't set");
 
   generation->heuristics()->record_cycle_end();
   if (mode()->is_generational() && generation->is_global()) {

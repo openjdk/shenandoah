@@ -188,12 +188,14 @@ public:
   }
 
   // Set the _gc_generation field: can only be called by the
-  // ShenandoahControlThread or a subclass thereof.
-  void set_gc_generation(ShenandoahGeneration* generation);
+  // ShenandoahControlThread or a subclass thereof. If `force` is
+  // true, then the change is pushed to active_generation immediately,
+  // without waiting for the next safepoint.
+  void set_gc_generation(ShenandoahGeneration* generation, bool force = false);
 
   // Copy the value in the _gc_generation field into
   // the _active_generation field: can only be called at
-  // a safepoint by the VMThread.
+  // a safepoint by the VMThread. 
   void set_active_generation();
 
   ShenandoahHeuristics* heuristics();
@@ -543,7 +545,7 @@ public:
   ShenandoahPhaseTimings*      phase_timings()   const { return _phase_timings;     }
   ShenandoahEvacuationTracker* evac_tracker()    const { return _evac_tracker;      }
 
-  void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation);
+  void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation, bool force);
   void on_cycle_end(ShenandoahGeneration* generation);
 
   ShenandoahVerifier*        verifier();

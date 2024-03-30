@@ -68,7 +68,7 @@ private:
 
   TraceMemoryManagerStats _trace_cycle;
 public:
-  ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation);
+  ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation, bool force = false);
   ~ShenandoahGCSession();
 };
 
