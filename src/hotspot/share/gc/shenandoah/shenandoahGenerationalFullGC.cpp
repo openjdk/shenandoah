@@ -53,7 +53,7 @@ void assert_usage_not_more_than_regions_used(ShenandoahGeneration* generation) {
 void ShenandoahGenerationalFullGC::prepare() {
   auto heap = ShenandoahGenerationalHeap::heap();
   // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
-  heap->set_gc_generation(heap->global_generation());
+  heap->set_gc_generation(heap->global_generation(), true /* force */);
 
   // No need for old_gen->increase_used() as this was done when plabs were allocated.
   heap->reset_generation_reserves();
