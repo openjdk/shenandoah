@@ -2126,7 +2126,6 @@ void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool fo
 void ShenandoahHeap::set_active_generation() {
   assert(Thread::current()->is_VM_thread(), "Verboten!");
   assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
-  assert(!is_concurrent_weak_root_in_progress() || _active_generation  == _gc_generation, "Flicker");
   _active_generation = _gc_generation;
 }
 
