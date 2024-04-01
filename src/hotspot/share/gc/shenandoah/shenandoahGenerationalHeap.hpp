@@ -47,6 +47,9 @@ public:
   size_t plab_min_size() const { return _min_plab_size; }
   size_t plab_max_size() const { return _max_plab_size; }
 
+  void retire_plab(PLAB* plab);
+  void retire_plab(PLAB* plab, Thread* thread);
+
 private:
   HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);
   HeapWord* allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion);

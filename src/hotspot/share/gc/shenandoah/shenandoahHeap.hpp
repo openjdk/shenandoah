@@ -744,8 +744,6 @@ public:
   inline RememberedScanner* card_scan() { return _card_scan; }
   void clear_cards_for(ShenandoahHeapRegion* region);
   void mark_card_as_dirty(void* location);
-  void retire_plab(PLAB* plab);
-  void retire_plab(PLAB* plab, Thread* thread);
   void cancel_old_gc();
 
 // ---------- Helper functions

@@ -136,7 +136,7 @@ void ShenandoahBarrierSet::on_thread_detach(Thread *thread) {
     // PLAB is aligned with the start of each card's memory range.
     // TODO: Assert this in retire_plab?
     if (plab != nullptr) {
-      _heap->retire_plab(plab);
+      ShenandoahGenerationalHeap::heap()->retire_plab(plab);
     }
 
     // SATB protocol requires to keep alive reachable oops from roots at the beginning of GC
