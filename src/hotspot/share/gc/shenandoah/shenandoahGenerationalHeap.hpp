@@ -29,26 +29,6 @@
 
 class ShenandoahRegulatorThread;
 class ShenandoahGenerationalControlThread;
-class ShenandoahGenerationalHeap;
-class ShenandoahRegionIterator;
-
-// Unlike ShenandoahEvacuationTask, this iterates over all regions rather than just the collection set.
-// This is needed in order to promote humongous start regions if age() >= tenure threshold.
-class ShenandoahGenerationalEvacuationTask : public WorkerTask {
-private:
-  ShenandoahGenerationalHeap* const _heap;
-  ShenandoahRegionIterator* _regions;
-  bool _concurrent;
-  uint _tenuring_threshold;
-
-public:
-  ShenandoahGenerationalEvacuationTask(ShenandoahGenerationalHeap* sh,
-                                       ShenandoahRegionIterator* iterator,
-                                       bool concurrent);
-  void work(uint worker_id) override;
-private:
-  void do_work();
-};
 
 class ShenandoahGenerationalHeap : public ShenandoahHeap {
 private:
@@ -69,6 +49,7 @@ public:
 
   void print_init_logger() const override;
 
+  // ---------- Evacuations and Promotions
   oop evacuate_or_promote_object(oop p, Thread* thread);
   oop try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
 

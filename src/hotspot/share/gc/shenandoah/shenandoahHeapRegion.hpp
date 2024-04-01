@@ -469,10 +469,6 @@ public:
 
   CENSUS_NOISE(void clear_youth() { _youth = 0; })
 
-  // Register all objects.  Set all remembered set cards to dirty.
-  void promote_humongous();
-  void promote_in_place();
-
 private:
   void decrement_humongous_waste() const;
   void do_commit();
