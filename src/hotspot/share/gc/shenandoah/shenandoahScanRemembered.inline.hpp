@@ -36,6 +36,7 @@
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "logging/log.hpp"
 
 inline size_t
 ShenandoahDirectCardMarkRememberedSet::last_valid_index() const {

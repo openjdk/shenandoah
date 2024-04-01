@@ -28,7 +28,9 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGenerationalEvacuationTask.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahPacer.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
@@ -125,8 +127,8 @@ void ShenandoahGenerationalEvacuationTask::do_work() {
 // We identify the entirety of the region as DIRTY to force the next remembered set scan to identify the "interesting poitners"
 // contained herein.
 void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion* region) {
-  ShenandoahMarkingContext* marking_context = _heap->marking_context();
-  HeapWord* tams = marking_context->top_at_mark_start(region);
+  ShenandoahMarkingContext* const marking_context = _heap->marking_context();
+  HeapWord* const tams = marking_context->top_at_mark_start(region);
 
   {
     const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
@@ -171,8 +173,8 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
   // We do not need to scan above TAMS because restored top equals tams
   assert(obj_addr == tams, "Expect loop to terminate when obj_addr equals tams");
 
-  ShenandoahOldGeneration* old_gen = _heap->old_generation();
-  ShenandoahYoungGeneration* young_gen = _heap->young_generation();
+  ShenandoahOldGeneration* const old_gen = _heap->old_generation();
+  ShenandoahYoungGeneration* const young_gen = _heap->young_generation();
 
   {
     ShenandoahHeapLocker locker(_heap->lock());
@@ -183,7 +185,6 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     // is_collector_free range.
     region->restore_top_before_promote();
 
-    size_t region_capacity = region->free();
     size_t region_used = region->used();
 
     // The update_watermark was likely established while we had the artificially high value of top.  Make it sane now.
@@ -226,13 +227,13 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
   // it becomes garbage.  Better to not make this change until sizes of young-gen and old-gen are completely
   // adaptive, as leaving primitive arrays in young-gen might be perceived as an "astonishing result" by someone
   // has carefully analyzed the required sizes of an application's young-gen and old-gen.
-  size_t used_bytes = obj->size() * HeapWordSize;
-  size_t spanned_regions = ShenandoahHeapRegion::required_regions(used_bytes);
-  size_t humongous_waste = spanned_regions * ShenandoahHeapRegion::region_size_bytes() - obj->size() * HeapWordSize;
-  size_t index_limit = region->index() + spanned_regions;
+  const size_t used_bytes = obj->size() * HeapWordSize;
+  const size_t spanned_regions = ShenandoahHeapRegion::required_regions(used_bytes);
+  const size_t humongous_waste = spanned_regions * ShenandoahHeapRegion::region_size_bytes() - obj->size() * HeapWordSize;
+  const size_t index_limit = region->index() + spanned_regions;
 
-  ShenandoahGeneration* old_generation = _heap->old_generation();
-  ShenandoahGeneration* young_generation = _heap->young_generation();
+  ShenandoahGeneration* const old_generation = _heap->old_generation();
+  ShenandoahGeneration* const young_generation = _heap->young_generation();
   {
     // We need to grab the heap lock in order to avoid a race when changing the affiliations of spanned_regions from
     // young to old.
@@ -266,7 +267,7 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
   }
 
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
-  HeapWord* humongous_bottom = region->bottom();
+  HeapWord* const humongous_bottom = region->bottom();
   _heap->card_scan()->reset_object_range(humongous_bottom, humongous_bottom + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
   _heap->card_scan()->register_object_without_lock(humongous_bottom);
