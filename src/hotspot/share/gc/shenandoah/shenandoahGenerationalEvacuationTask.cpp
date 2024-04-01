@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahGenerationalEvacuationTask.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 

@@ -633,16 +633,11 @@ public:
 //
 protected:
   inline HeapWord* allocate_from_gclab(Thread* thread, size_t size);
-  inline HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);
 
 private:
   HeapWord* allocate_memory_under_lock(ShenandoahAllocRequest& request, bool& in_new_region);
-
   HeapWord* allocate_from_gclab_slow(Thread* thread, size_t size);
   HeapWord* allocate_new_gclab(size_t min_size, size_t word_size, size_t* actual_size);
-
-  HeapWord* allocate_from_plab_slow(Thread* thread, size_t size, bool is_promotion);
-  HeapWord* allocate_new_plab(size_t min_size, size_t word_size, size_t* actual_size);
 
 public:
   HeapWord* allocate_memory(ShenandoahAllocRequest& request);
