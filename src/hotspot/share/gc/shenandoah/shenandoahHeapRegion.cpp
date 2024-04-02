@@ -485,6 +485,10 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
       size_t fill_size = next_marked_obj - obj_addr;
       assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+      log_info(gc)("Filling @" PTR_FORMAT " in region " SIZE_FORMAT ", size: " SIZE_FORMAT, p2i(obj_addr), index(), fill_size);
+#endif
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }
@@ -531,6 +535,9 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
       size_t fill_size = next_marked_obj - obj_addr;
       assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated object known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+#ifdef KELVIN_DEBUG
+      log_info(gc)("Filling @" PTR_FORMAT " in region " SIZE_FORMAT ", size: " SIZE_FORMAT, p2i(obj_addr), index(), fill_size);
+#endif
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }

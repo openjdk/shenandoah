@@ -152,7 +152,13 @@ public:
   // True if there are old regions that need to be filled.
   bool has_coalesce_and_fill_candidates() const { return coalesce_and_fill_candidates_count() > 0; }
 
-  // Return the number of old regions that need to be filled.
+  // The anticipated coalesce-and-fill candidates count is all the old regions except those that are intended to be
+  // evacuated by mixed evacuation.
+  size_t anticipated_coalesce_and_fill_candidates_count() const { return _last_old_region - _last_old_collection_candidate; }
+
+  // Return the number of old regions that need to be filled.  The actual number of old regions that need to be filled
+  // may be greater than anticipated count, in the case that some regions planned to be evacuated were not evacuated because
+  // they were pinned.
   size_t coalesce_and_fill_candidates_count() const { return _last_old_region - _next_old_collection_candidate; }
 
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being

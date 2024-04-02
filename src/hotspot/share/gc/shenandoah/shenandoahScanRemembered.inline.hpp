@@ -105,6 +105,10 @@ ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(size_t card_index, si
 
 inline bool
 ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) const {
+#undef KELVIN_DEBUG_DIRTY
+#ifdef KELVIN_DEBUG_DIRTY
+  log_info(gc)("Testing whether card @ " PTR_FORMAT " is dirty", p2i(p));
+#endif  
   size_t index = card_index_for_addr(p);
   CardValue* bp = &(_card_table->read_byte_map())[index];
   return (bp[0] == CardTable::dirty_card_val());
@@ -162,6 +166,10 @@ ShenandoahCardCluster<RememberedSet>::reset_object_range(HeapWord* from, HeapWor
   assert(((((unsigned long long) from) & (CardTable::card_size() - 1)) == 0) &&
          ((((unsigned long long) to) & (CardTable::card_size() - 1)) == 0),
          "reset_object_range bounds must align with card boundaries");
+#ifdef KELVIN_DEBUG_DIRTY
+  log_info(gc)("Reset object range [" PTR_FORMAT ", " PTR_FORMAT "]", p2i(from), p2i(to));
+#endif  
+
   size_t card_at_start = _rs->card_index_for_addr(from);
   size_t num_cards = (to - from) / CardTable::card_size_in_words();
 
@@ -203,6 +211,11 @@ template<typename RememberedSet>
 inline void
 ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t length_in_words) {
 
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("coalesce_objects(" PTR_FORMAT ", " SIZE_FORMAT ")", p2i(address), length_in_words);
+#endif
+
   size_t card_at_start = _rs->card_index_for_addr(address);
   HeapWord *card_start_address = _rs->addr_for_card_index(card_at_start);
   size_t card_at_end = card_at_start + ((address + length_in_words) - card_start_address) / CardTable::card_size_in_words();
@@ -225,8 +238,10 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
     if (get_last_start(card_at_start) > coalesced_offset) {
       // Existing last start is being coalesced, create new last start
       set_last_start(card_at_start, coalesced_offset);
+    } else {
+      // otherwise, get_last_start(card_at_start) must equal coalesced_offset
+      assert (get_last_start(card_at_start) == coalesced_offset, "sanity");
     }
-    // otherwise, get_last_start(card_at_start) must equal coalesced_offset
 
     // All the cards between first and last get cleared.
     for (size_t i = card_at_start + 1; i < card_at_end; i++) {
@@ -234,6 +249,25 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
     }
 
     uint8_t follow_offset = static_cast<uint8_t>((address + length_in_words) - _rs->addr_for_card_index(card_at_end));
+
+#undef KELVIN_DEBUG_DEEPER
+#ifdef KELVIN_DEBUG_DEEPER
+    if (follow_offset == 0) {
+      if (starts_object(card_at_end)) {
+        log_info(gc)("KELVIN PROBLEM: card_at_end: " SIZE_FORMAT ", starts_object? %s, first_start: " SIZE_FORMAT
+                     ", last_start: " SIZE_FORMAT ", follow_offset: %u",
+                     card_at_end, "yes", get_first_start(card_at_end), get_last_start(card_at_end), follow_offset);
+      } else {
+        log_info(gc)("KELVIN PROBLEM: card_at_end: " SIZE_FORMAT ", starts_object? %s, first_start: NaN"
+                     ", last_start: NaN, follow_offset: %u",
+                     card_at_end, "no", follow_offset);
+      }
+    }
+
+#endif
+// suppose follow_offset is zero
+//  if !starts_object(card_at_end), we do nothing here
+
     if (starts_object(card_at_end) && (get_first_start(card_at_end) < follow_offset)) {
       // It may be that after coalescing within this last card's memory range, the last card
       // no longer holds an object.
@@ -249,6 +283,51 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
     //  card_at_end had an object that starts after the coalesced object, so no changes required for card_at_end
 
   }
+#ifdef ASSERT
+  HeapWord* end_of_object = address + length_in_words;
+  // Cannot use card_index_for_addr because addr may point to end of heap
+  size_t card_for_end = card_at_end;
+  if (is_aligned(address + length_in_words, CardTable::card_size())) {
+    // end of fill object aligns with start of next card
+    HeapWord* card_start_addr = _rs->addr_for_card_index(card_for_end);
+
+    // region_of_end may be end of heap, for which there is no heap region, so we cannot ask heap_region_containing until
+    // we know card_start_add is not aligned with end of heap
+    if (!is_aligned(card_start_addr, ShenandoahHeapRegion::region_size_bytes())) {
+      ShenandoahHeapRegion* region_of_end = ShenandoahHeap::heap()->heap_region_containing(card_start_addr);
+      assert(region_of_end->is_old(), "Only coalesce within old regions, addr: " PTR_FORMAT ", length: " SIZE_FORMAT
+             ", end: " PTR_FORMAT ", card_at_end: " SIZE_FORMAT ", card addr: " PTR_FORMAT ", containing region: " SIZE_FORMAT
+             " is %s",
+             p2i(address), length_in_words, p2i(end_of_object), card_for_end, p2i(card_start_addr), region_of_end->index(),
+             region_of_end->affiliation_name());
+      HeapWord* my_other_block_start = block_start(card_for_end);
+      assert(my_other_block_start == address + length_in_words,
+             "Required by scan remembered, address: " PTR_FORMAT ", address + length: " PTR_FORMAT ", length_in_words: " SIZE_FORMAT
+             ", card_at_start: " SIZE_FORMAT
+             ", card_at_end: " SIZE_FORMAT ", block_start: " PTR_FORMAT,
+             p2i(address), 
+             p2i(address + length_in_words), length_in_words, card_at_start, card_at_end, p2i(my_other_block_start));
+    }
+    // else, the end of fill object aligns with start of a new region, which may not be in old.  no need to enforce crossing info.
+  } else if (card_at_start != card_for_end) {
+    // fill object spans more than one card and end does not align with card boundary
+
+    HeapWord* card_start_addr = _rs->addr_for_card_index(card_for_end);
+    ShenandoahHeapRegion* region_of_end = ShenandoahHeap::heap()->heap_region_containing(card_start_addr);
+    assert(region_of_end->is_old(), "Only coalesce within old regions, addr: " PTR_FORMAT ", length: " SIZE_FORMAT
+           ", end: " PTR_FORMAT ", card_at_end: " SIZE_FORMAT ", card addr: " PTR_FORMAT ", containing region: " SIZE_FORMAT
+           " is %s",
+           p2i(address), length_in_words, p2i(end_of_object), card_for_end, p2i(card_start_addr), region_of_end->index(),
+           region_of_end->affiliation_name());
+
+    HeapWord* my_block_start = block_start(card_for_end);
+    assert(my_block_start == address,
+           "Required by scan remembered, address: " PTR_FORMAT ", length_in_words: " SIZE_FORMAT ", card_at_start: " SIZE_FORMAT
+           ", card_at_end: " SIZE_FORMAT ", block_start: " PTR_FORMAT,
+           p2i(address), length_in_words, card_at_start, card_at_end, p2i(my_block_start));
+  }
+  // else, this fill object does not cross card boundaries, so should have no impact on crossing maps
+#endif
 }
 
 
@@ -282,7 +361,11 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
 #ifdef ASSERT
   assert(ShenandoahHeap::heap()->mode()->is_generational(), "Do not use in non-generational mode");
   ShenandoahHeapRegion* region = ShenandoahHeap::heap()->heap_region_containing(left);
-  assert(region->is_old(), "Do not use for young regions");
+  assert(region->is_old(),
+         "Do not use for young regions, card: " SIZE_FORMAT ", left: " PTR_FORMAT ", region: " SIZE_FORMAT ", BTE: "
+         PTR_FORMAT ", " PTR_FORMAT ", " PTR_FORMAT ", affiliation: %s",
+         card_index, p2i(left), region->index(), p2i(region->bottom()), p2i(region->top()), p2i(region->end()),
+         region->affiliation_name());
   // For HumongousRegion:s it's more efficient to jump directly to the
   // start region.
   assert(!region->is_humongous(), "Use region->humongous_start_region() instead");
@@ -293,6 +376,8 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
     assert(oopDesc::is_oop(cast_to_oop(left)), "Should be an object");
     return left;
   }
+  // If memory has not yet been allocated within card card_index, the above test will fail, but it still may be the
+  // case that the last object allocated in a preceding card ends at left.
 
   HeapWord* p = nullptr;
   oop obj = cast_to_oop(p);
@@ -312,8 +397,16 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   size_t offset = get_last_start(cur_index);
   // can avoid call via card size arithmetic below instead
   p = _rs->addr_for_card_index(cur_index) + offset;
-  // Recall that we already dealt with the co-initial object case above
+  // In the case that no object has been allocated in this card, we may not have dealt with co-initial object case above.
   assert(p < left, "obj should start before left");
+  obj = cast_to_oop(p);
+  if (p + obj->size() == left) {
+#ifdef KELVIN_DEBUG_DEEPER
+    log_info(gc)("KELVIN CONFIRMS PROBLEM");
+#endif
+    return left;
+  }
+
   // While it is safe to ask an object its size in the loop that
   // follows, the (ifdef'd out) loop should never be needed.
   // 1. we ask this question only for regions in the old generation
@@ -328,14 +421,18 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   //    evacuation phase) of young collections. This is never called
   //    during old or global collections.
   // 4. Every allocation under TAMS updates the object start array.
-  NOT_PRODUCT(obj = cast_to_oop(p);)
   assert(oopDesc::is_oop(obj), "Should be an object");
 #define WALK_FORWARD_IN_BLOCK_START false
+  if (WALK_FORWARD_IN_BLOCK_START) {
+    obj = cast_to_oop(p);
+  }
   while (WALK_FORWARD_IN_BLOCK_START && p + obj->size() < left) {
     p += obj->size();
+    obj = cast_to_oop(p);
   }
 #undef WALK_FORWARD_IN_BLOCK_START // false
-  assert(p + obj->size() > left, "obj should end after left");
+  assert(p + obj->size() >= left, "obj should end at or after left, p: " PTR_FORMAT ", obj->size(): " SIZE_FORMAT ", left: " PTR_FORMAT,
+         p2i(p), obj->size(), p2i(left));
   return p;
 }
 
@@ -619,6 +716,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     // address identified by the last dirty range that we processed, if any,
     // skipping any cards at higher addresses.
     if (upper_bound != nullptr) {
+#ifdef KELVIN_DEBUG
+      log_info(gc)("Working backward from upper bound: " PTR_FORMAT, p2i(upper_bound));
+#endif
       ssize_t right_index = _rs->card_index_for_addr(upper_bound);
       assert(right_index >= 0, "Overflow");
       cur_index = MIN2(cur_index, right_index);
@@ -690,6 +790,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
         // the result of precise marking by GC closures.
 
         // index of the "head card" for p
+#ifdef KELVIN_DEBUG
+        log_info(gc)("Head card spans p: " PTR_FORMAT, p2i(p));
+#endif
         const size_t hc_index = _rs->card_index_for_addr(p);
         if (ctbm[hc_index] == CardTable::dirty_card_val()) {
           // Scan or skip the object, depending on location of its
@@ -713,6 +816,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
               assert(p < tams, "Error 1 in ctx/marking/tams logic");
               // Skip over any intermediate dead objects
               p = ctx->get_next_marked_addr(p, tams);
+              // Since the object at tams is implicitly marked, the
+              // next marked object after p should be below tams or
+              // should equal tams.
               assert(p <= tams, "Error 2 in ctx/marking/tams logic");
             }
           }
@@ -724,6 +830,8 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
       HeapWord* last_p = nullptr;
 
       // BODY: Deal with (other) objects in this dirty card range
+      // In the case that left was spanned by an array of reference and preceding card was CLEAN, p points
+      // to this array of reference so we can scan that portion of the array that overlaps dirty cards.
       while (p < right) {
         obj = cast_to_oop(p);
         // walk right scanning eligible objects
@@ -734,6 +842,9 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           // apply the closure to the oops in the portion of
           // the object within mr.
           p += obj->oop_iterate_size(cl, mr);
+          // In the case that ctx is not nullptr, the object newly referenced by p may not be marked.
+          // If this happens, the next iteration of this loop will discover such and will skip to the
+          // next marked object.
           NOT_PRODUCT(i++);
         } else {
           // forget the last object pointer we remembered
@@ -741,6 +852,8 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
           assert(p < tams, "Tams and above are implicitly marked in ctx");
           // object under tams isn't marked: skip to next live object
           p = ctx->get_next_marked_addr(p, tams);
+          // The object at tams is implicitly marked.  Thus, the next marked object following an object that
+          // is below tams will either also be below tams, or it will be tams itself.
           assert(p <= tams, "Error 3 in ctx/marking/tams logic");
         }
       }

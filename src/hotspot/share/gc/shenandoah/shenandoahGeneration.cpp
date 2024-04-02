@@ -725,7 +725,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         heap->old_heuristics()->prepare_for_old_collections();
         log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT ", coalescing candidates: " SIZE_FORMAT,
                      heap->old_heuristics()->unprocessed_old_collection_candidates(),
-                     heap->old_heuristics()->coalesce_and_fill_candidates_count());
+                     heap->old_heuristics()->anticipated_coalesce_and_fill_candidates_count());
       }
     } else {
       _heuristics->choose_collection_set(collection_set);

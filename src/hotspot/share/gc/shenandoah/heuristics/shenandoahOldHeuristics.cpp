@@ -522,8 +522,19 @@ unsigned int ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(Shenandoa
   uint end = _last_old_region;
   uint index = _next_old_collection_candidate;
   while (index < end) {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    ShenandoahHeapRegion* r = _region_data[index]._region;
+    log_info(gc)("@ %u of %u, adding %s region " SIZE_FORMAT " to C&F candidates", index, end, r->affiliation_name(), r->index());
+#endif
     *buffer++ = _region_data[index++]._region;
   }
+#ifdef KELVIN_DEBUG
+  log_info(gc)("Returning %u C&F candidates", (_last_old_region - _next_old_collection_candidate));
+  ShenandoahHeapRegion* r = _region_data[index]._region;
+  // The following causes SIGSEGV (at least some of the time)
+//  log_info(gc)("  last old region is " SIZE_FORMAT ", which is %s with used: " SIZE_FORMAT " and garbage: " SIZE_FORMAT, r->index(), r->affiliation_name(), r->used(), r->garbage());
+#endif
   return (_last_old_region - _next_old_collection_candidate);
 }
 

@@ -151,6 +151,15 @@ public:
   void work(uint worker_id) {
     for (uint region_idx = worker_id; region_idx < _coalesce_and_fill_region_count; region_idx += _nworkers) {
       ShenandoahHeapRegion* r = _coalesce_and_fill_region_array[region_idx];
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+      log_info(gc)("C&F worker(%u), processing %s region " SIZE_FORMAT " found at index %u",
+                   worker_id, r->affiliation_name(), r->index(), region_idx);
+#endif
+
+      assert (r->is_old(), "Region " SIZE_FORMAT " found at index %u of %u is %s",
+              r->index(), region_idx, _coalesce_and_fill_region_count, r->affiliation_name());
+
       if (r->is_humongous()) {
         // There is only one object in this region and it is not garbage,
         // so no need to coalesce or fill.
