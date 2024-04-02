@@ -1412,6 +1412,23 @@ void ShenandoahHeap::evacuate_collection_set(bool concurrent) {
   }
 }
 
+oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
+  assert(thread == Thread::current(), "Expected thread parameter to be current thread.");
+  if (ShenandoahThreadLocalData::is_oom_during_evac(thread)) {
+    // This thread went through the OOM during evac protocol. It is safe to return
+    // the forward pointer. It must not attempt to evacuate any other objects.
+    return ShenandoahBarrierSet::resolve_forwarded(p);
+  }
+
+  assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
+
+  ShenandoahHeapRegion* r = heap_region_containing(p);
+  assert(!r->is_humongous(), "never evacuate humongous objects");
+
+  ShenandoahAffiliation target_gen = r->affiliation();
+  return try_evacuate_object(p, thread, r, target_gen);
+}
+
 oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region,
                                                ShenandoahAffiliation target_gen) {
   assert(target_gen == YOUNG_GENERATION, "Only expect evacuations to young in this mode");

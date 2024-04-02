@@ -303,23 +303,6 @@ inline ShenandoahAgeCensus* ShenandoahHeap::age_census() const {
   return _age_census;
 }
 
-inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
-  assert(thread == Thread::current(), "Expected thread parameter to be current thread.");
-  if (ShenandoahThreadLocalData::is_oom_during_evac(thread)) {
-    // This thread went through the OOM during evac protocol and it is safe to return
-    // the forward pointer. It must not attempt to evacuate any more.
-    return ShenandoahBarrierSet::resolve_forwarded(p);
-  }
-
-  assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
-
-  ShenandoahHeapRegion* r = heap_region_containing(p);
-  assert(!r->is_humongous(), "never evacuate humongous objects");
-
-  ShenandoahAffiliation target_gen = r->affiliation();
-  return try_evacuate_object(p, thread, r, target_gen);
-}
-
 void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   // This operates on new copy of an object. This means that the object's mark-word
   // is thread-local and therefore safe to access. However, when the mark is

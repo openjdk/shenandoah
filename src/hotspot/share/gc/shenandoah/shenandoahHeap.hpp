@@ -729,7 +729,7 @@ public:
 
   // Evacuates or promotes object src. Returns the evacuated object, either evacuated
   // by this thread, or by some other thread.
-  inline oop evacuate_object(oop src, Thread* thread);
+  virtual oop evacuate_object(oop src, Thread* thread);
 
   // Call before/after evacuation.
   inline void enter_evacuation(Thread* t);

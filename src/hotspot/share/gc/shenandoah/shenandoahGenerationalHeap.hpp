@@ -41,7 +41,7 @@ public:
 
   // ---------- Evacuations and Promotions
   //
-  oop evacuate_or_promote_object(oop p, Thread* thread);
+  oop evacuate_object(oop p, Thread* thread) override;
   oop try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
 
   size_t plab_min_size() const { return _min_plab_size; }

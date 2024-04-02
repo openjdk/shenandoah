@@ -46,7 +46,7 @@ public:
   void do_object(oop p) override {
     shenandoah_assert_marked(nullptr, p);
     if (!p->is_forwarded()) {
-      _heap->evacuate_or_promote_object(p, _thread);
+      _heap->evacuate_object(p, _thread);
     }
   }
 };
@@ -54,11 +54,11 @@ public:
 ShenandoahGenerationalEvacuationTask::ShenandoahGenerationalEvacuationTask(ShenandoahGenerationalHeap* heap,
                                                                            ShenandoahRegionIterator* iterator,
                                                                            bool concurrent) :
-        WorkerTask("Shenandoah Evacuation"),
-        _heap(heap),
-        _regions(iterator),
-        _concurrent(concurrent),
-        _tenuring_threshold(0)
+  WorkerTask("Shenandoah Evacuation"),
+  _heap(heap),
+  _regions(iterator),
+  _concurrent(concurrent),
+  _tenuring_threshold(0)
 {
   shenandoah_assert_generational();
   _tenuring_threshold = _heap->age_census()->tenuring_threshold();

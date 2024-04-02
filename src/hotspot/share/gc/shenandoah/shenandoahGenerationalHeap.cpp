@@ -146,7 +146,7 @@ void ShenandoahGenerationalHeap::stop() {
   ShenandoahHeap::stop();
 }
 
-oop ShenandoahGenerationalHeap::evacuate_or_promote_object(oop p, Thread* thread) {
+oop ShenandoahGenerationalHeap::evacuate_object(oop p, Thread* thread) {
   assert(thread == Thread::current(), "Expected thread parameter to be current thread.");
   if (ShenandoahThreadLocalData::is_oom_during_evac(thread)) {
     // This thread went through the OOM during evac protocol and it is safe to return
