@@ -1554,9 +1554,11 @@ public:
     assert(gclab != nullptr, "GCLAB should be initialized for %s", thread->name());
     assert(gclab->words_remaining() == 0, "GCLAB should not need retirement");
 
-    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-    assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
-    assert(plab->words_remaining() == 0, "PLAB should not need retirement");
+    if (ShenandoahHeap::heap()->mode()->is_generational()) {
+      PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+      assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
+      assert(plab->words_remaining() == 0, "PLAB should not need retirement");
+    }
   }
 };
 
@@ -1573,15 +1575,17 @@ public:
       ShenandoahThreadLocalData::set_gclab_size(thread, 0);
     }
 
-    PLAB* plab = ShenandoahThreadLocalData::plab(thread);
-    assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
+    if (ShenandoahHeap::heap()->mode()->is_generational()) {
+      PLAB* plab = ShenandoahThreadLocalData::plab(thread);
+      assert(plab != nullptr, "PLAB should be initialized for %s", thread->name());
 
-    // There are two reasons to retire all plabs between old-gen evacuation passes.
-    //  1. We need to make the plab memory parsable by remembered-set scanning.
-    //  2. We need to establish a trustworthy UpdateWaterMark value within each old-gen heap region
-    ShenandoahGenerationalHeap::heap()->retire_plab(plab, thread);
-    if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
-      ShenandoahThreadLocalData::set_plab_size(thread, 0);
+      // There are two reasons to retire all plabs between old-gen evacuation passes.
+      //  1. We need to make the plab memory parsable by remembered-set scanning.
+      //  2. We need to establish a trustworthy UpdateWaterMark value within each old-gen heap region
+      ShenandoahGenerationalHeap::heap()->retire_plab(plab, thread);
+      if (_resize && ShenandoahThreadLocalData::plab_size(thread) > 0) {
+        ShenandoahThreadLocalData::set_plab_size(thread, 0);
+      }
     }
   }
 };

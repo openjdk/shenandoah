@@ -431,7 +431,7 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 //               |   |          +-----------------+     |
 //               |   |            |                     |
 //               |   |            | Filling Complete    | <-> A global collection may
-//               |   |            v                     |     may move the old generation
+//               |   |            v                     |     move the old generation
 //               |   |          +-----------------+     |     directly from waiting for
 //               |   +--------> |     WAITING     |     |     bootstrap to filling or
 //               |   |    +---- |  FOR BOOTSTRAP  | ----+     evacuating.
