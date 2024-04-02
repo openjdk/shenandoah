@@ -246,13 +246,13 @@ bool ShenandoahOldGeneration::contains(ShenandoahHeapRegion* region) const {
 }
 
 void ShenandoahOldGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-  ShenandoahIncludeRegionClosure<OLD_GENERATION> old_regions(cl);
-  ShenandoahHeap::heap()->parallel_heap_region_iterate(&old_regions);
+  ShenandoahIncludeRegionClosure<OLD_GENERATION> old_regions_cl(cl);
+  ShenandoahHeap::heap()->parallel_heap_region_iterate(&old_regions_cl);
 }
 
 void ShenandoahOldGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-  ShenandoahIncludeRegionClosure<OLD_GENERATION> old_regions(cl);
-  ShenandoahHeap::heap()->heap_region_iterate(&old_regions);
+  ShenandoahIncludeRegionClosure<OLD_GENERATION> old_regions_cl(cl);
+  ShenandoahHeap::heap()->heap_region_iterate(&old_regions_cl);
 }
 
 void ShenandoahOldGeneration::set_concurrent_mark_in_progress(bool in_progress) {
@@ -572,6 +572,6 @@ void ShenandoahOldGeneration::handle_evacuation(HeapWord* obj, size_t words, boo
 
 void ShenandoahOldGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
   // Iterate over old and free regions (exclude young).
-  ShenandoahExcludeRegionClosure<YOUNG_GENERATION> exclude(cl);
-  ShenandoahGeneration::parallel_region_iterate_free(&exclude);
+  ShenandoahExcludeRegionClosure<YOUNG_GENERATION> exclude_cl(cl);
+  ShenandoahGeneration::parallel_region_iterate_free(&exclude_cl);
 }

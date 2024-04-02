@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 
+// Applies the given closure to all regions with the given affiliation
 template<ShenandoahAffiliation AFFILIATION>
 class ShenandoahIncludeRegionClosure : public ShenandoahHeapRegionClosure {
 private:
@@ -48,6 +49,7 @@ public:
   }
 };
 
+// Applies the given closure to all regions without the given affiliation
 template<ShenandoahAffiliation AFFILIATION>
 class ShenandoahExcludeRegionClosure : public ShenandoahHeapRegionClosure {
 private:
