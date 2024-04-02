@@ -108,7 +108,7 @@ ShenandoahDirectCardMarkRememberedSet::is_card_dirty(HeapWord *p) const {
 #undef KELVIN_DEBUG_DIRTY
 #ifdef KELVIN_DEBUG_DIRTY
   log_info(gc)("Testing whether card @ " PTR_FORMAT " is dirty", p2i(p));
-#endif  
+#endif
   size_t index = card_index_for_addr(p);
   CardValue* bp = &(_card_table->read_byte_map())[index];
   return (bp[0] == CardTable::dirty_card_val());
@@ -168,7 +168,7 @@ ShenandoahCardCluster<RememberedSet>::reset_object_range(HeapWord* from, HeapWor
          "reset_object_range bounds must align with card boundaries");
 #ifdef KELVIN_DEBUG_DIRTY
   log_info(gc)("Reset object range [" PTR_FORMAT ", " PTR_FORMAT "]", p2i(from), p2i(to));
-#endif  
+#endif
 
   size_t card_at_start = _rs->card_index_for_addr(from);
   size_t num_cards = (to - from) / CardTable::card_size_in_words();
@@ -305,7 +305,7 @@ ShenandoahCardCluster<RememberedSet>::coalesce_objects(HeapWord* address, size_t
              "Required by scan remembered, address: " PTR_FORMAT ", address + length: " PTR_FORMAT ", length_in_words: " SIZE_FORMAT
              ", card_at_start: " SIZE_FORMAT
              ", card_at_end: " SIZE_FORMAT ", block_start: " PTR_FORMAT,
-             p2i(address), 
+             p2i(address),
              p2i(address + length_in_words), length_in_words, card_at_start, card_at_end, p2i(my_other_block_start));
     }
     // else, the end of fill object aligns with start of a new region, which may not be in old.  no need to enforce crossing info.
