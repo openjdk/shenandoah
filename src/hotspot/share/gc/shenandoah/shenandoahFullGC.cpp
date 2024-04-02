@@ -1196,15 +1196,16 @@ void ShenandoahFullGC::phase5_epilog() {
 
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
 
-    // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
-    // abbreviated cycle.
-    if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set();
-      ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
-    }
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }
 
   _preserved_marks->restore(heap->workers());
   _preserved_marks->reclaim();
+
+  // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
+  // abbreviated cycle.
+  if (heap->mode()->is_generational()) {
+    ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set();
+    ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
+  }
 }

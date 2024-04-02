@@ -447,7 +447,6 @@ void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
         HeapWord* t = r->top();
         while (obj_addr < t) {
           oop obj = cast_to_oop(obj_addr);
-          size_t size = obj->size();
           scanner->register_object_without_lock(obj_addr);
           obj_addr += obj->oop_iterate_size(&dirty_cards_for_cross_generational_pointers);
         }
