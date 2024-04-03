@@ -195,8 +195,10 @@ public:
 
   // Copy the value in the _gc_generation field into
   // the _active_generation field: can only be called at
-  // a safepoint by the VMThread. 
-  void set_active_generation();
+  // a safepoint by the VMThread, except when "force" is true,
+  // in which case the ShenandoahController thread may force
+  // the change at a non-safepoint. 
+  void set_active_generation(bool force = false);
 
   ShenandoahHeuristics* heuristics();
   ShenandoahOldHeuristics* old_heuristics();

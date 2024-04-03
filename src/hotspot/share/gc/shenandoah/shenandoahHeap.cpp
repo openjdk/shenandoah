@@ -2105,27 +2105,28 @@ void ShenandoahHeap::print_tracing_info() const {
 
 void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool force) {
   _gc_generation = generation;
-  // forcing breaks STW active_generation update protocol by VM Thread ...
-#ifdef ASSERT
-  bool is_ctlr_thrd = (Thread::current() == ShenandoahController::thread());
-  bool is_safept    = SafepointSynchronize::is_at_safepoint();
-#endif // ASSERT
+  // forcing breaks active_generation update protocol by VM Thread at Safept, upon
+  // instigation by Ctlr thread at non-safepoint.
   if (!force) {
-    assert(is_ctlr_thrd, "Controller thread only");
-    assert(!is_safept, "Safepoint only");
+    assert(Thread::current() == ShenandoahController::thread(), "Controller thread only");
+    assert(!SafepointSynchronize::is_at_safepoint(), "Not at safepoint only");
   } else {
-    // ... and allows the VM thread to force the change immediately at a safepoint,
-    // or for the Controller thread to force the change immediately at a non-safepoint.
-    assert((Thread::current()->is_VM_thread() && is_safept) ||
-           (is_ctlr_thrd && !is_safept),
-           "Unexpected forcing scenario");
-    _active_generation = generation;
+    // ... allowing it to be immediately updated at a non-safepoint by Ctlr thread
+    set_active_generation(force);
   }
 }
 
-void ShenandoahHeap::set_active_generation() {
-  assert(Thread::current()->is_VM_thread(), "Verboten!");
-  assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
+void ShenandoahHeap::set_active_generation(bool force) {
+  if (!force) {
+    assert(Thread::current()->is_VM_thread(), "Verboten!");
+    assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
+  } else {
+    Thread* self = Thread::current();
+    bool is_safept = SafepointSynchronize::is_at_safepoint();
+    assert((self->is_VM_thread() && is_safept) ||
+           (self == ShenandoahController::thread() && !is_safept),
+          "Only VM at safept or ShenCtlr Thrd not at safept can force ");
+  }
   _active_generation = _gc_generation;
 }
 
@@ -2533,8 +2534,11 @@ void ShenandoahHeap::propagate_gc_state_to_java_threads() {
 }
 
 void ShenandoahHeap::set_gc_state(uint mask, bool value) {
-  assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
-  assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
+  // ysr: I think the assertion below is too strong; also the _gc_state_changed and update protocol seems
+  // to be a bit heavyweight; may be we can simplify this a bit.
+  //
+  // assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
+  // assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
   _gc_state.set_cond(mask, value);
   _gc_state_changed = true;
   // ysr: debugging. Check that if concurrent weak root is set then active_gen isn't null

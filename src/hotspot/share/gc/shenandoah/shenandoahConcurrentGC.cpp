@@ -1041,6 +1041,7 @@ void ShenandoahConcurrentGC::op_weak_roots() {
     ShenandoahTimingsTracker t(ShenandoahPhaseTimings::conc_weak_roots_rendezvous);
     heap->rendezvous_threads();
   }
+  heap->set_concurrent_weak_root_in_progress(false);
 }
 
 void ShenandoahConcurrentGC::op_class_unloading() {
