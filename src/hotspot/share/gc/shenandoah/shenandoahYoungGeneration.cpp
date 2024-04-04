@@ -26,6 +26,7 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahHeapRegionClosures.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -56,13 +57,13 @@ bool ShenandoahYoungGeneration::contains(ShenandoahHeapRegion* region) const {
 
 void ShenandoahYoungGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
   // Just iterate over the young generation here.
-  ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
-  ShenandoahHeap::heap()->parallel_heap_region_iterate(&young_regions);
+  ShenandoahIncludeRegionClosure<YOUNG_GENERATION> young_regions_cl(cl);
+  ShenandoahHeap::heap()->parallel_heap_region_iterate(&young_regions_cl);
 }
 
 void ShenandoahYoungGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-  ShenandoahGenerationRegionClosure<YOUNG> young_regions(cl);
-  ShenandoahHeap::heap()->heap_region_iterate(&young_regions);
+  ShenandoahIncludeRegionClosure<YOUNG_GENERATION> young_regions_cl(cl);
+  ShenandoahHeap::heap()->heap_region_iterate(&young_regions_cl);
 }
 
 bool ShenandoahYoungGeneration::is_concurrent_mark_in_progress() {
@@ -107,4 +108,9 @@ void ShenandoahYoungGeneration::prepare_gc() {
   // Clear any stale/partial local census data before the start of a
   // new marking cycle
   ShenandoahHeap::heap()->age_census()->reset_local();
+}
+
+void ShenandoahYoungGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
+  ShenandoahExcludeRegionClosure<OLD_GENERATION> exclude_cl(cl);
+  ShenandoahHeap::heap()->parallel_heap_region_iterate(&exclude_cl);
 }
