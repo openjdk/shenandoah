@@ -2768,7 +2768,7 @@ public:
     }
   }
 
-  bool is_thread_safe() { return true; }
+  bool is_thread_safe() override { return true; }
 };
 
 void ShenandoahHeap::update_heap_region_states(bool concurrent) {
