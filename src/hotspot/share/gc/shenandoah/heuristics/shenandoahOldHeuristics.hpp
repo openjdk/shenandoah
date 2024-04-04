@@ -175,6 +175,10 @@ public:
     last_index = _fragmentation_last_old_region;
   }
 
+  void trigger_collection_if_fragmented(ShenandoahGenerationalHeap* gen_heap, ShenandoahOldGeneration* old_gen,
+                                        size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions);
+  void trigger_collection_if_overgrown(ShenandoahGenerationalHeap* gen_heap, ShenandoahOldGeneration* old_gen);
+
   void clear_triggers();
 
   void record_cycle_end() override;

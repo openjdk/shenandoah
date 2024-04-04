@@ -3201,8 +3201,9 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   if (mode()->is_generational()) {
     ShenandoahGenerationalHeap* gen_heap = (ShenandoahGenerationalHeap*) this;
     ShenandoahOldGeneration* old_gen = old_generation();
-    old_gen->trigger_collection_if_fragmented(gen_heap, first_old_region, last_old_region, old_region_count, num_regions());
-    old_gen->trigger_collection_if_overgrown(gen_heap);
+    ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) old_gen->heuristics();
+    old_heuristics->trigger_collection_if_fragmented(gen_heap, old_gen, first_old_region, last_old_region, old_region_count, num_regions());
+    old_heuristics->trigger_collection_if_overgrown(gen_heap, old_gen);
   }
 }
 

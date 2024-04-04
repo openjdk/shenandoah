@@ -225,10 +225,6 @@ public:
   size_t get_live_bytes_after_last_mark() const;
   void set_live_bytes_after_last_mark(size_t new_live);
 
-  void trigger_collection_if_fragmented(ShenandoahGenerationalHeap* gen_heap, size_t first_old_region, size_t last_old_region,
-                                        size_t old_region_count, size_t num_regions);
-  void trigger_collection_if_overgrown(ShenandoahGenerationalHeap* gen_heap);
-
   size_t usage_trigger_threshold() const;
 
   bool can_start_gc() {
