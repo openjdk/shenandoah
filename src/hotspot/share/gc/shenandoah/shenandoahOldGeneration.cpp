@@ -305,8 +305,6 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   WorkerThreads* workers = heap->workers();
   uint nworkers = workers->active_workers();
 
-  log_debug(gc)("Starting (or resuming) coalesce-and-fill of old heap regions");
-
   // This code will see the same set of regions to fill on each resumption as it did
   // on the initial run. That's okay because each region keeps track of its own coalesce
   // and fill state. Regions that were filled on a prior attempt will not try to fill again.
@@ -314,6 +312,7 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
 
+  log_info(gc)("Starting (or resuming) coalesce-and-fill of " UINT32_FORMAT " old heap regions", coalesce_and_fill_regions_count);
   workers->run_task(&task);
   if (task.is_completed()) {
     old_heuristics->abandon_collection_candidates();

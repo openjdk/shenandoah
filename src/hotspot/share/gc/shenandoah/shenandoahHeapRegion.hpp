@@ -124,6 +124,7 @@ private:
     _REGION_STATES_NUM        // last
   };
 
+public:
   static const char* region_state_to_string(RegionState s) {
     switch (s) {
       case _empty_uncommitted:       return "Empty Uncommitted";
@@ -142,6 +143,7 @@ private:
     }
   }
 
+private:
   // This method protects from accidental changes in enum order:
   int region_state_to_ordinal(RegionState s) const {
     switch (s) {
