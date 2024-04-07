@@ -423,15 +423,12 @@ ShenandoahCardCluster<RememberedSet>::block_start(const size_t card_index) const
   // 4. Every allocation under TAMS updates the object start array.
   assert(oopDesc::is_oop(obj), "Should be an object");
 #define WALK_FORWARD_IN_BLOCK_START false
-  if (WALK_FORWARD_IN_BLOCK_START) {
-    obj = cast_to_oop(p);
-  }
   while (WALK_FORWARD_IN_BLOCK_START && p + obj->size() < left) {
     p += obj->size();
     obj = cast_to_oop(p);
   }
 #undef WALK_FORWARD_IN_BLOCK_START // false
-  assert(p + obj->size() >= left, "obj should end at or after left, p: " PTR_FORMAT ", obj->size(): " SIZE_FORMAT ", left: " PTR_FORMAT,
+  assert(p + obj->size() > left, "obj should end after left, p: " PTR_FORMAT ", obj->size(): " SIZE_FORMAT ", left: " PTR_FORMAT,
          p2i(p), obj->size(), p2i(left));
   return p;
 }

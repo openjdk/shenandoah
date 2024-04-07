@@ -443,7 +443,11 @@ void ShenandoahGenerationalControlThread::service_concurrent_old_cycle(Shenandoa
   switch (original_state) {
     case ShenandoahOldGeneration::FILLING: {
       _allow_old_preemption.set();
-      old_generation->entry_coalesce_and_fill();
+#define KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+      log_info(gc)("CF: service_concurrent_old_cycle(FILLING) invokes entry_coalesce_and_fill(false)");
+#endif
+      old_generation->entry_coalesce_and_fill(false);
       _allow_old_preemption.unset();
 
       // Before bootstrapping begins, we must acknowledge any cancellation request.

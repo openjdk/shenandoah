@@ -726,6 +726,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // old-gen concurrent mark (i.e. this region is allocated following the start of old-gen concurrent mark but before
       // concurrent preparations for mixed evacuations are completed), we mark this region as not requiring any
       // coalesce-and-fill processing.
+#define KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+      log_info(gc)("CF: region " SIZE_FORMAT " excluded from C&F: newly affiliated with OLD", r->index());
+#endif
       r->end_preemptible_coalesce_and_fill();
       _heap->clear_cards_for(r);
       _heap->old_generation()->increment_affiliated_region_count();
@@ -1306,12 +1310,19 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
   }
 }
 
+#define KELVIN_DEBUG
+
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
 #ifdef ASSERT
   // Dump of the FreeSet details is only enabled if assertions are enabled
+#ifdef KELVIN_DEBUG
+  // Use the same block terminator for either version of the code.
+  if (true) {
+#else
   if (LogTarget(Debug, gc, free)::is_enabled()) {
+#endif
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
@@ -1333,6 +1344,18 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
+#ifdef KELVIN_DEBUG
+    log_info(gc)("FreeSet map legend:"
+                       " M:mutator_free C:collector_free O:old_collector_free"
+                       " H:humongous ~:retired old _:retired young");
+    log_info(gc)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
+                       " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
+                       "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocates from %s",
+                       _free_sets.leftmost(Mutator), _free_sets.rightmost(Mutator),
+                       _free_sets.leftmost(Collector), _free_sets.rightmost(Collector),
+                       _free_sets.leftmost(OldCollector), _free_sets.rightmost(OldCollector),
+                       _free_sets.alloc_from_left_bias(OldCollector)? "left to right": "right to left");
+#endif
     log_debug(gc, free)("FreeSet map legend:"
                        " M:mutator_free C:collector_free O:old_collector_free"
                        " H:humongous ~:retired old _:retired young");
@@ -1348,6 +1371,9 @@ void ShenandoahFreeSet::log_status() {
       ShenandoahHeapRegion *r = _heap->get_region(i);
       uint idx = i % 64;
       if ((i != 0) && (idx == 0)) {
+#ifdef KELVIN_DEBUG
+        log_info(gc)(" %6u: %s", i-64, buffer);
+#endif
         log_debug(gc, free)(" %6u: %s", i-64, buffer);
       }
       if (_free_sets.in_free_set(i, Mutator)) {
@@ -1393,11 +1419,14 @@ void ShenandoahFreeSet::log_status() {
     } else {
       remnant = 64;
     }
+#ifdef KELVIN_DEBUG
+    log_info(gc)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
+#endif
     log_debug(gc, free)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
     size_t total_young = retired_young + retired_young_humongous;
     size_t total_old = retired_old + retired_old_humongous;
   }
-#endif
+#endif   // ASSERT
 
   LogTarget(Info, gc, free) lt;
   if (lt.is_enabled()) {

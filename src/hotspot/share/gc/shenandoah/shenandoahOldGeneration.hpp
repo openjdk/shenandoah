@@ -56,8 +56,8 @@ public:
   void set_concurrent_mark_in_progress(bool in_progress) override;
   bool is_concurrent_mark_in_progress() override;
 
-  bool entry_coalesce_and_fill();
   virtual void prepare_gc() override;
+  bool entry_coalesce_and_fill(bool is_in_gc_phase);
   void prepare_regions_and_collection_set(bool concurrent) override;
   virtual void record_success_concurrent(bool abbreviated) override;
   virtual void cancel_marking() override;

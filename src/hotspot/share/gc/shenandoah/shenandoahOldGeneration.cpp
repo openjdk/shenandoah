@@ -146,6 +146,15 @@ public:
     _coalesce_and_fill_region_array(coalesce_and_fill_region_array),
     _coalesce_and_fill_region_count(region_count),
     _is_preempted(false) {
+#define KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: ShenConcurrentCoalesceAndFillTask(workers: %u, regions: %u)", nworkers, region_count);
+  for (unsigned int i = 0; i < region_count; i++) {
+    printf("%5lu", (unsigned long) coalesce_and_fill_region_array[i]->index());
+    if (i + 1 % 32 == 0) printf("\n");
+  }
+  printf("\n");
+#endif
   }
 
   void work(uint worker_id) {
@@ -249,20 +258,23 @@ void ShenandoahOldGeneration::prepare_gc() {
   ShenandoahGeneration::prepare_gc();
 }
 
-bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
+bool ShenandoahOldGeneration::entry_coalesce_and_fill(bool is_in_gc_phase) {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
-  static const char* msg = "Coalescing and filling (OLD)";
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
+  if (is_in_gc_phase) {
+    static const char* msg = "Coalescing and filling (OLD) to prepare for GLOBAL";
+    ShenandoahWorkerScope scope(heap->workers(), ShenandoahWorkerPolicy::calc_workers_for_conc_marking(), msg);
+    return coalesce_and_fill();
+  } else {
+    static const char* msg = "Coalescing and filling (OLD)";
+    ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
 
-  // TODO: I don't think we're using these concurrent collection counters correctly.
-  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  EventMark em("%s", msg);
-  ShenandoahWorkerScope scope(heap->workers(),
-                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
-                              msg);
-
-  return coalesce_and_fill();
+    // TODO: I don't think we're using these concurrent collection counters correctly.
+    TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+    EventMark em("%s", msg);
+    ShenandoahWorkerScope scope(heap->workers(), ShenandoahWorkerPolicy::calc_workers_for_conc_marking(), msg);
+    return coalesce_and_fill();
+  }
 }
 
 // Make the old generation regions parsable, so they can be safely
@@ -282,10 +294,21 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   // and fill state. Regions that were filled on a prior attempt will not try to fill again.
   uint coalesce_and_fill_regions_count = old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
+
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("Starting or resuming C&F with %u regions in _c&f_region_array", coalesce_and_fill_regions_count);
+  for (uint i = 0; i < coalesce_and_fill_regions_count; i++) {
+    printf("%5u", (unsigned) _coalesce_and_fill_region_array[i]->index());
+    if ((i + 1) % 32 == 0) printf("\n");
+  }
+  printf("\n");
+#endif
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
 
   workers->run_task(&task);
   if (task.is_completed()) {
+    // Since the task is completed, there is no race or contention for access to the old_heuristics state variables,
+    // so we do not need synchronization here.
     old_heuristics->abandon_collection_candidates();
     return true;
   } else {
@@ -336,6 +359,32 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     ShenandoahHeapLocker locker(heap->lock());
     _old_heuristics->prepare_for_old_collections();
   }
+
+  log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT
+               ", coalescing candidates: " SIZE_FORMAT,
+               heap->old_heuristics()->unprocessed_old_collection_candidates(),
+               heap->old_heuristics()->anticipated_coalesce_and_fill_candidates_count());
+#define KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+  assert(heap->old_heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");
+  size_t mixed_evac_limit = heap->old_heuristics()->last_old_collection_candidate();
+  printf("mixed evac candidates:\n");
+  uintx i;
+  for (i = 0; i < mixed_evac_limit; i++) {
+    ShenandoahHeapRegion* r = heap->old_heuristics()->old_candidate(i);
+    printf("%4ld%c", r->index(), r->is_pinned()? 'P': ' ');
+    if ((i + 1) % 32 == 0) printf("\n");
+  }
+  printf("\nC&F candidates:\n");
+  size_t old_region_limit = heap->old_heuristics()->last_old_region();
+  while (i < old_region_limit) {
+    ShenandoahHeapRegion* r = heap->old_heuristics()->old_candidate(i);
+    printf("%4ld%c", r->index(), r->is_pinned()? 'P': ' ');
+    if ((i + 1) % 32 == 0) printf("\n");
+    i++;
+  }
+  printf("\n");
+#endif
 
   {
     // Though we did not choose a collection set above, we still may have

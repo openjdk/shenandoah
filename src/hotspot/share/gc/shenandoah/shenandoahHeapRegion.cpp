@@ -455,9 +455,16 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 // oop_iterate without closure and without cancellation.  always return true.
 bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
+#define KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ")", index());
+#endif
 
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
   if (!is_active()) {
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") ends preemptible C&F because region !active", index());
+#endif
     end_preemptible_coalesce_and_fill();
     return true;
   }
@@ -494,6 +501,10 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
     }
   }
   // Mark that this region has been coalesced and filled
+
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") finishes premptible C&F for region", index());
+#endif
   end_preemptible_coalesce_and_fill();
   return true;
 }
@@ -504,8 +515,15 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   // Consider yielding to cancel/preemption request after this many coalesce operations (skip marked, or coalesce free).
   const size_t preemption_stride = 128;
 
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce(" SIZE_FORMAT ")", index());
+#endif
+
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
   if (!is_active()) {
+#ifdef KELVIN_DEBUG_CF
+    log_info(gc)("CF: oop_fill_and_coalesce(" SIZE_FORMAT ") ends preemptible C&F because region is !active", index());
+#endif
     end_preemptible_coalesce_and_fill();
     return true;
   }
@@ -543,6 +561,10 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
     }
     if (ops_before_preempt_check-- == 0) {
       if (heap->cancelled_gc()) {
+#ifdef KELVIN_DEBUG_CF
+        log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") suspends premptible C&F @ " PTR_FORMAT,
+                     index(), p2i(obj_addr));
+#endif
         suspend_coalesce_and_fill(obj_addr);
         return false;
       }
@@ -550,6 +572,9 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
     }
   }
   // Mark that this region has been coalesced and filled
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") finishes premptible C&F for region", index());
+#endif
   end_preemptible_coalesce_and_fill();
   return true;
 }
@@ -568,6 +593,10 @@ void ShenandoahHeapRegion::global_oop_iterate_and_fill_dead(OopIterateClosure* b
 void ShenandoahHeapRegion::global_oop_iterate_objects_and_fill_dead(OopIterateClosure* blk) {
   assert(!is_humongous(), "no humongous region here");
   HeapWord* obj_addr = bottom();
+
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: global_oop_iterate_objects_and_fill_dead(" SIZE_FORMAT ") (not preemptible)", index());
+#endif
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
@@ -1016,6 +1045,9 @@ void ShenandoahHeapRegion::promote_in_place() {
   heap->card_scan()->reset_object_range(bottom(), end());
   heap->card_scan()->mark_range_as_dirty(bottom(), get_top_before_promote() - bottom());
 
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: promote_in_place(" SIZE_FORMAT ") does C&F", index());
+#endif
   // TODO: use an existing coalesce-and-fill function rather than replicating the code here.
   HeapWord* obj_addr = bottom();
   while (obj_addr < tams) {

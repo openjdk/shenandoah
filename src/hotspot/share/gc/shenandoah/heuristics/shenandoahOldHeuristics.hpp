@@ -73,7 +73,6 @@ private:
   // No regions after this will be considered for inclusion in a mixed collection
   // set.
   uint _last_old_collection_candidate;
-
   // This index points to the first candidate in line to be added to the mixed
   // collection set. It is updated as regions are added to the collection set.
   uint _next_old_collection_candidate;
@@ -198,6 +197,12 @@ public:
   bool is_diagnostic() override;
 
   bool is_experimental() override;
+
+  size_t next_old_collection_candidate_index() const { return _next_old_collection_candidate; }
+  size_t last_old_collection_candidate() const       { return _last_old_collection_candidate; }
+  size_t last_old_region() const                     { return _last_old_region; }
+  ShenandoahHeapRegion* old_candidate(size_t index)  { return _region_data[index]._region; }
+
 
  private:
   void slide_pinned_regions_to_front();

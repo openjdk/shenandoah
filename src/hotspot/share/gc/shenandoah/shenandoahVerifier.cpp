@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahForwarding.inline.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -1253,6 +1254,42 @@ void ShenandoahVerifier::verify_roots_no_forwarded() {
   ShenandoahRootVerifier::roots_do(&cl);
 }
 
+#define KELVIN_DEBUG_SPECIAL
+#ifdef KELVIN_DEBUG_SPECIAL
+static oop obj_acorn;
+static ShenandoahMarkingContext* ctx_acorn;
+static HeapWord* addr_acorn;
+static size_t size_acorn;
+static bool is_dirty_acorn;
+static bool is_obj_array_acorn;
+
+static void squirrel_away(ShenandoahMarkingContext* ctx, oop obj, HeapWord* addr, bool is_dirty, bool is_obj_array, size_t size) {
+  obj_acorn = obj;
+  ctx_acorn = ctx;
+  addr_acorn = addr;
+  is_dirty_acorn = is_dirty;
+  is_obj_array_acorn = is_obj_array;
+  size_acorn = size;
+}
+
+void reveal_acorn() {
+  RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
+  log_info(gc)("Acorn details: ctx was " PTR_FORMAT ", object @ " PTR_FORMAT ", of size: " SIZE_FORMAT " is %san array",
+               p2i(ctx_acorn), p2i(addr_acorn), size_acorn, is_obj_array_acorn? "": "not ");
+  HeapWord* addr = addr_acorn;
+  log_info(gc)(" card for " PTR_FORMAT " was %soriginally dirty", p2i(addr), is_dirty_acorn? "": "not ");
+  do {
+    log_info(gc)(" card for " PTR_FORMAT " is %sdirty", p2i(addr), scanner->is_card_dirty(addr)? "": "not ");
+    addr += CardTable::card_size_in_words();
+  } while (addr < addr_acorn + size_acorn);
+
+  ShenandoahMessageBuffer msg("\n");
+  ShenandoahAsserts::print_obj(msg, obj_acorn);
+  msg.append("\n");
+  log_info(gc)("%s", msg.buffer());
+}
+#endif
+
 class ShenandoahVerifyRemSetClosure : public BasicOopIterateClosure {
 protected:
   bool               const _init_mark;
@@ -1267,6 +1304,15 @@ public:
             _scanner(_heap->card_scan()) {}
 
   template<class T>
+
+  // p points to a reference contained within an OLD object that began on a card that was not DIRTY.  Thus, *p should
+  // not contain an interesting pointer, unless the enclosing object was a reference array and the card that spans the
+  // interesting pointer is DIRTY.
+
+  // If the enclosing object is not an array of reference, this work() method should object even if the enclosing card
+  // is DIRTY.  For normal objects that contain interesting pointers, the card holding the start of the object should
+  // be marked DIRTY.  (This may be an error in the implementation of this work() method: this closure needs different
+  // behavior for regular objects vs reference arrays).
   inline void work(T* p) {
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
@@ -1274,9 +1320,27 @@ public:
       if (_heap->is_in_young(obj)) {
         size_t card_index = _scanner->card_index_for_addr((HeapWord*) p);
         if (_init_mark && !_scanner->is_card_dirty(card_index)) {
+#define KELVIN_DEBUG_CRASH
+#ifdef KELVIN_DEBUG_CRASH
+          ShenandoahMarkingContext* const ctx = _heap->marking_context();
+          reveal_acorn();
+          ShenandoahHeapRegion* r = _heap->heap_region_containing(obj);
+          log_info(gc)("Failure @init_mark rem-set: clean_card should be dirty: card_index: " SIZE_FORMAT " for addr: " PTR_FORMAT, card_index, p2i(p));
+          log_info(gc)(" addr holds: " PTR_FORMAT " - klass " PTR_FORMAT " %s\n", p2i(obj), p2i(obj->klass()), obj->klass()->external_name());
+          log_info(gc)("    %3s allocated after mark start\n", ctx->allocated_after_mark_start(obj) ? "" : "not");
+          log_info(gc)("    %3s after update watermark\n",     cast_from_oop<HeapWord*>(obj) >= r->get_update_watermark() ? "" : "not");
+          log_info(gc)("    %3s marked strong\n",              ctx->is_marked_strong(obj) ? "" : "not");
+          log_info(gc)("    %3s marked weak\n",                ctx->is_marked_weak(obj) ? "" : "not");
+          log_info(gc)("    %3s in collection set\n",          _heap->in_collection_set(obj) ? "" : "not");
+#endif
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
                                            "Verify init-mark remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
         } else if (!_init_mark && !_scanner->is_write_card_dirty(card_index)) {
+#ifdef KELVIN_DEBUG_CRASH
+          reveal_acorn();
+          log_info(gc)("Failure @update-refs rem-set: clean_card should be dirty: card_index: " SIZE_FORMAT " for addr: " PTR_FORMAT,
+                       card_index, p2i(p));
+#endif
           ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
                                            "Verify init-update-refs remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
         }
@@ -1333,10 +1397,37 @@ void ShenandoahVerifier::help_verify_region_rem_set(ShenandoahHeapRegion* r, She
       } else {
         // This object is not live so we don't verify dirty cards contained therein
         HeapWord* tams = ctx->top_at_mark_start(r);
+        HeapWord* orig_obj_addr = obj_addr;
         obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
+        confirm_filled(orig_obj_addr, obj_addr, message);
       }
     }
   }
+}
+
+void ShenandoahVerifier::confirm_filled(HeapWord* start, HeapWord* end, const char *message) {
+  ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+  assert(gen_heap->mode()->is_generational(), "Filled is for generational");
+  ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
+  ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) old_gen->heuristics();
+
+  bool check_fill_objects = !old_heuristics->has_coalesce_and_fill_candidates();
+  while (start < end) {
+    oop obj = cast_to_oop(start);
+
+    // This object is not marked.  It should be a fill object, or an object that is about to be filled.  If it is a fill
+    // object, it should be array of int.
+    
+    // if there are coalesce-and-fill candidates, skip over it.  Otherwise, this should be a fill object.
+    if (check_fill_objects && !obj->is_array()) {
+      log_info(gc)("confirm_filled thinks thinks is_old_bitmap_stable(): %s, old_gen->is_mark_complete(): %s",
+                   gen_heap->is_old_bitmap_stable()? "yes": "no", old_gen->is_mark_complete()? "yes": "no");
+      ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, start, nullptr, message,
+                                       "Fill object should be an array of int", __FILE__, __LINE__);
+    }
+    start += obj->size();
+  }
+  assert(start == end, "Fill words should precisely cover the span to end");
 }
 
 // Assure that the remember set has a dirty card everywhere there is an interesting pointer.
@@ -1354,7 +1445,9 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
 
   log_debug(gc)("Verifying remembered set at %s mark", _heap->doing_mixed_evacuations()? "mixed": "young");
 
-  if (_heap->is_old_bitmap_stable() || _heap->active_generation()->is_global()) {
+  // kelvin removed this: _heap->active_generation()->is_global() we
+  // do no have a stable bitmap at start of global gc
+  if (_heap->is_old_bitmap_stable()) {
     ctx = _heap->complete_marking_context();
   } else {
     ctx = nullptr;
@@ -1398,6 +1491,16 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
             // For regular objects (not object arrays), if the card holding the start of the object is dirty,
             // we do not need to verify that cards spanning interesting pointers within this object are dirty.
             if (!scanner->is_card_dirty(obj_addr) || obj->is_objArray()) {
+#ifdef KELVIN_DEBUG_SPECIAL
+              // Kelvin observes this path is failing, inside oop_iterate().  Kelvin asks if this is the right
+              // thing to do.  We should only iterate over the array references that overlap the dirty card.
+              // It appears this crash happen only when ctx is null, when we start an old mark.  That is probably
+              // because this object is not marked.
+              
+              size_t size = obj->size();
+              squirrel_away(ctx, obj, obj_addr, scanner->is_card_dirty(obj_addr), obj->is_objArray(), size);
+              // Cannot consult: scanner->is_card_dirty(obj_addr + size) because this may reach beyond end of heap
+#endif
               obj->oop_iterate(&check_interesting_pointers);
             }
             // else, object's start is marked dirty and obj is not an objArray, so any interesting pointers are covered
@@ -1409,7 +1512,9 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
           } else {
             // This object is not live so we don't verify dirty cards contained therein
             assert(tams != nullptr, "If object is not live, ctx and tams should be non-null");
+            HeapWord* orig_obj_addr = obj_addr;
             obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
+            confirm_filled(orig_obj_addr, obj_addr, "Verify remember set before mark");
           }
         }
       } // else, we ignore humongous continuation region

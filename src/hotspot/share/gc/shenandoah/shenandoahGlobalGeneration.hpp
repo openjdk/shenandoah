@@ -64,6 +64,8 @@ public:
 
   void set_mark_incomplete() override;
 
+  virtual void prepare_gc() override;
+
   ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
 };
 

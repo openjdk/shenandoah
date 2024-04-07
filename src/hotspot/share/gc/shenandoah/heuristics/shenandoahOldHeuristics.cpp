@@ -27,9 +27,11 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 #include "utilities/quickSort.hpp"
 
 #define BYTES_FORMAT    SIZE_FORMAT "%s"
@@ -458,6 +460,14 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
 
+  // Unfragmented is the memory that was free within the chosen collection set.  This free memory, which used to be scattered
+  // between <old_candidates> regions is now going to be consolidated into totally free regions (following compaction).
+
+  // defrag_count is reported as "humongous defragmentation".  What does this mean?  Of the regions selected for the
+  // collection set, some were selected not because they had large amounts of garbage, but because they were contributing
+  // to unwanted fragmention of the humongous allocation area.  A high value of defrag_count may correspond to a lower
+  // yield of reclaimed memory per evacuated memory, because we may end up evacuating regions that are already highly
+  // utilized.
   log_info(gc)("Old-Gen Collectable Garbage: " SIZE_FORMAT "%s "
                "consolidated with free: " SIZE_FORMAT "%s, over " SIZE_FORMAT " regions (humongous defragmentation: "
                SIZE_FORMAT " regions), Old-Gen Immediate Garbage: " SIZE_FORMAT "%s over " SIZE_FORMAT " regions.",
