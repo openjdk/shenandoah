@@ -150,8 +150,9 @@ public:
 #ifdef KELVIN_DEBUG_CF
   log_info(gc)("CF: ShenConcurrentCoalesceAndFillTask(workers: %u, regions: %u)", nworkers, region_count);
   for (unsigned int i = 0; i < region_count; i++) {
-    printf("%5lu", (unsigned long) coalesce_and_fill_region_array[i]->index());
-    if (i + 1 % 32 == 0) printf("\n");
+    ShenandoahHeapRegion* r = coalesce_and_fill_region_array[i];
+    printf("%4lu%c", (unsigned long) r->index(), r->is_pinned_regular()? 'P': ' ');
+    if ((i + 1) % 32 == 0) printf("\n");
   }
   printf("\n");
 #endif
@@ -298,7 +299,8 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
 #ifdef KELVIN_DEBUG_CF
   log_info(gc)("Starting or resuming C&F with %u regions in _c&f_region_array", coalesce_and_fill_regions_count);
   for (uint i = 0; i < coalesce_and_fill_regions_count; i++) {
-    printf("%5u", (unsigned) _coalesce_and_fill_region_array[i]->index());
+    ShenandoahHeapRegion* r = _coalesce_and_fill_region_array[i];
+    printf("%4u%c", (unsigned) r->index(), r->is_pinned_regular()? 'P': ' ');
     if ((i + 1) % 32 == 0) printf("\n");
   }
   printf("\n");

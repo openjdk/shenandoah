@@ -110,6 +110,13 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _garbage += garbage;
   _used += r->used();
   _live += live;
+
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("Adding region " SIZE_FORMAT " to cset, _region_count: " SIZE_FORMAT ", _garbage: " SIZE_FORMAT ", _used: " SIZE_FORMAT ", _live: " SIZE_FORMAT ", has_old: %s",
+               r->index(), _region_count, _garbage, _used, _live, _has_old_regions? "yes": "no");
+#endif
+
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
 }
@@ -117,6 +124,9 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
 void ShenandoahCollectionSet::clear() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("Clearing cset, but not touching individual regions");
+#endif
   Copy::zero_to_bytes(_cset_map, _map_size);
 
 #ifdef ASSERT

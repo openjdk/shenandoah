@@ -1445,6 +1445,17 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
 
   log_debug(gc)("Verifying remembered set at %s mark", _heap->doing_mixed_evacuations()? "mixed": "young");
 
+  if (_heap->active_generation()->is_global()) {
+    ShenandoahOldGeneration*old_generation  = _heap->old_generation();
+    ShenandoahOldGeneration::State state = old_generation->state();
+    if ((state == ShenandoahOldGeneration::EVACUATING) || (state == ShenandoahOldGeneration::FILLING)) {
+      // If we are EVACUATING or FILLING at the start of GLOBAL GC, we cannot verify the remembered set since the remembered
+      // set is not valid until evacuation is complete and all unevacuated old-gen regions have been coalesced and filled.
+      // Since GLOBAL GC does not need the remembered set, don't bother to verify it.
+      return;
+    }
+  }
+
   // kelvin removed this: _heap->active_generation()->is_global() we
   // do no have a stable bitmap at start of global gc
   if (_heap->is_old_bitmap_stable()) {

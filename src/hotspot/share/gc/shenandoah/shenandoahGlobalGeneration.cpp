@@ -123,30 +123,3 @@ void ShenandoahGlobalGeneration::set_mark_incomplete() {
   heap->young_generation()->set_mark_incomplete();
   heap->old_generation()->set_mark_incomplete();
 }
-
-void ShenandoahGlobalGeneration::prepare_gc() {
-#ifdef ASSERT
-  const bool force_cf = true;
-#else
-  const bool force_cf = false;
-#endif
-  if (force_cf || ShenandoahVerify) {
-    if (ShenandoahHeap::heap()->mode()->is_generational()) {
-      ShenandoahHeap* gen_heap = ShenandoahGenerationalHeap::heap();
-      ShenandoahOldGeneration*old_generation  = gen_heap->old_generation();
-      ShenandoahOldGeneration::State state = old_generation->state();
-      if ((state == ShenandoahOldGeneration::EVACUATING) || (state == ShenandoahOldGeneration::FILLING)) {
-        // entry_coalesce_and_fill returns true when it has finished with coalesce and fill.
-#define KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-        log_info(gc)("prepare_gc() is forcing C&F");
-#endif
-        // Writing this as a loop makes sure we finish the job before moving on.
-        while (!old_generation->entry_coalesce_and_fill(true))
-          ;
-      } // In other old-gen states, there's no need to C&F
-    }
-  }     // No need to C&F if this is release build and we're not verifying because global GC does not need rem set.
-
-  ShenandoahGeneration::prepare_gc();
-}

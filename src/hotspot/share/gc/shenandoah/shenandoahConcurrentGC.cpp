@@ -169,13 +169,16 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // we will not age young-gen objects in the case that we skip evacuation.
   entry_cleanup_early();
 
+#ifdef KELVIN_DEPRECATE
+  // we're going to rebuild free set at start of evac and will log_status there.
   {
     // TODO: Not sure there is value in logging free-set status right here.  Note that whenever the free set is rebuilt,
     // it logs the newly rebuilt status.
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
-
+#endif
+  
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
       heap->is_concurrent_weak_root_in_progress()) {
@@ -225,10 +228,14 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("Back from vmop_entry_final_roots() with abbreviated GC, should transfer regions next");
+#endif
   }
 
-  // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
-  // abbreviated cycle.
+  // We calculated intended resizing of generations above when heap->rebuild_free_set() is called by vmop_entry_final_updaterefs()
+  // or vmop_entry_final_roots().  Now, we perform tihe intended region transfers.
   if (heap->mode()->is_generational()) {
     bool success;
     size_t region_xfer;
@@ -262,7 +269,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       heap->set_old_evac_reserve(0);
       heap->set_promoted_reserve(0);
     }
-
     // Report outside the heap lock
     size_t young_available = young_gen->available();
     size_t old_available = old_gen->available();
@@ -272,6 +278,8 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
                        byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
                        byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
   }
+
+
   return true;
 }
 
@@ -1297,6 +1305,13 @@ void ShenandoahConcurrentGC::op_final_roots() {
         }
       }
     }
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("op_final_roots() is rebuilding the free set");
+#endif
+    // Even when we do not evacuate (e.g. abbreviated cycle), we need to rebuild the free set so that we can
+    // rebalance the sizes of old and young.
+    heap->rebuild_free_set(true /*concurrent*/);
   }
 }
 

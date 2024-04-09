@@ -53,7 +53,7 @@
   declare_constant(ShenandoahHeapRegion::_humongous_cont)                          \
   declare_constant(ShenandoahHeapRegion::_pinned_humongous_start)                  \
   declare_constant(ShenandoahHeapRegion::_cset)                                    \
-  declare_constant(ShenandoahHeapRegion::_pinned)                                  \
+  declare_constant(ShenandoahHeapRegion::_pinned_regular)                          \
   declare_constant(ShenandoahHeapRegion::_pinned_cset)                             \
   declare_constant(ShenandoahHeapRegion::_trash)                                   \
 

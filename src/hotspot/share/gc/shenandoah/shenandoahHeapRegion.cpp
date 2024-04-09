@@ -110,14 +110,14 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affilia
       assert(this->affiliation() == affiliation, "Region affiliation should already be established");
       set_state(_regular);
     case _regular:
-    case _pinned:
+    case _pinned_regular:
       return;
     default:
       report_illegal_transition("regular allocation");
   }
 }
 
-// Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned.  This implements
+// Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned_regular.  This implements
 // behavior previously performed as a side effect of make_regular_bypass().
 void ShenandoahHeapRegion::make_young_maybe() {
   shenandoah_assert_heaplocked();
@@ -137,7 +137,7 @@ void ShenandoahHeapRegion::make_young_maybe() {
      return;
    case _pinned_cset:
    case _regular:
-   case _pinned:
+   case _pinned_regular:
      return;
    default:
      assert(false, "Unexpected _state in make_young_maybe");
@@ -159,10 +159,10 @@ void ShenandoahHeapRegion::make_regular_bypass() {
       set_state(_regular);
       return;
     case _pinned_cset:
-      set_state(_pinned);
+      set_state(_pinned_regular);
       return;
     case _regular:
-    case _pinned:
+    case _pinned_regular:
       return;
     default:
       report_illegal_transition("regular bypass");
@@ -239,9 +239,9 @@ void ShenandoahHeapRegion::make_pinned() {
 
   switch (_state) {
     case _regular:
-      set_state(_pinned);
+      set_state(_pinned_regular);
     case _pinned_cset:
-    case _pinned:
+    case _pinned_regular:
       return;
     case _humongous_start:
       set_state(_pinned_humongous_start);
@@ -260,7 +260,7 @@ void ShenandoahHeapRegion::make_unpinned() {
   assert(pin_count() == 0, "Should not have pins: " SIZE_FORMAT, pin_count());
 
   switch (_state) {
-    case _pinned:
+    case _pinned_regular:
       assert(is_affiliated(), "Pinned region should be affiliated");
       set_state(_regular);
       return;
@@ -418,7 +418,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
     case _trash:
       st->print("|TR ");
       break;
-    case _pinned:
+    case _pinned_regular:
       st->print("|P  ");
       break;
     case _pinned_cset:
