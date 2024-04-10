@@ -675,7 +675,9 @@ void ShenandoahHeapRegion::recycle() {
   shenandoah_assert_heaplocked();
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahGeneration* generation = heap->generation_for(affiliation());
+
   heap->decrease_used(generation, used());
+  generation->decrement_affiliated_region_count();
 
   set_top(bottom());
   clear_live_data();
@@ -686,7 +688,7 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
-  ShenandoahHeap::heap()->generation_for(affiliation())->decrement_affiliated_region_count();
+
   set_affiliation(FREE);
   if (ZapUnusedHeapArea) {
     SpaceMangler::mangle_region(MemRegion(bottom(), end()));
@@ -1064,7 +1066,7 @@ void ShenandoahHeapRegion::promote_in_place() {
     old_gen->increment_affiliated_region_count();
     old_gen->increase_used(region_used);
 
-    // add_old_collector_free_region() increases promoted_reserve() if available space exceeds PLAB::min_size()
+    // add_old_collector_free_region() increases promoted_reserve() if available space exceeds plab_min_size()
     heap->free_set()->add_old_collector_free_region(this);
   }
 }
