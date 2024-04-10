@@ -1417,8 +1417,9 @@ void ShenandoahVerifier::confirm_filled(HeapWord* start, HeapWord* end, const ch
 
     // This object is not marked.  It should be a fill object, or an object that is about to be filled.  If it is a fill
     // object, it should be array of int.
-    
-    // if there are coalesce-and-fill candidates, skip over it.  Otherwise, this should be a fill object.
+
+    // if there are coalesce-and-fill candidates, skip over this object.  Otherwise, this regions has already been
+    // coalesced and filled, so this should be a fill object.
     if (check_fill_objects && !obj->is_array()) {
       log_info(gc)("confirm_filled thinks thinks is_old_bitmap_stable(): %s, old_gen->is_mark_complete(): %s",
                    gen_heap->is_old_bitmap_stable()? "yes": "no", old_gen->is_mark_complete()? "yes": "no");
@@ -1507,7 +1508,7 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
               // thing to do.  We should only iterate over the array references that overlap the dirty card.
               // It appears this crash happen only when ctx is null, when we start an old mark.  That is probably
               // because this object is not marked.
-              
+
               size_t size = obj->size();
               squirrel_away(ctx, obj, obj_addr, scanner->is_card_dirty(obj_addr), obj->is_objArray(), size);
               // Cannot consult: scanner->is_card_dirty(obj_addr + size) because this may reach beyond end of heap

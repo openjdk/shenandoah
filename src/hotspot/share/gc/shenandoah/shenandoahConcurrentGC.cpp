@@ -179,7 +179,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     heap->free_set()->log_status();
   }
 #endif
-  
+
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
       heap->is_concurrent_weak_root_in_progress()) {
