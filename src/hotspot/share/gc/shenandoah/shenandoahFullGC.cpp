@@ -134,7 +134,7 @@ void ShenandoahFullGC::do_it(GCCause::Cause gc_cause) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   if (heap->mode()->is_generational()) {
-    ShenandoahGenerationalFullGC::prepare(heap);
+    ShenandoahGenerationalFullGC::prepare();
   }
 
   if (ShenandoahVerify) {
@@ -388,11 +388,13 @@ public:
       _compact_point = _to_region->bottom();
     }
 
-    // Object fits into current region, record new location:
+    // Object fits into current region, record new location, if object does not move:
     assert(_compact_point + obj_size <= _to_region->end(), "must fit");
     shenandoah_assert_not_forwarded(nullptr, p);
-    _preserved_marks->push_if_necessary(p, p->mark());
-    p->forward_to(cast_to_oop(_compact_point));
+    if (_compact_point != cast_from_oop<HeapWord*>(p)) {
+      _preserved_marks->push_if_necessary(p, p->mark());
+      p->forward_to(cast_to_oop(_compact_point));
+    }
     _compact_point += obj_size;
   }
 };
@@ -916,6 +918,7 @@ public:
     if (p->is_forwarded()) {
       HeapWord* compact_from = cast_from_oop<HeapWord*>(p);
       HeapWord* compact_to = cast_from_oop<HeapWord*>(p->forwardee());
+      assert(compact_from != compact_to, "Forwarded object should move");
       Copy::aligned_conjoint_words(compact_from, compact_to, size);
       oop new_obj = cast_to_oop(compact_to);
 
@@ -1192,17 +1195,15 @@ void ShenandoahFullGC::phase5_epilog() {
 
 
     if (heap->mode()->is_generational()) {
-      // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
-      heap->clear_promotion_potential();
-      // Invoke this in case we are able to transfer memory from OLD to YOUNG.
-      heap->compute_old_generation_balance(0, 0);
+      ShenandoahGenerationalFullGC::compute_balances();
     }
+
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
 
     // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
     // abbreviated cycle.
     if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set(heap);
+      ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set();
       ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
     }
     heap->clear_cancelled_gc(true /* clear oom handler */);
