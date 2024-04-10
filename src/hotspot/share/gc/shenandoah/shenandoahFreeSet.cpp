@@ -726,7 +726,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // old-gen concurrent mark (i.e. this region is allocated following the start of old-gen concurrent mark but before
       // concurrent preparations for mixed evacuations are completed), we mark this region as not requiring any
       // coalesce-and-fill processing.
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
       log_info(gc)("CF: region " SIZE_FORMAT " excluded from C&F: newly affiliated with OLD", r->index());
 #endif
@@ -1310,7 +1310,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
   }
 }
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();

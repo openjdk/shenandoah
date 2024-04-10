@@ -28,10 +28,9 @@
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
-#include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahUtils.hpp"
+#include "logging/log.hpp"
 #include "utilities/quickSort.hpp"
 
 #define BYTES_FORMAT    SIZE_FORMAT "%s"
@@ -308,7 +307,7 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
   _next_old_collection_candidate = write_index + 1;
 }
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
 void ShenandoahOldHeuristics::dump_candidates(const char*msg, RegionData* candidates,
                                                      size_t num_candidates, size_t coalesce_start) {

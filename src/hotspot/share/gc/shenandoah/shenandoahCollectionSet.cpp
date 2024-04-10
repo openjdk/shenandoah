@@ -111,7 +111,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _used += r->used();
   _live += live;
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("Adding region " SIZE_FORMAT " to cset, _region_count: " SIZE_FORMAT ", _garbage: " SIZE_FORMAT ", _used: " SIZE_FORMAT ", _live: " SIZE_FORMAT ", has_old: %s",
                r->index(), _region_count, _garbage, _used, _live, _has_old_regions? "yes": "no");

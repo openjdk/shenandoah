@@ -848,7 +848,7 @@ public:
         _heap->marked_object_iterate(r, &obj_cl);
       }
       if (_heap->mode()->is_generational()) {
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
       log_info(gc)("CF: region " SIZE_FORMAT " maybe C&F in ShenAdjustPointersTask::work()", r->index());
 #endif

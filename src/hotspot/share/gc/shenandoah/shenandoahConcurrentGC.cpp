@@ -228,7 +228,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
     log_info(gc)("Back from vmop_entry_final_roots() with abbreviated GC, should transfer regions next");
 #endif
@@ -1305,7 +1305,7 @@ void ShenandoahConcurrentGC::op_final_roots() {
         }
       }
     }
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
     log_info(gc)("op_final_roots() is rebuilding the free set");
 #endif

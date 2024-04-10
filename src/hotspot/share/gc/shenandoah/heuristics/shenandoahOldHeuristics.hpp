@@ -108,7 +108,10 @@ private:
 
   static int compare_by_index(RegionData a, RegionData b);
 
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
   static void dump_candidates(const char* msg, RegionData* candidates, size_t num_candidates, size_t coalesce_start);
+#endif
 
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,

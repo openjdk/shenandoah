@@ -1254,7 +1254,7 @@ void ShenandoahVerifier::verify_roots_no_forwarded() {
   ShenandoahRootVerifier::roots_do(&cl);
 }
 
-#define KELVIN_DEBUG_SPECIAL
+#undef KELVIN_DEBUG_SPECIAL
 #ifdef KELVIN_DEBUG_SPECIAL
 static oop obj_acorn;
 static ShenandoahMarkingContext* ctx_acorn;
@@ -1320,7 +1320,7 @@ public:
       if (_heap->is_in_young(obj)) {
         size_t card_index = _scanner->card_index_for_addr((HeapWord*) p);
         if (_init_mark && !_scanner->is_card_dirty(card_index)) {
-#define KELVIN_DEBUG_CRASH
+#undef KELVIN_DEBUG_CRASH
 #ifdef KELVIN_DEBUG_CRASH
           ShenandoahMarkingContext* const ctx = _heap->marking_context();
           reveal_acorn();

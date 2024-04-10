@@ -303,7 +303,7 @@ void ShenandoahConcurrentMark::finish_mark() {
 
   _generation->set_concurrent_mark_in_progress(false);
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("Setting mark_complete for generation %s", _generation->name());
 #endif

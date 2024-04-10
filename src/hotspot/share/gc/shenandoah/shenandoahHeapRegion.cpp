@@ -455,7 +455,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 // oop_iterate without closure and without cancellation.  always return true.
 bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
   log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ")", index());
 #endif

@@ -146,7 +146,7 @@ public:
     _coalesce_and_fill_region_array(coalesce_and_fill_region_array),
     _coalesce_and_fill_region_count(region_count),
     _is_preempted(false) {
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
   log_info(gc)("CF: ShenConcurrentCoalesceAndFillTask(workers: %u, regions: %u)", nworkers, region_count);
   for (unsigned int i = 0; i < region_count; i++) {
@@ -259,23 +259,17 @@ void ShenandoahOldGeneration::prepare_gc() {
   ShenandoahGeneration::prepare_gc();
 }
 
-bool ShenandoahOldGeneration::entry_coalesce_and_fill(bool is_in_gc_phase) {
+bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
-  if (is_in_gc_phase) {
-    static const char* msg = "Coalescing and filling (OLD) to prepare for GLOBAL";
-    ShenandoahWorkerScope scope(heap->workers(), ShenandoahWorkerPolicy::calc_workers_for_conc_marking(), msg);
-    return coalesce_and_fill();
-  } else {
-    static const char* msg = "Coalescing and filling (OLD)";
-    ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
+  static const char* msg = "Coalescing and filling (OLD)";
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
 
-    // TODO: I don't think we're using these concurrent collection counters correctly.
-    TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-    EventMark em("%s", msg);
-    ShenandoahWorkerScope scope(heap->workers(), ShenandoahWorkerPolicy::calc_workers_for_conc_marking(), msg);
-    return coalesce_and_fill();
-  }
+  // TODO: I don't think we're using these concurrent collection counters correctly.
+  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+  EventMark em("%s", msg);
+  ShenandoahWorkerScope scope(heap->workers(), ShenandoahWorkerPolicy::calc_workers_for_conc_marking(), msg);
+  return coalesce_and_fill();
 }
 
 // Make the old generation regions parsable, so they can be safely
@@ -366,7 +360,7 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
                ", coalescing candidates: " SIZE_FORMAT,
                heap->old_heuristics()->unprocessed_old_collection_candidates(),
                heap->old_heuristics()->anticipated_coalesce_and_fill_candidates_count());
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
   assert(heap->old_heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");
   size_t mixed_evac_limit = heap->old_heuristics()->last_old_collection_candidate();

@@ -56,7 +56,7 @@ void ShenandoahGenerationalFullGC::prepare(ShenandoahHeap* heap) {
   // No need for old_gen->increase_used() as this was done when plabs were allocated.
   heap->reset_generation_reserves();
 
-  // Full GC supersedes any marking or coalescoing in old generation.
+  // Full GC supersedes any marking or coalescing in old generation.
   heap->cancel_old_gc();
 }
 
@@ -188,7 +188,7 @@ void ShenandoahGenerationalFullGC::account_for_region(ShenandoahHeapRegion* r, s
 
 void ShenandoahGenerationalFullGC::maybe_coalesce_and_fill_region(ShenandoahHeapRegion* r) {
   if (r->is_pinned() && r->is_old() && r->is_active() && !r->is_humongous()) {
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
     log_info(gc)("CF: maybe_c&f_region(" SIZE_FORMAT ") acts because pinned & old & active & !humongous", r->index());
 #endif

@@ -181,7 +181,7 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("set_mark_incomplete() for generation %s", name());
 #endif
@@ -220,7 +220,7 @@ void ShenandoahGeneration::merge_write_table() {
 }
 
 void ShenandoahGeneration::prepare_gc() {
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
   log_info(gc)("prepare_gc() set_mark_incomplete() for generation %s", name());
 #endif
@@ -735,7 +735,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
                      ", coalescing candidates: " SIZE_FORMAT,
                      heap->old_heuristics()->unprocessed_old_collection_candidates(),
                      heap->old_heuristics()->anticipated_coalesce_and_fill_candidates_count());
-#define KELVIN_DEBUG_CF
+#undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
         assert(heap->old_heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");
         size_t mixed_evac_limit = heap->old_heuristics()->last_old_collection_candidate();
@@ -816,7 +816,7 @@ void ShenandoahGeneration::cancel_marking() {
   _task_queues->clear();
   ref_processor()->abandon_partial_discovery();
   if (is_concurrent_mark_in_progress()) {
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
     log_info(gc)("cancel_marking set_mark_incomplete() for generation %s", name());
 #endif
