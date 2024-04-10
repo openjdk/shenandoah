@@ -272,16 +272,31 @@ bool ShenandoahGenerationSizer::transfer_regions(ShenandoahGeneration* src, Shen
   if (src->free_unaffiliated_regions() < regions) {
     // Source does not have enough free regions for this transfer. The caller should have
     // already capped the transfer based on available unaffiliated regions.
+#define KELVIN_DEBUG_XFER
+#ifdef KELVIN_DEBUG_XFER
+    log_info(gc)("Failing to xfer " SIZE_FORMAT " regions from %s to %s because source has only " SIZE_FORMAT " unaffiliated",
+                 regions, src->name(), dst->name(), src->free_unaffiliated_regions());
+#endif
     return false;
   }
 
   if (dst->max_capacity() + bytes_to_transfer > max_size_for(dst)) {
     // This transfer would cause the destination generation to grow above its configured maximum size.
+#ifdef KELVIN_DEBUG_XFER
+    log_info(gc)("Failing to xfer " SIZE_FORMAT " regions from %s to %s because max_capacity: " SIZE_FORMAT " plus xfer bytes: "
+                 SIZE_FORMAT " exceeds max_size: " SIZE_FORMAT,
+                 regions, src->name(), dst->name(), dst->max_capacity(), bytes_to_transfer, max_size_for(dst));
+#endif
     return false;
   }
 
   if (src->max_capacity() - bytes_to_transfer < min_size_for(src)) {
     // This transfer would cause the source generation to shrink below its configured minimum size.
+#ifdef KELVIN_DEBUG_XFER
+    log_info(gc)("Failing to xfer " SIZE_FORMAT " regions from %s to %s because max_capacity: " SIZE_FORMAT " minus xfer bytes: "
+                 SIZE_FORMAT " is smaller than min_size: " SIZE_FORMAT,
+                 regions, src->name(), dst->name(), src->max_capacity(), bytes_to_transfer, min_size_for(src));
+#endif
     return false;
   }
 
@@ -299,7 +314,10 @@ size_t ShenandoahGenerationSizer::max_size_for(ShenandoahGeneration* generation)
     case YOUNG:
       return max_young_size();
     case OLD:
-      return min_young_size();
+      // Officially, there's no limit on size of OLD, though the practical limit is heap size - min_young_size().
+      // The practical limit is enforced when we try to shrink young.
+      return ShenandoahHeap::heap()->max_capacity();
+min_young_size();
     default:
       ShouldNotReachHere();
       return 0;
@@ -311,7 +329,9 @@ size_t ShenandoahGenerationSizer::min_size_for(ShenandoahGeneration* generation)
     case YOUNG:
       return min_young_size();
     case OLD:
-      return ShenandoahHeap::heap()->max_capacity() - max_young_size();
+      // Officially, there's no limit on size of OLD, though the practical limit is heap size - max_young_size().
+      // The practical limit is enforced when we try to expand young.
+      return 0;
     default:
       ShouldNotReachHere();
       return 0;
