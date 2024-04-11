@@ -774,6 +774,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
 
       // If we are using the write table (during update refs, e.g.), a mutator may dirty
       // a card at any time. This is fine for the algorithm below because it is only
+      // counting contiguous runs of clean cards (and only for non-product builds).
       assert(use_write_table || ctbm[cur_index] == CardTable::clean_card_val(), "Error");
 
       // walk back over contiguous clean cards
