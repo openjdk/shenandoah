@@ -202,6 +202,8 @@ public:
   bool is_committed()              const { return !is_empty_uncommitted(); }
   bool is_cset()                   const { return _state == _cset   || _state == _pinned_cset; }
   bool is_pinned()                 const { return _state == _pinned || _state == _pinned_cset || _state == _pinned_humongous_start; }
+  bool is_regular_pinned()         const { return _state == _pinned; }
+
   inline bool is_young() const;
   inline bool is_old() const;
   inline bool is_affiliated() const;

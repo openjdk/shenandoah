@@ -343,7 +343,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         size_t region_count = heap->trash_humongous_region_at(region);
         log_debug(gc)("Trashed " SIZE_FORMAT " regions for humongous object.", region_count);
       }
-    } else if (region->is_regular() || region->is_pinned()) {
+    } else if (region->is_regular() || region->is_regular_pinned()) {
       if (!region->has_live()) {
         assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
         region->make_trash_immediate();
@@ -440,7 +440,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     while ((defrag_count < bound_on_additional_regions) &&
            (total_uncollected_old_regions < 15 * span_of_uncollected_regions / 16)) {
       ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate]._region;
-      assert((r->is_regular() || r->is_pinned()) && !r->is_humongous(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
+      assert(r->is_regular() || r->is_regular_pinned(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
              r->index(), ShenandoahHeapRegion::region_state_to_string(r->state()));
       const size_t region_garbage = candidates[_last_old_collection_candidate]._region->garbage();
       const size_t region_free = r->free();
