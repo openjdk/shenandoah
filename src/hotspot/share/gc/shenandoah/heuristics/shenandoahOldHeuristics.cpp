@@ -324,10 +324,22 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     size_t live_bytes = region->get_live_data_bytes();
     live_data += live_bytes;
 
-    if (region->is_trash()) {
-      // Count humongous objects made into trash here.
-      immediate_regions++;
-      immediate_garbage += garbage;
+    if (region->is_regular() || region->is_regular_pinned()) {
+        // Only place regular or pinned regions with live data into the candidate set.
+        // Pinned regions cannot be evacuated, but we are not actually choosing candidates
+        // for the collection set here. That happens later during the next young GC cycle,
+        // by which time, the pinned region may no longer be pinned.
+      if (!region->has_live()) {
+        assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
+        region->make_trash_immediate();
+        immediate_regions++;
+        immediate_garbage += garbage;
+      } else {
+        region->begin_preemptible_coalesce_and_fill();
+        candidates[cand_idx]._region = region;
+        candidates[cand_idx]._u._live_data = live_bytes;
+        cand_idx++;
+      }
     } else if (region->is_humongous_start()) {
       // This will handle humongous start regions whether they are also pinned, or not.
       // If they are pinned, we expect them to hold live data, so they will not be
@@ -343,22 +355,10 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         size_t region_count = heap->trash_humongous_region_at(region);
         log_debug(gc)("Trashed " SIZE_FORMAT " regions for humongous object.", region_count);
       }
-    } else if (region->is_regular() || region->is_regular_pinned()) {
-      if (!region->has_live()) {
-        assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
-        region->make_trash_immediate();
-        immediate_regions++;
-        immediate_garbage += garbage;
-      } else {
-        // Only place regular or pinned regions with live data into the candidate set.
-        // Pinned regions cannot be evacuated, but we are not actually choosing candidates
-        // for the collection set here. That happens later during the next young GC cycle,
-        // by which time, the pinned region may no longer be pinned.
-        region->begin_preemptible_coalesce_and_fill();
-        candidates[cand_idx]._region = region;
-        candidates[cand_idx]._u._live_data = live_bytes;
-        cand_idx++;
-      }
+    } else if (region->is_trash()) {
+      // Count humongous objects made into trash here.
+      immediate_regions++;
+      immediate_garbage += garbage;
     }
   }
 
@@ -408,6 +408,8 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     unfragmented += region_free;
   }
 
+  // defrag_count represents regions that are placed into the old collection set in order to defragment the memory
+  // that we try to "reserve" for humongous allocations.
   size_t defrag_count = 0;
   size_t total_uncollected_old_regions = _last_old_region - _last_old_collection_candidate;
 
