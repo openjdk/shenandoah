@@ -153,7 +153,7 @@ public:
         continue;
       }
 
-      if (!r->oop_fill_and_coalesce()) {
+      if (!r->oop_fill_and_coalesce(true)) {
         // Coalesce and fill has been preempted
         Atomic::store(&_is_preempted, true);
         return;
