@@ -27,6 +27,7 @@
 
 
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 
 class ShenandoahCollectionSet;
 class ShenandoahHeapRegion;
