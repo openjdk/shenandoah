@@ -504,7 +504,7 @@ bool ShenandoahOldGeneration::validate_waiting_for_bootstrap() {
 #endif
 
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
-  _old_heuristics = new ShenandoahOldHeuristics(this);
+  _old_heuristics = new ShenandoahOldHeuristics(this, ShenandoahGenerationalHeap::heap());
   _old_heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
   _heuristics = _old_heuristics;
   return _heuristics;

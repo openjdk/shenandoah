@@ -51,6 +51,9 @@ private:
 
   static uint NOT_FOUND;
 
+  ShenandoahGenerationalHeap* _heap;
+  ShenandoahOldGeneration* _old_gen;
+
   // After final marking of the old generation, this heuristic will select
   // a set of candidate regions to be included in subsequent mixed collections.
   // The regions are sorted into a `_region_data` array (declared in base
@@ -109,12 +112,23 @@ private:
 
   static int compare_by_index(RegionData a, RegionData b);
 
+  inline void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
+    _fragmentation_trigger = true;
+    _fragmentation_density = density;
+    _fragmentation_first_old_region = first_old_index;
+    _fragmentation_last_old_region = last_old_index;
+  }
+  inline void trigger_old_has_grown() { _growth_trigger = true; }
+
+  void trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions);
+  void trigger_collection_if_overgrown();
+
  protected:
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
                                                      size_t free) override;
 
 public:
-  ShenandoahOldHeuristics(ShenandoahOldGeneration* generation);
+  ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap);
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
@@ -161,25 +175,15 @@ public:
 
   void trigger_cannot_expand() { _cannot_expand_trigger = true; };
 
-  inline void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
-    _fragmentation_trigger = true;
-    _fragmentation_density = density;
-    _fragmentation_first_old_region = first_old_index;
-    _fragmentation_last_old_region = last_old_index;
-  }
-  void trigger_old_has_grown() { _growth_trigger = true; }
-
   inline void get_fragmentation_trigger_reason_for_log_message(double &density, size_t &first_index, size_t &last_index) {
     density = _fragmentation_density;
     first_index = _fragmentation_first_old_region;
     last_index = _fragmentation_last_old_region;
   }
 
-  void trigger_collection_if_fragmented(ShenandoahGenerationalHeap* gen_heap, ShenandoahOldGeneration* old_gen,
-                                        size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions);
-  void trigger_collection_if_overgrown(ShenandoahGenerationalHeap* gen_heap, ShenandoahOldGeneration* old_gen);
-
   void clear_triggers();
+
+  void trigger_maybe(size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions);
 
   void record_cycle_end() override;
 

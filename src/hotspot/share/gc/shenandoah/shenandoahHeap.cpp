@@ -2832,11 +2832,10 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   _free_set->rebuild(young_cset_regions, old_cset_regions);
 
   if (mode()->is_generational()) {
-    ShenandoahGenerationalHeap* gen_heap = (ShenandoahGenerationalHeap*) this;
-    ShenandoahOldGeneration* old_gen = old_generation();
+    ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+    ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
     ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) old_gen->heuristics();
-    old_heuristics->trigger_collection_if_fragmented(gen_heap, old_gen, first_old_region, last_old_region, old_region_count, num_regions());
-    old_heuristics->trigger_collection_if_overgrown(gen_heap, old_gen);
+    old_heuristics->trigger_maybe(first_old_region, last_old_region, old_region_count, num_regions());
   }
 }
 

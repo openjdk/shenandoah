@@ -56,8 +56,10 @@ int ShenandoahOldHeuristics::compare_by_index(RegionData a, RegionData b) {
   }
 }
 
-ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation) :
+ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap) :
   ShenandoahHeuristics(generation),
+  _heap(gen_heap),
+  _old_gen(generation),
   _first_pinned_candidate(NOT_FOUND),
   _last_old_collection_candidate(0),
   _next_old_collection_candidate(0),
@@ -544,8 +546,7 @@ void ShenandoahOldHeuristics::clear_triggers() {
   _growth_trigger = false;
 }
 
-void ShenandoahOldHeuristics::trigger_collection_if_fragmented(ShenandoahGenerationalHeap* gen_heap, ShenandoahOldGeneration* old_gen,
-                                                               size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions) {
+void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions) {
   if (ShenandoahGenerationalHumongousReserve > 0) {
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
     size_t allowed_old_gen_span = num_regions - (ShenandoahGenerationalHumongousReserve * num_regions) / 100;
@@ -560,9 +561,9 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(ShenandoahGenerat
     // A previous implementation was more aggressive in triggering, resulting in degraded throughput when
     // humongous allocation was not required.
 
-    size_t old_available = old_gen->available();
+    size_t old_available = _old_gen->available();
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-    size_t old_unaffiliated_available = old_gen->free_unaffiliated_regions() * region_size_bytes;
+    size_t old_unaffiliated_available = _old_gen->free_unaffiliated_regions() * region_size_bytes;
     assert(old_available >= old_unaffiliated_available, "sanity");
     size_t old_fragmented_available = old_available - old_unaffiliated_available;
 
@@ -575,7 +576,7 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(ShenandoahGenerat
       size_t span_threshold = eighths * allowed_old_gen_span / 8;
       double density_threshold = (eighths - 2) / 8.0;
       if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
-        gen_heap->old_heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
+        trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
         return;
       }
       eighths--;
@@ -583,16 +584,22 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(ShenandoahGenerat
   }
 }
 
-void ShenandoahOldHeuristics::trigger_collection_if_overgrown(ShenandoahGenerationalHeap* gen_heap, ShenandoahOldGeneration* old_gen) {
-  size_t old_used = old_gen->used() + old_gen->get_humongous_waste();
-  size_t trigger_threshold = old_gen->usage_trigger_threshold();
+void ShenandoahOldHeuristics::trigger_collection_if_overgrown() {
+  size_t old_used = _old_gen->used() + _old_gen->get_humongous_waste();
+  size_t trigger_threshold = _old_gen->usage_trigger_threshold();
   // Detects unsigned arithmetic underflow
-  assert(old_used <= gen_heap->capacity(),
+  assert(old_used <= _heap->capacity(),
          "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
-         old_gen->used(), old_gen->get_humongous_waste(), gen_heap->capacity());
+         _old_gen->used(), _old_gen->get_humongous_waste(), _heap->capacity());
   if (old_used > trigger_threshold) {
-    gen_heap->old_heuristics()->trigger_old_has_grown();
+    trigger_old_has_grown();
   }
+}
+
+void ShenandoahOldHeuristics::trigger_maybe(size_t first_old_region, size_t last_old_region,
+                                            size_t old_region_count, size_t num_regions) {
+  trigger_collection_if_fragmented(first_old_region, last_old_region, old_region_count, num_regions);
+  trigger_collection_if_overgrown();
 }
 
 bool ShenandoahOldHeuristics::should_start_gc() {
