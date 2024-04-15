@@ -76,6 +76,9 @@ private:
   size_t _promotable_humongous_regions;
   size_t _promotable_regular_regions;
 
+  // True if old regions may be safely traversed by the remembered set scan.
+  bool _is_parseable;
+
   bool coalesce_and_fill();
 
 public:
@@ -125,6 +128,10 @@ public:
   void set_expected_humongous_region_promotions(size_t region_count) { _promotable_humongous_regions = region_count; }
   void set_expected_regular_region_promotions(size_t region_count) { _promotable_regular_regions = region_count; }
   bool has_in_place_promotions() const { return (_promotable_humongous_regions + _promotable_regular_regions) > 0; }
+
+  // Class unloading may render the card table offsets unusable, if they refer to unmarked objects
+  bool is_parseable() const   { return _is_parseable; }
+  void set_parseable(bool parseable) { _is_parseable = parseable; }
 
   // This will signal the heuristic to trigger an old generation collection
   void handle_failed_transfer();

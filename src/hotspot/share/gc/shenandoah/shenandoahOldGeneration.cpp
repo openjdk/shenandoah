@@ -178,6 +178,7 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
     _pad_for_promote_in_place(0),
     _promotable_humongous_regions(0),
     _promotable_regular_regions(0),
+    _is_parseable(true),
     _state(WAITING_FOR_BOOTSTRAP),
     _growth_before_compaction(INITIAL_GROWTH_BEFORE_COMPACTION),
     _min_growth_before_compaction ((ShenandoahMinOldGenGrowthPercent * FRACTIONAL_DENOMINATOR) / 100)
@@ -316,7 +317,11 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
 
   workers->run_task(&task);
   if (task.is_completed()) {
+    // We no longer need to track regions that need to be coalesced and filled.
     abandon_collection_candidates();
+
+    // All the remaining old regions have been made parseable.
+    set_parseable(true);
     return true;
   } else {
     // Coalesce-and-fill has been preempted. We'll finish that effort in the future.  Do not invoke
