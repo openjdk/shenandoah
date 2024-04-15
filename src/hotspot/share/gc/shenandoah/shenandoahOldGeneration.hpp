@@ -27,6 +27,7 @@
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
 class ShenandoahHeapRegion;
@@ -199,7 +200,6 @@ public:
   // Abandon any regions waiting for mixed collections
   void abandon_collection_candidates();
 
-  void maybe_trigger_collection(size_t first_old_region, size_t last_old_region, size_t old_region_count);
 public:
   enum State {
     FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING
