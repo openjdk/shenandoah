@@ -394,8 +394,8 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
 
   log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT
                ", coalescing candidates: " SIZE_FORMAT,
-               heap->old_heuristics()->unprocessed_old_collection_candidates(),
-               heap->old_heuristics()->anticipated_coalesce_and_fill_candidates_count());
+               _old_heuristics->unprocessed_old_collection_candidates(),
+               _old_heuristics->anticipated_coalesce_and_fill_candidates_count());
 #undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
   assert(heap->old_heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");

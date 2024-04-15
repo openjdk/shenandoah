@@ -744,26 +744,27 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         // eligible for coalescing. As implemented now, this has the side effect of possibly initiating mixed-evacuations
         // after a global cycle for old regions that were not included in this collection set.
 
-        heap->old_generation()->prepare_for_mixed_collections_after_global_gc();
+        ShenandoahOldGeneration* old_gen = heap->old_generation();
+        old_gen->prepare_for_mixed_collections_after_global_gc();
         log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT
                      ", coalescing candidates: " SIZE_FORMAT,
-                     heap->old_heuristics()->unprocessed_old_collection_candidates(),
-                     heap->old_heuristics()->anticipated_coalesce_and_fill_candidates_count());
+                     old_gen->heuristics()->unprocessed_old_collection_candidates(),
+                     old_gen->heuristics()->anticipated_coalesce_and_fill_candidates_count());
 #undef KELVIN_DEBUG_CF
 #ifdef KELVIN_DEBUG_CF
-        assert(heap->old_heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");
+        assert(old_gen->heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");
         size_t mixed_evac_limit = heap->old_heuristics()->last_old_collection_candidate();
         printf("mixed evac candidates:\n");
         uintx i;
         for (i = 0; i < mixed_evac_limit; i++) {
-          ShenandoahHeapRegion* r = heap->old_heuristics()->old_candidate(i);
+          ShenandoahHeapRegion* r = old_gen->heuristics()->old_candidate(i);
           printf("%4ld%c", r->index(), r->is_pinned()? 'P': ' ');
           if ((i + 1) % 32 == 0) printf("\n");
         }
         printf("\nC&F candidates:\n");
-        size_t old_region_limit = heap->old_heuristics()->last_old_region();
+        size_t old_region_limit = old_gen->heuristics()->last_old_region();
         while (i < old_region_limit) {
-          ShenandoahHeapRegion* r = heap->old_heuristics()->old_candidate(i);
+          ShenandoahHeapRegion* r = old_gen->heuristics()->old_candidate(i);
           printf("%4ld%c", r->index(), r->is_pinned()? 'P': ' ');
           if ((i + 1) % 32 == 0) printf("\n");
           i++;

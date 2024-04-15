@@ -1422,8 +1422,6 @@ void ShenandoahVerifier::confirm_filled(HeapWord* start, HeapWord* end, const ch
     // if there are coalesce-and-fill candidates, skip over this object.  Otherwise, this regions has already been
     // coalesced and filled, so this should be a fill object.
     if (check_fill_objects && !obj->is_array()) {
-      log_info(gc)("confirm_filled thinks thinks is_old_bitmap_stable(): %s, old_gen->is_mark_complete(): %s",
-                   gen_heap->is_old_bitmap_stable()? "yes": "no", old_gen->is_mark_complete()? "yes": "no");
       ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, start, nullptr, message,
                                        "Fill object should be an array of int", __FILE__, __LINE__);
     }

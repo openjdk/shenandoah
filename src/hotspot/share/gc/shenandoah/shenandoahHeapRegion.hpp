@@ -118,7 +118,7 @@ private:
     _humongous_cont,          // region is the humongous continuation
     _pinned_humongous_start,  // region is both humongous start and pinned
     _cset,                    // region is in collection set
-    _pinned_regular,          // region is pinned
+    _pinned,                  // region is pinned
     _pinned_cset,             // region is pinned and in cset (evac failure path)
     _trash,                   // region contains only trash
     _REGION_STATES_NUM        // last
@@ -134,7 +134,7 @@ public:
       case _humongous_cont:          return "Humongous Continuation";
       case _pinned_humongous_start:  return "Humongous Start, Pinned";
       case _cset:                    return "Collection Set";
-      case _pinned_regular:          return "Pinned Regular";
+      case _pinned:                  return "Pinned Regular";
       case _pinned_cset:             return "Collection Set, Pinned";
       case _trash:                   return "Trash";
       default:
@@ -153,7 +153,7 @@ private:
       case _humongous_start:        return 3;
       case _humongous_cont:         return 4;
       case _cset:                   return 5;
-      case _pinned_regular:         return 6;
+      case _pinned:                 return 6;
       case _trash:                  return 7;
       case _pinned_cset:            return 8;
       case _pinned_humongous_start: return 9;
@@ -209,7 +209,7 @@ public:
   inline bool is_affiliated() const;
 
   // Macro-properties:
-  bool is_alloc_allowed()          const { return is_empty() || is_regular() || _state == _pinned_regular; }
+  bool is_alloc_allowed()          const { return is_empty() || is_regular() || _state == _pinned; }
   bool is_stw_move_allowed()       const { return is_regular() || _state == _cset || (ShenandoahHumongousMoves && _state == _humongous_start); }
 
   RegionState state()              const { return _state; }

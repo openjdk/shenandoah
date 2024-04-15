@@ -314,16 +314,9 @@ size_t ShenandoahGenerationSizer::max_size_for(ShenandoahGeneration* generation)
     case YOUNG:
       return max_young_size();
     case OLD:
-<<<<<<< HEAD
-      // Officially, there's no limit on size of OLD, though the practical limit is heap size - min_young_size().
-      // The practical limit is enforced when we try to shrink young.
-      return ShenandoahHeap::heap()->max_capacity();
-min_young_size();
-=======
       // On the command line, max size of OLD is specified indirectly, by setting a minimum size of young.
       // OLD is what remains within the heap after YOUNG has been sized.
       return ShenandoahHeap::heap()->max_capacity() - min_young_size();
->>>>>>> origin/master
     default:
       ShouldNotReachHere();
       return 0;
@@ -335,15 +328,9 @@ size_t ShenandoahGenerationSizer::min_size_for(ShenandoahGeneration* generation)
     case YOUNG:
       return min_young_size();
     case OLD:
-<<<<<<< HEAD
-      // Officially, there's no limit on size of OLD, though the practical limit is heap size - max_young_size().
-      // The practical limit is enforced when we try to expand young.
-      return 0;
-=======
       // On the command line, min size of OLD is specified indirectly, by setting a maximum size of young.
       // OLD is what remains within the heap after YOUNG has been sized.
       return ShenandoahHeap::heap()->max_capacity() - max_young_size();
->>>>>>> origin/master
     default:
       ShouldNotReachHere();
       return 0;
