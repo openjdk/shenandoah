@@ -26,17 +26,19 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
 
 #include "memory/allocation.hpp"
-#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
+class ShenandoahCollectionSet;
+class ShenandoahHeap;
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
-class ShenandoahReferenceProcessor;
-class ShenandoahHeap;
+class ShenandoahHeuristics;
 class ShenandoahMode;
+class ShenandoahReferenceProcessor;
+
 
 class ShenandoahGeneration : public CHeapObj<mtGC>, public ShenandoahSpaceInfo {
   friend class VMStructs;
@@ -117,7 +119,7 @@ private:
 
   inline ShenandoahGenerationType type() const { return _type; }
 
-  inline ShenandoahHeuristics* heuristics() const { return _heuristics; }
+  virtual ShenandoahHeuristics* heuristics() const { return _heuristics; }
 
   ShenandoahReferenceProcessor* ref_processor() { return _ref_processor; }
 
@@ -178,6 +180,9 @@ private:
 
   // Apply closure to all regions affiliated with this generation.
   virtual void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;
+
+  // Apply closure to all regions affiliated with this generation (include free regions);
+  virtual void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl);
 
   // Apply closure to all regions affiliated with this generation (single threaded).
   virtual void heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;

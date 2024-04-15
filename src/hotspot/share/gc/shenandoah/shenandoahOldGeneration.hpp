@@ -25,25 +25,25 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
-class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
 private:
   ShenandoahHeapRegion** _coalesce_and_fill_region_array;
   ShenandoahOldHeuristics* _old_heuristics;
 
-  // After determining the desired size of the old generation (see compute_old_generation_balance), these
-  // quantities represent the number of regions above (surplus) or below (deficit) that size.
-  // These values are computed prior to the actual exchange of any regions. These may never both
-  // be positive simultaneously.
-  size_t _region_surplus;
-  size_t _region_deficit;
+  // After determining the desired size of the old generation (see compute_old_generation_balance), this
+  // quantity represents the number of regions above (surplus) or below (deficit) that size.
+  // This value is computed prior to the actual exchange of any regions. A positive value represents
+  // a surplus of old regions which will be transferred from old _to_ young. A negative value represents
+  // a deficit of regions that will be replenished by a transfer _from_ young to old.
+  ssize_t _region_balance;
 
   // Set when evacuation in the old generation fails. When this is set, the control thread will initiate a
   // full GC instead of a futile degenerated cycle.
@@ -88,6 +88,10 @@ public:
     return "OLD";
   }
 
+  ShenandoahOldHeuristics* heuristics() const override {
+    return _old_heuristics;
+  }
+
   // See description in field declaration
   void set_promoted_reserve(size_t new_val);
   size_t get_promoted_reserve() const;
@@ -108,11 +112,8 @@ public:
   size_t get_promoted_expended();
 
   // See description in field declaration
-  void set_region_surplus(size_t surplus) { _region_surplus = surplus; };
-  void set_region_deficit(size_t deficit) { _region_deficit = deficit; };
-  size_t get_region_surplus() const { return _region_surplus; };
-  size_t get_region_deficit() const { return _region_deficit; };
-
+  void set_region_balance(ssize_t balance) { _region_balance = balance; }
+  ssize_t get_region_balance() const { return _region_balance; }
   // See description in field declaration
   void set_promotion_potential(size_t val) { _promotion_potential = val; };
   size_t get_promotion_potential() const { return _promotion_potential; };
@@ -144,6 +145,9 @@ public:
   }
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
+
+  void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
+
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   bool contains(ShenandoahHeapRegion* region) const override;
@@ -153,10 +157,11 @@ public:
   bool is_concurrent_mark_in_progress() override;
 
   bool entry_coalesce_and_fill();
-  virtual void prepare_gc() override;
+  void prepare_for_mixed_collections_after_global_gc();
+  void prepare_gc() override;
   void prepare_regions_and_collection_set(bool concurrent) override;
-  virtual void record_success_concurrent(bool abbreviated) override;
-  virtual void cancel_marking() override;
+  void record_success_concurrent(bool abbreviated) override;
+  void cancel_marking() override;
 
   // We leave the SATB barrier on for the entirety of the old generation
   // marking phase. In some cases, this can cause a write to a perfectly
@@ -178,10 +183,31 @@ public:
   // the performance impact would be too severe.
   void transfer_pointers_from_satb();
 
+  // True if there are old regions waiting to be selected for a mixed collection
+  bool has_unprocessed_collection_candidates();
+
+  bool is_doing_mixed_evacuations() const {
+    return state() == EVACUATING;
+  }
+
+  bool is_preparing_for_mark() const {
+    return state() == FILLING;
+  }
+
+  // Amount of live memory (bytes) in regions waiting for mixed collections
+  size_t unprocessed_collection_candidates_live_memory();
+
+  // Abandon any regions waiting for mixed collections
+  void abandon_collection_candidates();
+
 public:
   enum State {
     FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING
   };
+
+#ifdef ASSERT
+  bool validate_waiting_for_bootstrap();
+#endif
 
 private:
   State _state;

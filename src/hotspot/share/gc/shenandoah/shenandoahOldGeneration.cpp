@@ -34,11 +34,13 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
+#include "gc/shenandoah/shenandoahHeapRegionClosures.hpp"
 #include "gc/shenandoah/shenandoahMarkClosures.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
@@ -169,8 +171,7 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
   : ShenandoahGeneration(OLD, max_queues, max_capacity, soft_max_capacity),
     _coalesce_and_fill_region_array(NEW_C_HEAP_ARRAY(ShenandoahHeapRegion*, ShenandoahHeap::heap()->num_regions(), mtGC)),
     _old_heuristics(nullptr),
-    _region_surplus(0),
-    _region_deficit(0),
+    _region_balance(0),
     _promoted_reserve(0),
     _promoted_expended(0),
     _promotion_potential(0),
@@ -246,13 +247,13 @@ bool ShenandoahOldGeneration::contains(ShenandoahHeapRegion* region) const {
 }
 
 void ShenandoahOldGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-  ShenandoahGenerationRegionClosure<OLD> old_regions(cl);
-  ShenandoahHeap::heap()->parallel_heap_region_iterate(&old_regions);
+  ShenandoahIncludeRegionClosure<OLD_GENERATION> old_regions_cl(cl);
+  ShenandoahHeap::heap()->parallel_heap_region_iterate(&old_regions_cl);
 }
 
 void ShenandoahOldGeneration::heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
-  ShenandoahGenerationRegionClosure<OLD> old_regions(cl);
-  ShenandoahHeap::heap()->heap_region_iterate(&old_regions);
+  ShenandoahIncludeRegionClosure<OLD_GENERATION> old_regions_cl(cl);
+  ShenandoahHeap::heap()->heap_region_iterate(&old_regions_cl);
 }
 
 void ShenandoahOldGeneration::set_concurrent_mark_in_progress(bool in_progress) {
@@ -273,7 +274,6 @@ void ShenandoahOldGeneration::cancel_marking() {
 }
 
 void ShenandoahOldGeneration::prepare_gc() {
-
   // Now that we have made the old generation parsable, it is safe to reset the mark bitmap.
   assert(state() != FILLING, "Cannot reset old without making it parsable");
 
@@ -302,7 +302,6 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   transition_to(FILLING);
 
-  ShenandoahOldHeuristics* old_heuristics = heap->old_heuristics();
   WorkerThreads* workers = heap->workers();
   uint nworkers = workers->active_workers();
 
@@ -311,13 +310,13 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   // This code will see the same set of regions to fill on each resumption as it did
   // on the initial run. That's okay because each region keeps track of its own coalesce
   // and fill state. Regions that were filled on a prior attempt will not try to fill again.
-  uint coalesce_and_fill_regions_count = old_heuristics->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
+  uint coalesce_and_fill_regions_count = heuristics()->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
   assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
 
   workers->run_task(&task);
   if (task.is_completed()) {
-    old_heuristics->abandon_collection_candidates();
+    abandon_collection_candidates();
     return true;
   } else {
     // Coalesce-and-fill has been preempted. We'll finish that effort in the future.  Do not invoke
@@ -432,7 +431,7 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 //               |   |          +-----------------+     |
 //               |   |            |                     |
 //               |   |            | Filling Complete    | <-> A global collection may
-//               |   |            v                     |     may move the old generation
+//               |   |            v                     |     move the old generation
 //               |   |          +-----------------+     |     directly from waiting for
 //               |   +--------> |     WAITING     |     |     bootstrap to filling or
 //               |   |    +---- |  FOR BOOTSTRAP  | ----+     evacuating.
@@ -466,14 +465,12 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
   switch (new_state) {
     case FILLING:
       assert(_state != BOOTSTRAPPING, "Cannot beging making old regions parsable after bootstrapping");
-      assert(heap->is_old_bitmap_stable(), "Cannot begin filling without first completing marking, state is '%s'", state_name(_state));
+      assert(is_mark_complete(), "Cannot begin filling without first completing marking, state is '%s'", state_name(_state));
       assert(_old_heuristics->has_coalesce_and_fill_candidates(), "Cannot begin filling without something to fill.");
       break;
     case WAITING_FOR_BOOTSTRAP:
       // GC cancellation can send us back here from any state.
-      assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become ready for bootstrap during old mark.");
-      assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Cannot become ready for bootstrap with collection candidates");
-      assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become ready for bootstrap when still setup for bootstrapping.");
+      validate_waiting_for_bootstrap();
       break;
     case BOOTSTRAPPING:
       assert(_state == WAITING_FOR_BOOTSTRAP, "Cannot reset bitmap without making old regions parsable, state is '%s'", state_name(_state));
@@ -492,6 +489,17 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
     default:
       fatal("Unknown new state");
   }
+}
+
+bool ShenandoahOldGeneration::validate_waiting_for_bootstrap() {
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  assert(!heap->is_concurrent_old_mark_in_progress(), "Cannot become ready for bootstrap during old mark.");
+  assert(heap->young_generation()->old_gen_task_queues() == nullptr, "Cannot become ready for bootstrap when still setup for bootstrapping.");
+  assert(!is_concurrent_mark_in_progress(), "Cannot be marking in IDLE");
+  assert(!heap->young_generation()->is_bootstrap_cycle(), "Cannot have old mark queues if IDLE");
+  assert(!heuristics()->has_coalesce_and_fill_candidates(), "Cannot have coalesce and fill candidates in IDLE");
+  assert(heuristics()->unprocessed_old_collection_candidates() == 0, "Cannot have mixed collection candidates in IDLE");
+  return true;
 }
 #endif
 
@@ -571,3 +579,28 @@ void ShenandoahOldGeneration::handle_evacuation(HeapWord* obj, size_t words, boo
   }
 }
 
+bool ShenandoahOldGeneration::has_unprocessed_collection_candidates() {
+  return _old_heuristics->unprocessed_old_collection_candidates() > 0;
+}
+
+size_t ShenandoahOldGeneration::unprocessed_collection_candidates_live_memory() {
+  return _old_heuristics->unprocessed_old_collection_candidates_live_memory();
+}
+
+void ShenandoahOldGeneration::abandon_collection_candidates() {
+  _old_heuristics->abandon_collection_candidates();
+}
+
+void ShenandoahOldGeneration::prepare_for_mixed_collections_after_global_gc() {
+  assert(is_mark_complete(), "Expected old generation mark to be complete after global cycle.");
+  _old_heuristics->prepare_for_old_collections();
+  log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT ", coalescing candidates: " SIZE_FORMAT,
+               _old_heuristics->unprocessed_old_collection_candidates(),
+               _old_heuristics->coalesce_and_fill_candidates_count());
+}
+
+void ShenandoahOldGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
+  // Iterate over old and free regions (exclude young).
+  ShenandoahExcludeRegionClosure<YOUNG_GENERATION> exclude_cl(cl);
+  ShenandoahGeneration::parallel_region_iterate_free(&exclude_cl);
+}

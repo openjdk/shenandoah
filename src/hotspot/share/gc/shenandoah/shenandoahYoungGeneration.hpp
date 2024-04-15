@@ -26,10 +26,12 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP
 
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/heuristics/shenandoahYoungHeuristics.hpp"
 
 class ShenandoahYoungGeneration : public ShenandoahGeneration {
 private:
   ShenandoahObjToScanQueueSet* _old_gen_task_queues;
+  ShenandoahYoungHeuristics* _young_heuristics;
 
 public:
   ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t max_soft_capacity);
@@ -40,10 +42,17 @@ public:
     return "YOUNG";
   }
 
+  ShenandoahYoungHeuristics* heuristics() const override {
+    return _young_heuristics;
+  }
+
   void set_concurrent_mark_in_progress(bool in_progress) override;
   bool is_concurrent_mark_in_progress() override;
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
+
+  void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
+
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   bool contains(ShenandoahHeapRegion* region) const override;
@@ -68,6 +77,8 @@ public:
   // Do not override available_with_reserve() because that needs to see memory reserved for Collector
 
   size_t soft_available() const override;
+
+  virtual void prepare_gc() override;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP
