@@ -42,7 +42,7 @@ public class TestOldGrowthTriggers {
   public static void makeOldAllocations() {
     // Expect most of the BigInteger entries placed into array to be promoted, and most will eventually become garbage within old
 
-    final int array_size = 256 * 1024;   // 256K entries
+    final int array_size = 512 * 1024;   // 512K entries
     BigInteger array[] = new BigInteger[array_size];
     Random r = new Random(46);
 
