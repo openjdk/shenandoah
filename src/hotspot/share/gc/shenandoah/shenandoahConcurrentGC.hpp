@@ -52,7 +52,6 @@ private:
   ShenandoahDegenPoint        _degen_point;
   bool                        _abbreviated;
   const bool                  _do_old_gc_bootstrap;
-  bool                        _unloaded_classes;
 
 protected:
   ShenandoahGeneration* const _generation;

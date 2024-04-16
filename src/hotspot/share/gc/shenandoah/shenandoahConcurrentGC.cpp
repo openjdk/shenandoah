@@ -95,7 +95,6 @@ ShenandoahConcurrentGC::ShenandoahConcurrentGC(ShenandoahGeneration* generation,
   _degen_point(ShenandoahDegenPoint::_degenerated_unset),
   _abbreviated(false),
   _do_old_gc_bootstrap(do_old_gc_bootstrap),
-  _unloaded_classes(false),
   _generation(generation) {
 }
 
@@ -232,7 +231,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
   // abbreviated cycle.
   if (heap->mode()->is_generational()) {
-    if (_unloaded_classes) {
+    if (!heap->old_generation()->is_parseable()) {
       // Class unloading may render the card offsets unusable, so we must rebuild them before
       // the next remembered set scan. We _could_ let the control thread do this sometime after
       // the global cycle has completed and before the next young collection, but under memory
@@ -1060,7 +1059,6 @@ void ShenandoahConcurrentGC::op_class_unloading() {
           heap->unload_classes(),
           "Checked by caller");
   heap->do_class_unloading();
-  _unloaded_classes = true;
 }
 
 class ShenandoahEvacUpdateCodeCacheClosure : public NMethodClosure {
@@ -1289,7 +1287,7 @@ void ShenandoahConcurrentGC::entry_global_coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
   const char* msg = "Coalescing and filling old regions in global collect";
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_coalesce_and_fill);
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
   EventMark em("%s", msg);

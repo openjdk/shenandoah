@@ -687,7 +687,7 @@ void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions() {
         // region is coalesced here and does not resume from a previously interrupted
         // or completed coalescing.
         region->begin_preemptible_coalesce_and_fill();
-        region->oop_fill_and_coalesce(false);
+        region->oop_coalesce_and_fill(false);
       }
     }
 

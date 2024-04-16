@@ -453,7 +453,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 }
 
 // oop_iterate without closure, return true if completed without cancellation
-bool ShenandoahHeapRegion::oop_fill_and_coalesce(bool cancellable) {
+bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
 
   // Consider yielding to cancel/preemption request after this many coalesce operations (skip marked, or coalesce free).
   const size_t preemption_stride = 128;

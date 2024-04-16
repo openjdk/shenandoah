@@ -307,6 +307,10 @@ void ShenandoahDegenGC::op_degenerated() {
     // In case degeneration interrupted concurrent evacuation or update references, we need to clean up transient state.
     // Otherwise, these actions have no effect.
     ShenandoahGenerationalHeap::heap()->reset_generation_reserves();
+
+    if (!ShenandoahGenerationalHeap::heap()->old_generation()->is_parseable()) {
+      op_global_coalesce_and_fill();
+    }
   }
 
   if (ShenandoahVerify) {
@@ -398,6 +402,11 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
 
 void ShenandoahDegenGC::op_cleanup_early() {
   ShenandoahHeap::heap()->recycle_trash();
+}
+
+void ShenandoahDegenGC::op_global_coalesce_and_fill() {
+  ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_coalesce_and_fill);
+  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions();
 }
 
 void ShenandoahDegenGC::op_evacuate() {
