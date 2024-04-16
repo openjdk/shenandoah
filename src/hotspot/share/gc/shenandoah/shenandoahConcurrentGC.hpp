@@ -52,13 +52,14 @@ private:
   ShenandoahDegenPoint        _degen_point;
   bool                        _abbreviated;
   const bool                  _do_old_gc_bootstrap;
+  bool                        _unloaded_classes;
 
 protected:
   ShenandoahGeneration* const _generation;
 
 public:
   ShenandoahConcurrentGC(ShenandoahGeneration* generation, bool do_old_gc_bootstrap);
-  bool collect(GCCause::Cause cause);
+  bool collect(GCCause::Cause cause) override;
   ShenandoahDegenPoint degen_point() const;
 
   // Return true if this cycle found enough immediate garbage to skip evacuation
@@ -104,6 +105,7 @@ private:
   void entry_evacuate();
   void entry_update_thread_roots();
   void entry_updaterefs();
+  void entry_global_coalesce_and_fill();
   void entry_cleanup_complete();
 
   // Actual work for the phases
@@ -123,6 +125,7 @@ private:
   void op_update_thread_roots();
   void op_final_updaterefs();
   void op_final_roots();
+  void op_global_coalesce_and_fill();
   void op_cleanup_complete();
 
 protected:

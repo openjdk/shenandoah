@@ -300,17 +300,24 @@ bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
 // Make the old generation regions parsable, so they can be safely
 // scanned when looking for objects in memory indicated by dirty cards.
 bool ShenandoahOldGeneration::coalesce_and_fill() {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   transition_to(FILLING);
 
-  WorkerThreads* workers = heap->workers();
-  uint nworkers = workers->active_workers();
 
   // This code will see the same set of regions to fill on each resumption as it did
   // on the initial run. That's okay because each region keeps track of its own coalesce
   // and fill state. Regions that were filled on a prior attempt will not try to fill again.
   uint coalesce_and_fill_regions_count = heuristics()->get_coalesce_and_fill_candidates(_coalesce_and_fill_region_array);
-  assert(coalesce_and_fill_regions_count <= heap->num_regions(), "Sanity");
+  assert(coalesce_and_fill_regions_count <= ShenandoahHeap::heap()->num_regions(), "Sanity");
+  if (coalesce_and_fill_regions_count == 0) {
+    // No regions need to be filled.
+    abandon_collection_candidates();
+    set_parseable(true);
+    return true;
+  }
+
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  WorkerThreads* workers = heap->workers();
+  uint nworkers = workers->active_workers();
   ShenandoahConcurrentCoalesceAndFillTask task(nworkers, _coalesce_and_fill_region_array, coalesce_and_fill_regions_count);
 
   log_info(gc)("Starting (or resuming) coalesce-and-fill of " UINT32_FORMAT " old heap regions", coalesce_and_fill_regions_count);
