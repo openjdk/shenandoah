@@ -695,7 +695,10 @@ void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions() {
       return true;
     }
   };
+
+  // This is not cancellable
   ShenandoahGlobalCoalesceAndFill coalesce;
   parallel_heap_region_iterate(&coalesce);
   old_generation()->set_parseable(true);
 }
+
