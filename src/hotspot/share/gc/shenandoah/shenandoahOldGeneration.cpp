@@ -225,10 +225,16 @@ size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
 }
 
 void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
-  _live_bytes_after_last_mark = bytes;
-  _growth_before_compaction /= 2;
-  if (_growth_before_compaction < _min_growth_before_compaction) {
-    _growth_before_compaction = _min_growth_before_compaction;
+  if (bytes == 0) {
+    // Restart search for best old-gen size to the initial state
+    _live_bytes_after_last_mark = ShenandoahHeap::heap()->capacity() * INITIAL_LIVE_FRACTION / FRACTIONAL_DENOMINATOR;
+    _growth_before_compaction = INITIAL_GROWTH_BEFORE_COMPACTION;
+  } else {
+    _live_bytes_after_last_mark = bytes;
+    _growth_before_compaction /= 2;
+    if (_growth_before_compaction < _min_growth_before_compaction) {
+      _growth_before_compaction = _min_growth_before_compaction;
+    }
   }
 }
 
