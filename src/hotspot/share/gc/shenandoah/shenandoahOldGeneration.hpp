@@ -131,7 +131,7 @@ public:
 
   // Class unloading may render the card table offsets unusable, if they refer to unmarked objects
   bool is_parseable() const   { return _is_parseable; }
-  void set_parseable(bool parseable) { _is_parseable = parseable; }
+  void set_parseable(bool parseable);
 
   // This will signal the heuristic to trigger an old generation collection
   void handle_failed_transfer();
@@ -193,11 +193,19 @@ public:
   bool has_unprocessed_collection_candidates();
 
   bool is_doing_mixed_evacuations() const {
-    return state() == EVACUATING;
+    return state() == EVACUATING || state() == EVACUATING_AFTER_GLOBAL;
   }
 
   bool is_preparing_for_mark() const {
     return state() == FILLING;
+  }
+
+  bool is_idle() const {
+    return state() == WAITING_FOR_BOOTSTRAP;
+  }
+
+  bool is_bootstrapping() const {
+    return state() == BOOTSTRAPPING;
   }
 
   // Amount of live memory (bytes) in regions waiting for mixed collections
@@ -209,7 +217,7 @@ public:
   void maybe_trigger_collection(size_t first_old_region, size_t last_old_region, size_t old_region_count);
 public:
   enum State {
-    FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING
+    FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING, EVACUATING_AFTER_GLOBAL
   };
 
 #ifdef ASSERT

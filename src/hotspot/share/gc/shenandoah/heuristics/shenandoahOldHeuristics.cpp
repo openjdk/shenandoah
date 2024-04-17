@@ -66,7 +66,11 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
   _old_generation(generation),
   _cannot_expand_trigger(false),
   _fragmentation_trigger(false),
-  _growth_trigger(false) {
+  _growth_trigger(false),
+  _fragmentation_density(0.0),
+  _fragmentation_first_old_region(0),
+  _fragmentation_last_old_region(0)
+{
 }
 
 bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
@@ -203,9 +207,12 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // We have added the last of our collection candidates to a mixed collection.
     // Any triggers that occurred during mixed evacuations may no longer be valid.  They can retrigger if appropriate.
     clear_triggers();
-    if (has_coalesce_and_fill_candidates()) {
+
+    assert(_old_generation->is_doing_mixed_evacuations(), "Mixed evacuations should be in progress");
+    if (has_coalesce_and_fill_candidates() && _old_generation->state() == ShenandoahOldGeneration::EVACUATING) {
       _old_generation->transition_to(ShenandoahOldGeneration::FILLING);
     } else {
+      // No candidate regions to coalesce and fill, or we already filled them after unloading classes
       _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
     }
   } else if (included_old_regions == 0) {
@@ -216,7 +223,9 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // (pinned) regions parsable.
     if (all_candidates_are_pinned()) {
       log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
-      _old_generation->transition_to(ShenandoahOldGeneration::FILLING);
+      if (_old_generation->state() == ShenandoahOldGeneration::EVACUATING) {
+        _old_generation->transition_to(ShenandoahOldGeneration::FILLING);
+      }
     } else {
       log_info(gc)("No regions selected for mixed collection. "
                    "Old evacuation budget: " PROPERFMT ", Remaining evacuation budget: " PROPERFMT

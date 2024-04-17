@@ -72,8 +72,7 @@ void ShenandoahGenerationalFullGC::handle_completion(ShenandoahHeap* heap) {
   heap->mmu_tracker()->record_full(GCId::current());
   heap->log_heap_status("At end of Full GC");
 
-  assert(old->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP,
-         "After full GC, old generation should be waiting for bootstrap.");
+  assert(old->is_idle(), "After full GC, old generation should be idle.");
 
   // Since we allow temporary violation of these constraints during Full GC, we want to enforce that the assertions are
   // made valid by the time Full GC completes.

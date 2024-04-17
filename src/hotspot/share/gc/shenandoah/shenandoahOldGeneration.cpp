@@ -285,7 +285,7 @@ bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
   static const char* msg = "Coalescing and filling (OLD)";
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::coalesce_and_fill);
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_coalesce_and_fill);
 
   // TODO: I don't think we're using these concurrent collection counters correctly.
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
@@ -396,11 +396,12 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
 
 const char* ShenandoahOldGeneration::state_name(State state) {
   switch (state) {
-    case WAITING_FOR_BOOTSTRAP: return "Waiting for Bootstrap";
-    case FILLING:               return "Coalescing";
-    case BOOTSTRAPPING:         return "Bootstrapping";
-    case MARKING:               return "Marking";
-    case EVACUATING:            return "Evacuating";
+    case WAITING_FOR_BOOTSTRAP:   return "Waiting for Bootstrap";
+    case FILLING:                 return "Coalescing";
+    case BOOTSTRAPPING:           return "Bootstrapping";
+    case MARKING:                 return "Marking";
+    case EVACUATING:              return "Evacuating";
+    case EVACUATING_AFTER_GLOBAL: return "Evacuating (G)";
     default:
       ShouldNotReachHere();
       return "Unknown";
@@ -492,6 +493,9 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
       assert(_state == BOOTSTRAPPING, "Must have finished bootstrapping before marking, state is '%s'", state_name(_state));
       assert(heap->young_generation()->old_gen_task_queues() != nullptr, "Young generation needs old mark queues.");
       assert(heap->is_concurrent_old_mark_in_progress(), "Should be marking old now.");
+      break;
+    case EVACUATING_AFTER_GLOBAL:
+      assert(_state == EVACUATING, "Must have been evacuating, state is '%s'", state_name(_state));
       break;
     case EVACUATING:
       assert(_state == WAITING_FOR_BOOTSTRAP || _state == MARKING, "Cannot have old collection candidates without first marking, state is '%s'", state_name(_state));
@@ -662,4 +666,34 @@ void ShenandoahOldGeneration::parallel_region_iterate_free(ShenandoahHeapRegionC
   // Iterate over old and free regions (exclude young).
   ShenandoahExcludeRegionClosure<YOUNG_GENERATION> exclude_cl(cl);
   ShenandoahGeneration::parallel_region_iterate_free(&exclude_cl);
+}
+
+void ShenandoahOldGeneration::set_parseable(bool parseable) {
+  _is_parseable = parseable;
+  if (_is_parseable) {
+    // The current state would have been chosen during final mark of the global
+    // collection, _before_ any decisions about class unloading have been made.
+    //
+    // After unloading classes, we have made the old generation regions parseable.
+    // We can skip filling or transition to a state that knows everything has
+    // already been filled.
+    switch (state()) {
+      case ShenandoahOldGeneration::EVACUATING:
+        transition_to(ShenandoahOldGeneration::EVACUATING_AFTER_GLOBAL);
+        break;
+      case ShenandoahOldGeneration::FILLING:
+        assert(_old_heuristics->unprocessed_old_collection_candidates() == 0, "Expected no mixed collection candidates");
+        assert(_old_heuristics->coalesce_and_fill_candidates_count() > 0, "Expected coalesce and fill candidates");
+        // When the heuristic put the old generation in this state, it didn't know
+        // that we would unload classes and make everything parseable. But, we know
+        // that now so we can override this state.
+        // TODO: It would be nicer if we didn't have to 'correct' this situation.
+        _old_heuristics->abandon_collection_candidates();
+        transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+        break;
+      default:
+        assert(is_idle(), "Unexpected state %s at end of global GC", state_name());
+        break;
+    }
+  }
 }
