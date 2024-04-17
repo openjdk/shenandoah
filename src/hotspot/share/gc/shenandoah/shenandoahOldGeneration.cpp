@@ -244,10 +244,16 @@ size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
 }
 
 void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
-  _live_bytes_after_last_mark = bytes;
-  _growth_before_compaction /= 2;
-  if (_growth_before_compaction < _min_growth_before_compaction) {
-    _growth_before_compaction = _min_growth_before_compaction;
+  if (bytes == 0) {
+    // Restart search for best old-gen size to the initial state
+    _live_bytes_after_last_mark = ShenandoahHeap::heap()->capacity() * INITIAL_LIVE_FRACTION / FRACTIONAL_DENOMINATOR;
+    _growth_before_compaction =	INITIAL_GROWTH_BEFORE_COMPACTION;
+  } else {
+    _live_bytes_after_last_mark = bytes;
+    _growth_before_compaction /= 2;
+    if (_growth_before_compaction < _min_growth_before_compaction) {
+      _growth_before_compaction = _min_growth_before_compaction;
+    }
   }
 }
 
@@ -257,6 +263,11 @@ void ShenandoahOldGeneration::handle_failed_transfer() {
 
 size_t ShenandoahOldGeneration::usage_trigger_threshold() const {
   size_t result = _live_bytes_after_last_mark + (_live_bytes_after_last_mark * _growth_before_compaction) / FRACTIONAL_DENOMINATOR;
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("usage_trigger_threshold() returns " SIZE_FORMAT " (" SIZE_FORMAT " + " SIZE_FORMAT ") vs. used: " SIZE_FORMAT " + humongous_waste: " SIZE_FORMAT,
+               result, _live_bytes_after_last_mark, (_live_bytes_after_last_mark * _growth_before_compaction) / FRACTIONAL_DENOMINATOR, used(), get_humongous_waste());
+#endif
   return result;
 }
 
