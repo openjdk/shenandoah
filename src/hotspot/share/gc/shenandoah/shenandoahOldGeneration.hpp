@@ -150,6 +150,13 @@ public:
     return _failed_evacuation.try_unset();
   }
 
+  // Transition to the next state after mixed evacuations have completed
+  void complete_mixed_evacuations();
+
+  // Abandon any future mixed collections. This is invoked when all old regions eligible for
+  // inclusion in a mixed evacuation are pinned. This should be rare.
+  void abandon_mixed_evacuations();
+
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;

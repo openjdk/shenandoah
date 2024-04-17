@@ -208,13 +208,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // Any triggers that occurred during mixed evacuations may no longer be valid.  They can retrigger if appropriate.
     clear_triggers();
 
-    assert(_old_generation->is_doing_mixed_evacuations(), "Mixed evacuations should be in progress");
-    if (has_coalesce_and_fill_candidates() && _old_generation->state() == ShenandoahOldGeneration::EVACUATING) {
-      _old_generation->transition_to(ShenandoahOldGeneration::FILLING);
-    } else {
-      // No candidate regions to coalesce and fill, or we already filled them after unloading classes
-      _old_generation->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
-    }
+    _old_generation->complete_mixed_evacuations();
   } else if (included_old_regions == 0) {
     // We have candidates, but none were included for evacuation - are they all pinned?
     // or did we just not have enough room for any of them in this collection set?
@@ -223,9 +217,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // (pinned) regions parsable.
     if (all_candidates_are_pinned()) {
       log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
-      if (_old_generation->state() == ShenandoahOldGeneration::EVACUATING) {
-        _old_generation->transition_to(ShenandoahOldGeneration::FILLING);
-      }
+      _old_generation->abandon_mixed_evacuations();
     } else {
       log_info(gc)("No regions selected for mixed collection. "
                    "Old evacuation budget: " PROPERFMT ", Remaining evacuation budget: " PROPERFMT

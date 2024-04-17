@@ -302,7 +302,6 @@ bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
 bool ShenandoahOldGeneration::coalesce_and_fill() {
   transition_to(FILLING);
 
-
   // This code will see the same set of regions to fill on each resumption as it did
   // on the initial run. That's okay because each region keeps track of its own coalesce
   // and fill state. Regions that were filled on a prior attempt will not try to fill again.
@@ -311,7 +310,6 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   if (coalesce_and_fill_regions_count == 0) {
     // No regions need to be filled.
     abandon_collection_candidates();
-    set_parseable(true);
     return true;
   }
 
@@ -325,9 +323,6 @@ bool ShenandoahOldGeneration::coalesce_and_fill() {
   if (task.is_completed()) {
     // We no longer need to track regions that need to be coalesced and filled.
     abandon_collection_candidates();
-
-    // All the remaining old regions have been made parseable.
-    set_parseable(true);
     return true;
   } else {
     // Coalesce-and-fill has been preempted. We'll finish that effort in the future.  Do not invoke
@@ -688,12 +683,48 @@ void ShenandoahOldGeneration::set_parseable(bool parseable) {
         // that we would unload classes and make everything parseable. But, we know
         // that now so we can override this state.
         // TODO: It would be nicer if we didn't have to 'correct' this situation.
-        _old_heuristics->abandon_collection_candidates();
+        abandon_collection_candidates();
         transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
         break;
       default:
         assert(is_idle(), "Unexpected state %s at end of global GC", state_name());
         break;
     }
+  }
+}
+
+void ShenandoahOldGeneration::complete_mixed_evacuations() {
+  assert(is_doing_mixed_evacuations(), "Mixed evacuations should be in progress");
+  if (!_old_heuristics->has_coalesce_and_fill_candidates()) {
+    // No candidate regions to coalesce and fill
+    transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+    return;
+  }
+
+  if (state() == ShenandoahOldGeneration::EVACUATING) {
+    transition_to(ShenandoahOldGeneration::FILLING);
+    return;
+  }
+
+  // Here, we have no more candidates for mixed collections. The candidates for coalescing
+  // and filling have already been processed during the global cycle, so there is nothing
+  // more to do.
+  assert(state() == ShenandoahOldGeneration::EVACUATING_AFTER_GLOBAL, "Should be evacuating after a global cycle");
+  abandon_collection_candidates();
+  transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+}
+
+void ShenandoahOldGeneration::abandon_mixed_evacuations() {
+  switch(state()) {
+    case ShenandoahOldGeneration::EVACUATING:
+      transition_to(ShenandoahOldGeneration::FILLING);
+      break;
+    case ShenandoahOldGeneration::EVACUATING_AFTER_GLOBAL:
+      abandon_collection_candidates();
+      transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+      break;
+    default:
+      ShouldNotReachHere();
+      break;
   }
 }
