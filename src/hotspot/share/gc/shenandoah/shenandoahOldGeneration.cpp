@@ -440,31 +440,37 @@ void ShenandoahOldGeneration::transition_to(State new_state) {
 //               |   |            | Filling Complete    | <-> A global collection may
 //               |   |            v                     |     move the old generation
 //               |   |          +-----------------+     |     directly from waiting for
-//               |   +--------> |     WAITING     |     |     bootstrap to filling or
-//               |   |    +---- |  FOR BOOTSTRAP  | ----+     evacuating.
-//               |   |    |     +-----------------+
-//               |   |    |       |
-//               |   |    |       | Reset Bitmap
-//               |   |    |       v
-//               |   |    |     +-----------------+     +----------------------+
-//               |   |    |     |    BOOTSTRAP    | <-> |       YOUNG GC       |
-//               |   |    |     |                 |     | (RSet Parses Region) |
-//               |   |    |     +-----------------+     +----------------------+
-//               |   |    |       |
-//               |   |    |       | Old Marking
-//               |   |    |       v
-//               |   |    |     +-----------------+     +----------------------+
-//               |   |    |     |     MARKING     | <-> |       YOUNG GC       |
-//               |   +--------- |                 |     | (RSet Parses Region) |
-//               |        |     +-----------------+     +----------------------+
-//               |        |       |
-//               |        |       | Has Evacuation Candidates
-//               |        |       v
-//               |        |     +-----------------+     +--------------------+
-//               |        +---> |    EVACUATING   | <-> |      YOUNG GC      |
-//               +------------- |                 |     | (RSet Uses Bitmap) |
+//           +-- |-- |--------> |     WAITING     |     |     bootstrap to filling or
+//           |   |   |    +---- |  FOR BOOTSTRAP  | ----+     evacuating. It may also
+//           |   |   |    |     +-----------------+           move from filling to waiting
+//           |   |   |    |       |                           for bootstrap.
+//           |   |   |    |       | Reset Bitmap
+//           |   |   |    |       v
+//           |   |   |    |     +-----------------+     +----------------------+
+//           |   |   |    |     |    BOOTSTRAP    | <-> |       YOUNG GC       |
+//           |   |   |    |     |                 |     | (RSet Parses Region) |
+//           |   |   |    |     +-----------------+     +----------------------+
+//           |   |   |    |       |
+//           |   |   |    |       | Old Marking
+//           |   |   |    |       v
+//           |   |   |    |     +-----------------+     +----------------------+
+//           |   |   |    |     |     MARKING     | <-> |       YOUNG GC       |
+//           |   |   +--------- |                 |     | (RSet Parses Region) |
+//           |   |        |     +-----------------+     +----------------------+
+//           |   |        |       |
+//           |   |        |       | Has Evacuation Candidates
+//           |   |        |       v
+//           |   |        |     +-----------------+     +--------------------+
+//           |   |        +---> |    EVACUATING   | <-> |      YOUNG GC      |
+//           |   +------------- |                 |     | (RSet Uses Bitmap) |
+//           |                  +-----------------+     +--------------------+
+//           |                    |
+//           |                    | Global Cycle Coalesces and Fills Old Regions
+//           |                    v
+//           |                  +-----------------+     +--------------------+
+//           +----------------- |    EVACUATING   | <-> |      YOUNG GC      |
+//                              |   AFTER GLOBAL  |     | (RSet Uses Bitmap) |
 //                              +-----------------+     +--------------------+
-//
 //
 //
 void ShenandoahOldGeneration::validate_transition(State new_state) {
