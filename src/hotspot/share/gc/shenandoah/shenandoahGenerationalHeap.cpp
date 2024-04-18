@@ -34,6 +34,7 @@
 #include "gc/shenandoah/shenandoahInitLogger.hpp"
 #include "gc/shenandoah/shenandoahMemoryPool.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
@@ -676,10 +677,18 @@ void ShenandoahGenerationalHeap::TransferResult::print_on(const char* when, outp
                      PROPERFMTARGS(old_available), PROPERFMTARGS(young_available));
 }
 
-void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions() {
+void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions(bool concurrent) {
   class ShenandoahGlobalCoalesceAndFill : public ShenandoahHeapRegionClosure {
+  private:
+      ShenandoahPhaseTimings::Phase _phase;
   public:
+    explicit ShenandoahGlobalCoalesceAndFill(ShenandoahPhaseTimings::Phase phase) : _phase(phase) {}
+
     void heap_region_do(ShenandoahHeapRegion* region) override {
+      ShenandoahWorkerTimingsTracker timer(_phase,
+                                           ShenandoahPhaseTimings::ScanClusters,
+                                           WorkerThread::worker_id(), true);
+
       // old region is not in the collection set and was not immediately trashed
       if (region->is_old() && region->is_active() && !region->is_humongous()) {
         // Reset the coalesce and fill boundary because this is a global collect
@@ -697,7 +706,8 @@ void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions() {
   };
 
   // This is not cancellable
-  ShenandoahGlobalCoalesceAndFill coalesce;
+  ShenandoahPhaseTimings::Phase phase = concurrent ? ShenandoahPhaseTimings::conc_coalesce_and_fill : ShenandoahPhaseTimings::degen_gc_coalesce_and_fill;
+  ShenandoahGlobalCoalesceAndFill coalesce(phase);
   parallel_heap_region_iterate(&coalesce);
   old_generation()->set_parseable(true);
 }

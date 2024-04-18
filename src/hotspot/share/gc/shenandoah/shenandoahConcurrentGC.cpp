@@ -1299,7 +1299,7 @@ void ShenandoahConcurrentGC::entry_global_coalesce_and_fill() {
 }
 
 void ShenandoahConcurrentGC::op_global_coalesce_and_fill() {
-  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions();
+  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions(true);
 }
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {

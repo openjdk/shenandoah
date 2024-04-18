@@ -405,7 +405,7 @@ void ShenandoahDegenGC::op_cleanup_early() {
 
 void ShenandoahDegenGC::op_global_coalesce_and_fill() {
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_coalesce_and_fill);
-  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions();
+  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions(false);
 }
 
 void ShenandoahDegenGC::op_evacuate() {
