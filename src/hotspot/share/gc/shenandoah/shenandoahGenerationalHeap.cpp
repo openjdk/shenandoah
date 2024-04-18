@@ -678,37 +678,41 @@ void ShenandoahGenerationalHeap::TransferResult::print_on(const char* when, outp
 }
 
 void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions(bool concurrent) {
-  class ShenandoahGlobalCoalesceAndFill : public ShenandoahHeapRegionClosure {
+  class ShenandoahGlobalCoalesceAndFill : public WorkerTask {
   private:
       ShenandoahPhaseTimings::Phase _phase;
+      ShenandoahRegionIterator _regions;
   public:
-    explicit ShenandoahGlobalCoalesceAndFill(ShenandoahPhaseTimings::Phase phase) : _phase(phase) {}
+    explicit ShenandoahGlobalCoalesceAndFill(ShenandoahPhaseTimings::Phase phase) :
+      WorkerTask("Shenandoah Global Coalesce"),
+      _phase(phase) {}
 
-    void heap_region_do(ShenandoahHeapRegion* region) override {
+    void work(uint worker_id) override {
       ShenandoahWorkerTimingsTracker timer(_phase,
                                            ShenandoahPhaseTimings::ScanClusters,
-                                           WorkerThread::worker_id(), true);
-
-      // old region is not in the collection set and was not immediately trashed
-      if (region->is_old() && region->is_active() && !region->is_humongous()) {
-        // Reset the coalesce and fill boundary because this is a global collect
-        // and cannot be preempted by young collects. We want to be sure the entire
-        // region is coalesced here and does not resume from a previously interrupted
-        // or completed coalescing.
-        region->begin_preemptible_coalesce_and_fill();
-        region->oop_coalesce_and_fill(false);
+                                           worker_id, true);
+      ShenandoahHeapRegion* region;
+      while ((region = _regions.next()) != nullptr) {
+        // old region is not in the collection set and was not immediately trashed
+        if (region->is_old() && region->is_active() && !region->is_humongous()) {
+          // Reset the coalesce and fill boundary because this is a global collect
+          // and cannot be preempted by young collects. We want to be sure the entire
+          // region is coalesced here and does not resume from a previously interrupted
+          // or completed coalescing.
+          region->begin_preemptible_coalesce_and_fill();
+          region->oop_coalesce_and_fill(false);
+        }
       }
-    }
-
-    bool is_thread_safe() override {
-      return true;
     }
   };
 
+  ShenandoahPhaseTimings::Phase phase = concurrent ?
+          ShenandoahPhaseTimings::conc_coalesce_and_fill :
+          ShenandoahPhaseTimings::degen_gc_coalesce_and_fill;
+
   // This is not cancellable
-  ShenandoahPhaseTimings::Phase phase = concurrent ? ShenandoahPhaseTimings::conc_coalesce_and_fill : ShenandoahPhaseTimings::degen_gc_coalesce_and_fill;
   ShenandoahGlobalCoalesceAndFill coalesce(phase);
-  parallel_heap_region_iterate(&coalesce);
+  workers()->run_task(&coalesce);
   old_generation()->set_parseable(true);
 }
 
