@@ -88,7 +88,7 @@ public:
     }
   }
 
-  size_t trashed_oops() {
+  size_t trashed_oops() const {
     return _trashed_oops;
   }
 };
@@ -477,7 +477,7 @@ void ShenandoahOldGeneration::validate_transition(State new_state) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   switch (new_state) {
     case FILLING:
-      assert(_state != BOOTSTRAPPING, "Cannot beging making old regions parsable after bootstrapping");
+      assert(_state != BOOTSTRAPPING, "Cannot begin making old regions parsable after bootstrapping");
       assert(is_mark_complete(), "Cannot begin filling without first completing marking, state is '%s'", state_name(_state));
       assert(_old_heuristics->has_coalesce_and_fill_candidates(), "Cannot begin filling without something to fill.");
       break;
