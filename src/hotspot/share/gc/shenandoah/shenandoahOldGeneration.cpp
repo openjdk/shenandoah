@@ -693,6 +693,10 @@ void ShenandoahOldGeneration::set_parseable(bool parseable) {
         transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
         break;
       default:
+        // We can get here during a full GC. The full GC will cancel anything
+        // happening in the old generation and return it to the waiting for bootstrap
+        // state. The full GC will then record that the old regions are parseable
+        // after rebuilding the remembered set.
         assert(is_idle(), "Unexpected state %s at end of global GC", state_name());
         break;
     }

@@ -90,6 +90,12 @@ void ShenandoahGenerationalFullGC::rebuild_remembered_set(ShenandoahHeap* heap) 
   ShenandoahRegionIterator regions;
   ShenandoahReconstructRememberedSetTask task(&regions);
   heap->workers()->run_task(&task);
+
+  // Rebuilding the remembered set recomputes all the card offsets for objects.
+  // The adjust pointers phase coalesces and fills all necessary regions. In case
+  // we came to the full GC from an incomplete global cycle, we need to indicate
+  // that the old regions are parseable.
+  heap->old_generation()->set_parseable(true);
 }
 
 void ShenandoahGenerationalFullGC::balance_generations_after_gc(ShenandoahHeap* heap) {
