@@ -140,6 +140,10 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("Back from vmop_entry_final_mark()");
+#endif
 
   // If GC was cancelled before final mark, then the safepoint operation will do nothing
   // and the concurrent mark will still be in progress. In this case it is safe to resume
@@ -276,6 +280,11 @@ void ShenandoahConcurrentGC::vmop_entry_final_mark() {
   heap->try_inject_alloc_failure();
   VM_ShenandoahFinalMarkStartEvac op(this);
   VMThread::execute(&op); // jump to entry_final_mark under safepoint
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  // The long pause happened before here
+  log_info(gc)("vmop_entry_final_mark() is done");
+#endif
 }
 
 void ShenandoahConcurrentGC::vmop_entry_init_updaterefs() {

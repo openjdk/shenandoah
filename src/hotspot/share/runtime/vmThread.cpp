@@ -551,16 +551,33 @@ void VMThread::execute(VM_Operation* op) {
     JavaThread::cast(t)->check_for_valid_safepoint_state();
   }
 
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::execute() before doit_prologue()");
+#endif
   // New request from Java thread, evaluate prologue
   if (!op->doit_prologue()) {
     return;   // op was cancelled
   }
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::execute() before set_calling_thread()");
+#endif
   op->set_calling_thread(t);
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::execute() before wait_until_executed()");
+#endif
   wait_until_executed(op);
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::execute() before doit_epilogue()");
+#endif
   op->doit_epilogue();
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::execute() after doit_epilogue()");
+#endif
 }
 
 void VMThread::verify() {

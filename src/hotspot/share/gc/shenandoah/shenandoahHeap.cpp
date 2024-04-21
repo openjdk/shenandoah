@@ -2126,13 +2126,27 @@ void ShenandoahHeap::prepare_update_heap_references(bool concurrent) {
 
 void ShenandoahHeap::propagate_gc_state_to_java_threads() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("propagate_gc_state_to_java_threads() with %s_gc_state_changed", _gc_state_changed? "": "!");
+  size_t thread_count = 0;
+#endif
   if (_gc_state_changed) {
     _gc_state_changed = false;
     char state = gc_state();
     for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
       ShenandoahThreadLocalData::set_gc_state(t, state);
+#ifdef KELVIN_DEBUG
+      thread_count++;
+      if (thread_count % 256 == 0) {
+        log_info(gc)("propagate_gc_state_to_java_threads() has processed " SIZE_FORMAT " threads", thread_count);
+      }
+#endif
     }
   }
+#ifdef KELVIN_DEBUG
+  log_info(gc)("propagate_gc_state_to_java_threads() finished processing " SIZE_FORMAT " threads", thread_count);
+#endif
 }
 
 void ShenandoahHeap::set_gc_state(uint mask, bool value) {

@@ -185,8 +185,15 @@ void MemoryService::gc_end(GCMemoryManager* manager, bool recordPostGCUsage,
                            GCCause::Cause cause,
                            bool allMemoryPoolsAffected, const char* message) {
   // register the GC end statistics and memory usage
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("MemoryService::gc_end() starts");
+#endif
   manager->gc_end(recordPostGCUsage, recordAccumulatedGCTime, recordGCEndTime,
                   countCollection, cause, allMemoryPoolsAffected, message);
+#ifdef KELVIN_DEBUG
+  log_info(gc)("MemoryService::gc_end() stops");
+#endif
 }
 
 bool MemoryService::set_verbose(bool verbose) {
