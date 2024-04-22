@@ -1381,7 +1381,7 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   ShenandoahOldGeneration* old_generation = _heap->old_generation();
   log_debug(gc)("Verifying remembered set at %s%s mark",
                 _heap->active_generation()->name(), old_generation->is_doing_mixed_evacuations()? " (mixed)": "");
-  
+
   if (_heap->active_generation()->is_global()) {
     ShenandoahOldGeneration::State state = old_generation->state();
     if ((state == ShenandoahOldGeneration::EVACUATING) || (state == ShenandoahOldGeneration::FILLING)) {
