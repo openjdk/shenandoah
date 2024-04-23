@@ -2930,11 +2930,23 @@ bool ShenandoahHeap::uncommit_bitmap_slice(ShenandoahHeapRegion *r) {
 }
 
 void ShenandoahHeap::safepoint_synchronize_begin() {
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_begin() entry");
+#endif
   SuspendibleThreadSet::synchronize();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_begin() exit");
+#endif
 }
 
 void ShenandoahHeap::safepoint_synchronize_end() {
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_end() entry");
+#endif
   SuspendibleThreadSet::desynchronize();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_end() exit");
+#endif
 }
 
 void ShenandoahHeap::try_inject_alloc_failure() {

@@ -127,12 +127,15 @@ static void post_safepoint_cleanup_task_event(EventSafepointCleanupTask& event,
 }
 
 static void post_safepoint_end_event(EventSafepointEnd& event, uint64_t safepoint_id) {
+#ifdef KELVIN_DEBUG
+  log_info(gc)("post_safepoint_end_event(id: %ld) before event.commit()", safepoint_id);
+#endif
   if (event.should_commit()) {
     event.set_safepointId(safepoint_id);
     event.commit();
   }
 #ifdef KELVIN_DEBUG
-  log_info(gc)("post_safepoint_end_event(id: %ld)", safepoint_id);
+  log_info(gc)("post_safepoint_end_event(id: %ld) after event.commit()", safepoint_id);
 #endif
 }
 
@@ -516,11 +519,27 @@ void SafepointSynchronize::end() {
   EventSafepointEnd event;
   assert(Thread::current()->is_VM_thread(), "Only VM thread can execute a safepoint");
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("SafepointSynchronize::end(): before disarm_safepoint()");
+#endif
+
   disarm_safepoint();
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("SafepointSynchronize::end(): before heap()->safepoint_syncronize_end()");
+#endif
 
   Universe::heap()->safepoint_synchronize_end();
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("SafepointSynchronize::end(): before heap()->safepoint_synchronize_end()");
+#endif
+
   SafepointTracing::end();
+
+#ifdef KELVIN_DEBUG
+  log_info(gc)("SafepointSynchronize::end(): before post_safepoint_end_event()");
+#endif
 
   post_safepoint_end_event(event, safepoint_id());
 }

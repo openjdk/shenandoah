@@ -396,7 +396,10 @@ static void self_destruct_if_needed() {
 
 void VMThread::inner_execute(VM_Operation* op) {
   assert(Thread::current()->is_VM_thread(), "Must be the VM thread");
-
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), _cur_vm_operation is %s", _cur_vm_operation? "not null": "null");
+#endif
   VM_Operation* prev_vm_operation = nullptr;
   if (_cur_vm_operation != nullptr) {
     // Check that the VM operation allows nested VM operation.
@@ -412,9 +415,15 @@ void VMThread::inner_execute(VM_Operation* op) {
 
   _cur_vm_operation = op;
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), HandleMark");
+#endif
   HandleMark hm(VMThread::vm_thread());
 
   const char* const cause = op->cause();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), EventMarkVMOperation");
+#endif
   EventMarkVMOperation em("Executing %sVM operation: %s%s%s%s",
       prev_vm_operation != nullptr ? "nested " : "",
       op->name(),
@@ -426,27 +435,54 @@ void VMThread::inner_execute(VM_Operation* op) {
                        prev_vm_operation != nullptr ? "nested" : "",
                       _cur_vm_operation->evaluate_at_safepoint() ? "safepoint" : "non-safepoint",
                       _cur_vm_operation->name());
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), is evaluating %s %s VM operation: %s",
+                       prev_vm_operation != nullptr ? "nested" : "",
+                      _cur_vm_operation->evaluate_at_safepoint() ? "safepoint" : "non-safepoint",
+                      _cur_vm_operation->name());
+#endif
 
   bool end_safepoint = false;
   bool has_timeout_task = (_timeout_task != nullptr);
   if (_cur_vm_operation->evaluate_at_safepoint() &&
       !SafepointSynchronize::is_at_safepoint()) {
+#ifdef KELVIN_DEBUG
+    log_info(gc)("VMThread::inner_execute(), cur_vm_operation->evaluate_at_safepoint() && !is_at_safepoint()");
+#endif
     SafepointSynchronize::begin();
+#ifdef KELVIN_DEBUG
+    log_info(gc)("VMThread::inner_execute(), after SafepointSynchronize::begin()");
+#endif
     if (has_timeout_task) {
       _timeout_task->arm(_cur_vm_operation->name());
+#ifdef KELVIN_DEBUG
+      log_info(gc)("VMThread::inner_execute(), after timeout_task->arm()");
+#endif
     }
     end_safepoint = true;
   }
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), about to evaluate operation");
+#endif
   evaluate_operation(_cur_vm_operation);
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), done with evaluate operation");
+#endif
 
   if (end_safepoint) {
     if (has_timeout_task) {
+#ifdef KELVIN_DEBUG
+      log_info(gc)("VMThread::inner_execute(), is disarming timeout_task");
+#endif
       _timeout_task->disarm();
     }
     SafepointSynchronize::end();
   }
 
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VMThread::inner_execute(), is done");
+#endif
   _cur_vm_operation = prev_vm_operation;
 }
 
@@ -502,10 +538,20 @@ void VMThread::loop() {
 
   while (true) {
     if (should_terminate()) break;
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("VMThread::loop() begins to wait for operation");
+#endif
     wait_for_operation();
+#ifdef KELVIN_DEBUG
+    log_info(gc)("VMThread::loop() finishes wait for operation");
+#endif
     if (should_terminate()) break;
     assert(_next_vm_operation != nullptr, "Must have one");
     inner_execute(_next_vm_operation);
+#ifdef KELVIN_DEBUG
+    log_info(gc)("VMThread::loop() back from inner_execute()");
+#endif
   }
 }
 
