@@ -102,6 +102,7 @@
 #include "runtime/java.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/safepointMechanism.hpp"
+#include "runtime/stackWatermarkSet.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 #include "utilities/powerOfTwo.hpp"
@@ -955,18 +956,15 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
 
   assert (size <= actual_size, "allocation should fit");
 
+  // ...and clear or zap just allocated TLAB, if needed.
   if (ZeroTLAB) {
-    // ..and clear it.
     Copy::zero_to_words(gclab_buf, actual_size);
-  } else {
-    // ...and zap just allocated object.
-#ifdef ASSERT
+  } else if (ZapTLAB) {
     // Skip mangling the space corresponding to the object header to
     // ensure that the returned space is not considered parsable by
     // any concurrent GC thread.
     size_t hdr_size = oopDesc::header_size();
     Copy::fill_to_words(gclab_buf + hdr_size, actual_size - hdr_size, badHeapWordVal);
-#endif // ASSERT
   }
   gclab->set_buf(gclab_buf, actual_size);
   return gclab->allocate(size);
@@ -975,7 +973,7 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
 void ShenandoahHeap::cancel_old_gc() {
   shenandoah_assert_safepoint();
   assert(old_generation() != nullptr, "Should only have mixed collections in generation mode.");
-  if (old_generation()->state() == ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP) {
+  if (old_generation()->is_idle()) {
 #ifdef ASSERT
     old_generation()->validate_waiting_for_bootstrap();
 #endif
@@ -2097,6 +2095,9 @@ void ShenandoahHeap::recycle_trash() {
 
 void ShenandoahHeap::do_class_unloading() {
   _unloader.unload();
+  if (mode()->is_generational()) {
+    old_generation()->set_parseable(false);
+  }
 }
 
 void ShenandoahHeap::stw_weak_refs(bool full_gc) {
@@ -2176,7 +2177,7 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
 }
 
 bool ShenandoahHeap::is_prepare_for_old_mark_in_progress() const {
-  return old_generation()->state() == ShenandoahOldGeneration::FILLING;
+  return old_generation()->is_preparing_for_mark();
 }
 
 void ShenandoahHeap::set_aging_cycle(bool in_progress) {
@@ -2272,7 +2273,7 @@ void ShenandoahHeap::stw_unload_classes(bool full_gc) {
   if (!unload_classes()) return;
   ClassUnloadingContext ctx(_workers->active_workers(),
                             true /* unregister_nmethods_during_purge */,
-                            false /* lock_codeblob_free_separately */);
+                            false /* lock_nmethod_free_separately */);
 
   // Unload classes and purge SystemDictionary.
   {
@@ -2913,6 +2914,7 @@ bool ShenandoahHeap::uncommit_bitmap_slice(ShenandoahHeapRegion *r) {
 }
 
 void ShenandoahHeap::safepoint_synchronize_begin() {
+  StackWatermarkSet::safepoint_synchronize_begin();
   SuspendibleThreadSet::synchronize();
 }
 
