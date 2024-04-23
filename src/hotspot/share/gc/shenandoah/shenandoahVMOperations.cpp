@@ -68,8 +68,18 @@ void VM_ShenandoahInitMark::doit() {
 
 void VM_ShenandoahFinalMarkStartEvac::doit() {
   ShenandoahGCPauseMark mark(_gc_id, "Final Mark", SvcGCMarker::CONCURRENT);
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VM_ShenandoahFinalMarkStartEvac::doit() entry");
+#endif
   _gc->entry_final_mark();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VM_ShenandoahFinalMarkStartEvac::doit() after entry_final_mark()");
+#endif
   ShenandoahHeap::heap()->propagate_gc_state_to_java_threads();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("VM_ShenandoahFinalMarkStartEvac::doit() after propagate_gc_state_to_java_threads()");
+#endif
 }
 
 void VM_ShenandoahFullGC::doit() {

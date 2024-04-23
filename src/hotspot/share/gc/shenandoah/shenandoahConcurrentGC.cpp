@@ -140,6 +140,10 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("Back from vmop_entry_final_mark()");
+#endif
 
   // If GC was cancelled before final mark, then the safepoint operation will do nothing
   // and the concurrent mark will still be in progress. In this case it is safe to resume
@@ -170,12 +174,15 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // we will not age young-gen objects in the case that we skip evacuation.
   entry_cleanup_early();
 
+#ifdef KELVIN_DEPRECATE
+  // we're going to rebuild free set at start of evac and will log_status there.
   {
     // TODO: Not sure there is value in logging free-set status right here.  Note that whenever the free set is rebuilt,
     // it logs the newly rebuilt status.
     ShenandoahHeapLocker locker(heap->lock());
     heap->free_set()->log_status();
   }
+#endif
 
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
@@ -226,10 +233,14 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("Back from vmop_entry_final_roots() with abbreviated GC, should transfer regions next");
+#endif
   }
 
-  // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
-  // abbreviated cycle.
+  // We calculated intended resizing of generations above when heap->rebuild_free_set() is called by vmop_entry_final_updaterefs()
+  // or vmop_entry_final_roots().  Now, we perform tihe intended region transfers.
   if (heap->mode()->is_generational()) {
     if (!heap->old_generation()->is_parseable()) {
       // Class unloading may render the card offsets unusable, so we must rebuild them before
@@ -257,6 +268,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       result.print_on("Concurrent GC", &ls);
     }
   }
+
   return true;
 }
 
@@ -278,6 +290,11 @@ void ShenandoahConcurrentGC::vmop_entry_final_mark() {
   heap->try_inject_alloc_failure();
   VM_ShenandoahFinalMarkStartEvac op(this);
   VMThread::execute(&op); // jump to entry_final_mark under safepoint
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  // The long pause happened before here
+  log_info(gc)("vmop_entry_final_mark() is done");
+#endif
 }
 
 void ShenandoahConcurrentGC::vmop_entry_init_updaterefs() {
@@ -1280,6 +1297,13 @@ void ShenandoahConcurrentGC::op_final_roots() {
         }
       }
     }
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("op_final_roots() is rebuilding the free set");
+#endif
+    // Even when we do not evacuate (e.g. abbreviated cycle), we need to rebuild the free set so that we can
+    // rebalance the sizes of old and young.
+    heap->rebuild_free_set(true /*concurrent*/);
   }
 }
 

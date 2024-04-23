@@ -169,9 +169,18 @@ void ShenandoahGenerationalFullGC::account_for_region(ShenandoahHeapRegion* r, s
 
 void ShenandoahGenerationalFullGC::maybe_coalesce_and_fill_region(ShenandoahHeapRegion* r) {
   if (r->is_pinned() && r->is_old() && r->is_active() && !r->is_humongous()) {
+#undef KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+    log_info(gc)("CF: maybe_c&f_region(" SIZE_FORMAT ") acts because pinned & old & active & !humongous", r->index());
+#endif
     r->begin_preemptible_coalesce_and_fill();
     r->oop_coalesce_and_fill(false);
   }
+#ifdef KELVIN_DEBUG_CF
+  else {
+    log_info(gc)("CF: maybe_c&f_region(" SIZE_FORMAT ") does not act because !pinned || !old || !active || humongous", r->index());
+  }
+#endif
 }
 
 void ShenandoahGenerationalFullGC::compute_balances() {

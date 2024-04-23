@@ -27,6 +27,7 @@
 
 
 #include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 
 class ShenandoahCollectionSet;
 class ShenandoahHeapRegion;
@@ -51,6 +52,9 @@ private:
 
   static uint NOT_FOUND;
 
+  ShenandoahGenerationalHeap* _heap;
+  ShenandoahOldGeneration* _old_gen;
+
   // After final marking of the old generation, this heuristic will select
   // a set of candidate regions to be included in subsequent mixed collections.
   // The regions are sorted into a `_region_data` array (declared in base
@@ -73,7 +77,6 @@ private:
   // No regions after this will be considered for inclusion in a mixed collection
   // set.
   uint _last_old_collection_candidate;
-
   // This index points to the first candidate in line to be added to the mixed
   // collection set. It is updated as regions are added to the collection set.
   uint _next_old_collection_candidate;
@@ -109,11 +112,27 @@ private:
 
   static int compare_by_index(RegionData a, RegionData b);
 
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  static void dump_candidates(const char* msg, RegionData* candidates, size_t num_candidates, size_t coalesce_start);
+#endif
+
+  inline void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
+    _fragmentation_trigger = true;
+    _fragmentation_density = density;
+    _fragmentation_first_old_region = first_old_index;
+    _fragmentation_last_old_region = last_old_index;
+  }
+  inline void trigger_old_has_grown() { _growth_trigger = true; }
+
+  void trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions);
+  void trigger_collection_if_overgrown();
+
  protected:
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size, size_t free) override;
 
 public:
-  explicit ShenandoahOldHeuristics(ShenandoahOldGeneration* generation);
+  explicit ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap);
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
@@ -151,7 +170,13 @@ public:
   // True if there are old regions that need to be filled.
   bool has_coalesce_and_fill_candidates() const { return coalesce_and_fill_candidates_count() > 0; }
 
-  // Return the number of old regions that need to be filled.
+  // The anticipated coalesce-and-fill candidates count is all the old regions except those that are intended to be
+  // evacuated by mixed evacuation.
+  size_t anticipated_coalesce_and_fill_candidates_count() const { return _last_old_region - _last_old_collection_candidate; }
+
+  // Return the number of old regions that need to be filled.  The actual number of old regions that need to be filled
+  // may be greater than anticipated count, in the case that some regions planned to be evacuated were not evacuated because
+  // they were pinned.
   size_t coalesce_and_fill_candidates_count() const { return _last_old_region - _next_old_collection_candidate; }
 
   // If a GLOBAL gc occurs, it will collect the entire heap which invalidates any collection candidates being
@@ -160,14 +185,6 @@ public:
 
   void trigger_cannot_expand() { _cannot_expand_trigger = true; };
 
-  inline void trigger_old_is_fragmented(double density, size_t first_old_index, size_t last_old_index) {
-    _fragmentation_trigger = true;
-    _fragmentation_density = density;
-    _fragmentation_first_old_region = first_old_index;
-    _fragmentation_last_old_region = last_old_index;
-  }
-  void trigger_old_has_grown() { _growth_trigger = true; }
-
   inline void get_fragmentation_trigger_reason_for_log_message(double &density, size_t &first_index, size_t &last_index) {
     density = _fragmentation_density;
     first_index = _fragmentation_first_old_region;
@@ -175,6 +192,8 @@ public:
   }
 
   void clear_triggers();
+
+  void trigger_maybe(size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions);
 
   void record_cycle_end() override;
 
@@ -191,6 +210,11 @@ public:
   bool is_diagnostic() override;
 
   bool is_experimental() override;
+
+  size_t next_old_collection_candidate_index() const { return _next_old_collection_candidate; }
+  size_t last_old_collection_candidate() const       { return _last_old_collection_candidate; }
+  size_t last_old_region() const                     { return _last_old_region; }
+  ShenandoahHeapRegion* old_candidate(size_t index)  { return _region_data[index]._region; }
 
 private:
   void slide_pinned_regions_to_front();

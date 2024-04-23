@@ -181,8 +181,10 @@ void ShenandoahControlThread::run_service() {
       // it is a normal completion, or the abort.
       {
         ShenandoahHeapLocker locker(heap->lock());
+#ifdef KELVIN_DEPRECATE
+        // We don't need this.  We just reported status in final update refs or in do_roots for an abbreviated cycle
         heap->free_set()->log_status();
-
+#endif
         // Notify Universe about new heap usage. This has implications for
         // global soft refs policy, and we better report it every time heap
         // usage goes down.

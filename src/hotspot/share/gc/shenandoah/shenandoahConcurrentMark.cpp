@@ -297,6 +297,12 @@ void ShenandoahConcurrentMark::finish_mark() {
   TASKQUEUE_STATS_ONLY(task_queues()->reset_taskqueue_stats());
 
   _generation->set_concurrent_mark_in_progress(false);
+
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("Setting mark_complete for generation %s", _generation->name());
+#endif
+
   _generation->set_mark_complete();
 
   end_mark();

@@ -134,7 +134,7 @@ public:
       case _humongous_cont:          return "Humongous Continuation";
       case _pinned_humongous_start:  return "Humongous Start, Pinned";
       case _cset:                    return "Collection Set";
-      case _pinned:                  return "Pinned";
+      case _pinned:                  return "Pinned Regular";
       case _pinned_cset:             return "Collection Set, Pinned";
       case _trash:                   return "Trash";
       default:
@@ -214,6 +214,9 @@ public:
 
   RegionState state()              const { return _state; }
   int  state_ordinal()             const { return region_state_to_ordinal(_state); }
+  const char* state_name()         const { return region_state_to_string(_state); }
+
+
 
   void record_pin();
   void record_unpin();

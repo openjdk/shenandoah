@@ -117,7 +117,7 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affilia
   }
 }
 
-// Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned.  This implements
+// Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned_regular.  This implements
 // behavior previously performed as a side effect of make_regular_bypass().
 void ShenandoahHeapRegion::make_young_maybe() {
   shenandoah_assert_heaplocked();
@@ -452,14 +452,84 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 #undef SHR_PTR_FORMAT
 }
 
+#ifdef KELVIN_DEPRECATE
+// William deprecated/moved this code elsewhere, so I'm labeling it
+// deprecated for now.  maybe i'll want to move some of this debug
+// instrumentation into the new version of the code.
+
+// oop_iterate without closure and without cancellation.  always return true.
+bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
+  HeapWord* obj_addr = resume_coalesce_and_fill();
+#undef KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ")", index());
+#endif
+
+  assert(!is_humongous(), "No need to fill or coalesce humongous regions");
+  if (!is_active()) {
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") ends preemptible C&F because region !active", index());
+#endif
+    end_preemptible_coalesce_and_fill();
+    return true;
+  }
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahMarkingContext* marking_context = heap->marking_context();
+  // All objects above TAMS are considered live even though their mark bits will not be set.  Note that young-
+  // gen evacuations that interrupt a long-running old-gen concurrent mark may promote objects into old-gen
+  // while the old-gen concurrent marking is ongoing.  These newly promoted objects will reside above TAMS
+  // and will be treated as live during the current old-gen marking pass, even though they will not be
+  // explicitly marked.
+  HeapWord* t = marking_context->top_at_mark_start(this);
+
+  // Expect marking to be completed before these threads invoke this service.
+  assert(heap->active_generation()->is_mark_complete(), "sanity");
+  while (obj_addr < t) {
+    oop obj = cast_to_oop(obj_addr);
+    if (marking_context->is_marked(obj)) {
+      assert(obj->klass() != nullptr, "klass should not be nullptr");
+      obj_addr += obj->size();
+    } else {
+      // Object is not marked.  Coalesce and fill dead object with dead neighbors.
+      HeapWord* next_marked_obj = marking_context->get_next_marked_addr(obj_addr, t);
+      assert(next_marked_obj <= t, "next marked object cannot exceed top");
+      size_t fill_size = next_marked_obj - obj_addr;
+      assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated objects known to be larger than min_size");
+      ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+      log_info(gc)("Filling @" PTR_FORMAT " in region " SIZE_FORMAT ", size: " SIZE_FORMAT, p2i(obj_addr), index(), fill_size);
+#endif
+      heap->card_scan()->coalesce_objects(obj_addr, fill_size);
+      obj_addr = next_marked_obj;
+    }
+  }
+  // Mark that this region has been coalesced and filled
+
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") finishes premptible C&F for region", index());
+#endif
+  end_preemptible_coalesce_and_fill();
+  return true;
+}
+#endif
+
 // oop_iterate without closure, return true if completed without cancellation
 bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
 
   // Consider yielding to cancel/preemption request after this many coalesce operations (skip marked, or coalesce free).
   const size_t preemption_stride = 128;
 
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce(" SIZE_FORMAT ")", index());
+#endif
+
   assert(!is_humongous(), "No need to fill or coalesce humongous regions");
   if (!is_active()) {
+#ifdef KELVIN_DEBUG_CF
+    log_info(gc)("CF: oop_fill_and_coalesce(" SIZE_FORMAT ") ends preemptible C&F because region is !active", index());
+#endif
     end_preemptible_coalesce_and_fill();
     return true;
   }
@@ -493,11 +563,18 @@ bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
       size_t fill_size = next_marked_obj - obj_addr;
       assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated object known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
+#ifdef KELVIN_DEBUG
+      log_info(gc)("Filling @" PTR_FORMAT " in region " SIZE_FORMAT ", size: " SIZE_FORMAT, p2i(obj_addr), index(), fill_size);
+#endif
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }
     if (cancellable && ops_before_preempt_check-- == 0) {
       if (heap->cancelled_gc()) {
+#ifdef KELVIN_DEBUG_CF
+        log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") suspends premptible C&F @ " PTR_FORMAT,
+                     index(), p2i(obj_addr));
+#endif
         suspend_coalesce_and_fill(obj_addr);
         return false;
       }
@@ -505,6 +582,9 @@ bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
     }
   }
   // Mark that this region has been coalesced and filled
+#ifdef KELVIN_DEBUG_CF
+  log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") finishes premptible C&F for region", index());
+#endif
   end_preemptible_coalesce_and_fill();
   return true;
 }

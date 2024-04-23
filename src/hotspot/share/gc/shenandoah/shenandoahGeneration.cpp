@@ -195,6 +195,10 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
 
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("set_mark_incomplete() for generation %s", name());
+#endif
   set_mark_incomplete();
 
   ShenandoahResetBitmapTask task;
@@ -230,6 +234,10 @@ void ShenandoahGeneration::merge_write_table() {
 }
 
 void ShenandoahGeneration::prepare_gc() {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("prepare_gc() set_mark_incomplete() for generation %s", name());
+#endif
   // Invalidate the marking context
   set_mark_incomplete();
 
@@ -735,7 +743,34 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
         // coalesce those regions. Only the old regions which are not part of the collection set at this point are
         // eligible for coalescing. As implemented now, this has the side effect of possibly initiating mixed-evacuations
         // after a global cycle for old regions that were not included in this collection set.
-        heap->old_generation()->prepare_for_mixed_collections_after_global_gc();
+
+        ShenandoahOldGeneration* old_gen = heap->old_generation();
+        old_gen->prepare_for_mixed_collections_after_global_gc();
+        log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT
+                     ", coalescing candidates: " SIZE_FORMAT,
+                     old_gen->heuristics()->unprocessed_old_collection_candidates(),
+                     old_gen->heuristics()->anticipated_coalesce_and_fill_candidates_count());
+#undef KELVIN_DEBUG_CF
+#ifdef KELVIN_DEBUG_CF
+        assert(old_gen->heuristics()->next_old_collection_candidate_index() == 0, "Assume virgin state");
+        size_t mixed_evac_limit = heap->old_heuristics()->last_old_collection_candidate();
+        printf("mixed evac candidates:\n");
+        uintx i;
+        for (i = 0; i < mixed_evac_limit; i++) {
+          ShenandoahHeapRegion* r = old_gen->heuristics()->old_candidate(i);
+          printf("%4ld%c", r->index(), r->is_pinned()? 'P': ' ');
+          if ((i + 1) % 32 == 0) printf("\n");
+        }
+        printf("\nC&F candidates:\n");
+        size_t old_region_limit = old_gen->heuristics()->last_old_region();
+        while (i < old_region_limit) {
+          ShenandoahHeapRegion* r = old_gen->heuristics()->old_candidate(i);
+          printf("%4ld%c", r->index(), r->is_pinned()? 'P': ' ');
+          if ((i + 1) % 32 == 0) printf("\n");
+          i++;
+        }
+        printf("\n");
+#endif
       }
     } else {
       _heuristics->choose_collection_set(collection_set);
@@ -792,11 +827,15 @@ ShenandoahMarkingContext* ShenandoahGeneration::complete_marking_context() {
 
 void ShenandoahGeneration::cancel_marking() {
   log_info(gc)("Cancel marking: %s", name());
-  if (is_concurrent_mark_in_progress()) {
-    set_mark_incomplete();
-  }
   _task_queues->clear();
   ref_processor()->abandon_partial_discovery();
+  if (is_concurrent_mark_in_progress()) {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("cancel_marking set_mark_incomplete() for generation %s", name());
+#endif
+    set_mark_incomplete();
+  }
   set_concurrent_mark_in_progress(false);
 }
 

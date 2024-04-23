@@ -2127,13 +2127,27 @@ void ShenandoahHeap::prepare_update_heap_references(bool concurrent) {
 
 void ShenandoahHeap::propagate_gc_state_to_java_threads() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("propagate_gc_state_to_java_threads() with %s_gc_state_changed", _gc_state_changed? "": "!");
+  size_t thread_count = 0;
+#endif
   if (_gc_state_changed) {
     _gc_state_changed = false;
     char state = gc_state();
     for (JavaThreadIteratorWithHandle jtiwh; JavaThread *t = jtiwh.next(); ) {
       ShenandoahThreadLocalData::set_gc_state(t, state);
+#ifdef KELVIN_DEBUG
+      thread_count++;
+      if (thread_count % 256 == 0) {
+        log_info(gc)("propagate_gc_state_to_java_threads() has processed " SIZE_FORMAT " threads", thread_count);
+      }
+#endif
     }
   }
+#ifdef KELVIN_DEBUG
+  log_info(gc)("propagate_gc_state_to_java_threads() finished processing " SIZE_FORMAT " threads", thread_count);
+#endif
 }
 
 void ShenandoahHeap::set_gc_state(uint mask, bool value) {
@@ -2832,8 +2846,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild(young_cset_regions, old_cset_regions);
 
-  if (mode()->is_generational() && (ShenandoahGenerationalHumongousReserve > 0)) {
-    old_generation()->maybe_trigger_collection(first_old_region, last_old_region, old_region_count);
+  if (mode()->is_generational()) {
+    ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+    ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
+    ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) old_gen->heuristics();
+    old_heuristics->trigger_maybe(first_old_region, last_old_region, old_region_count, num_regions());
   }
 }
 
@@ -2914,12 +2931,24 @@ bool ShenandoahHeap::uncommit_bitmap_slice(ShenandoahHeapRegion *r) {
 }
 
 void ShenandoahHeap::safepoint_synchronize_begin() {
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_begin() entry");
+#endif
   StackWatermarkSet::safepoint_synchronize_begin();
   SuspendibleThreadSet::synchronize();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_begin() exit");
+#endif
 }
 
 void ShenandoahHeap::safepoint_synchronize_end() {
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_end() entry");
+#endif
   SuspendibleThreadSet::desynchronize();
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenHeap::safepoint_synchronize_end() exit");
+#endif
 }
 
 void ShenandoahHeap::try_inject_alloc_failure() {
