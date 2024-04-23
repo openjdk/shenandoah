@@ -452,6 +452,11 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
 #undef SHR_PTR_FORMAT
 }
 
+#ifdef KELVIN_DEPRECATE
+// William deprecated/moved this code elsewhere, so I'm labeling it
+// deprecated for now.  maybe i'll want to move some of this debug
+// instrumentation into the new version of the code.
+
 // oop_iterate without closure and without cancellation.  always return true.
 bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   HeapWord* obj_addr = resume_coalesce_and_fill();
@@ -508,10 +513,11 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce_without_cancel() {
   end_preemptible_coalesce_and_fill();
   return true;
 }
+#endif
 
 // oop_iterate without closure, return true if completed without cancellation
-bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
-  HeapWord* obj_addr = resume_coalesce_and_fill();
+bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
+
   // Consider yielding to cancel/preemption request after this many coalesce operations (skip marked, or coalesce free).
   const size_t preemption_stride = 128;
 
@@ -530,6 +536,10 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
+
+  // Expect marking to be completed before these threads invoke this service.
+  assert(heap->active_generation()->is_mark_complete(), "sanity");
+
   // All objects above TAMS are considered live even though their mark bits will not be set.  Note that young-
   // gen evacuations that interrupt a long-running old-gen concurrent mark may promote objects into old-gen
   // while the old-gen concurrent marking is ongoing.  These newly promoted objects will reside above TAMS
@@ -537,8 +547,8 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
   // explicitly marked.
   HeapWord* t = marking_context->top_at_mark_start(this);
 
-  // Expect marking to be completed before these threads invoke this service.
-  assert(heap->active_generation()->is_mark_complete(), "sanity");
+  // Resume coalesce and fill from this address
+  HeapWord* obj_addr = resume_coalesce_and_fill();
 
   size_t ops_before_preempt_check = preemption_stride;
   while (obj_addr < t) {
@@ -559,7 +569,7 @@ bool ShenandoahHeapRegion::oop_fill_and_coalesce() {
       heap->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }
-    if (ops_before_preempt_check-- == 0) {
+    if (cancellable && ops_before_preempt_check-- == 0) {
       if (heap->cancelled_gc()) {
 #ifdef KELVIN_DEBUG_CF
         log_info(gc)("CF: oop_fill_and_coalesce_without_cancel(" SIZE_FORMAT ") suspends premptible C&F @ " PTR_FORMAT,

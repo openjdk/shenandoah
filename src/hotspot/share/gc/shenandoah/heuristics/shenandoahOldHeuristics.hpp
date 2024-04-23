@@ -129,11 +129,10 @@ private:
   void trigger_collection_if_overgrown();
 
  protected:
-  virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size,
-                                                     size_t free) override;
+  void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size, size_t free) override;
 
 public:
-  ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap);
+  explicit ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap);
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
@@ -217,8 +216,7 @@ public:
   size_t last_old_region() const                     { return _last_old_region; }
   ShenandoahHeapRegion* old_candidate(size_t index)  { return _region_data[index]._region; }
 
-
- private:
+private:
   void slide_pinned_regions_to_front();
   bool all_candidates_are_pinned();
 };
