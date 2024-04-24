@@ -2835,7 +2835,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   if (mode()->is_generational()) {
     ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
     ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
-    ShenandoahOldHeuristics* old_heuristics = (ShenandoahOldHeuristics*) old_gen->heuristics();
+    ShenandoahOldHeuristics* old_heuristics = old_gen->heuristics();
     old_heuristics->trigger_maybe(first_old_region, last_old_region, old_region_count, num_regions());
   }
 }
