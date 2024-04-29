@@ -33,6 +33,7 @@
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -188,7 +189,7 @@ private:
           // fallthrough for fast failure for un-live regions:
         case ShenandoahVerifier::_verify_liveness_conservative:
           check(ShenandoahAsserts::_safe_oop, obj, obj_reg->has_live() ||
-                (obj_reg->is_old() && ShenandoahHeap::heap()->is_gc_generation_young()),
+                (obj_reg->is_old() && _heap->active_generation()->is_young()),
                    "Object must belong to region with live data");
           break;
         default:
@@ -411,7 +412,7 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     size_t generation_used = generation->used();
     size_t generation_used_regions = generation->used_regions();
     if (adjust_for_padding && (generation->is_young() || generation->is_global())) {
-      size_t pad = ShenandoahHeap::heap()->get_pad_for_promote_in_place();
+      size_t pad = heap->old_generation()->get_pad_for_promote_in_place();
       generation_used += pad;
     }
 
@@ -857,7 +858,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
     size_t heap_used;
     if (_heap->mode()->is_generational() && (sizeness == _verify_size_adjusted_for_padding)) {
       // Prior to evacuation, regular regions that are to be evacuated in place are padded to prevent further allocations
-      heap_used = _heap->used() + _heap->get_pad_for_promote_in_place();
+      heap_used = _heap->used() + _heap->old_generation()->get_pad_for_promote_in_place();
     } else if (sizeness != _verify_size_disable) {
       heap_used = _heap->used();
     }
@@ -1352,9 +1353,10 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
   ShenandoahMarkingContext* ctx;
 
-  log_debug(gc)("Verifying remembered set at %s mark", _heap->doing_mixed_evacuations()? "mixed": "young");
+  ShenandoahOldGeneration* old_generation = _heap->old_generation();
+  log_debug(gc)("Verifying remembered set at %s mark", old_generation->is_doing_mixed_evacuations() ? "mixed" : "young");
 
-  if (_heap->is_old_bitmap_stable() || _heap->active_generation()->is_global()) {
+  if (old_generation->is_mark_complete() || _heap->active_generation()->is_global()) {
     ctx = _heap->complete_marking_context();
   } else {
     ctx = nullptr;
@@ -1446,7 +1448,7 @@ void ShenandoahVerifier::verify_rem_set_before_update_ref() {
   ShenandoahRegionIterator iterator;
   ShenandoahMarkingContext* ctx;
 
-  if (_heap->is_old_bitmap_stable() || _heap->active_generation()->is_global()) {
+  if (_heap->old_generation()->is_mark_complete() || _heap->active_generation()->is_global()) {
     ctx = _heap->complete_marking_context();
   } else {
     ctx = nullptr;

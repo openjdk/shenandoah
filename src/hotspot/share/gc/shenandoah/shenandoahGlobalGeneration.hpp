@@ -33,7 +33,7 @@
 class ShenandoahGlobalGeneration : public ShenandoahGeneration {
 public:
   ShenandoahGlobalGeneration(bool generational, uint max_queues, size_t max_capacity, size_t soft_max_capacity)
-  : ShenandoahGeneration(generational ? GLOBAL_GEN : GLOBAL_NON_GEN, max_queues, max_capacity, soft_max_capacity) { }
+  : ShenandoahGeneration(generational ? GLOBAL : NON_GEN, max_queues, max_capacity, soft_max_capacity) { }
 
 public:
   const char* name() const override;
@@ -65,6 +65,8 @@ public:
   void set_mark_incomplete() override;
 
   ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
+
+  virtual void prepare_gc() override;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHGLOBALGENERATION_HPP

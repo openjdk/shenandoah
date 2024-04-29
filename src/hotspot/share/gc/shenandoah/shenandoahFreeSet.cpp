@@ -459,12 +459,13 @@ HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation
 
 void ShenandoahFreeSet::add_old_collector_free_region(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
+  size_t plab_min_size_in_bytes = ShenandoahGenerationalHeap::heap()->plab_min_size() * HeapWordSize;
   size_t idx = region->index();
   size_t capacity = alloc_capacity(region);
   assert(_free_sets.membership(idx) == NotFree, "Regions promoted in place should not be in any free set");
-  if (capacity >= PLAB::min_size() * HeapWordSize) {
+  if (capacity >= plab_min_size_in_bytes) {
     _free_sets.make_free(idx, OldCollector, capacity);
-    _heap->augment_promo_reserve(capacity);
+    _heap->old_generation()->augment_promoted_reserve(capacity);
   }
 }
 
@@ -698,13 +699,13 @@ HeapWord* ShenandoahFreeSet::allocate_aligned_plab(size_t size, ShenandoahAllocR
   assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
   assert(r->is_old(), "All PLABs reside in old-gen");
   assert(!req.is_mutator_alloc(), "PLABs should not be allocated by mutators.");
-  assert(size % CardTable::card_size_in_words() == 0, "size must be multiple of card table size, was " SIZE_FORMAT, size);
+  assert(is_aligned(size, CardTable::card_size_in_words()), "Align by design");
 
   HeapWord* result = r->allocate_aligned(size, req, CardTable::card_size());
   assert(result != nullptr, "Allocation cannot fail");
   assert(r->top() <= r->end(), "Allocation cannot span end of region");
   assert(req.actual_size() == size, "Should not have needed to adjust size for PLAB.");
-  assert(((uintptr_t) result) % CardTable::card_size_in_words() == 0, "PLAB start must align with card boundary");
+  assert(is_aligned(result, CardTable::card_size_in_words()), "Align by design");
 
   return result;
 }
@@ -784,14 +785,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         log_trace(gc, free)("Failed to shrink TLAB or GCLAB request (" SIZE_FORMAT ") in region " SIZE_FORMAT " to " SIZE_FORMAT
                            " because min_size() is " SIZE_FORMAT, req.size(), r->index(), adjusted_size, req.min_size());
       }
-    }
-  } else if (req.is_lab_alloc() && req.type() == ShenandoahAllocRequest::_alloc_plab) {
-
-    // inelastic PLAB
-    size_t size = req.size();
-    size_t usable_free = get_usable_free_words(r->free());
-    if (size <= usable_free) {
-      result = allocate_aligned_plab(size, req, r);
     }
   } else {
     size_t size = req.size();
@@ -1007,7 +1000,7 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   size_t region_capacity = alloc_capacity(r);
   _free_sets.move_to_set(idx, OldCollector, region_capacity);
   _free_sets.assert_bounds();
-  _heap->augment_old_evac_reserve(region_capacity);
+  _heap->old_generation()->augment_evacuation_reserve(region_capacity);
   bool transferred = _heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
     log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
@@ -1074,7 +1067,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
       assert(!region->is_cset(), "Shouldn't be adding cset regions to the free set");
       assert(_free_sets.in_free_set(idx, NotFree), "We are about to make region free; it should not be free already");
 
-      // Do not add regions that would almost surely fail allocation
+      // Do not add regions that would almost surely fail allocation.  Note that PLAB::min_size() is typically less than ShenandoahGenerationalHeap::plab_min_size()
       if (alloc_capacity(region) < PLAB::min_size() * HeapWordSize) continue;
 
       if (region->is_old()) {
@@ -1169,100 +1162,99 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
   find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
 }
 
-void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions) {
+void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves) {
   shenandoah_assert_heaplocked();
-  size_t young_reserve, old_reserve;
-  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  size_t young_reserve(0), old_reserve(0);
 
-  size_t old_capacity = _heap->old_generation()->max_capacity();
-  size_t old_available = _heap->old_generation()->available();
-  size_t old_unaffiliated_regions = _heap->old_generation()->free_unaffiliated_regions();
-  size_t young_capacity = _heap->young_generation()->max_capacity();
-  size_t young_available = _heap->young_generation()->available();
-  size_t young_unaffiliated_regions = _heap->young_generation()->free_unaffiliated_regions();
-
-  old_unaffiliated_regions += old_cset_regions;
-  old_available += old_cset_regions * region_size_bytes;
-  young_unaffiliated_regions += young_cset_regions;
-  young_available += young_cset_regions * region_size_bytes;
-
-  // Consult old-region surplus and deficit to make adjustments to current generation capacities and availability.
-  // The generation region transfers take place after we rebuild.
-  size_t old_region_surplus = _heap->get_old_region_surplus();
-  size_t old_region_deficit = _heap->get_old_region_deficit();
-
-  if (old_region_surplus > 0) {
-    size_t xfer_bytes = old_region_surplus * region_size_bytes;
-    assert(old_region_surplus <= old_unaffiliated_regions, "Cannot transfer regions that are affiliated");
-    old_capacity -= xfer_bytes;
-    old_available -= xfer_bytes;
-    old_unaffiliated_regions -= old_region_surplus;
-    young_capacity += xfer_bytes;
-    young_available += xfer_bytes;
-    young_unaffiliated_regions += old_region_surplus;
-  } else if (old_region_deficit > 0) {
-    size_t xfer_bytes = old_region_deficit * region_size_bytes;
-    assert(old_region_deficit <= young_unaffiliated_regions, "Cannot transfer regions that are affiliated");
-    old_capacity += xfer_bytes;
-    old_available += xfer_bytes;
-    old_unaffiliated_regions += old_region_deficit;
-    young_capacity -= xfer_bytes;
-    young_available -= xfer_bytes;
-    young_unaffiliated_regions -= old_region_deficit;
-  }
-
-  // Evac reserve: reserve trailing space for evacuations, with regions reserved for old evacuations placed to the right
-  // of regions reserved of young evacuations.
   if (!_heap->mode()->is_generational()) {
     young_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
     old_reserve = 0;
   } else {
-    // All allocations taken from the old collector set are performed by GC, generally using PLABs for both
-    // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
-    // which is reserved for promotion is enforced using thread-local variables that prescribe intentons for
-    // each PLAB's available memory.
-
-    // At end of final mark, evacuation reserve quantities are defined by choose_collection_set().  At end of update refs,
-    // evacuation reserve quantities are established by adjust_generation_sizes_for_next_cycle().
-
-#ifdef KELVIN_DEPRECATE
-    assert(_heap->has_evacuation_reserve_quantities(), "Always prepare reserve quantities before rebuild");
-#endif
-    young_reserve = _heap->get_young_evac_reserve();
-    old_reserve = _heap->get_promoted_reserve() + _heap->get_old_evac_reserve();
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-    size_t xfer_bytes = old_region_deficit * region_size_bytes;
-    log_info(gc)("KELVIN rebuild has reserve quantities for YOUNG: " SIZE_FORMAT ", OLD: " SIZE_FORMAT,
-                 young_reserve, old_reserve);
-    log_info(gc)(" old_reserve is mixed_reserve: " SIZE_FORMAT " + evac_reserve: " SIZE_FORMAT,
-                 _heap->get_promoted_reserve(), _heap->get_old_evac_reserve());
-    log_info(gc)(" Old available is current: " SIZE_FORMAT " + old cset: " SIZE_FORMAT
-                 " + xfer_bytes: " SIZE_FORMAT " equals: " SIZE_FORMAT,
-                 _heap->old_generation()->available(), old_cset_regions * region_size_bytes,
-                 xfer_bytes, _heap->old_generation()->available() + old_cset_regions*region_size_bytes + xfer_bytes);
-#endif
-    assert(old_reserve <= old_available,
-           "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
-           _heap->get_promoted_reserve(), _heap->get_old_evac_reserve(), old_available);
-  }
-
-  // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector
-  // free set.  Because of this, old_available may not have enough memory to represent the intended reserve.  Adjust
-  // the reserve downward to account for this possibility. This loss is part of the reason why the original budget
-  // was adjusted with ShenandoahOldEvacWaste and ShenandoahOldPromoWaste multipliers.
-  if (old_reserve > _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes) {
-    old_reserve = _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes;
-  }
-
-  if (young_reserve > young_unaffiliated_regions * region_size_bytes) {
-    young_reserve = young_unaffiliated_regions * region_size_bytes;
+    compute_young_and_old_reserves(young_cset_regions, old_cset_regions, have_evacuation_reserves,
+                                   young_reserve, old_reserve);
   }
 
   reserve_regions(young_reserve, old_reserve);
   _free_sets.establish_alloc_bias(OldCollector);
   _free_sets.assert_bounds();
   log_status();
+}
+
+void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
+                                                       size_t& young_reserve_result, size_t& old_reserve_result) const {
+  const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  ShenandoahOldGeneration* const old_generation = _heap->old_generation();
+  size_t old_available = old_generation->available();
+  size_t old_unaffiliated_regions = old_generation->free_unaffiliated_regions();
+  ShenandoahYoungGeneration* const young_generation = _heap->young_generation();
+  size_t young_capacity = young_generation->max_capacity();
+  size_t young_unaffiliated_regions = young_generation->free_unaffiliated_regions();
+
+  // Add in the regions we anticipate to be freed by evacuation of the collection set
+  old_unaffiliated_regions += old_cset_regions;
+  old_available += old_cset_regions * region_size_bytes;
+  young_unaffiliated_regions += young_cset_regions;
+
+  // Consult old-region balance to make adjustments to current generation capacities and availability.
+  // The generation region transfers take place after we rebuild.
+  const ssize_t old_region_balance = old_generation->get_region_balance();
+  if (old_region_balance != 0) {
+    if (old_region_balance > 0) {
+      assert(old_region_balance <= checked_cast<ssize_t>(old_unaffiliated_regions), "Cannot transfer regions that are affiliated");
+    } else {
+      assert(0 - old_region_balance <= checked_cast<ssize_t>(young_unaffiliated_regions), "Cannot transfer regions that are affiliated");
+    }
+
+    ssize_t xfer_bytes = old_region_balance * checked_cast<ssize_t>(region_size_bytes);
+    old_available -= xfer_bytes;
+    old_unaffiliated_regions -= old_region_balance;
+    young_capacity += xfer_bytes;
+    young_unaffiliated_regions += old_region_balance;
+  }
+
+  // All allocations taken from the old collector set are performed by GC, generally using PLABs for both
+  // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
+  // which is reserved for promotion is enforced using thread-local variables that prescribe intentions for
+  // each PLAB's available memory.
+  
+#define KELVIN_CONFIRM_SUCCESSFUL_MERGE
+#ifdef KELVIN_CONFIRM_SUCCESSFUL_MERGE
+    assert(have_evacuation_reserves, "Always prepare reserve quantities before rebuild");
+    // After testing with this assert:
+    // 1. make the following code unconditional
+    // 2. toss the else arm
+    // 3. get rid of the have_evacuation_reserves argument
+    // 4. maybe even get rid of the state variable from which have_evacuation_reserves value is derived
+#endif
+  if (have_evacuation_reserves) {
+    // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
+    const size_t promoted_reserve = old_generation->get_promoted_reserve();
+    const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
+    young_reserve_result = young_generation->get_evacuation_reserve();
+    old_reserve_result = promoted_reserve + old_evac_reserve;
+    assert(old_reserve_result <= old_available,
+           "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
+           promoted_reserve, old_evac_reserve, old_available);
+  } else {
+    // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
+    young_reserve_result = (young_capacity * ShenandoahEvacReserve) / 100;
+    // The auto-sizer has already made old-gen large enough to hold all anticipated evacuations and promotions.
+    // Affiliated old-gen regions are already in the OldCollector free set.  Add in the relevant number of
+    // unaffiliated regions.
+    old_reserve_result = old_available;
+  }
+
+  // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector
+  // free set.  Because of this, old_available may not have enough memory to represent the intended reserve.  Adjust
+  // the reserve downward to account for this possibility. This loss is part of the reason why the original budget
+  // was adjusted with ShenandoahOldEvacWaste and ShenandoahOldPromoWaste multipliers.
+  if (old_reserve_result > _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes) {
+    old_reserve_result = _free_sets.capacity_of(OldCollector) + old_unaffiliated_regions * region_size_bytes;
+  }
+
+  if (old_reserve_result > young_unaffiliated_regions * region_size_bytes) {
+    young_reserve_result = young_unaffiliated_regions * region_size_bytes;
+  }
 }
 
 // Having placed all regions that have allocation capacity into the mutator set if they identify as is_young()

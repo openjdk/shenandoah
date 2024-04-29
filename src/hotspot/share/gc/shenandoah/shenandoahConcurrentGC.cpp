@@ -33,6 +33,7 @@
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
@@ -236,24 +237,34 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
   // abbreviated cycle.
   if (heap->mode()->is_generational()) {
+    if (!heap->old_generation()->is_parseable()) {
+      // Class unloading may render the card offsets unusable, so we must rebuild them before
+      // the next remembered set scan. We _could_ let the control thread do this sometime after
+      // the global cycle has completed and before the next young collection, but under memory
+      // pressure the control thread may not have the time (that is, because it's running back
+      // to back GCs). In that scenario, we would have to make the old regions parsable before
+      // we could start a young collection. This could delay the start of the young cycle and
+      // throw off the heuristics.
+      entry_global_coalesce_and_fill();
+      // Finish global coalesce and fill before we initiate further GC efforts.
+    }
+
     bool success;
     size_t region_xfer;
     const char* region_destination;
     ShenandoahYoungGeneration* young_gen = heap->young_generation();
-    ShenandoahGeneration* old_gen = heap->old_generation();
+    ShenandoahOldGeneration* old_gen = heap->old_generation();
     {
-      ShenandoahHeapLocker locker(heap->lock());
-
-      size_t old_region_surplus = heap->get_old_region_surplus();
-      size_t old_region_deficit = heap->get_old_region_deficit();
-#ifdef KELVIN_DEBUG
-      log_info(gc)("KELVIN Fetching old surplus: " SIZE_FORMAT " and deficit: " SIZE_FORMAT, old_region_surplus, old_region_deficit);
-#endif
-      if (old_region_surplus) {
+      ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+      ShenandoahHeapLocker locker(gen_heap->lock());
+      ssize_t region_imbalance = old_gen->get_region_balance();
+      if (region_imbalance > 0) {
+        const size_t old_region_surplus = region_imbalance;
         success = heap->generation_sizer()->transfer_to_young(old_region_surplus);
         region_destination = "young";
         region_xfer = old_region_surplus;
-      } else if (old_region_deficit) {
+      } else if (region_imbalance < 0) {
+        const size_t old_region_deficit = -region_imbalance;
         success = heap->generation_sizer()->transfer_to_old(old_region_deficit);
         region_destination = "old";
         region_xfer = old_region_deficit;
@@ -265,18 +276,23 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
         region_xfer = 0;
         success = true;
       }
-      heap->set_old_region_surplus(0);
-      heap->set_old_region_deficit(0);
+      old_gen->set_region_balance(0);
     }
 
-    // Report outside the heap lock
-    size_t young_available = young_gen->available();
-    size_t old_available = old_gen->available();
-    log_info(gc, ergo)("After cleanup, %s " SIZE_FORMAT " regions to %s to prepare for next gc, old available: "
-                       SIZE_FORMAT "%s, young_available: " SIZE_FORMAT "%s",
-                       success? "successfully transferred": "failed to transfer", region_xfer, region_destination,
-                       byte_size_in_proper_unit(old_available), proper_unit_for_byte_size(old_available),
-                       byte_size_in_proper_unit(young_available), proper_unit_for_byte_size(young_available));
+    ShenandoahGenerationalHeap::TransferResult result;
+    {
+      ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+      ShenandoahHeapLocker locker(gen_heap->lock());
+
+      result = gen_heap->balance_generations();
+      gen_heap->reset_generation_reserves();
+    }
+
+    LogTarget(Info, gc, ergo) lt;
+    if (lt.is_enabled()) {
+      LogStream ls(lt);
+      result.print_on("Concurrent GC", &ls);
+    }
   }
 #ifdef KELVIN_DEBUG
   {
@@ -766,16 +782,16 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Upon return from prepare_regions_and_collection_set(), certain parameters have been established to govern the
     // evacuation efforts that are about to begin.  In particular:
     //
-    // heap->get_promoted_reserve() represents the amount of memory within old-gen's available memory that has
+    // old_generation->get_promoted_reserve() represents the amount of memory within old-gen's available memory that has
     //   been set aside to hold objects promoted from young-gen memory.  This represents an estimated percentage
     //   of the live young-gen memory within the collection set.  If there is more data ready to be promoted than
     //   can fit within this reserve, the promotion of some objects will be deferred until a subsequent evacuation
     //   pass.
     //
-    // heap->get_old_evac_reserve() represents the amount of memory within old-gen's available memory that has been
+    // old_generation->get_evacuation_reserve() represents the amount of memory within old-gen's available memory that has been
     //  set aside to hold objects evacuated from the old-gen collection set.
     //
-    // heap->get_young_evac_reserve() represents the amount of memory within young-gen's available memory that has
+    // young_generation->get_evacuation_reserve() represents the amount of memory within young-gen's available memory that has
     //  been set aside to hold objects evacuated from the young-gen collection set.  Conservatively, this value
     //  equals the entire amount of live young-gen memory within the collection set, even though some of this memory
     //  will likely be promoted.
@@ -784,9 +800,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
     heap->prepare_concurrent_roots();
 
     if (heap->mode()->is_generational()) {
-      size_t humongous_regions_promoted = heap->get_promotable_humongous_regions();
-      size_t regular_regions_promoted_in_place = heap->get_regular_regions_promoted_in_place();
-      if (!heap->collection_set()->is_empty() || (humongous_regions_promoted + regular_regions_promoted_in_place > 0)) {
+      if (!heap->collection_set()->is_empty() || heap->old_generation()->has_in_place_promotions()) {
         // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
         // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 
@@ -838,7 +852,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
     } else {
       // Not is_generational()
       if (!heap->collection_set()->is_empty()) {
-        LogTarget(Info, gc, ergo) lt;
+        LogTarget(Debug, gc, ergo) lt;
         if (lt.is_enabled()) {
           ResourceMark rm;
           LogStream ls(lt);
@@ -1320,6 +1334,25 @@ void ShenandoahConcurrentGC::op_final_roots() {
       }
     }
   }
+}
+
+void ShenandoahConcurrentGC::entry_global_coalesce_and_fill() {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+
+  const char* msg = "Coalescing and filling old regions in global collect";
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_coalesce_and_fill);
+
+  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+  EventMark em("%s", msg);
+  ShenandoahWorkerScope scope(heap->workers(),
+                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
+                              "concurrent coalesce and fill");
+
+  op_global_coalesce_and_fill();
+}
+
+void ShenandoahConcurrentGC::op_global_coalesce_and_fill() {
+  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions(true);
 }
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {

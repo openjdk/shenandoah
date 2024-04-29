@@ -175,7 +175,6 @@ private:
   JavaThread* volatile _succ;       // Heir presumptive thread - used for futile wakeup throttling
   JavaThread* volatile _Responsible;
 
-  volatile int _Spinner;            // for exit->spinner handoff optimization
   volatile int _SpinDuration;
 
   int _contentions;                 // Number of active contentions in enter(). It is used by is_busy()
@@ -295,6 +294,7 @@ private:
   int       contentions() const;
   void      add_to_contentions(int value);
   intx      recursions() const                                         { return _recursions; }
+  void      set_recursions(size_t recursions);
 
   // JVM/TI GetObjectMonitorUsage() needs this:
   ObjectWaiter* first_waiter()                                         { return _WaitSet; }

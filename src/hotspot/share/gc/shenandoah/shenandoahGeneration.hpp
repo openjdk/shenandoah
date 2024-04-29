@@ -26,17 +26,19 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHGENERATION_HPP
 
 #include "memory/allocation.hpp"
-#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.hpp"
 
+class ShenandoahCollectionSet;
+class ShenandoahHeap;
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
-class ShenandoahReferenceProcessor;
-class ShenandoahHeap;
+class ShenandoahHeuristics;
 class ShenandoahMode;
+class ShenandoahReferenceProcessor;
+
 
 class ShenandoahGeneration : public CHeapObj<mtGC>, public ShenandoahSpaceInfo {
   friend class VMStructs;
@@ -58,6 +60,9 @@ private:
   // The units are bytes. The value is only changed on a safepoint or under the
   // heap lock.
   size_t _humongous_waste;
+
+  // Bytes reserved within this generation to hold evacuated objects from the collection set
+  size_t _evacuation_reserve;
 
 protected:
   // Usage
@@ -105,11 +110,16 @@ private:
 
   bool is_young() const  { return _type == YOUNG; }
   bool is_old() const    { return _type == OLD; }
-  bool is_global() const { return _type == GLOBAL_GEN || _type == GLOBAL_NON_GEN; }
+  bool is_global() const { return _type == GLOBAL || _type == NON_GEN; }
+
+  // see description in field declaration
+  void set_evacuation_reserve(size_t new_val);
+  size_t get_evacuation_reserve() const;
+  void augment_evacuation_reserve(size_t increment);
 
   inline ShenandoahGenerationType type() const { return _type; }
 
-  inline ShenandoahHeuristics* heuristics() const { return _heuristics; }
+  virtual ShenandoahHeuristics* heuristics() const { return _heuristics; }
 
   ShenandoahReferenceProcessor* ref_processor() { return _ref_processor; }
 
@@ -123,6 +133,9 @@ private:
   size_t used() const override { return _used; }
   size_t available() const override;
   size_t available_with_reserve() const;
+  size_t used_including_humongous_waste() const {
+    return used() + get_humongous_waste();
+  }
 
   // Returns the memory available based on the _soft_ max heap capacity (soft_max_heap - used).
   // The soft max heap size may be adjusted lower than the max heap size to cause the trigger
@@ -167,6 +180,9 @@ private:
 
   // Apply closure to all regions affiliated with this generation.
   virtual void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;
+
+  // Apply closure to all regions affiliated with this generation (include free regions);
+  virtual void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl);
 
   // Apply closure to all regions affiliated with this generation (single threaded).
   virtual void heap_region_iterate(ShenandoahHeapRegionClosure* cl) = 0;

@@ -124,6 +124,7 @@ private:
     _REGION_STATES_NUM        // last
   };
 
+public:
   static const char* region_state_to_string(RegionState s) {
     switch (s) {
       case _empty_uncommitted:       return "Empty Uncommitted";
@@ -142,6 +143,7 @@ private:
     }
   }
 
+private:
   // This method protects from accidental changes in enum order:
   int region_state_to_ordinal(RegionState s) const {
     switch (s) {
@@ -200,6 +202,8 @@ public:
   bool is_committed()              const { return !is_empty_uncommitted(); }
   bool is_cset()                   const { return _state == _cset   || _state == _pinned_cset; }
   bool is_pinned()                 const { return _state == _pinned || _state == _pinned_cset || _state == _pinned_humongous_start; }
+  bool is_regular_pinned()         const { return _state == _pinned; }
+
   inline bool is_young() const;
   inline bool is_old() const;
   inline bool is_affiliated() const;
@@ -351,8 +355,11 @@ public:
   inline void restore_top_before_promote();
   inline size_t garbage_before_padded_for_promote() const;
 
-  // Allocation (return nullptr if full)
-  inline HeapWord* allocate_aligned(size_t word_size, ShenandoahAllocRequest &req, size_t alignment_in_words);
+  // If next available memory is not aligned on address that is multiple of alignment, fill the empty space
+  // so that returned object is aligned on an address that is a multiple of alignment_in_bytes.  Requested
+  // size is in words.  It is assumed that this->is_old().  A pad object is allocated, filled, and registered
+  // if necessary to assure the new allocation is properly aligned.  Return nullptr if memory is not available.
+  inline HeapWord* allocate_aligned(size_t word_size, ShenandoahAllocRequest &req, size_t alignment_in_bytes);
 
   // Allocation (return nullptr if full)
   inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest req);
@@ -395,17 +402,7 @@ public:
   // Coalesce contiguous spans of garbage objects by filling header and reregistering start locations with remembered set.
   // This is used by old-gen GC following concurrent marking to make old-gen HeapRegions parsable.  Return true iff
   // region is completely coalesced and filled.  Returns false if cancelled before task is complete.
-  bool oop_fill_and_coalesce();
-
-  // Like oop_fill_and_coalesce(), but without honoring cancellation requests.
-  bool oop_fill_and_coalesce_without_cancel();
-
-  // During global collections, this service iterates through an old-gen heap region that is not part of collection
-  // set to fill and register ranges of dead memory.  Note that live objects were previously registered.  Some dead objects
-  // that are subsumed into coalesced ranges of dead memory need to be "unregistered".
-  void global_oop_iterate_and_fill_dead(OopIterateClosure* cl);
-  void oop_iterate_humongous(OopIterateClosure* cl);
-  void oop_iterate_humongous(OopIterateClosure* cl, HeapWord* start, size_t words);
+  bool oop_coalesce_and_fill(bool cancellable);
 
   // Invoke closure on every reference contained within the humongous object that spans this humongous
   // region if the reference is contained within a DIRTY card and the reference is no more than words following
@@ -473,18 +470,10 @@ public:
 
   CENSUS_NOISE(void clear_youth() { _youth = 0; })
 
-  // Register all objects.  Set all remembered set cards to dirty.
-  void promote_humongous();
-  void promote_in_place();
-
 private:
   void decrement_humongous_waste() const;
   void do_commit();
   void do_uncommit();
-
-  // This is an old-region that was not part of the collection set during a GLOBAL collection.  We coalesce the dead
-  // objects, but do not need to register the live objects as they are already registered.
-  void global_oop_iterate_objects_and_fill_dead(OopIterateClosure* cl);
 
   inline void internal_increase_live_data(size_t s);
 

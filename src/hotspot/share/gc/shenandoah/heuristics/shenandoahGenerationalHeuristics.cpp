@@ -28,8 +28,9 @@
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 
 #include "logging/log.hpp"
 
@@ -40,7 +41,7 @@ ShenandoahGenerationalHeuristics::ShenandoahGenerationalHeuristics(ShenandoahGen
 void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectionSet* collection_set) {
   assert(collection_set->is_empty(), "Must be empty");
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  auto heap = ShenandoahGenerationalHeap::heap();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
 
@@ -148,8 +149,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
       immediate_garbage += garbage;
     }
   }
-  heap->reserve_promotable_humongous_regions(humongous_regions_promoted);
-  heap->reserve_promotable_regular_regions(regular_regions_promoted_in_place);
+  heap->old_generation()->set_expected_humongous_region_promotions(humongous_regions_promoted);
+  heap->old_generation()->set_expected_regular_region_promotions(regular_regions_promoted_in_place);
   log_info(gc, ergo)("Planning to promote in place " SIZE_FORMAT " humongous regions and " SIZE_FORMAT
                      " regular regions, spanning a total of " SIZE_FORMAT " used bytes",
                      humongous_regions_promoted, regular_regions_promoted_in_place,
@@ -170,7 +171,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     // Only young collections need to prime the collection set.
     if (_generation->is_young()) {
-      heap->old_heuristics()->prime_collection_set(collection_set);
+      heap->old_generation()->heuristics()->prime_collection_set(collection_set);
     }
 
     // Call the subclasses to add young-gen regions into the collection set.
