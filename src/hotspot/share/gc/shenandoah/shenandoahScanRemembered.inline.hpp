@@ -33,8 +33,10 @@
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
+#include "logging/log.hpp"
 
 inline size_t
 ShenandoahDirectCardMarkRememberedSet::last_valid_index() const {
@@ -549,6 +551,7 @@ template <typename ClosureType>
 void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_cluster, size_t count, HeapWord* end_of_range,
                                                                ClosureType* cl, bool use_write_table, uint worker_id) {
 
+  assert(ShenandoahHeap::heap()->old_generation()->is_parseable(), "Old generation regions must be parseable for remembered set scan");
   // If old-gen evacuation is active, then MarkingContext for old-gen heap regions is valid.  We use the MarkingContext
   // bits to determine which objects within a DIRTY card need to be scanned.  This is necessary because old-gen heap
   // regions that are in the candidate collection set have not been coalesced and filled.  Thus, these heap regions
@@ -583,7 +586,7 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
   // the old generation marking. These include objects allocated since the
   // start of old generation marking (being those above TAMS).
   const ShenandoahHeap* heap = ShenandoahHeap::heap();
-  const ShenandoahMarkingContext* ctx = heap->is_old_bitmap_stable() ?
+  const ShenandoahMarkingContext* ctx = heap->old_generation()->is_mark_complete() ?
                                         heap->marking_context() : nullptr;
 
   // The region we will scan is the half-open interval [start_addr, end_addr),
@@ -772,7 +775,11 @@ void ShenandoahScanRemembered<RememberedSet>::process_clusters(size_t first_clus
     } else {
       // ==== BEGIN CLEAN card range processing ====
 
-      assert(ctbm[cur_index] == CardTable::clean_card_val(), "Error");
+      // If we are using the write table (during update refs, e.g.), a mutator may dirty
+      // a card at any time. This is fine for the algorithm below because it is only
+      // counting contiguous runs of clean cards (and only for non-product builds).
+      assert(use_write_table || ctbm[cur_index] == CardTable::clean_card_val(), "Error");
+
       // walk back over contiguous clean cards
       size_t i = 0;
       while (--cur_index >= (ssize_t)start_card_index && ctbm[cur_index] == CardTable::clean_card_val()) {
@@ -890,7 +897,8 @@ ShenandoahScanRemembered<RememberedSet>::addr_for_cluster(size_t cluster_no) {
 template<typename RememberedSet>
 void ShenandoahScanRemembered<RememberedSet>::roots_do(OopIterateClosure* cl) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(heap->is_old_bitmap_stable()));
+  bool old_bitmap_stable = heap->old_generation()->is_mark_complete();
+  log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(old_bitmap_stable));
   for (size_t i = 0, n = heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* region = heap->get_region(i);
     if (region->is_old() && region->is_active() && !region->is_cset()) {

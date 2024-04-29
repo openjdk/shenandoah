@@ -90,7 +90,7 @@ void ShenandoahEvacuationStats::print_on(outputStream* st) {
             byte_size_in_proper_unit(abandoned_size),   proper_unit_for_byte_size(abandoned_size),
             abandoned_count);
   if (_use_age_table) {
-    _age_table->print_on(st, ShenandoahHeap::heap()->age_census()->tenuring_threshold());
+    _age_table->print_on(st);
   }
 }
 
@@ -117,9 +117,8 @@ void ShenandoahEvacuationTracker::print_evacuations_on(outputStream* st,
         young_region_ages.add(r->age(), r->get_live_data_words());
       }
     }
-    uint tenuring_threshold = heap->age_census()->tenuring_threshold();
     st->print("Young regions: ");
-    young_region_ages.print_on(st, tenuring_threshold);
+    young_region_ages.print_on(st);
     st->cr();
   }
 }
@@ -149,14 +148,12 @@ ShenandoahCycleStats ShenandoahEvacuationTracker::flush_cycle_to_global() {
   _workers_global.accumulate(&workers);
 
   if (_generational && (ShenandoahGenerationalCensusAtEvac || !ShenandoahGenerationalAdaptiveTenuring)) {
-    // Ingest population vectors into the heap's global census
-    // data, and use it to compute an appropriate tenuring threshold
+    // Ingest mutator & worker collected population vectors into the heap's
+    // global census data, and use it to compute an appropriate tenuring threshold
     // for use in the next cycle.
-    ShenandoahAgeCensus* census = ShenandoahHeap::heap()->age_census();
-    census->prepare_for_census_update();
     // The first argument is used for any age 0 cohort population that we may otherwise have
     // missed during the census. This is non-zero only when census happens at marking.
-    census->update_census(0, _mutators_global.age_table(), _workers_global.age_table());
+    ShenandoahHeap::heap()->age_census()->update_census(0, _mutators_global.age_table(), _workers_global.age_table());
   }
 
   return {workers, mutators};

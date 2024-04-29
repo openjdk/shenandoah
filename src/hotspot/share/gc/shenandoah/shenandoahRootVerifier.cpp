@@ -31,6 +31,7 @@
 #include "code/codeCache.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahRootVerifier.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
@@ -59,8 +60,8 @@ void ShenandoahRootVerifier::roots_do(OopIterateClosure* oops) {
   ShenandoahGCStateResetter resetter;
   shenandoah_assert_safepoint();
 
-  CodeBlobToOopClosure blobs(oops, !CodeBlobToOopClosure::FixRelocations);
-  CodeCache::blobs_do(&blobs);
+  NMethodToOopClosure blobs(oops, !NMethodToOopClosure::FixRelocations);
+  CodeCache::nmethods_do(&blobs);
 
   CLDToOopClosure clds(oops, ClassLoaderData::_claim_none);
   ClassLoaderDataGraph::cld_do(&clds);
@@ -70,7 +71,7 @@ void ShenandoahRootVerifier::roots_do(OopIterateClosure* oops) {
   }
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
+  if (heap->mode()->is_generational() && heap->active_generation()->is_young()) {
     shenandoah_assert_safepoint();
     heap->card_scan()->roots_do(oops);
   }
@@ -93,13 +94,13 @@ void ShenandoahRootVerifier::strong_roots_do(OopIterateClosure* oops) {
   }
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational() && heap->is_gc_generation_young()) {
+  if (heap->mode()->is_generational() && heap->active_generation()->is_young()) {
     heap->card_scan()->roots_do(oops);
   }
 
   // Do thread roots the last. This allows verification code to find
   // any broken objects from those special roots first, not the accidental
   // dangling reference from the thread root.
-  CodeBlobToOopClosure blobs(oops, !CodeBlobToOopClosure::FixRelocations);
-  Threads::possibly_parallel_oops_do(true, oops, &blobs);
+  NMethodToOopClosure nmethods(oops, !NMethodToOopClosure::FixRelocations);
+  Threads::possibly_parallel_oops_do(true, oops, &nmethods);
 }

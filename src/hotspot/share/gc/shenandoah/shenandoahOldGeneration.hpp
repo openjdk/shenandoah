@@ -25,12 +25,13 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 
+#include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
-class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
 private:
@@ -76,6 +77,9 @@ private:
   size_t _promotable_humongous_regions;
   size_t _promotable_regular_regions;
 
+  // True if old regions may be safely traversed by the remembered set scan.
+  bool _is_parseable;
+
   bool coalesce_and_fill();
 
 public:
@@ -85,6 +89,10 @@ public:
 
   const char* name() const override {
     return "OLD";
+  }
+
+  ShenandoahOldHeuristics* heuristics() const override {
+    return _old_heuristics;
   }
 
   // See description in field declaration
@@ -122,6 +130,10 @@ public:
   void set_expected_regular_region_promotions(size_t region_count) { _promotable_regular_regions = region_count; }
   bool has_in_place_promotions() const { return (_promotable_humongous_regions + _promotable_regular_regions) > 0; }
 
+  // Class unloading may render the card table offsets unusable, if they refer to unmarked objects
+  bool is_parseable() const   { return _is_parseable; }
+  void set_parseable(bool parseable);
+
   // This will signal the heuristic to trigger an old generation collection
   void handle_failed_transfer();
 
@@ -139,6 +151,13 @@ public:
     return _failed_evacuation.try_unset();
   }
 
+  // Transition to the next state after mixed evacuations have completed
+  void complete_mixed_evacuations();
+
+  // Abandon any future mixed collections. This is invoked when all old regions eligible for
+  // inclusion in a mixed evacuation are pinned. This should be rare.
+  void abandon_mixed_evacuations();
+
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
@@ -152,6 +171,7 @@ public:
   bool is_concurrent_mark_in_progress() override;
 
   bool entry_coalesce_and_fill();
+  void prepare_for_mixed_collections_after_global_gc();
   void prepare_gc() override;
   void prepare_regions_and_collection_set(bool concurrent) override;
   void record_success_concurrent(bool abbreviated) override;
@@ -177,15 +197,44 @@ public:
   // the performance impact would be too severe.
   void transfer_pointers_from_satb();
 
+  // True if there are old regions waiting to be selected for a mixed collection
+  bool has_unprocessed_collection_candidates();
+
+  bool is_doing_mixed_evacuations() const {
+    return state() == EVACUATING || state() == EVACUATING_AFTER_GLOBAL;
+  }
+
+  bool is_preparing_for_mark() const {
+    return state() == FILLING;
+  }
+
+  bool is_idle() const {
+    return state() == WAITING_FOR_BOOTSTRAP;
+  }
+
+  bool is_bootstrapping() const {
+    return state() == BOOTSTRAPPING;
+  }
+
+  // Amount of live memory (bytes) in regions waiting for mixed collections
+  size_t unprocessed_collection_candidates_live_memory();
+
+  // Abandon any regions waiting for mixed collections
+  void abandon_collection_candidates();
+
 public:
   enum State {
-    FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING
+    FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING, EVACUATING_AFTER_GLOBAL
   };
+
+#ifdef ASSERT
+  bool validate_waiting_for_bootstrap();
+#endif
 
 private:
   State _state;
 
-  static const size_t FRACTIONAL_DENOMINATOR = 64536;
+  static const size_t FRACTIONAL_DENOMINATOR = 65536;
 
   // During initialization of the JVM, we search for the correct old-gen size by initially performing old-gen
   // collection when old-gen usage is 50% more (INITIAL_GROWTH_BEFORE_COMPACTION) than the initial old-gen size
