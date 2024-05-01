@@ -112,7 +112,14 @@ public:
   size_t unexpend_promoted(size_t decrement);
 
   // This is used on the allocation path to gate promotions that would exceed the reserve
-  size_t get_promoted_expended();
+  size_t get_promoted_expended() const;
+
+  // Test if there is enough memory reserved for this promotion
+  bool can_promote(size_t requested_bytes) const {
+    size_t promotion_avail = get_promoted_reserve();
+    size_t promotion_expended = get_promoted_expended();
+    return promotion_expended + requested_bytes <= promotion_avail;
+  }
 
   // See description in field declaration
   void set_region_balance(ssize_t balance) { _region_balance = balance; }

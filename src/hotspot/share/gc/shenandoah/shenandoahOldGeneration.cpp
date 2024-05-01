@@ -218,7 +218,7 @@ size_t ShenandoahOldGeneration::unexpend_promoted(size_t decrement) {
   return Atomic::sub(&_promoted_expended, decrement);
 }
 
-size_t ShenandoahOldGeneration::get_promoted_expended() {
+size_t ShenandoahOldGeneration::get_promoted_expended() const {
   return Atomic::load(&_promoted_expended);
 }
 
