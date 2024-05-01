@@ -1113,7 +1113,6 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   {
     // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
     bool promotion_eligible = false;
-    bool allow_allocation = true;
     size_t requested_bytes = req.size() * HeapWordSize;
     HeapWord* result = nullptr;
 
@@ -1150,13 +1149,15 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
           if (!old_generation()->can_promote(requested_bytes)) {
             if (old_generation()->get_evacuation_reserve() == 0) {
               // The old generation promotion and evacuation reserves are both exhausted. Do not create a PLAB.
-              allow_allocation = false;
+              return nullptr;
             }
             // We have enough evacuation reserve to create a plab for that purpose. However, since we do not
             // have enough promotion reserve for further promotions, the plab will be configured to not allow
             // promotions after it is created (if it is created).
           } else {
-            // We have enough promotion reserve to try to allocate a plab.
+            // We have enough promotion reserve to try to allocate a plab. However, the allocation request size
+            // may be increase to satisfy alignment with the card table. If promotion_eligible is false, we will
+            // not later check if promotions are still possible with this plab.
             promotion_eligible = true;
           }
         } else if (req.is_promotion()) {
@@ -1177,7 +1178,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
 
     // First try the original request.  If TLAB request size is greater than available, allocate() will attempt to downsize
     // request to fit within available memory.
-    result = (allow_allocation)? _free_set->allocate(req, in_new_region): nullptr;
+    result = _free_set->allocate(req, in_new_region);
     if (result != nullptr) {
       if (req.is_old()) {
         complete_old_allocation(thread, req, promotion_eligible, requested_bytes, result);
@@ -1239,7 +1240,7 @@ void ShenandoahHeap::complete_old_allocation(Thread* thread, const ShenandoahAll
   assert(req.is_old(), "Should only get old allocations here");
   ShenandoahThreadLocalData::reset_plab_promoted(thread);
   if (req.is_gc_alloc()) {
-    // Note: Even when a mutator is performing a promotion outside of a LAB, we use a 'shared_gc' request.
+    // Note: Even when a mutator is performing a promotion outside a LAB, we use a 'shared_gc' request.
     bool disable_plab_promotions = false;
     if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
       if (promotion_eligible) {
