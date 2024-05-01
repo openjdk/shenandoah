@@ -1008,8 +1008,7 @@ void C2_MacroAssembler::fast_lock_lightweight(Register obj, Register box, Regist
 
     // Check if recursive.
     cmpptr(thread, rax_reg);
-    // ysr: jccb(Assembler::notEqual, slow_path);
-    jcc(Assembler::notEqual, slow_path);
+    jccb(Assembler::notEqual, slow_path);
 
     // Recursive.
     increment(Address(tagged_monitor, OM_OFFSET_NO_MONITOR_VALUE_TAG(recursions)));
