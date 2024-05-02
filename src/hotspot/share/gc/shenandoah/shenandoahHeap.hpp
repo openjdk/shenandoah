@@ -785,7 +785,6 @@ private:
 
   void try_inject_alloc_failure();
   bool should_inject_alloc_failure();
-
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
