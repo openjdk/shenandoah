@@ -1108,10 +1108,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
-  // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
-  bool promotion_eligible = false;
-  size_t requested_bytes = req.size() * HeapWordSize;
-
   // If we are dealing with mutator allocation, then we may need to block for safepoint.
   // We cannot block for safepoint for GC allocations, because there is a high chance
   // we are already running at safepoint or from stack watermark machinery, and we cannot
@@ -1119,112 +1115,41 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
   ShenandoahHeapLocker locker(lock(), req.is_mutator_alloc());
 
   // Make sure the old generation has room for either evacuations or promotions before trying to allocate.
-  if (req.is_old() && !can_allocate_old(req, requested_bytes, promotion_eligible)) {
+  if (req.is_old() && !old_generation()->can_allocate(req)) {
     return nullptr;
   }
 
-  // First try the original request.  If TLAB request size is greater than available, allocate() will attempt to downsize
-  // request to fit within available memory.
+  // If TLAB request size is greater than available, allocate() will attempt to downsize request to fit within available
+  // memory.
   HeapWord* result = _free_set->allocate(req, in_new_region);
 
   // Record the plab configuration for this result and register the object.
   if (result != nullptr && req.is_old()) {
-    complete_old_allocation(req, promotion_eligible, requested_bytes, result);
+    old_generation()->configure_plab_for_current_thread(req);
+    // TODO: Is this only necessary for 'shared' allocations?
+    //
+    // Register the newly allocated object while we're holding the global lock since there's no synchronization
+    // built in to the implementation of register_object().  There are potential races when multiple independent
+    // threads are allocating objects, some of which might span the same card region.  For example, consider
+    // a card table's memory region within which three objects are being allocated by three different threads:
+    //
+    // objects being "concurrently" allocated:
+    //    [-----a------][-----b-----][--------------c------------------]
+    //            [---- card table memory range --------------]
+    //
+    // Before any objects are allocated, this card's memory range holds no objects.  Note that allocation of object a
+    // wants to set the starts-object, first-start, and last-start attributes of the preceding card region.
+    // Allocation of object b wants to set the starts-object, first-start, and last-start attributes of this card region.
+    // Allocation of object c also wants to set the starts-object, first-start, and last-start attributes of this
+    // card region.
+    //
+    // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as
+    // last-start representing object b while first-start represents object c.  This is why we need to require all
+    // register_object() invocations to be "mutually exclusive" with respect to each card's memory range.
+    card_scan()->register_object(result);
   }
 
   return result;
-}
-
-bool ShenandoahHeap::can_allocate_old(const ShenandoahAllocRequest& req, size_t requested_bytes, bool &promotion_eligible) const {
-  assert(mode()->is_generational(), "Only generational mode can have allocation requests for old");
-  assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-  if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-    if (!old_generation()->can_promote(requested_bytes)) {
-      if (old_generation()->get_evacuation_reserve() == 0) {
-        // The old generation promotion and evacuation reserves are both exhausted. Do not create a PLAB.
-        return false;
-      }
-      // We have enough evacuation reserve to create a plab for that purpose. However, since we do not
-      // have enough promotion reserve for further promotions, the plab will be configured to not allow
-      // promotions after it is created (if it is created).
-    } else {
-      // We have enough promotion reserve to try to allocate a plab. However, the allocation request size
-      // may be increased to satisfy alignment with the card table. If promotion_eligible is false, we will
-      // not later check if promotions are still possible with this plab.
-      promotion_eligible = true;
-    }
-  } else if (req.is_promotion()) {
-    // This is a shared alloc for promotion
-    if (!old_generation()->can_promote(requested_bytes)) {
-      // There isn't enough promotion capacity reserved for this request. We need to reserve the remaining memory
-      // for evacuation.  Reject this allocation.  The object will be evacuated to young-gen memory and promoted
-      // during a future GC pass.
-      return false;
-    }
-    // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
-  } else {
-    // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
-    assert(!req.is_lab_alloc(), "Expected request for memory outside of LAB");
-  }
-  return true;
-}
-
-void ShenandoahHeap::complete_old_allocation(const ShenandoahAllocRequest &req, bool promotion_eligible,
-                                             size_t requested_bytes, HeapWord* result) {
-  Thread* thread = Thread::current();
-  ShenandoahThreadLocalData::reset_plab_promoted(thread);
-  if (req.is_gc_alloc()) {
-    // Note: Even when a mutator is performing a promotion outside a LAB, we use a 'shared_gc' request.
-    bool disable_plab_promotions = false;
-    if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-      if (promotion_eligible) {
-        size_t actual_size = req.actual_size() * HeapWordSize;
-        // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
-        // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
-        if (old_generation()->can_promote(actual_size)) {
-          // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
-          // When we retire this plab, we'll unexpend what we don't really use.
-          old_generation()->expend_promoted(actual_size);
-          ShenandoahThreadLocalData::enable_plab_promotions(thread);
-          ShenandoahThreadLocalData::set_plab_actual_size(thread, actual_size);
-        } else {
-          disable_plab_promotions = true;
-        }
-      } else {
-        disable_plab_promotions = true;
-      }
-      if (disable_plab_promotions) {
-        // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
-        ShenandoahThreadLocalData::disable_plab_promotions(thread);
-        ShenandoahThreadLocalData::set_plab_actual_size(thread, 0);
-      }
-    } else if (req.is_promotion()) {
-      // Shared promotion.  Assume size is requested_bytes.
-      old_generation()->expend_promoted(requested_bytes);
-    }
-  }
-
-  // TODO: Is this only necessary for 'shared' allocations.
-  //
-  // Register the newly allocated object while we're holding the global lock since there's no synchronization
-  // built in to the implementation of register_object().  There are potential races when multiple independent
-  // threads are allocating objects, some of which might span the same card region.  For example, consider
-  // a card table's memory region within which three objects are being allocated by three different threads:
-  //
-  // objects being "concurrently" allocated:
-  //    [-----a------][-----b-----][--------------c------------------]
-  //            [---- card table memory range --------------]
-  //
-  // Before any objects are allocated, this card's memory range holds no objects.  Note that allocation of object a
-  //   wants to set the starts-object, first-start, and last-start attributes of the preceding card region.
-  //   allocation of object b wants to set the starts-object, first-start, and last-start attributes of this card region.
-  //   allocation of object c also wants to set the starts-object, first-start, and last-start attributes of this
-  //   card region.
-  //
-  // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as
-  // last-start representing object b while first-start represents object c.  This is why we need to require all
-  // register_object() invocations to be "mutually exclusive" with respect to each card's memory range.
-  card_scan()->register_object(result);
 }
 
 HeapWord* ShenandoahHeap::mem_allocate(size_t size,

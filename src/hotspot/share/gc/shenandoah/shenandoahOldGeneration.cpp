@@ -222,6 +222,69 @@ size_t ShenandoahOldGeneration::get_promoted_expended() const {
   return Atomic::load(&_promoted_expended);
 }
 
+bool ShenandoahOldGeneration::can_allocate(const ShenandoahAllocRequest &req) const {
+  size_t requested_bytes = req.size() * HeapWordSize;
+  assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
+  if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+    if (!can_promote(requested_bytes)) {
+      // We don't know how much of the plab might be used for evacuation, so we don't require the evacuation
+      // reserve be large enough to accommodate this request.
+      if (get_evacuation_reserve() == 0) {
+        // The old generation promotion and evacuation reserves are both exhausted. Do not create a PLAB.
+        return false;
+      }
+      // We have enough evacuation reserve to create a plab for that purpose. However, since we do not
+      // have enough promotion reserve for further promotions, the plab will be configured to not allow
+      // promotions after it is created (if it is created).
+    } else {
+      // We have enough promotion reserve to try to allocate a plab. However, the allocation request size
+      // may be increased to satisfy alignment with the card table. If promotion_eligible is false, we will
+      // not later check if promotions are still possible with this plab.
+    }
+  } else if (req.is_promotion()) {
+    // This is a shared alloc for promotion
+    if (!can_promote(requested_bytes)) {
+      // There isn't enough promotion capacity reserved for this request. We need to reserve the remaining memory
+      // for evacuation.  Reject this allocation.  The object will be evacuated to young-gen memory and promoted
+      // during a future GC pass.
+      return false;
+    }
+    // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
+  } else {
+    // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
+    assert(!req.is_lab_alloc(), "Expected request for memory outside of LAB");
+  }
+  return true;
+}
+
+void
+ShenandoahOldGeneration::configure_plab_for_current_thread(const ShenandoahAllocRequest &req) {
+  Thread* thread = Thread::current();
+  ShenandoahThreadLocalData::reset_plab_promoted(thread);
+  // Note: Even when a mutator is performing a promotion outside a LAB, we use a 'shared_gc' request.
+  if (req.is_gc_alloc()) {
+    size_t actual_size = req.actual_size() * HeapWordSize;
+    if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+      // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
+      // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
+      if (can_promote(actual_size)) {
+        // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
+        // When we retire this plab, we'll unexpend what we don't really use.
+        expend_promoted(actual_size);
+        ShenandoahThreadLocalData::enable_plab_promotions(thread);
+        ShenandoahThreadLocalData::set_plab_actual_size(thread, actual_size);
+      } else {
+        // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
+        ShenandoahThreadLocalData::disable_plab_promotions(thread);
+        ShenandoahThreadLocalData::set_plab_actual_size(thread, 0);
+      }
+    } else if (req.is_promotion()) {
+      // Shared promotion.
+      expend_promoted(actual_size);
+    }
+  }
+}
+
 size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
   return _live_bytes_after_last_mark;
 }

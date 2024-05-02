@@ -786,9 +786,6 @@ private:
   void try_inject_alloc_failure();
   bool should_inject_alloc_failure();
 
-  bool can_allocate_old(const ShenandoahAllocRequest& req, size_t requested_bytes, bool& promotion_eligible) const;
-  void complete_old_allocation(const ShenandoahAllocRequest &req, bool promotion_eligible,
-                               size_t requested_bytes, HeapWord* result);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
