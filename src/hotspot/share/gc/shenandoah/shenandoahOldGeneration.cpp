@@ -223,48 +223,40 @@ size_t ShenandoahOldGeneration::get_promoted_expended() const {
 }
 
 bool ShenandoahOldGeneration::can_allocate(const ShenandoahAllocRequest &req) const {
-  size_t requested_bytes = req.size() * HeapWordSize;
   assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-  if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-    if (!can_promote(requested_bytes)) {
-      // We don't know how much of the plab might be used for evacuation, so we don't require the evacuation
-      // reserve be large enough to accommodate this request.
-      if (get_evacuation_reserve() == 0) {
-        // The old generation promotion and evacuation reserves are both exhausted. Do not create a PLAB.
-        return false;
-      }
-      // We have enough evacuation reserve to create a plab for that purpose. However, since we do not
-      // have enough promotion reserve for further promotions, the plab will be configured to not allow
-      // promotions after it is created (if it is created).
-    } else {
-      // We have enough promotion reserve to try to allocate a plab. However, the allocation request size
-      // may be increased to satisfy alignment with the card table. If promotion_eligible is false, we will
-      // not later check if promotions are still possible with this plab.
-    }
-  } else if (req.is_promotion()) {
-    // This is a shared alloc for promotion
-    if (!can_promote(requested_bytes)) {
-      // There isn't enough promotion capacity reserved for this request. We need to reserve the remaining memory
-      // for evacuation.  Reject this allocation.  The object will be evacuated to young-gen memory and promoted
-      // during a future GC pass.
-      return false;
-    }
-    // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
-  } else {
-    // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
-    assert(!req.is_lab_alloc(), "Expected request for memory outside of LAB");
+
+  const size_t requested_bytes = req.size() * HeapWordSize;
+  if (can_promote(requested_bytes)) {
+    // The promotion reserve should be able to accommodate this request. The request
+    // might still fail if alignment with the card table increases the size. The request
+    // may also fail if the heap is badly fragmented and the free set cannot find room for it.
+    return true;
   }
-  return true;
+
+  if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
+    // The promotion reserve is exhausted. Check if we still have room for evacuations.
+    // Note that we cannot really know how much of the plab will be used for evacuations,
+    // so here we only check that some evacuation reserve still exists.
+    return get_evacuation_reserve() > 0;
+  }
+
+  // This is a shared allocation promotion request. However, we do not have room for any
+  // promotions. This allocation into old will fail, so we will just evacuate the object
+  // somewhere in the young generation.
+  return !req.is_promotion();
 }
 
 void
 ShenandoahOldGeneration::configure_plab_for_current_thread(const ShenandoahAllocRequest &req) {
-  Thread* thread = Thread::current();
-  ShenandoahThreadLocalData::reset_plab_promoted(thread);
   // Note: Even when a mutator is performing a promotion outside a LAB, we use a 'shared_gc' request.
   if (req.is_gc_alloc()) {
-    size_t actual_size = req.actual_size() * HeapWordSize;
+    const size_t actual_size = req.actual_size() * HeapWordSize;
     if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+      // We've created a new plab. Now we configure it whether it will be used for promotions
+      // and evacuations - or just evacuations.
+      Thread* thread = Thread::current();
+      ShenandoahThreadLocalData::reset_plab_promoted(thread);
+
       // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
       // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
       if (can_promote(actual_size)) {

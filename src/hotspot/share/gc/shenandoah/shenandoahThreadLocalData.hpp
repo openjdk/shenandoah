@@ -66,8 +66,16 @@ private:
 
   // Once the plab has been allocated, and we know the actual size, we record it here.
   size_t _plab_actual_size;
+
+  // As the plab is used for promotions, this value is incremented. When the plab is
+  // retired, the difference between 'actual_size' and 'promoted' will be returned to
+  // the old generation's promotion reserve (i.e., it will be 'unexpended').
   size_t _plab_promoted;
-  bool   _plab_allows_promotion; // If false, no more promotion by this thread during this evacuation phase.
+
+  // If false, no more promotion by this thread during this evacuation phase.
+  bool   _plab_allows_promotion;
+
+  // If true, evacuations may attempt to allocate a smaller plab if the original size fails.
   bool   _plab_retries_enabled;
 
   ShenandoahEvacuationStats* _evacuation_stats;
