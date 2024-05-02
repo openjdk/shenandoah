@@ -1108,136 +1108,70 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
-  bool try_smaller_lab_size = false;
-  size_t smaller_lab_size;
-  {
-    // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
-    bool promotion_eligible = false;
-    size_t requested_bytes = req.size() * HeapWordSize;
-    HeapWord* result = nullptr;
+  // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
+  bool promotion_eligible = false;
+  size_t requested_bytes = req.size() * HeapWordSize;
 
-    // If we are dealing with mutator allocation, then we may need to block for safepoint.
-    // We cannot block for safepoint for GC allocations, because there is a high chance
-    // we are already running at safepoint or from stack watermark machinery, and we cannot
-    // block again.
-    ShenandoahHeapLocker locker(lock(), req.is_mutator_alloc());
-    Thread* thread = Thread::current();
+  // If we are dealing with mutator allocation, then we may need to block for safepoint.
+  // We cannot block for safepoint for GC allocations, because there is a high chance
+  // we are already running at safepoint or from stack watermark machinery, and we cannot
+  // block again.
+  ShenandoahHeapLocker locker(lock(), req.is_mutator_alloc());
 
-    if (mode()->is_generational()) {
-      if (req.affiliation() == YOUNG_GENERATION) {
-        if (req.is_mutator_alloc()) {
-          // TODO: Why do we decide this _before_ attempting the allocation?
-          // Check that freeset allocation will automatically retry/use smaller size
-          size_t young_words_available = young_generation()->available() / HeapWordSize;
-          if (req.is_lab_alloc() && (req.min_size() < young_words_available)) {
-            // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
-            // lab size because young memory has become too fragmented.
-            try_smaller_lab_size = true;
-            smaller_lab_size = (young_words_available < req.size())? young_words_available: req.size();
-          } else if (req.size() > young_words_available) {
-            // Can't allocate because even min_size() is larger than remaining young_available
-            log_info(gc, ergo)("Unable to shrink %s alloc request of minimum size: " SIZE_FORMAT
-                               ", young words available: " SIZE_FORMAT, req.type_string(),
-                               HeapWordSize * (req.is_lab_alloc()? req.min_size(): req.size()), young_words_available);
-            return nullptr;
-          }
-        }
-      } else {
-        assert(req.is_old(), "Must be allocating from old, if not young");
-        assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-        if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-          if (!old_generation()->can_promote(requested_bytes)) {
-            if (old_generation()->get_evacuation_reserve() == 0) {
-              // The old generation promotion and evacuation reserves are both exhausted. Do not create a PLAB.
-              return nullptr;
-            }
-            // We have enough evacuation reserve to create a plab for that purpose. However, since we do not
-            // have enough promotion reserve for further promotions, the plab will be configured to not allow
-            // promotions after it is created (if it is created).
-          } else {
-            // We have enough promotion reserve to try to allocate a plab. However, the allocation request size
-            // may be increase to satisfy alignment with the card table. If promotion_eligible is false, we will
-            // not later check if promotions are still possible with this plab.
-            promotion_eligible = true;
-          }
-        } else if (req.is_promotion()) {
-          // This is a shared alloc for promotion
-          if (!old_generation()->can_promote(requested_bytes)) {
-            // There isn't enough promotion capacity reserved for this request. We need to reserve the remaining memory
-            // for evacuation.  Reject this allocation.  The object will be evacuated to young-gen memory and promoted
-            // during a future GC pass.
-            return nullptr;
-          }
-          // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
-        } else {
-          // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
-          assert(!req.is_lab_alloc(), "Expected request for memory outside of LAB");
-        }
-      }
-    } // This ends the is_generational() block
-
-    // First try the original request.  If TLAB request size is greater than available, allocate() will attempt to downsize
-    // request to fit within available memory.
-    result = _free_set->allocate(req, in_new_region);
-    if (result != nullptr) {
-      if (req.is_old()) {
-        complete_old_allocation(thread, req, promotion_eligible, requested_bytes, result);
-      }
-    }
-
-    if ((result != nullptr) || !try_smaller_lab_size) {
-      return result;
-    }
-    // else, fall through to try_smaller_lab_size
-  } // This closes the block that holds the heap lock, releasing the lock.
-
-  // We failed to allocate the originally requested lab size.  Let's see if we can allocate a smaller lab size.
-  if (req.size() == smaller_lab_size) {
-    // If we were already trying to allocate min size, no value in attempting to repeat the same.  End the recursion.
+  // Make sure the old generation has room for either evacuations or promotions before trying to allocate.
+  if (req.is_old() && !can_allocate_old(req, requested_bytes, promotion_eligible)) {
     return nullptr;
   }
 
-  // We arrive here if the tlab allocation request can be resized to fit within young_available
-  assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
-         (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations");
+  // First try the original request.  If TLAB request size is greater than available, allocate() will attempt to downsize
+  // request to fit within available memory.
+  HeapWord* result = _free_set->allocate(req, in_new_region);
 
-  // By convention, ShenandoahAllocationRequest is primarily read-only.  The only mutable instance data is represented by
-  // actual_size(), which is overwritten with the size of the allocaion when the allocation request is satisfied.  We use a
-  // recursive call here rather than introducing new methods to mutate the existing ShenandoahAllocationRequest argument.
-  // Mutation of the existing object might result in astonishing results if calling contexts assume the content of immutable
-  // fields remain constant.  The original TLAB allocation request was for memory that exceeded the current capacity.  We'll
-  // attempt to allocate a smaller TLAB.  If this is successful, we'll update actual_size() of our incoming
-  // ShenandoahAllocRequest.  If the recursive request fails, we'll simply return nullptr.
-
-  // Note that we've relinquished the HeapLock and some other thread may perform additional allocation before our recursive
-  // call reacquires the lock.  If that happens, we will need another recursive call to further reduce the size of our request
-  // for each time another thread allocates young memory during the brief intervals that the heap lock is available to
-  // interfering threads.  We expect this interference to be rare.  The recursion bottoms out when young_available is
-  // smaller than req.min_size().  The inner-nested call to allocate_memory_under_lock() uses the same min_size() value
-  // as this call, but it uses a preferred size() that is smaller than our preferred size, and is no larger than what we most
-  // recently saw as the memory currently available within the young generation.
-
-  // TODO: At the expense of code clarity, we could rewrite this recursive solution to use iteration.  We need at most one
-  // extra instance of the ShenandoahAllocRequest, which we can re-initialize multiple times inside a loop, with one iteration
-  // of the loop required for each time the existing solution would recurse.  An iterative solution would be more efficient
-  // in CPU time and stack memory utilization.  The expectation is that it is very rare that we would recurse more than once
-  // so making this change is not currently seen as a high priority.
-
-  ShenandoahAllocRequest smaller_req = ShenandoahAllocRequest::for_tlab(req.min_size(), smaller_lab_size);
-
-  // Note that shrinking the preferred size gets us past the gatekeeper that checks whether there's available memory to
-  // satisfy the allocation request.  The reality is the actual TLAB size is likely to be even smaller, because it will
-  // depend on how much memory is available within mutator regions that are not yet fully used.
-  HeapWord* result = allocate_memory_under_lock(smaller_req, in_new_region);
-  if (result != nullptr) {
-    req.set_actual_size(smaller_req.actual_size());
+  // Record the plab configuration for this result and register the object.
+  if (result != nullptr && req.is_old()) {
+    complete_old_allocation(req, promotion_eligible, requested_bytes, result);
   }
+
   return result;
 }
 
-void ShenandoahHeap::complete_old_allocation(Thread* thread, const ShenandoahAllocRequest &req, bool promotion_eligible,
+bool ShenandoahHeap::can_allocate_old(const ShenandoahAllocRequest& req, size_t requested_bytes, bool &promotion_eligible) const {
+  assert(mode()->is_generational(), "Only generational mode can have allocation requests for old");
+  assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
+  if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+    if (!old_generation()->can_promote(requested_bytes)) {
+      if (old_generation()->get_evacuation_reserve() == 0) {
+        // The old generation promotion and evacuation reserves are both exhausted. Do not create a PLAB.
+        return false;
+      }
+      // We have enough evacuation reserve to create a plab for that purpose. However, since we do not
+      // have enough promotion reserve for further promotions, the plab will be configured to not allow
+      // promotions after it is created (if it is created).
+    } else {
+      // We have enough promotion reserve to try to allocate a plab. However, the allocation request size
+      // may be increased to satisfy alignment with the card table. If promotion_eligible is false, we will
+      // not later check if promotions are still possible with this plab.
+      promotion_eligible = true;
+    }
+  } else if (req.is_promotion()) {
+    // This is a shared alloc for promotion
+    if (!old_generation()->can_promote(requested_bytes)) {
+      // There isn't enough promotion capacity reserved for this request. We need to reserve the remaining memory
+      // for evacuation.  Reject this allocation.  The object will be evacuated to young-gen memory and promoted
+      // during a future GC pass.
+      return false;
+    }
+    // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
+  } else {
+    // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
+    assert(!req.is_lab_alloc(), "Expected request for memory outside of LAB");
+  }
+  return true;
+}
+
+void ShenandoahHeap::complete_old_allocation(const ShenandoahAllocRequest &req, bool promotion_eligible,
                                              size_t requested_bytes, HeapWord* result) {
-  assert(req.is_old(), "Should only get old allocations here");
+  Thread* thread = Thread::current();
   ShenandoahThreadLocalData::reset_plab_promoted(thread);
   if (req.is_gc_alloc()) {
     // Note: Even when a mutator is performing a promotion outside a LAB, we use a 'shared_gc' request.
@@ -1270,6 +1204,8 @@ void ShenandoahHeap::complete_old_allocation(Thread* thread, const ShenandoahAll
     }
   }
 
+  // TODO: Is this only necessary for 'shared' allocations.
+  //
   // Register the newly allocated object while we're holding the global lock since there's no synchronization
   // built in to the implementation of register_object().  There are potential races when multiple independent
   // threads are allocating objects, some of which might span the same card region.  For example, consider
