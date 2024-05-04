@@ -360,6 +360,7 @@ bool ShenandoahHeap::is_in(const void* p) const {
 inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
   if (!mode()->is_generational()) {
     // everything is the same single generation
+    assert(is_in(obj), "Returning true below");
     return true;
   }
 
