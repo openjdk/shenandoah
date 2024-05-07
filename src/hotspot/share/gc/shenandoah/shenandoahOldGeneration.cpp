@@ -226,7 +226,9 @@ bool ShenandoahOldGeneration::can_allocate(const ShenandoahAllocRequest &req) co
   assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
 
   const size_t requested_bytes = req.size() * HeapWordSize;
+  // If there is room to promote, there is also room to evacuate.
   if (can_promote(requested_bytes)) {
+    assert(get_evacuation_reserve() > 0, "Promotion reserve greater than evacuation reserve");
     // The promotion reserve should be able to accommodate this request. The request
     // might still fail if alignment with the card table increases the size. The request
     // may also fail if the heap is badly fragmented and the free set cannot find room for it.
@@ -234,15 +236,14 @@ bool ShenandoahOldGeneration::can_allocate(const ShenandoahAllocRequest &req) co
   }
 
   if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
-    // The promotion reserve is exhausted. Check if we still have room for evacuations.
-    // Note that we cannot really know how much of the plab will be used for evacuations,
+    // The promotion reserve cannot accommodate this plab request. Check if we still have room for
+    // evacuations. Note that we cannot really know how much of the plab will be used for evacuations,
     // so here we only check that some evacuation reserve still exists.
     return get_evacuation_reserve() > 0;
   }
 
-  // This is a shared allocation promotion request. However, we do not have room for any
-  // promotions. This allocation into old will fail, so we will just evacuate the object
-  // somewhere in the young generation.
+  // If this is a shared allocation promotion request, we do not have room for any it.
+  // This promotion into old will fail, so we will just evacuate the object in the young generation.
   return !req.is_promotion();
 }
 

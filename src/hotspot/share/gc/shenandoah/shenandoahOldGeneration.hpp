@@ -122,7 +122,8 @@ public:
     return promotion_expended + requested_bytes <= promotion_avail;
   }
 
-  // Test if there is enough memory available in the old generation to allocate a new PLAB.
+  // Test if there is enough memory available in the old generation to accommodate this request.
+  // The request will be subject to constraints on promotion and evacuation reserves.
   bool can_allocate(const ShenandoahAllocRequest& req) const;
 
   // Updates the promotion expenditure tracking and configures whether the plab may be used
