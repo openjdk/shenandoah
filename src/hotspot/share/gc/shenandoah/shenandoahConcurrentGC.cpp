@@ -1051,7 +1051,9 @@ void ShenandoahConcurrentGC::op_weak_roots() {
     ShenandoahTimingsTracker t(ShenandoahPhaseTimings::conc_weak_roots_rendezvous);
     heap->rendezvous_threads();
   }
-  heap->set_concurrent_weak_root_in_progress(false);
+  // We can only toggle concurrent_weak_root_in_progress flag
+  // at a safepoint, so that mutators see a consistent
+  // value. The flag will be cleared at the next safepoint.
 }
 
 void ShenandoahConcurrentGC::op_class_unloading() {
