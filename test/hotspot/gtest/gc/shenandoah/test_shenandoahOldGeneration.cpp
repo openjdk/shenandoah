@@ -24,6 +24,8 @@
 #include "precompiled.hpp"
 #include "unittest.hpp"
 
+#include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 
@@ -177,7 +179,7 @@ TEST_VM_F(ShenandoahOldGenerationTest, test_shared_evacuation_has_no_side_effect
   old.configure_plab_for_current_thread(req);
   size_t expended_after = old.get_promoted_expended();
 
-  EXPECT_EQ(expended_before, expended_after) << "Not a promotion, should not expende promotion reserve";
+  EXPECT_EQ(expended_before, expended_after) << "Not a promotion, should not expend promotion reserve";
   EXPECT_EQ(plab_promoted(), INITIAL_PLAB_PROMOTED) << "Not a plab, should not have touched plab";
   EXPECT_EQ(plab_size(), INITIAL_PLAB_SIZE) << "Not a plab, should not have touched plab";
   EXPECT_FALSE(promotions_enabled());
