@@ -1745,9 +1745,9 @@ void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool fo
   // instigation by Ctlr thread at non-safepoint.
   if (!force) {
     assert(Thread::current() == ShenandoahController::thread(), "Controller thread only");
-    assert(!SafepointSynchronize::is_at_safepoint(), "Not at safepoint only");
   } else {
     // ... allowing it to be immediately updated at a non-safepoint by Ctlr thread
+    ShouldNotReachHere();
     set_active_generation(force);
   }
 }
@@ -1757,6 +1757,7 @@ void ShenandoahHeap::set_active_generation(bool force) {
     assert(Thread::current()->is_VM_thread(), "Verboten!");
     assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
   } else {
+    ShouldNotReachHere();
     Thread* self = Thread::current();
     bool is_safept = SafepointSynchronize::is_at_safepoint();
     assert((self->is_VM_thread() && is_safept) ||
