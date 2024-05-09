@@ -1744,7 +1744,9 @@ void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool fo
   // forcing breaks active_generation update protocol by VM Thread at Safept, upon
   // instigation by Ctlr thread at non-safepoint.
   if (!force) {
-    assert(Thread::current() == ShenandoahController::thread(), "Controller thread only");
+    assert(Thread::current() == ShenandoahController::thread() ||
+           (SafepointSynchronize::is_at_safepoint() && Thread::current()->is_VM_thread()),
+          "Unexpected thread or condition");
   } else {
     // ... allowing it to be immediately updated at a non-safepoint by Ctlr thread
     ShouldNotReachHere();
