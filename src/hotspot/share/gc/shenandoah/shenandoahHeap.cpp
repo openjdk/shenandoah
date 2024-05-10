@@ -2018,10 +2018,6 @@ bool ShenandoahHeap::is_prepare_for_old_mark_in_progress() const {
   return old_generation()->is_preparing_for_mark();
 }
 
-void ShenandoahHeap::set_aging_cycle(bool in_progress) {
-  _is_aging_cycle.set_cond(in_progress);
-}
-
 void ShenandoahHeap::manage_satb_barrier(bool active) {
   if (is_concurrent_mark_in_progress()) {
     // Ignore request to deactivate barrier while concurrent mark is in progress.
@@ -2585,7 +2581,7 @@ public:
         // There have been allocations in this region since the start of the cycle.
         // Any objects new to this region must not assimilate elevated age.
         r->reset_age();
-      } else if (ShenandoahHeap::heap()->is_aging_cycle()) {
+      } else if (ShenandoahGenerationalHeap::heap()->is_aging_cycle()) {
         r->increment_age();
       }
     }

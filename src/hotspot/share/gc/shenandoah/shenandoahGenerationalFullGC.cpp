@@ -187,7 +187,7 @@ ShenandoahPrepareForGenerationalCompactionObjectClosure::ShenandoahPrepareForGen
                                                           GrowableArray<ShenandoahHeapRegion*>& empty_regions,
                                                           ShenandoahHeapRegion* from_region, uint worker_id) :
         _preserved_marks(preserved_marks),
-        _heap(ShenandoahHeap::heap()),
+        _heap(ShenandoahGenerationalHeap::heap()),
         _tenuring_threshold(0),
         _empty_regions(empty_regions),
         _empty_regions_pos(0),
