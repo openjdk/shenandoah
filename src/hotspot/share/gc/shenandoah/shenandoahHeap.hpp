@@ -159,8 +159,8 @@ private:
   // ysr: May be it should just move there?
   ShenandoahGeneration* _gc_generation;
 
-  // This is set and cleared by only the VMThread 
-  // at each STW pause (safepoint) to the value seen in 
+  // This is set and cleared by only the VMThread
+  // at each STW pause (safepoint) to the value seen in
   // _gc_generation. This allows the value to be always consistently
   // by all mutators as well as all GC worker threads.
   // In that sense, it's a stable snapshot of _gc_generation that is
