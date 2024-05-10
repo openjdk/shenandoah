@@ -178,17 +178,13 @@ public:
   }
 
   // Set the _gc_generation field: can only be called by the
-  // ShenandoahControlThread or a subclass thereof. If `force` is
-  // true, then the change is pushed to active_generation immediately,
-  // without waiting for the next safepoint.
-  void set_gc_generation(ShenandoahGeneration* generation, bool force = false);
+  // ShenandoahControlThread or a subclass thereof.
+  void set_gc_generation(ShenandoahGeneration* generation);
 
   // Copy the value in the _gc_generation field into
   // the _active_generation field: can only be called at
-  // a safepoint by the VMThread, except when "force" is true,
-  // in which case the ShenandoahController thread may force
-  // the change at a non-safepoint. 
-  void set_active_generation(bool force = false);
+  // a safepoint by the VMThread.
+  void set_active_generation();
 
   ShenandoahHeuristics* heuristics();
 
@@ -530,7 +526,7 @@ public:
 
   ShenandoahEvacOOMHandler* oom_evac_handler() { return &_oom_evac_handler; }
 
-  void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation, bool force);
+  void on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation);
   void on_cycle_end(ShenandoahGeneration* generation);
 
   ShenandoahVerifier*        verifier();

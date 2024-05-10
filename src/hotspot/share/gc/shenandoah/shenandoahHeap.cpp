@@ -1739,44 +1739,27 @@ void ShenandoahHeap::print_tracing_info() const {
   }
 }
 
-void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation, bool force) {
+void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
   _gc_generation = generation;
-  // forcing breaks active_generation update protocol by VM Thread at Safept, upon
-  // instigation by Ctlr thread at non-safepoint.
-  if (!force) {
-    assert(Thread::current() == ShenandoahController::thread() ||
-           (SafepointSynchronize::is_at_safepoint() && Thread::current()->is_VM_thread()),
-          "Unexpected thread or condition");
-  } else {
-    // ... allowing it to be immediately updated at a non-safepoint by Ctlr thread
-    ShouldNotReachHere();
-    set_active_generation(force);
-  }
+  assert(Thread::current() == ShenandoahController::thread() ||
+         (SafepointSynchronize::is_at_safepoint() && Thread::current()->is_VM_thread()),
+         "Unexpected thread or condition");
 }
 
-void ShenandoahHeap::set_active_generation(bool force) {
-  if (!force) {
-    assert(Thread::current()->is_VM_thread(), "Verboten!");
-    assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
-  } else {
-    ShouldNotReachHere();
-    Thread* self = Thread::current();
-    bool is_safept = SafepointSynchronize::is_at_safepoint();
-    assert((self->is_VM_thread() && is_safept) ||
-           (self == ShenandoahController::thread() && !is_safept),
-          "Only VM at safept or ShenCtlr Thrd not at safept can force ");
-  }
+void ShenandoahHeap::set_active_generation() {
+  assert(Thread::current()->is_VM_thread(), "Verboten!");
+  assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
   _active_generation = _gc_generation;
 }
 
-void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation, bool force) {
+void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
   shenandoah_policy()->record_collection_cause(cause);
 
   assert(gc_cause()  == GCCause::_no_gc, "Over-writing cause");
   assert(_gc_generation == nullptr, "Over-writing _gc_generation");
 
   set_gc_cause(cause);
-  set_gc_generation(generation, force);
+  set_gc_generation(generation);
 
   generation->heuristics()->record_cycle_start();
 }
