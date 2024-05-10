@@ -1746,9 +1746,10 @@ void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
          "Unexpected thread or condition");
 }
 
+// Active generation may only be set by the VM thread at a safepoint.
 void ShenandoahHeap::set_active_generation() {
-  assert(Thread::current()->is_VM_thread(), "Verboten!");
-  assert(SafepointSynchronize::is_at_safepoint(), "Verboten!");
+  assert(Thread::current()->is_VM_thread(), "Only the VM Thread");
+  assert(SafepointSynchronize::is_at_safepoint(), "Only at a safepoint!");
   _active_generation = _gc_generation;
 }
 
@@ -2159,14 +2160,10 @@ void ShenandoahHeap::propagate_gc_state_to_java_threads() {
 }
 
 void ShenandoahHeap::set_gc_state(uint mask, bool value) {
-  // ysr: I think the assertion below is too strong; also the _gc_state_changed and update protocol seems
-  // to be a bit heavyweight; may be we can simplify this a bit.
-  //
-  // assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
-  // assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
+  assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
   _gc_state.set_cond(mask, value);
   _gc_state_changed = true;
-  // ysr: debugging. Check that if concurrent weak root is set then active_gen isn't null
+  // Check that if concurrent weak root is set then active_gen isn't null
   assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
 }
 

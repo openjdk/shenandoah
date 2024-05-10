@@ -39,21 +39,21 @@
 
 bool VM_ShenandoahOperation::doit_prologue() {
   log_active_generation("Prologue");
-  // ysr: allowing heap state changes at any time
-  // assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State can only be changed on a safepoint.");
+  assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State can only be changed on a safepoint.");
   return true;
 }
 
 void VM_ShenandoahOperation::doit_epilogue() {
   log_active_generation("Epilogue");
-  // ysr: allowing heap state changes at any time
-  // assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State was not synchronized to java threads.");
+  assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State was not synchronized to java threads.");
 }
 
 void VM_ShenandoahOperation::log_active_generation(const char* prefix) {
   ShenandoahGeneration* agen = ShenandoahHeap::heap()->active_generation();
-  log_info(gc)("%s: active_generation is %s",
-               prefix, agen == nullptr ? "nullptr" : shenandoah_generation_name(agen->type()));
+  ShenandoahGeneration* ggen = ShenandoahHeap::heap()->gc_generation();
+  log_debug(gc, heap)("%s: active_generation is %s, gc_generation is %s", prefix,
+                      agen == nullptr ? "nullptr" : shenandoah_generation_name(agen->type()),
+                      ggen == nullptr ? "nullptr" : shenandoah_generation_name(ggen->type()));
 }
 
 void VM_ShenandoahOperation::set_active_generation() {

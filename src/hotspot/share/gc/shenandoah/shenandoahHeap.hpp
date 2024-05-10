@@ -152,17 +152,14 @@ class ShenandoahHeap : public CollectedHeap {
 private:
   ShenandoahHeapLock _lock;
 
-  // This is set and cleared by the ShenandoahControlThread
-  // whenever a new cycle (or part thereof in the case of an
-  // old generation sub-cycle) starts or ends, and is done
-  // concurrently. It's only set and cleared by the ShenandoahControlThread.
-  // ysr: May be it should just move there?
+  // Indicates the generation whose collection is in
+  // proress
   ShenandoahGeneration* _gc_generation;
 
   // This is set and cleared by only the VMThread
   // at each STW pause (safepoint) to the value seen in
   // _gc_generation. This allows the value to be always consistently
-  // by all mutators as well as all GC worker threads.
+  // seen by all mutators as well as all GC worker threads.
   // In that sense, it's a stable snapshot of _gc_generation that is
   // updated at each STW pause associated with a ShenandoahVMOp.
   ShenandoahGeneration* _active_generation;
@@ -172,13 +169,17 @@ public:
     return &_lock;
   }
 
+  ShenandoahGeneration* gc_generation() const {
+    // value of _gc_generation field, see above
+    return _gc_generation;
+  }
+
   ShenandoahGeneration* active_generation() const {
-    // value of _active_generation field
+    // value of _active_generation field, see above
     return _active_generation;
   }
 
-  // Set the _gc_generation field: can only be called by the
-  // ShenandoahControlThread or a subclass thereof.
+  // Set the _gc_generation field
   void set_gc_generation(ShenandoahGeneration* generation);
 
   // Copy the value in the _gc_generation field into

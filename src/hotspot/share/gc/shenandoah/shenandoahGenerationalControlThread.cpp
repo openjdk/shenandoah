@@ -495,8 +495,6 @@ void ShenandoahGenerationalControlThread::service_concurrent_old_cycle(Shenandoa
       old_generation->transition_to(ShenandoahOldGeneration::MARKING);
     }
     case ShenandoahOldGeneration::MARKING: {
-      assert(!heap->is_concurrent_weak_root_in_progress(), "Can't force active_generation below");
-      // ShenandoahGCSession session(cause, old_generation, true /* force */);
       ShenandoahGCSession session(cause, old_generation);
       bool marking_complete = resume_concurrent_old_cycle(old_generation, cause);
       if (marking_complete) {

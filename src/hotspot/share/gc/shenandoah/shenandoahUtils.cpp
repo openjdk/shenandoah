@@ -41,7 +41,7 @@
 
 ShenandoahPhaseTimings::Phase ShenandoahTimingsTracker::_current_phase = ShenandoahPhaseTimings::_invalid_phase;
 
-ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation, bool force) :
+ShenandoahGCSession::ShenandoahGCSession(GCCause::Cause cause, ShenandoahGeneration* generation) :
   _heap(ShenandoahHeap::heap()),
   _generation(generation),
   _timer(_heap->gc_timer()),

@@ -360,14 +360,14 @@ bool ShenandoahHeap::is_in(const void* p) const {
 inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
   if (!mode()->is_generational()) {
     // everything is the same single generation
-    assert(is_in(obj), "Returning true below");
+    assert(is_in(obj), "Otherwise shouldn't return true below");
     return true;
   }
 
   ShenandoahGeneration* const gen = active_generation();
 
   if (gen == nullptr) {
-    // no collection is happening, only expect this to be called
+    // no collection is happening: only expect this to be called
     // when concurrent processing is active, but that could change
     return false;
   }
@@ -380,11 +380,8 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
 
   size_t index = heap_region_containing(obj)->index();
 
-#ifdef ASSERT
-  ShenandoahGeneration* const gen_again = active_generation();
   // No flickering!
-  assert(gen == gen_again, "Race");
-#endif
+  assert(gen == active_generation(), "Race?");
 
   switch (_affiliations[index]) {
   case ShenandoahAffiliation::FREE:
