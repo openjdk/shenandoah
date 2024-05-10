@@ -639,7 +639,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
     }
 
     if (_generation->is_global()) {
-      heap->cancel_old_gc();
+      heap->old_generation()->cancel_gc();
     } else if (heap->is_concurrent_old_mark_in_progress()) {
       // Purge the SATB buffers, transferring any valid, old pointers to the
       // old generation mark queue. Any pointers in a young region will be

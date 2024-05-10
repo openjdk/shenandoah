@@ -970,26 +970,6 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   return gclab->allocate(size);
 }
 
-void ShenandoahHeap::cancel_old_gc() {
-  shenandoah_assert_safepoint();
-  assert(old_generation() != nullptr, "Should only have mixed collections in generation mode.");
-  if (old_generation()->is_idle()) {
-#ifdef ASSERT
-    old_generation()->validate_waiting_for_bootstrap();
-#endif
-  } else {
-    log_info(gc)("Terminating old gc cycle.");
-    // Stop marking
-    old_generation()->cancel_marking();
-    // Stop tracking old regions
-    old_generation()->abandon_collection_candidates();
-    // Remove old generation access to young generation mark queues
-    young_generation()->set_old_gen_task_queues(nullptr);
-    // Transition to IDLE now.
-    old_generation()->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
-  }
-}
-
 // Called from stubs in JIT code or interpreter
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,

@@ -59,7 +59,7 @@ void ShenandoahGenerationalFullGC::prepare() {
   heap->reset_generation_reserves();
 
   // Full GC supersedes any marking or coalescing in old generation.
-  heap->cancel_old_gc();
+  heap->old_generation()->cancel_gc();
 }
 
 void ShenandoahGenerationalFullGC::handle_completion(ShenandoahHeap* heap) {
