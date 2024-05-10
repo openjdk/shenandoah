@@ -771,8 +771,6 @@ public:
   // mutator
   static inline uint get_object_age(oop obj);
 
-  void transfer_old_pointers_from_satb();
-
   void log_heap_status(const char *msg) const;
 
 private:

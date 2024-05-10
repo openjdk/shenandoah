@@ -645,7 +645,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
       // old generation mark queue. Any pointers in a young region will be
       // abandoned.
       ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_transfer_satb);
-      heap->transfer_old_pointers_from_satb();
+      heap->old_generation()->transfer_pointers_from_satb();
     }
   }
 
@@ -1230,7 +1230,7 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
     // We are not concerned about skipping this step in abbreviated cycles because regions
     // with no live objects cannot have been written to and so cannot have entries in the SATB
     // buffers.
-    heap->transfer_old_pointers_from_satb();
+    heap->old_generation()->transfer_pointers_from_satb();
   }
 
   heap->update_heap_region_states(true /*concurrent*/);
@@ -1264,7 +1264,7 @@ void ShenandoahConcurrentGC::op_final_roots() {
     // the last GC safepoint before concurrent marking of old resumes. We must be sure
     // that old mark threads don't see any pointers to garbage in the SATB buffers.
     if (heap->is_concurrent_old_mark_in_progress()) {
-      heap->transfer_old_pointers_from_satb();
+      heap->old_generation()->transfer_pointers_from_satb();
     }
 
     ShenandoahMarkingContext *ctx = heap->complete_marking_context();

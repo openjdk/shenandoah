@@ -2884,10 +2884,6 @@ bool ShenandoahHeap::requires_barriers(stackChunkOop obj) const {
   return false;
 }
 
-void ShenandoahHeap::transfer_old_pointers_from_satb() {
-  _old_generation->transfer_pointers_from_satb();
-}
-
 bool ShenandoahHeap::verify_generation_usage(bool verify_old, size_t old_regions, size_t old_bytes, size_t old_waste,
                                              bool verify_young, size_t young_regions, size_t young_bytes, size_t young_waste) {
   size_t tally_old_regions = 0;
