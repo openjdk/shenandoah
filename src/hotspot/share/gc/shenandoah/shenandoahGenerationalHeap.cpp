@@ -942,7 +942,7 @@ void ShenandoahGenerationalHeap::update_heap_references(bool concurrent) {
     ShenandoahGenerationalUpdateHeapRefsTask<false> task(&update_refs_iterator, &work_list);
     workers()->run_task(&task);
   }
-  assert(!update_refs_iterator.has_next(), "Should have finished update references");
+  assert(cancelled_gc() || !update_refs_iterator.has_next(), "Should have finished update references");
 
   if (ShenandoahEnableCardStats) { // generational check proxy
     assert(card_scan() != nullptr, "Card table must exist when card stats are enabled");

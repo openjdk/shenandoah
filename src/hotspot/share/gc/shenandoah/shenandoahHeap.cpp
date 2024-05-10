@@ -2550,7 +2550,7 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
     ShenandoahUpdateHeapRefsTask<false> task(&update_refs_iterator);
     workers()->run_task(&task);
   }
-  assert(!update_refs_iterator.has_next(), "Should have finished update references");
+  assert(cancelled_gc() || !update_refs_iterator.has_next(), "Should have finished update references");
 }
 
 class ShenandoahFinalUpdateRefsUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
