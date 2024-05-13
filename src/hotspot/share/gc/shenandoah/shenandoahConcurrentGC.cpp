@@ -1215,7 +1215,8 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
     heap->verifier()->verify_roots_in_to_space();
   }
 
-  // This needs to see is_aging_cycle
+  // If we are running in generational mode and this is an aging cycle, this will also age active
+  // regions that haven't been used for allocation.
   heap->update_heap_region_states(true /*concurrent*/);
 
   heap->set_update_refs_in_progress(false);
