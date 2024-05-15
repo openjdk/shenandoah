@@ -749,99 +749,60 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();
 
-    if (heap->mode()->is_generational()) {
-      if (!heap->collection_set()->is_empty() || heap->old_generation()->has_in_place_promotions()) {
-        // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
-        // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
+    if (!heap->collection_set()->is_empty() || has_in_place_promotions(heap)) {
+      // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
+      // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
 
-        LogTarget(Debug, gc, cset) lt;
-        if (lt.is_enabled()) {
-          ResourceMark rm;
-          LogStream ls(lt);
-          heap->collection_set()->print_on(&ls);
-        }
-
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_before_evacuation();
-        }
-
-        heap->set_evacuation_in_progress(true);
-
-        // Verify before arming for concurrent processing.
-        // Otherwise, verification can trigger stack processing.
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_during_evacuation();
-        }
-
-        // Generational mode may promote objects in place during the evacuation phase.
-        // If that is the only reason we are evacuating, we don't need to update references
-        // and there will be no forwarded objects on the heap.
-        heap->set_has_forwarded_objects(!heap->collection_set()->is_empty());
-
-        // Arm nmethods/stack for concurrent processing
-        if (!heap->collection_set()->is_empty()) {
-          // Iff objects will be evaluated, arm the nmethod barriers. These will be disarmed
-          // under the same condition (established in prepare_concurrent_roots) after strong
-          // root evacuation has completed (see op_strong_roots).
-          ShenandoahCodeRoots::arm_nmethods_for_evac();
-          ShenandoahStackWatermark::change_epoch_id();
-        }
-
-        if (ShenandoahPacing) {
-          heap->pacer()->setup_for_evac();
-        }
-      } else {
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_after_concmark();
-        }
-
-        if (VerifyAfterGC) {
-          Universe::verify();
-        }
+      LogTarget(Debug, gc, cset) lt;
+      if (lt.is_enabled()) {
+        ResourceMark rm;
+        LogStream ls(lt);
+        heap->collection_set()->print_on(&ls);
       }
-    } else {
-      // Not is_generational()
+
+      if (ShenandoahVerify) {
+        heap->verifier()->verify_before_evacuation();
+      }
+
+      heap->set_evacuation_in_progress(true);
+
+      // Verify before arming for concurrent processing.
+      // Otherwise, verification can trigger stack processing.
+      if (ShenandoahVerify) {
+        heap->verifier()->verify_during_evacuation();
+      }
+
+      // Generational mode may promote objects in place during the evacuation phase.
+      // If that is the only reason we are evacuating, we don't need to update references
+      // and there will be no forwarded objects on the heap.
+      heap->set_has_forwarded_objects(!heap->collection_set()->is_empty());
+
+      // Arm nmethods/stack for concurrent processing
       if (!heap->collection_set()->is_empty()) {
-        LogTarget(Debug, gc, ergo) lt;
-        if (lt.is_enabled()) {
-          ResourceMark rm;
-          LogStream ls(lt);
-          heap->collection_set()->print_on(&ls);
-        }
-
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_before_evacuation();
-        }
-
-        heap->set_evacuation_in_progress(true);
-
-        // Verify before arming for concurrent processing.
-        // Otherwise, verification can trigger stack processing.
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_during_evacuation();
-        }
-
-        // From here on, we need to update references.
-        heap->set_has_forwarded_objects(true);
-
-        // Arm nmethods/stack for concurrent processing
+        // Iff objects will be evaluated, arm the nmethod barriers. These will be disarmed
+        // under the same condition (established in prepare_concurrent_roots) after strong
+        // root evacuation has completed (see op_strong_roots).
         ShenandoahCodeRoots::arm_nmethods_for_evac();
         ShenandoahStackWatermark::change_epoch_id();
+      }
 
-        if (ShenandoahPacing) {
-          heap->pacer()->setup_for_evac();
-        }
-      } else {
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_after_concmark();
-        }
+      if (ShenandoahPacing) {
+        heap->pacer()->setup_for_evac();
+      }
+    } else {
+      if (ShenandoahVerify) {
+        heap->verifier()->verify_after_concmark();
+      }
 
-        if (VerifyAfterGC) {
-          Universe::verify();
-        }
+      if (VerifyAfterGC) {
+        Universe::verify();
       }
     }
   }
+}
+
+bool ShenandoahConcurrentGC::has_in_place_promotions(ShenandoahHeap* heap) {
+  return heap->mode()->is_generational() && heap->old_generation()->has_in_place_promotions();
 }
 
 class ShenandoahConcurrentEvacThreadClosure : public ThreadClosure {

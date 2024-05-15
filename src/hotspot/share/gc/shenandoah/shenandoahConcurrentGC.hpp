@@ -133,6 +133,8 @@ protected:
 private:
   void start_mark();
 
+  static bool has_in_place_promotions(ShenandoahHeap* heap) ;
+
   // Messages for GC trace events, they have to be immortal for
   // passing around the logging/tracing systems
   const char* init_mark_event_message() const;
