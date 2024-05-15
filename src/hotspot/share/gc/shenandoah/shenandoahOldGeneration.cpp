@@ -218,8 +218,65 @@ size_t ShenandoahOldGeneration::unexpend_promoted(size_t decrement) {
   return Atomic::sub(&_promoted_expended, decrement);
 }
 
-size_t ShenandoahOldGeneration::get_promoted_expended() {
+size_t ShenandoahOldGeneration::get_promoted_expended() const {
   return Atomic::load(&_promoted_expended);
+}
+
+bool ShenandoahOldGeneration::can_allocate(const ShenandoahAllocRequest &req) const {
+  assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
+
+  const size_t requested_bytes = req.size() * HeapWordSize;
+  // The promotion reserve may also be used for evacuations. If we can promote this object,
+  // then we can also evacuate it.
+  if (can_promote(requested_bytes)) {
+    // The promotion reserve should be able to accommodate this request. The request
+    // might still fail if alignment with the card table increases the size. The request
+    // may also fail if the heap is badly fragmented and the free set cannot find room for it.
+    return true;
+  }
+
+  if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
+    // The promotion reserve cannot accommodate this plab request. Check if we still have room for
+    // evacuations. Note that we cannot really know how much of the plab will be used for evacuations,
+    // so here we only check that some evacuation reserve still exists.
+    return get_evacuation_reserve() > 0;
+  }
+
+  // This is a shared allocation request. We've already checked that it can't be promoted, so if
+  // it is a promotion, we return false. Otherwise, it is a shared evacuation request, and we allow
+  // the allocation to proceed.
+  return !req.is_promotion();
+}
+
+void
+ShenandoahOldGeneration::configure_plab_for_current_thread(const ShenandoahAllocRequest &req) {
+  // Note: Even when a mutator is performing a promotion outside a LAB, we use a 'shared_gc' request.
+  if (req.is_gc_alloc()) {
+    const size_t actual_size = req.actual_size() * HeapWordSize;
+    if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
+      // We've created a new plab. Now we configure it whether it will be used for promotions
+      // and evacuations - or just evacuations.
+      Thread* thread = Thread::current();
+      ShenandoahThreadLocalData::reset_plab_promoted(thread);
+
+      // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
+      // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
+      if (can_promote(actual_size)) {
+        // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
+        // When we retire this plab, we'll unexpend what we don't really use.
+        expend_promoted(actual_size);
+        ShenandoahThreadLocalData::enable_plab_promotions(thread);
+        ShenandoahThreadLocalData::set_plab_actual_size(thread, actual_size);
+      } else {
+        // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
+        ShenandoahThreadLocalData::disable_plab_promotions(thread);
+        ShenandoahThreadLocalData::set_plab_actual_size(thread, 0);
+      }
+    } else if (req.is_promotion()) {
+      // Shared promotion.
+      expend_promoted(actual_size);
+    }
+  }
 }
 
 size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
@@ -227,10 +284,16 @@ size_t ShenandoahOldGeneration::get_live_bytes_after_last_mark() const {
 }
 
 void ShenandoahOldGeneration::set_live_bytes_after_last_mark(size_t bytes) {
-  _live_bytes_after_last_mark = bytes;
-  _growth_before_compaction /= 2;
-  if (_growth_before_compaction < _min_growth_before_compaction) {
-    _growth_before_compaction = _min_growth_before_compaction;
+  if (bytes == 0) {
+    // Restart search for best old-gen size to the initial state
+    _live_bytes_after_last_mark = ShenandoahHeap::heap()->capacity() * INITIAL_LIVE_FRACTION / FRACTIONAL_DENOMINATOR;
+    _growth_before_compaction = INITIAL_GROWTH_BEFORE_COMPACTION;
+  } else {
+    _live_bytes_after_last_mark = bytes;
+    _growth_before_compaction /= 2;
+    if (_growth_before_compaction < _min_growth_before_compaction) {
+      _growth_before_compaction = _min_growth_before_compaction;
+    }
   }
 }
 
@@ -273,6 +336,25 @@ void ShenandoahOldGeneration::cancel_marking() {
   }
 
   ShenandoahGeneration::cancel_marking();
+}
+
+void ShenandoahOldGeneration::cancel_gc() {
+  shenandoah_assert_safepoint();
+  if (is_idle()) {
+#ifdef ASSERT
+    validate_waiting_for_bootstrap();
+#endif
+  } else {
+    log_info(gc)("Terminating old gc cycle.");
+    // Stop marking
+    cancel_marking();
+    // Stop tracking old regions
+    abandon_collection_candidates();
+    // Remove old generation access to young generation mark queues
+    ShenandoahHeap::heap()->young_generation()->set_old_gen_task_queues(nullptr);
+    // Transition to IDLE now.
+    transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
+  }
 }
 
 void ShenandoahOldGeneration::prepare_gc() {
@@ -520,7 +602,7 @@ bool ShenandoahOldGeneration::validate_waiting_for_bootstrap() {
 #endif
 
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
-  _old_heuristics = new ShenandoahOldHeuristics(this);
+  _old_heuristics = new ShenandoahOldHeuristics(this, ShenandoahGenerationalHeap::heap());
   _old_heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
   _heuristics = _old_heuristics;
   return _heuristics;
@@ -613,54 +695,6 @@ void ShenandoahOldGeneration::prepare_for_mixed_collections_after_global_gc() {
   log_info(gc)("After choosing global collection set, mixed candidates: " UINT32_FORMAT ", coalescing candidates: " SIZE_FORMAT,
                _old_heuristics->unprocessed_old_collection_candidates(),
                _old_heuristics->coalesce_and_fill_candidates_count());
-}
-
-void ShenandoahOldGeneration::maybe_trigger_collection(size_t first_old_region, size_t last_old_region, size_t old_region_count) {
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  const size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
-  const size_t allowed_old_gen_span = heap->num_regions() - (ShenandoahGenerationalHumongousReserve * heap->num_regions() / 100);
-
-  // Tolerate lower density if total span is small.  Here's the implementation:
-  //   if old_gen spans more than 100% and density < 75%, trigger old-defrag
-  //   else if old_gen spans more than 87.5% and density < 62.5%, trigger old-defrag
-  //   else if old_gen spans more than 75% and density < 50%, trigger old-defrag
-  //   else if old_gen spans more than 62.5% and density < 37.5%, trigger old-defrag
-  //   else if old_gen spans more than 50% and density < 25%, trigger old-defrag
-  //
-  // A previous implementation was more aggressive in triggering, resulting in degraded throughput when
-  // humongous allocation was not required.
-
-  const size_t old_available = available();
-  const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-  const size_t old_unaffiliated_available = free_unaffiliated_regions() * region_size_bytes;
-  assert(old_available >= old_unaffiliated_available, "sanity");
-  const size_t old_fragmented_available = old_available - old_unaffiliated_available;
-
-  const size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
-  const size_t old_bytes_spanned = old_region_span * region_size_bytes;
-  const double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
-
-  uint eighths = 8;
-  for (uint i = 0; i < 5; i++) {
-    size_t span_threshold = eighths * allowed_old_gen_span / 8;
-    double density_threshold = (eighths - 2) / 8.0;
-    if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
-      heuristics()->trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-      break;
-    }
-    eighths--;
-  }
-
-  const size_t old_used = used() + get_humongous_waste();
-  const size_t trigger_threshold = usage_trigger_threshold();
-  // Detects unsigned arithmetic underflow
-  assert(old_used <= heap->free_set()->capacity(),
-         "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
-         used(), get_humongous_waste(), heap->free_set()->capacity());
-
-  if (old_used > trigger_threshold) {
-    heuristics()->trigger_old_has_grown();
-  }
 }
 
 void ShenandoahOldGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {

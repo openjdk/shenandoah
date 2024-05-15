@@ -567,7 +567,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _num_regions(0),
   _regions(nullptr),
   _affiliations(nullptr),
-  _update_refs_iterator(this),
   _gc_state_changed(false),
   _gc_no_progress_count(0),
   _age_census(nullptr),
@@ -970,26 +969,6 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   return gclab->allocate(size);
 }
 
-void ShenandoahHeap::cancel_old_gc() {
-  shenandoah_assert_safepoint();
-  assert(old_generation() != nullptr, "Should only have mixed collections in generation mode.");
-  if (old_generation()->is_idle()) {
-#ifdef ASSERT
-    old_generation()->validate_waiting_for_bootstrap();
-#endif
-  } else {
-    log_info(gc)("Terminating old gc cycle.");
-    // Stop marking
-    old_generation()->cancel_marking();
-    // Stop tracking old regions
-    old_generation()->abandon_collection_candidates();
-    // Remove old generation access to young generation mark queues
-    young_generation()->set_old_gen_task_queues(nullptr);
-    // Transition to IDLE now.
-    old_generation()->transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
-  }
-}
-
 // Called from stubs in JIT code or interpreter
 HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
                                             size_t requested_size,
@@ -1017,9 +996,6 @@ HeapWord* ShenandoahHeap::allocate_new_gclab(size_t min_size,
   return res;
 }
 
-
-// is_promotion is true iff this allocation is known for sure to hold the result of young-gen evacuation
-// to old-gen.  plab allocates are not known as such, since they may hold old-gen evacuations.
 HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
   intptr_t pacer_epoch = 0;
   bool in_new_region = false;
@@ -1066,7 +1042,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
       log_debug(gc, alloc)("Thread: %s, Result: " PTR_FORMAT ", Request: %s, Size: " SIZE_FORMAT ", Original: " SIZE_FORMAT ", Latest: " SIZE_FORMAT,
                            Thread::current()->name(), p2i(result), req.type_string(), req.size(), original_count, get_gc_no_progress_count());
     }
-
   } else {
     assert(req.is_gc_alloc(), "Can only accept GC allocs here");
     result = allocate_memory_under_lock(req, in_new_region);
@@ -1108,189 +1083,47 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
 }
 
 HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req, bool& in_new_region) {
-  bool try_smaller_lab_size = false;
-  size_t smaller_lab_size;
-  {
-    // promotion_eligible pertains only to PLAB allocations, denoting that the PLAB is allowed to allocate for promotions.
-    bool promotion_eligible = false;
-    bool allow_allocation = true;
-    bool plab_alloc = false;
-    size_t requested_bytes = req.size() * HeapWordSize;
-    HeapWord* result = nullptr;
+  // If we are dealing with mutator allocation, then we may need to block for safepoint.
+  // We cannot block for safepoint for GC allocations, because there is a high chance
+  // we are already running at safepoint or from stack watermark machinery, and we cannot
+  // block again.
+  ShenandoahHeapLocker locker(lock(), req.is_mutator_alloc());
 
-    // If we are dealing with mutator allocation, then we may need to block for safepoint.
-    // We cannot block for safepoint for GC allocations, because there is a high chance
-    // we are already running at safepoint or from stack watermark machinery, and we cannot
-    // block again.
-    ShenandoahHeapLocker locker(lock(), req.is_mutator_alloc());
-    Thread* thread = Thread::current();
-
-    if (mode()->is_generational()) {
-      if (req.affiliation() == YOUNG_GENERATION) {
-        if (req.is_mutator_alloc()) {
-          size_t young_words_available = young_generation()->available() / HeapWordSize;
-          if (req.is_lab_alloc() && (req.min_size() < young_words_available)) {
-            // Allow ourselves to try a smaller lab size even if requested_bytes <= young_available.  We may need a smaller
-            // lab size because young memory has become too fragmented.
-            try_smaller_lab_size = true;
-            smaller_lab_size = (young_words_available < req.size())? young_words_available: req.size();
-          } else if (req.size() > young_words_available) {
-            // Can't allocate because even min_size() is larger than remaining young_available
-            log_info(gc, ergo)("Unable to shrink %s alloc request of minimum size: " SIZE_FORMAT
-                               ", young words available: " SIZE_FORMAT, req.type_string(),
-                               HeapWordSize * (req.is_lab_alloc()? req.min_size(): req.size()), young_words_available);
-            return nullptr;
-          }
-        }
-      } else {                    // reg.affiliation() == OLD_GENERATION
-        assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "GCLAB pertains only to young-gen memory");
-        if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-          plab_alloc = true;
-          size_t promotion_avail = old_generation()->get_promoted_reserve();
-          size_t promotion_expended = old_generation()->get_promoted_expended();
-          if (promotion_expended + requested_bytes > promotion_avail) {
-            promotion_avail = 0;
-            if (old_generation()->get_evacuation_reserve() == 0) {
-              // There are no old-gen evacuations in this pass.  There's no value in creating a plab that cannot
-              // be used for promotions.
-              allow_allocation = false;
-            }
-          } else {
-            promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
-            promotion_eligible = true;
-          }
-        } else if (req.is_promotion()) {
-          // This is a shared alloc for promotion
-          size_t promotion_avail = old_generation()->get_promoted_reserve();
-          size_t promotion_expended = old_generation()->get_promoted_expended();
-          if (promotion_expended + requested_bytes > promotion_avail) {
-            promotion_avail = 0;
-          } else {
-            promotion_avail = promotion_avail - (promotion_expended + requested_bytes);
-          }
-          if (promotion_avail == 0) {
-            // We need to reserve the remaining memory for evacuation.  Reject this allocation.  The object will be
-            // evacuated to young-gen memory and promoted during a future GC pass.
-            return nullptr;
-          }
-          // Else, we'll allow the allocation to proceed.  (Since we hold heap lock, the tested condition remains true.)
-        } else {
-          // This is a shared allocation for evacuation.  Memory has already been reserved for this purpose.
-        }
-      }
-    } // This ends the is_generational() block
-
-    // First try the original request.  If TLAB request size is greater than available, allocate() will attempt to downsize
-    // request to fit within available memory.
-    result = (allow_allocation)? _free_set->allocate(req, in_new_region): nullptr;
-    if (result != nullptr) {
-      if (req.is_old()) {
-        ShenandoahThreadLocalData::reset_plab_promoted(thread);
-        if (req.is_gc_alloc()) {
-          bool disable_plab_promotions = false;
-          if (req.type() ==  ShenandoahAllocRequest::_alloc_plab) {
-            if (promotion_eligible) {
-              size_t actual_size = req.actual_size() * HeapWordSize;
-              // The actual size of the allocation may be larger than the requested bytes (due to alignment on card boundaries).
-              // If this puts us over our promotion budget, we need to disable future PLAB promotions for this thread.
-              if (old_generation()->get_promoted_expended() + actual_size <= old_generation()->get_promoted_reserve()) {
-                // Assume the entirety of this PLAB will be used for promotion.  This prevents promotion from overreach.
-                // When we retire this plab, we'll unexpend what we don't really use.
-                ShenandoahThreadLocalData::enable_plab_promotions(thread);
-                old_generation()->expend_promoted(actual_size);
-                ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, actual_size);
-              } else {
-                disable_plab_promotions = true;
-              }
-            } else {
-              disable_plab_promotions = true;
-            }
-            if (disable_plab_promotions) {
-              // Disable promotions in this thread because entirety of this PLAB must be available to hold old-gen evacuations.
-              ShenandoahThreadLocalData::disable_plab_promotions(thread);
-              ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
-            }
-          } else if (req.is_promotion()) {
-            // Shared promotion.  Assume size is requested_bytes.
-            old_generation()->expend_promoted(requested_bytes);
-          }
-        }
-
-        // Register the newly allocated object while we're holding the global lock since there's no synchronization
-        // built in to the implementation of register_object().  There are potential races when multiple independent
-        // threads are allocating objects, some of which might span the same card region.  For example, consider
-        // a card table's memory region within which three objects are being allocated by three different threads:
-        //
-        // objects being "concurrently" allocated:
-        //    [-----a------][-----b-----][--------------c------------------]
-        //            [---- card table memory range --------------]
-        //
-        // Before any objects are allocated, this card's memory range holds no objects.  Note that allocation of object a
-        //   wants to set the starts-object, first-start, and last-start attributes of the preceding card region.
-        //   allocation of object b wants to set the starts-object, first-start, and last-start attributes of this card region.
-        //   allocation of object c also wants to set the starts-object, first-start, and last-start attributes of this
-        //   card region.
-        //
-        // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as
-        // last-start representing object b while first-start represents object c.  This is why we need to require all
-        // register_object() invocations to be "mutually exclusive" with respect to each card's memory range.
-        card_scan()->register_object(result);
-      }
-    } else {
-      // The allocation failed.  If this was a plab allocation, We've already retired it and no longer have a plab.
-      if (req.is_old() && req.is_gc_alloc() && (req.type() == ShenandoahAllocRequest::_alloc_plab)) {
-        // We don't need to disable PLAB promotions because there is no PLAB.  We leave promotions enabled because
-        // this allows the surrounding infrastructure to retry alloc_plab_slow() with a smaller PLAB size.
-        ShenandoahThreadLocalData::set_plab_preallocated_promoted(thread, 0);
-      }
-    }
-    if ((result != nullptr) || !try_smaller_lab_size) {
-      return result;
-    }
-    // else, fall through to try_smaller_lab_size
-  } // This closes the block that holds the heap lock, releasing the lock.
-
-  // We failed to allocate the originally requested lab size.  Let's see if we can allocate a smaller lab size.
-  if (req.size() == smaller_lab_size) {
-    // If we were already trying to allocate min size, no value in attempting to repeat the same.  End the recursion.
+  // Make sure the old generation has room for either evacuations or promotions before trying to allocate.
+  if (req.is_old() && !old_generation()->can_allocate(req)) {
     return nullptr;
   }
 
-  // We arrive here if the tlab allocation request can be resized to fit within young_available
-  assert((req.affiliation() == YOUNG_GENERATION) && req.is_lab_alloc() && req.is_mutator_alloc() &&
-         (smaller_lab_size < req.size()), "Only shrink allocation request size for TLAB allocations");
+  // If TLAB request size is greater than available, allocate() will attempt to downsize request to fit within available
+  // memory.
+  HeapWord* result = _free_set->allocate(req, in_new_region);
 
-  // By convention, ShenandoahAllocationRequest is primarily read-only.  The only mutable instance data is represented by
-  // actual_size(), which is overwritten with the size of the allocaion when the allocation request is satisfied.  We use a
-  // recursive call here rather than introducing new methods to mutate the existing ShenandoahAllocationRequest argument.
-  // Mutation of the existing object might result in astonishing results if calling contexts assume the content of immutable
-  // fields remain constant.  The original TLAB allocation request was for memory that exceeded the current capacity.  We'll
-  // attempt to allocate a smaller TLAB.  If this is successful, we'll update actual_size() of our incoming
-  // ShenandoahAllocRequest.  If the recursive request fails, we'll simply return nullptr.
-
-  // Note that we've relinquished the HeapLock and some other thread may perform additional allocation before our recursive
-  // call reacquires the lock.  If that happens, we will need another recursive call to further reduce the size of our request
-  // for each time another thread allocates young memory during the brief intervals that the heap lock is available to
-  // interfering threads.  We expect this interference to be rare.  The recursion bottoms out when young_available is
-  // smaller than req.min_size().  The inner-nested call to allocate_memory_under_lock() uses the same min_size() value
-  // as this call, but it uses a preferred size() that is smaller than our preferred size, and is no larger than what we most
-  // recently saw as the memory currently available within the young generation.
-
-  // TODO: At the expense of code clarity, we could rewrite this recursive solution to use iteration.  We need at most one
-  // extra instance of the ShenandoahAllocRequest, which we can re-initialize multiple times inside a loop, with one iteration
-  // of the loop required for each time the existing solution would recurse.  An iterative solution would be more efficient
-  // in CPU time and stack memory utilization.  The expectation is that it is very rare that we would recurse more than once
-  // so making this change is not currently seen as a high priority.
-
-  ShenandoahAllocRequest smaller_req = ShenandoahAllocRequest::for_tlab(req.min_size(), smaller_lab_size);
-
-  // Note that shrinking the preferred size gets us past the gatekeeper that checks whether there's available memory to
-  // satisfy the allocation request.  The reality is the actual TLAB size is likely to be even smaller, because it will
-  // depend on how much memory is available within mutator regions that are not yet fully used.
-  HeapWord* result = allocate_memory_under_lock(smaller_req, in_new_region);
-  if (result != nullptr) {
-    req.set_actual_size(smaller_req.actual_size());
+  // Record the plab configuration for this result and register the object.
+  if (result != nullptr && req.is_old()) {
+    old_generation()->configure_plab_for_current_thread(req);
+    if (req.type() == ShenandoahAllocRequest::_alloc_shared_gc) {
+      // Register the newly allocated object while we're holding the global lock since there's no synchronization
+      // built in to the implementation of register_object().  There are potential races when multiple independent
+      // threads are allocating objects, some of which might span the same card region.  For example, consider
+      // a card table's memory region within which three objects are being allocated by three different threads:
+      //
+      // objects being "concurrently" allocated:
+      //    [-----a------][-----b-----][--------------c------------------]
+      //            [---- card table memory range --------------]
+      //
+      // Before any objects are allocated, this card's memory range holds no objects.  Note that allocation of object a
+      // wants to set the starts-object, first-start, and last-start attributes of the preceding card region.
+      // Allocation of object b wants to set the starts-object, first-start, and last-start attributes of this card region.
+      // Allocation of object c also wants to set the starts-object, first-start, and last-start attributes of this
+      // card region.
+      //
+      // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as
+      // last-start representing object b while first-start represents object c.  This is why we need to require all
+      // register_object() invocations to be "mutually exclusive" with respect to each card's memory range.
+      card_scan()->register_object(result);
+    }
   }
+
   return result;
 }
 
@@ -1661,7 +1494,8 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
 
 // Returns size in bytes
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
-  // Return the max allowed size, and let the allocation path figure out the safe size for current allocation.
+  // Return the max allowed size, and let the allocation path
+  // figure out the safe size for current allocation.
   return ShenandoahHeapRegion::max_tlab_size_bytes();
 }
 
@@ -2121,8 +1955,6 @@ void ShenandoahHeap::prepare_update_heap_references(bool concurrent) {
                             ShenandoahPhaseTimings::degen_gc_init_update_refs_manage_gclabs);
     gclabs_retire(ResizeTLAB);
   }
-
-  _update_refs_iterator.reset();
 }
 
 void ShenandoahHeap::propagate_gc_state_to_java_threads() {
@@ -2178,10 +2010,6 @@ void ShenandoahHeap::set_concurrent_old_mark_in_progress(bool in_progress) {
 
 bool ShenandoahHeap::is_prepare_for_old_mark_in_progress() const {
   return old_generation()->is_preparing_for_mark();
-}
-
-void ShenandoahHeap::set_aging_cycle(bool in_progress) {
-  _is_aging_cycle.set_cond(in_progress);
 }
 
 void ShenandoahHeap::manage_satb_barrier(bool active) {
@@ -2254,18 +2082,18 @@ uint ShenandoahHeap::max_workers() {
 void ShenandoahHeap::stop() {
   // The shutdown sequence should be able to terminate when GC is running.
 
-  // Step 1. Notify policy to disable event recording and prevent visiting gc threads during shutdown
+  // Step 0. Notify policy to disable event recording.
   _shenandoah_policy->record_shutdown();
 
-  // Step 2. Notify control thread that we are in shutdown.
+  // Step 1. Notify control thread that we are in shutdown.
   // Note that we cannot do that with stop(), because stop() is blocking and waits for the actual shutdown.
   // Doing stop() here would wait for the normal GC cycle to complete, never falling through to cancel below.
   control_thread()->prepare_for_graceful_shutdown();
 
-  // Step 3. Notify GC workers that we are cancelling GC.
+  // Step 2. Notify GC workers that we are cancelling GC.
   cancel_gc(GCCause::_shenandoah_stop_vm);
 
-  // Step 4. Wait until GC worker exits normally.
+  // Step 3. Wait until GC worker exits normally.
   control_thread()->stop();
 }
 
@@ -2494,18 +2322,11 @@ class ShenandoahUpdateHeapRefsTask : public WorkerTask {
 private:
   ShenandoahHeap* _heap;
   ShenandoahRegionIterator* _regions;
-  ShenandoahRegionChunkIterator* _work_chunks;
-
 public:
-  explicit ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions,
-                                        ShenandoahRegionChunkIterator* work_chunks) :
+  explicit ShenandoahUpdateHeapRefsTask(ShenandoahRegionIterator* regions) :
     WorkerTask("Shenandoah Update References"),
     _heap(ShenandoahHeap::heap()),
-    _regions(regions),
-    _work_chunks(work_chunks)
-  {
-    bool old_bitmap_stable = _heap->old_generation()->is_mark_complete();
-    log_info(gc, remset)("Scan remembered set using bitmap: %s", BOOL_TO_STR(old_bitmap_stable));
+    _regions(regions) {
   }
 
   void work(uint worker_id) {
@@ -2522,7 +2343,6 @@ public:
 private:
   template<class T>
   void do_work(uint worker_id) {
-    T cl;
     if (CONCURRENT && (worker_id == 0)) {
       // We ask the first worker to replenish the Mutator free set by moving regions previously reserved to hold the
       // results of evacuation.  These reserves are no longer necessary because evacuation has completed.
@@ -2532,191 +2352,36 @@ private:
       _heap->free_set()->move_collector_sets_to_mutator(cset_regions);
     }
     // If !CONCURRENT, there's no value in expanding Mutator free set
-
+    T cl;
     ShenandoahHeapRegion* r = _regions->next();
-    // We update references for global, old, and young collections.
-    assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
-    ShenandoahMarkingContext* const ctx = _heap->marking_context();
-    bool is_mixed = _heap->collection_set()->has_old_regions();
     while (r != nullptr) {
       HeapWord* update_watermark = r->get_update_watermark();
       assert (update_watermark >= r->bottom(), "sanity");
-
-      log_debug(gc)("ShenandoahUpdateHeapRefsTask::do_work(%u) looking at region " SIZE_FORMAT, worker_id, r->index());
-      bool region_progress = false;
       if (r->is_active() && !r->is_cset()) {
-        if (!_heap->mode()->is_generational() || r->is_young()) {
-          _heap->marked_object_oop_iterate(r, &cl, update_watermark);
-          region_progress = true;
-        } else if (r->is_old()) {
-          if (_heap->active_generation()->is_global()) {
-            // Note that GLOBAL collection is not as effectively balanced as young and mixed cycles.  This is because
-            // concurrent GC threads are parceled out entire heap regions of work at a time and there
-            // is no "catchup phase" consisting of remembered set scanning, during which parcels of work are smaller
-            // and more easily distributed more fairly across threads.
-
-            // TODO: Consider an improvement to load balance GLOBAL GC.
-            _heap->marked_object_oop_iterate(r, &cl, update_watermark);
-            region_progress = true;
-          }
-          // Otherwise, this is an old region in a young or mixed cycle.  Process it during a second phase, below.
-          // Don't bother to report pacing progress in this case.
-        } else {
-          // Because updating of references runs concurrently, it is possible that a FREE inactive region transitions
-          // to a non-free active region while this loop is executing.  Whenever this happens, the changing of a region's
-          // active status may propagate at a different speed than the changing of the region's affiliation.
-
-          // When we reach this control point, it is because a race has allowed a region's is_active() status to be seen
-          // by this thread before the region's affiliation() is seen by this thread.
-
-          // It's ok for this race to occur because the newly transformed region does not have any references to be
-          // updated.
-
-          assert(r->get_update_watermark() == r->bottom(),
-                 "%s Region " SIZE_FORMAT " is_active but not recognized as YOUNG or OLD so must be newly transitioned from FREE",
-                 r->affiliation_name(), r->index());
+        _heap->marked_object_oop_iterate(r, &cl, update_watermark);
+        if (ShenandoahPacing) {
+          _heap->pacer()->report_updaterefs(pointer_delta(update_watermark, r->bottom()));
         }
-      }
-      if (region_progress && ShenandoahPacing) {
-        _heap->pacer()->report_updaterefs(pointer_delta(update_watermark, r->bottom()));
       }
       if (_heap->check_cancelled_gc_and_yield(CONCURRENT)) {
         return;
       }
       r = _regions->next();
     }
-
-    if (_heap->mode()->is_generational() && !_heap->active_generation()->is_global()) {
-      // Since this is generational and not GLOBAL, we have to process the remembered set.  There's no remembered
-      // set processing if not in generational mode or if GLOBAL mode.
-
-      // After this thread has exhausted its traditional update-refs work, it continues with updating refs within remembered set.
-      // The remembered set workload is better balanced between threads, so threads that are "behind" can catch up with other
-      // threads during this phase, allowing all threads to work more effectively in parallel.
-      struct ShenandoahRegionChunk assignment;
-      RememberedScanner* scanner = _heap->card_scan();
-
-      while (!_heap->check_cancelled_gc_and_yield(CONCURRENT) && _work_chunks->next(&assignment)) {
-        // Keep grabbing next work chunk to process until finished, or asked to yield
-        ShenandoahHeapRegion* r = assignment._r;
-        if (r->is_active() && !r->is_cset() && r->is_old()) {
-          HeapWord* start_of_range = r->bottom() + assignment._chunk_offset;
-          HeapWord* end_of_range = r->get_update_watermark();
-          if (end_of_range > start_of_range + assignment._chunk_size) {
-            end_of_range = start_of_range + assignment._chunk_size;
-          }
-
-          // Old region in a young cycle or mixed cycle.
-          if (is_mixed) {
-            // TODO: For mixed evac, consider building an old-gen remembered set that allows restricted updating
-            // within old-gen HeapRegions.  This remembered set can be constructed by old-gen concurrent marking
-            // and augmented by card marking.  For example, old-gen concurrent marking can remember for each old-gen
-            // card which other old-gen regions it refers to: none, one-other specifically, multiple-other non-specific.
-            // Update-references when _mixed_evac processess each old-gen memory range that has a traditional DIRTY
-            // card or if the "old-gen remembered set" indicates that this card holds pointers specifically to an
-            // old-gen region in the most recent collection set, or if this card holds pointers to other non-specific
-            // old-gen heap regions.
-
-            if (r->is_humongous()) {
-              if (start_of_range < end_of_range) {
-                // Need to examine both dirty and clean cards during mixed evac.
-                r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true);
-              }
-            } else {
-              // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
-              // and filled.  Use mark bits to find objects that need to be updated.
-              //
-              // Future TODO: establish a second remembered set to identify which old-gen regions point to other old-gen
-              // regions which are in the collection set for a particular mixed evacuation.
-              if (start_of_range < end_of_range) {
-                HeapWord* p = nullptr;
-                size_t card_index = scanner->card_index_for_addr(start_of_range);
-                // In case last object in my range spans boundary of my chunk, I may need to scan all the way to top()
-                ShenandoahObjectToOopBoundedClosure<T> objs(&cl, start_of_range, r->top());
-
-                // Any object that begins in a previous range is part of a different scanning assignment.  Any object that
-                // starts after end_of_range is also not my responsibility.  (Either allocated during evacuation, so does
-                // not hold pointers to from-space, or is beyond the range of my assigned work chunk.)
-
-                // Find the first object that begins in my range, if there is one.
-                p = start_of_range;
-                oop obj = cast_to_oop(p);
-                HeapWord* tams = ctx->top_at_mark_start(r);
-                if (p >= tams) {
-                  // We cannot use ctx->is_marked(obj) to test whether an object begins at this address.  Instead,
-                  // we need to use the remembered set crossing map to advance p to the first object that starts
-                  // within the enclosing card.
-
-                  while (true) {
-                    HeapWord* first_object = scanner->first_object_in_card(card_index);
-                    if (first_object != nullptr) {
-                      p = first_object;
-                      break;
-                    } else if (scanner->addr_for_card_index(card_index + 1) < end_of_range) {
-                      card_index++;
-                    } else {
-                      // Force the loop that follows to immediately terminate.
-                      p = end_of_range;
-                      break;
-                    }
-                  }
-                  obj = cast_to_oop(p);
-                  // Note: p may be >= end_of_range
-                } else if (!ctx->is_marked(obj)) {
-                  p = ctx->get_next_marked_addr(p, tams);
-                  obj = cast_to_oop(p);
-                  // If there are no more marked objects before tams, this returns tams.
-                  // Note that tams is either >= end_of_range, or tams is the start of an object that is marked.
-                }
-                while (p < end_of_range) {
-                  // p is known to point to the beginning of marked object obj
-                  objs.do_object(obj);
-                  HeapWord* prev_p = p;
-                  p += obj->size();
-                  if (p < tams) {
-                    p = ctx->get_next_marked_addr(p, tams);
-                    // If there are no more marked objects before tams, this returns tams.  Note that tams is
-                    // either >= end_of_range, or tams is the start of an object that is marked.
-                  }
-                  assert(p != prev_p, "Lack of forward progress");
-                  obj = cast_to_oop(p);
-                }
-              }
-            }
-          } else {
-            // This is a young evac..
-            if (start_of_range < end_of_range) {
-              size_t cluster_size =
-                CardTable::card_size_in_words() * ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
-              size_t clusters = assignment._chunk_size / cluster_size;
-              assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
-              scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, worker_id);
-            }
-          }
-          if (ShenandoahPacing && (start_of_range < end_of_range)) {
-            _heap->pacer()->report_updaterefs(pointer_delta(end_of_range, start_of_range));
-          }
-        }
-      }
-    }
   }
 };
 
 void ShenandoahHeap::update_heap_references(bool concurrent) {
   assert(!is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
-  uint nworkers = workers()->active_workers();
-  ShenandoahRegionChunkIterator work_list(nworkers);
-
+  ShenandoahRegionIterator update_refs_iterator(this);
   if (concurrent) {
-    ShenandoahUpdateHeapRefsTask<true> task(&_update_refs_iterator, &work_list);
+    ShenandoahUpdateHeapRefsTask<true> task(&update_refs_iterator);
     workers()->run_task(&task);
   } else {
-    ShenandoahUpdateHeapRefsTask<false> task(&_update_refs_iterator, &work_list);
+    ShenandoahUpdateHeapRefsTask<false> task(&update_refs_iterator);
     workers()->run_task(&task);
   }
-  if (ShenandoahEnableCardStats && card_scan()!=nullptr) { // generational check proxy
-    card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
-  }
+  assert(cancelled_gc() || !update_refs_iterator.has_next(), "Should have finished update references");
 }
 
 class ShenandoahFinalUpdateRefsUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
@@ -2747,7 +2412,7 @@ public:
         // There have been allocations in this region since the start of the cycle.
         // Any objects new to this region must not assimilate elevated age.
         r->reset_age();
-      } else if (ShenandoahHeap::heap()->is_aging_cycle()) {
+      } else if (ShenandoahGenerationalHeap::heap()->is_aging_cycle()) {
         r->increment_age();
       }
     }
@@ -2810,11 +2475,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
          old_region_count, first_old_region, last_old_region);
 
   if (mode()->is_generational()) {
-    assert(verify_generation_usage(true, old_generation()->used_regions(),
-                                   old_generation()->used(), old_generation()->get_humongous_waste(),
-                                   true, young_generation()->used_regions(),
-                                   young_generation()->used(), young_generation()->get_humongous_waste()),
-           "Generation accounts are inaccurate");
+#ifdef ASSERT
+    if (ShenandoahVerify) {
+      verifier()->verify_before_rebuilding_free_set();
+    }
+#endif
 
     // The computation of bytes_of_allocation_runway_before_gc_trigger is quite conservative so consider all of this
     // available for transfer to old. Note that transfer of humongous regions does not impact available.
@@ -2832,8 +2497,11 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   // Rebuild free set based on adjusted generation sizes.
   _free_set->rebuild(young_cset_regions, old_cset_regions);
 
-  if (mode()->is_generational() && (ShenandoahGenerationalHumongousReserve > 0)) {
-    old_generation()->maybe_trigger_collection(first_old_region, last_old_region, old_region_count);
+  if (mode()->is_generational()) {
+    ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+    ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
+    ShenandoahOldHeuristics* old_heuristics = old_gen->heuristics();
+    old_heuristics->trigger_maybe(first_old_region, last_old_region, old_region_count, num_regions());
   }
 }
 
@@ -2994,7 +2662,6 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
   assert(worker_id < _max_workers, "sanity");
   assert(_liveness_cache != nullptr, "sanity");
   ShenandoahLiveData* ld = _liveness_cache[worker_id];
-
   for (uint i = 0; i < num_regions(); i++) {
     ShenandoahLiveData live = ld[i];
     if (live > 0) {
@@ -3021,61 +2688,6 @@ bool ShenandoahHeap::requires_barriers(stackChunkOop obj) const {
   }
 
   return false;
-}
-
-void ShenandoahHeap::transfer_old_pointers_from_satb() {
-  _old_generation->transfer_pointers_from_satb();
-}
-
-bool ShenandoahHeap::verify_generation_usage(bool verify_old, size_t old_regions, size_t old_bytes, size_t old_waste,
-                                             bool verify_young, size_t young_regions, size_t young_bytes, size_t young_waste) {
-  size_t tally_old_regions = 0;
-  size_t tally_old_bytes = 0;
-  size_t tally_old_waste = 0;
-  size_t tally_young_regions = 0;
-  size_t tally_young_bytes = 0;
-  size_t tally_young_waste = 0;
-
-  shenandoah_assert_heaplocked_or_safepoint();
-  for (size_t i = 0; i < num_regions(); i++) {
-    ShenandoahHeapRegion* r = get_region(i);
-    if (r->is_old()) {
-      tally_old_regions++;
-      tally_old_bytes += r->used();
-      if (r->is_humongous()) {
-        ShenandoahHeapRegion* start = r->humongous_start_region();
-        HeapWord* obj_addr = start->bottom();
-        oop obj = cast_to_oop(obj_addr);
-        size_t word_size = obj->size();
-        HeapWord* end_addr = obj_addr + word_size;
-        if (end_addr <= r->end()) {
-          tally_old_waste += (r->end() - end_addr) * HeapWordSize;
-        }
-      }
-    } else if (r->is_young()) {
-      tally_young_regions++;
-      tally_young_bytes += r->used();
-      if (r->is_humongous()) {
-        ShenandoahHeapRegion* start = r->humongous_start_region();
-        HeapWord* obj_addr = start->bottom();
-        oop obj = cast_to_oop(obj_addr);
-        size_t word_size = obj->size();
-        HeapWord* end_addr = obj_addr + word_size;
-        if (end_addr <= r->end()) {
-          tally_young_waste += (r->end() - end_addr) * HeapWordSize;
-        }
-      }
-    }
-  }
-  if (verify_young &&
-      ((young_regions != tally_young_regions) || (young_bytes != tally_young_bytes) || (young_waste != tally_young_waste))) {
-    return false;
-  } else if (verify_old &&
-             ((old_regions != tally_old_regions) || (old_bytes != tally_old_bytes) || (old_waste != tally_old_waste))) {
-    return false;
-  } else {
-    return true;
-  }
 }
 
 ShenandoahGeneration* ShenandoahHeap::generation_for(ShenandoahAffiliation affiliation) const {
