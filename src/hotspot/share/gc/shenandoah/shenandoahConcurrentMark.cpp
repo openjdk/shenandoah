@@ -63,7 +63,8 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahWorkerTimingsTracker timer(ShenandoahPhaseTimings::conc_mark, ShenandoahPhaseTimings::ParallelMark, worker_id, true);
     ShenandoahSuspendibleThreadSetJoiner stsj;
-    ShenandoahReferenceProcessor* rp = heap->active_generation()->ref_processor();
+    ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
+    // assert(heap->gc_generation() == heap->active_generation(), "Should be identical at STW phases");
     assert(rp != nullptr, "need reference processor");
     StringDedup::Requests requests;
     _cm->mark_loop(worker_id, _terminator, rp, GENERATION, true /*cancellable*/,
@@ -111,7 +112,8 @@ public:
 
     ShenandoahParallelWorkerSession worker_session(worker_id);
     StringDedup::Requests requests;
-    ShenandoahReferenceProcessor* rp = heap->active_generation()->ref_processor();
+    ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
+    assert(heap->gc_generation() == heap->active_generation(), "Should be identical at STW phases");
 
     // First drain remaining SATB buffers.
     {

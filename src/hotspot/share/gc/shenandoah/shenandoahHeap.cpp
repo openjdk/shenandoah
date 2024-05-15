@@ -2129,7 +2129,9 @@ void ShenandoahHeap::stw_weak_refs(bool full_gc) {
                                                 : ShenandoahPhaseTimings::degen_gc_weakrefs;
   ShenandoahTimingsTracker t(phase);
   ShenandoahGCWorkerPhase worker_phase(phase);
-  active_generation()->ref_processor()->process_references(phase, workers(), false /* concurrent */);
+  // During stw phases, active and gc generations should be identical
+  assert(active_generation() == gc_generation(), "Not reconciled at ATW?");
+  gc_generation()->ref_processor()->process_references(phase, workers(), false /* concurrent */);
 }
 
 void ShenandoahHeap::prepare_update_heap_references(bool concurrent) {
@@ -2462,6 +2464,8 @@ void ShenandoahHeap::sync_pinned_region_status() {
 void ShenandoahHeap::assert_pinned_region_status() {
   for (size_t i = 0; i < num_regions(); i++) {
     ShenandoahHeapRegion* r = get_region(i);
+    // During stw phases, active and gc generations should be identical
+    assert(active_generation() == gc_generation(), "Not reconciled at ATW?");
     if (active_generation()->contains(r)) {
       assert((r->is_pinned() && r->pin_count() > 0) || (!r->is_pinned() && r->pin_count() == 0),
              "Region " SIZE_FORMAT " pinning status is inconsistent", i);
@@ -2560,7 +2564,8 @@ private:
 
     ShenandoahHeapRegion* r = _regions->next();
     // We update references for global, old, and young collections.
-    assert(_heap->active_generation()->is_mark_complete(), "Expected complete marking");
+    assert(_heap->gc_generation()->is_mark_complete(), "Expected complete marking");
+    assert(_heap->gc_generation() == _heap->active_generation(), "Chec this");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();
     while (r != nullptr) {
@@ -2574,7 +2579,7 @@ private:
           _heap->marked_object_oop_iterate(r, &cl, update_watermark);
           region_progress = true;
         } else if (r->is_old()) {
-          if (_heap->active_generation()->is_global()) {
+          if (_heap->gc_generation()->is_global()) {
             // Note that GLOBAL collection is not as effectively balanced as young and mixed cycles.  This is because
             // concurrent GC threads are parceled out entire heap regions of work at a time and there
             // is no "catchup phase" consisting of remembered set scanning, during which parcels of work are smaller
@@ -2805,7 +2810,7 @@ void ShenandoahHeap::update_heap_region_states(bool concurrent) {
     ShenandoahGCPhase phase(concurrent ?
                             ShenandoahPhaseTimings::final_update_refs_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_refs_update_region_states);
-    ShenandoahFinalUpdateRefsUpdateRegionStateClosure cl (active_generation()->complete_marking_context());
+    ShenandoahFinalUpdateRefsUpdateRegionStateClosure cl (gc_generation()->complete_marking_context());
     parallel_heap_region_iterate(&cl);
 
     assert_pinned_region_status();

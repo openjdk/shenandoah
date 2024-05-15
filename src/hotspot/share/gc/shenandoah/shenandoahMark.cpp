@@ -149,11 +149,9 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
   ShenandoahObjToScanQueue* q;
   ShenandoahMarkTask t;
 
-  // ysr: this assert requires async push of update to active_generation, which is
-  // neither desirable nor essential. Disabling apparently unnecessary (and undesirable)
-  // assert here.
-  // assert(heap->active_generation()->type() == GENERATION, "Sanity");
-  heap->active_generation()->ref_processor()->set_mark_closure(worker_id, cl);
+  assert(heap->gc_generation()->type() == GENERATION, "Sanity: %d != %d", heap->active_generation()->type(), GENERATION);
+  heap->gc_generation()->ref_processor()->set_mark_closure(worker_id, cl);
+  // assert(heap->gc_generation() == heap->active_generation(), "Should be identical at STW phases");
 
   /*
    * Process outstanding queues, if any.
