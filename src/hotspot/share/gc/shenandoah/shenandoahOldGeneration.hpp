@@ -26,6 +26,7 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
@@ -112,7 +113,22 @@ public:
   size_t unexpend_promoted(size_t decrement);
 
   // This is used on the allocation path to gate promotions that would exceed the reserve
-  size_t get_promoted_expended();
+  size_t get_promoted_expended() const;
+
+  // Test if there is enough memory reserved for this promotion
+  bool can_promote(size_t requested_bytes) const {
+    size_t promotion_avail = get_promoted_reserve();
+    size_t promotion_expended = get_promoted_expended();
+    return promotion_expended + requested_bytes <= promotion_avail;
+  }
+
+  // Test if there is enough memory available in the old generation to accommodate this request.
+  // The request will be subject to constraints on promotion and evacuation reserves.
+  bool can_allocate(const ShenandoahAllocRequest& req) const;
+
+  // Updates the promotion expenditure tracking and configures whether the plab may be used
+  // for promotions and evacuations, or just evacuations.
+  void configure_plab_for_current_thread(const ShenandoahAllocRequest &req);
 
   // See description in field declaration
   void set_region_balance(ssize_t balance) { _region_balance = balance; }
@@ -176,6 +192,9 @@ public:
   void prepare_regions_and_collection_set(bool concurrent) override;
   void record_success_concurrent(bool abbreviated) override;
   void cancel_marking() override;
+
+  // Cancels old gc and transitions to the idle state
+  void cancel_gc();
 
   // We leave the SATB barrier on for the entirety of the old generation
   // marking phase. In some cases, this can cause a write to a perfectly

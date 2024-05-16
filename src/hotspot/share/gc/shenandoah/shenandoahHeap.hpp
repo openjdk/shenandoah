@@ -214,9 +214,6 @@ public:
   void prepare_for_verify() override;
   void verify(VerifyOption vo) override;
 
-  bool verify_generation_usage(bool verify_old, size_t old_regions, size_t old_bytes, size_t old_waste,
-                               bool verify_young, size_t young_regions, size_t young_bytes, size_t young_waste);
-
 // WhiteBox testing support.
   bool supports_concurrent_gc_breakpoints() const override {
     return true;
@@ -291,7 +288,6 @@ private:
   size_t    _num_regions;
   ShenandoahHeapRegion** _regions;
   uint8_t* _affiliations;       // Holds array of enum ShenandoahAffiliation, including FREE status in non-generational mode
-  ShenandoahRegionIterator _update_refs_iterator;
 
 public:
 
@@ -399,8 +395,6 @@ public:
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
 
-  void set_aging_cycle(bool cond);
-
   inline bool is_stable() const;
   inline bool is_idle() const;
 
@@ -418,7 +412,6 @@ public:
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
   bool is_prepare_for_old_mark_in_progress() const;
-  inline bool is_aging_cycle() const;
 
   // Return the age census object for young gen (in generational mode)
   inline ShenandoahAgeCensus* age_census() const;
@@ -474,7 +467,7 @@ private:
   void do_class_unloading();
   // Reference updating
   void prepare_update_heap_references(bool concurrent);
-  void update_heap_references(bool concurrent);
+  virtual void update_heap_references(bool concurrent);
   // Final update region states
   void update_heap_region_states(bool concurrent);
 
@@ -556,7 +549,6 @@ public:
 // ---------- Class Unloading
 //
 private:
-  ShenandoahSharedFlag  _is_aging_cycle;
   ShenandoahSharedFlag _unload_classes;
   ShenandoahUnload     _unloader;
 
@@ -759,7 +751,6 @@ public:
   inline RememberedScanner* card_scan() { return _card_scan; }
   void clear_cards_for(ShenandoahHeapRegion* region);
   void mark_card_as_dirty(void* location);
-  void cancel_old_gc();
 
 // ---------- Helper functions
 //
@@ -790,8 +781,6 @@ public:
   // necessarily be determined because of concurrent locking by the
   // mutator
   static inline uint get_object_age(oop obj);
-
-  void transfer_old_pointers_from_satb();
 
   void log_heap_status(const char *msg) const;
 

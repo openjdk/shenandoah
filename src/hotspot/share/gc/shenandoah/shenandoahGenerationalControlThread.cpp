@@ -61,7 +61,7 @@ ShenandoahGenerationalControlThread::ShenandoahGenerationalControlThread() :
 }
 
 void ShenandoahGenerationalControlThread::run_service() {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* const heap = ShenandoahGenerationalHeap::heap();
   set_thread();
 
   const GCMode default_mode = concurrent_normal;
