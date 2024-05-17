@@ -117,7 +117,7 @@ public:
     StringDedup::Requests requests;
     ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
     heap->assert_generations_reconciled();
-    
+
     // First drain remaining SATB buffers.
     {
       ShenandoahObjToScanQueue* q = _cm->get_queue(worker_id);
