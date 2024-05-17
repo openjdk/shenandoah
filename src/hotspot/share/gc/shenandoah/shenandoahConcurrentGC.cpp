@@ -928,6 +928,10 @@ void ShenandoahEvacUpdateCleanupOopStorageRootsClosure::do_oop(oop* p) {
   const oop obj = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(obj)) {
     if (!_mark_context->is_marked(obj)) {
+      // YSR TODO: This needs to be thought through carefully; in many of these
+      // cases, it makes more sense to place the state in the closure rather than
+      // do the async/snapshot field split we are doing with _gc_generation() and
+      // _active_generation().
       if (_heap->is_in_active_generation(obj)) {
         // TODO: This worries me. Here we are asserting that an unmarked from-space object is 'correct'.
         // Normally, I would call this a bogus assert, but there seems to be a legitimate use-case for
