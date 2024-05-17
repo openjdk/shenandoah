@@ -141,19 +141,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // Complete marking under STW, and start evacuation
   vmop_entry_final_mark();
 
-  // If GC was cancelled before final mark, then the safepoint operation will do nothing
-  // and the concurrent mark will still be in progress. In this case it is safe to resume
-  // the degenerated cycle from the marking phase. On the other hand, if the GC is cancelled
-  // after final mark (but before this check), then the final mark safepoint operation
-  // will have finished the mark (setting concurrent mark in progress to false). Final mark
-  // will also have setup state (in concurrent stack processing) that will not be safe to
-  // resume from the marking phase in the degenerated cycle. That is, if the cancellation
-  // occurred after final mark, we must resume the degenerated cycle after the marking phase.
-  if (_generation->is_concurrent_mark_in_progress() && check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_mark)) {
-    assert(!heap->is_concurrent_weak_root_in_progress(), "Weak roots should not be in progress when concurrent mark is in progress");
-    return false;
-  }
-
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
     entry_thread_roots();
@@ -231,31 +218,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
   // abbreviated cycle.
   if (heap->mode()->is_generational()) {
-    if (!heap->old_generation()->is_parseable()) {
-      // Class unloading may render the card offsets unusable, so we must rebuild them before
-      // the next remembered set scan. We _could_ let the control thread do this sometime after
-      // the global cycle has completed and before the next young collection, but under memory
-      // pressure the control thread may not have the time (that is, because it's running back
-      // to back GCs). In that scenario, we would have to make the old regions parsable before
-      // we could start a young collection. This could delay the start of the young cycle and
-      // throw off the heuristics.
-      entry_global_coalesce_and_fill();
-    }
-
-    ShenandoahGenerationalHeap::TransferResult result;
-    {
-      ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
-      ShenandoahHeapLocker locker(gen_heap->lock());
-
-      result = gen_heap->balance_generations();
-      gen_heap->reset_generation_reserves();
-    }
-
-    LogTarget(Info, gc, ergo) lt;
-    if (lt.is_enabled()) {
-      LogStream ls(lt);
-      result.print_on("Concurrent GC", &ls);
-    }
+    ShenandoahGenerationalHeap::heap()->complete_concurrent_cycle();
   }
   return true;
 }
@@ -662,6 +625,7 @@ void ShenandoahConcurrentGC::op_init_mark() {
   start_mark();
 
   if (_do_old_gc_bootstrap) {
+    shenandoah_assert_generational();
     // Update region state for both young and old regions
     // TODO: We should be able to pull this out of the safepoint for the bootstrap
     // cycle. The top of an old region will only move when a GC cycle evacuates
@@ -764,6 +728,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
         heap->verifier()->verify_before_evacuation();
       }
 
+      // TODO: Do we need to set this if we are only promoting regions in place? We don't need the barriers on for that.
       heap->set_evacuation_in_progress(true);
 
       // Verify before arming for concurrent processing.
@@ -821,7 +786,9 @@ ShenandoahConcurrentEvacThreadClosure::ShenandoahConcurrentEvacThreadClosure(Oop
 void ShenandoahConcurrentEvacThreadClosure::do_thread(Thread* thread) {
   JavaThread* const jt = JavaThread::cast(thread);
   StackWatermarkSet::finish_processing(jt, _oops, StackWatermarkKind::gc);
-  ShenandoahThreadLocalData::enable_plab_promotions(thread);
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    ShenandoahThreadLocalData::enable_plab_promotions(thread);
+  }
 }
 
 class ShenandoahConcurrentEvacUpdateThreadTask : public WorkerTask {
@@ -835,8 +802,10 @@ public:
   }
 
   void work(uint worker_id) {
-    Thread* worker_thread = Thread::current();
-    ShenandoahThreadLocalData::enable_plab_promotions(worker_thread);
+    if (ShenandoahHeap::heap()->mode()->is_generational()) {
+      Thread* worker_thread = Thread::current();
+      ShenandoahThreadLocalData::enable_plab_promotions(worker_thread);
+    }
 
     // ShenandoahEvacOOMScope has to be setup by ShenandoahContextEvacuateUpdateRootsClosure.
     // Otherwise, may deadlock with watermark lock
@@ -1229,39 +1198,8 @@ void ShenandoahConcurrentGC::op_final_roots() {
       heap->old_generation()->transfer_pointers_from_satb();
     }
 
-    ShenandoahMarkingContext *ctx = heap->complete_marking_context();
-    for (size_t i = 0; i < heap->num_regions(); i++) {
-      ShenandoahHeapRegion *r = heap->get_region(i);
-      if (r->is_active() && r->is_young()) {
-        HeapWord* tams = ctx->top_at_mark_start(r);
-        HeapWord* top = r->top();
-        if (top > tams) {
-          r->reset_age();
-        } else if (ShenandoahGenerationalHeap::heap()->is_aging_cycle()) {
-          r->increment_age();
-        }
-      }
-    }
+    ShenandoahGenerationalHeap::heap()->update_region_ages();
   }
-}
-
-void ShenandoahConcurrentGC::entry_global_coalesce_and_fill() {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-
-  const char* msg = "Coalescing and filling old regions in global collect";
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_coalesce_and_fill);
-
-  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  EventMark em("%s", msg);
-  ShenandoahWorkerScope scope(heap->workers(),
-                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
-                              "concurrent coalesce and fill");
-
-  op_global_coalesce_and_fill();
-}
-
-void ShenandoahConcurrentGC::op_global_coalesce_and_fill() {
-  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions(true);
 }
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {

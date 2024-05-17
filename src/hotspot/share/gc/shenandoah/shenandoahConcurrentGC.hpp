@@ -104,7 +104,7 @@ private:
   void entry_evacuate();
   void entry_update_thread_roots();
   void entry_updaterefs();
-  void entry_global_coalesce_and_fill();
+
   void entry_cleanup_complete();
 
   // Actual work for the phases
@@ -124,7 +124,7 @@ private:
   void op_update_thread_roots();
   void op_final_updaterefs();
   void op_final_roots();
-  void op_global_coalesce_and_fill();
+
   void op_cleanup_complete();
 
 protected:
@@ -144,6 +144,8 @@ private:
 protected:
   // Check GC cancellation and abort concurrent GC
   bool check_cancellation_and_abort(ShenandoahDegenPoint point);
+
+  void complete_concurrent_gc(const ShenandoahHeap* heap);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTGC_HPP

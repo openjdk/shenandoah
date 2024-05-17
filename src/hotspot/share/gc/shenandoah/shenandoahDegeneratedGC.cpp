@@ -283,29 +283,7 @@ void ShenandoahDegenGC::op_degenerated() {
       op_cleanup_complete();
 
       if (heap->mode()->is_generational()) {
-        if (heap->is_concurrent_old_mark_in_progress()) {
-          // This is still necessary for degenerated cycles because the degeneration point may occur
-          // after final mark of the young generation. See ShenandoahConcurrentGC::op_final_updaterefs for
-          // a more detailed explanation.
-          heap->old_generation()->transfer_pointers_from_satb();
-        }
-
-        // We defer generation resizing actions until after cset regions have been recycled.
-        ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
-        auto result = gen_heap->balance_generations();
-        LogTarget(Info, gc, ergo) lt;
-        if (lt.is_enabled()) {
-          LogStream ls(lt);
-          result.print_on("Degenerated GC", &ls);
-        }
-
-        // In case degeneration interrupted concurrent evacuation or update references, we need to clean up
-        // transient state. Otherwise, these actions have no effect.
-        gen_heap->reset_generation_reserves();
-
-        if (!gen_heap->old_generation()->is_parseable()) {
-          op_global_coalesce_and_fill();
-        }
+        ShenandoahGenerationalHeap::heap()->complete_degenerated_cycle();
       }
 
       break;
@@ -402,11 +380,6 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
 
 void ShenandoahDegenGC::op_cleanup_early() {
   ShenandoahHeap::heap()->recycle_trash();
-}
-
-void ShenandoahDegenGC::op_global_coalesce_and_fill() {
-  ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_coalesce_and_fill);
-  ShenandoahGenerationalHeap::heap()->coalesce_and_fill_old_regions(false);
 }
 
 void ShenandoahDegenGC::op_evacuate() {
