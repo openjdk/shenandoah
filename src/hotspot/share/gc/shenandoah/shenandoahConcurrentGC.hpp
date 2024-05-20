@@ -144,8 +144,6 @@ private:
 protected:
   // Check GC cancellation and abort concurrent GC
   bool check_cancellation_and_abort(ShenandoahDegenPoint point);
-
-  void complete_concurrent_gc(const ShenandoahHeap* heap);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTGC_HPP

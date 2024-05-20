@@ -22,7 +22,6 @@
  *
  */
 
-#include <utilities/events.hpp>
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
@@ -40,10 +39,11 @@
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
+#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "logging/log.hpp"
-#include "shenandoahWorkerPolicy.hpp"
+#include "utilities/events.hpp"
 
 
 class ShenandoahGenerationalInitLogger : public ShenandoahInitLogger {
@@ -958,7 +958,7 @@ void ShenandoahGenerationalHeap::complete_degenerated_cycle() {
   }
 
   // We defer generation resizing actions until after cset regions have been recycled.
-  auto result = balance_generations();
+  TransferResult result = balance_generations();
   LogTarget(Info, gc, ergo) lt;
   if (lt.is_enabled()) {
     LogStream ls(lt);
@@ -987,7 +987,7 @@ void ShenandoahGenerationalHeap::complete_concurrent_cycle() {
     entry_global_coalesce_and_fill();
   }
 
-  ShenandoahGenerationalHeap::TransferResult result;
+  TransferResult result;
   {
     ShenandoahHeapLocker locker(lock());
 
