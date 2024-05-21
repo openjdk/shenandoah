@@ -105,6 +105,7 @@ void ShenandoahSTWMark::mark() {
 
   // Weak reference processing
   ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
+  heap->assert_generations_reconciled();
   assert(heap->gc_generation() == heap->active_generation(), "Should be identical at stw phases");
   rp->reset_thread_locals();
   rp->set_soft_reference_policy(heap->soft_ref_policy()->should_clear_all_soft_refs());
@@ -174,8 +175,7 @@ void ShenandoahSTWMark::finish_mark(uint worker_id) {
   ShenandoahPhaseTimings::Phase phase = _full_gc ? ShenandoahPhaseTimings::full_gc_mark : ShenandoahPhaseTimings::degen_gc_stw_mark;
   ShenandoahWorkerTimingsTracker timer(phase, ShenandoahPhaseTimings::ParallelMark, worker_id);
   ShenandoahReferenceProcessor* rp = ShenandoahHeap::heap()->gc_generation()->ref_processor();
-  assert(ShenandoahHeap::heap()->gc_generation() == ShenandoahHeap::heap()->active_generation(),
-         "Should be identical at stw phases");
+  ShenandoahHeap::heap()->assert_generations_reconciled();
   StringDedup::Requests requests;
 
   mark_loop(worker_id, &_terminator, rp,
