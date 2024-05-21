@@ -50,8 +50,8 @@ public:
     return _is_aging_cycle.is_set();
   }
 
-  // Age regions that haven't been used for allocations in the current cycle.
-  // Reset ages for regions that have been used for allocations.
+  // Ages regions that haven't been used for allocations in the current cycle.
+  // Resets ages for regions that have been used for allocations.
   void update_region_ages();
 
   oop evacuate_object(oop p, Thread* thread) override;
@@ -108,7 +108,7 @@ public:
   // Transfers surplus old regions to young, or takes regions from young to satisfy old region deficit
   TransferResult balance_generations();
 
-  // Balance generations, coalesce and fill old regions if necessary
+  // Balances generations, coalesces and fills old regions if necessary
   void complete_degenerated_cycle();
   void complete_concurrent_cycle();
 private:
