@@ -770,39 +770,35 @@ bool ShenandoahConcurrentGC::has_in_place_promotions(ShenandoahHeap* heap) {
   return heap->mode()->is_generational() && heap->old_generation()->has_in_place_promotions();
 }
 
+template<bool GENERATIONAL>
 class ShenandoahConcurrentEvacThreadClosure : public ThreadClosure {
 private:
   OopClosure* const _oops;
-
 public:
-  ShenandoahConcurrentEvacThreadClosure(OopClosure* oops);
-  void do_thread(Thread* thread);
+  explicit ShenandoahConcurrentEvacThreadClosure(OopClosure* oops) : _oops(oops) {}
+
+  void do_thread(Thread* thread) override {
+    JavaThread* const jt = JavaThread::cast(thread);
+    StackWatermarkSet::finish_processing(jt, _oops, StackWatermarkKind::gc);
+    if (GENERATIONAL) {
+      ShenandoahThreadLocalData::enable_plab_promotions(thread);
+    }
+  }
 };
 
-ShenandoahConcurrentEvacThreadClosure::ShenandoahConcurrentEvacThreadClosure(OopClosure* oops) :
-  _oops(oops) {
-}
-
-void ShenandoahConcurrentEvacThreadClosure::do_thread(Thread* thread) {
-  JavaThread* const jt = JavaThread::cast(thread);
-  StackWatermarkSet::finish_processing(jt, _oops, StackWatermarkKind::gc);
-  if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    ShenandoahThreadLocalData::enable_plab_promotions(thread);
-  }
-}
-
+template<bool GENERATIONAL>
 class ShenandoahConcurrentEvacUpdateThreadTask : public WorkerTask {
 private:
   ShenandoahJavaThreadsIterator _java_threads;
 
 public:
-  ShenandoahConcurrentEvacUpdateThreadTask(uint n_workers) :
+  explicit ShenandoahConcurrentEvacUpdateThreadTask(uint n_workers) :
     WorkerTask("Shenandoah Evacuate/Update Concurrent Thread Roots"),
     _java_threads(ShenandoahPhaseTimings::conc_thread_roots, n_workers) {
   }
 
-  void work(uint worker_id) {
-    if (ShenandoahHeap::heap()->mode()->is_generational()) {
+  void work(uint worker_id) override {
+    if (GENERATIONAL) {
       Thread* worker_thread = Thread::current();
       ShenandoahThreadLocalData::enable_plab_promotions(worker_thread);
     }
@@ -810,7 +806,7 @@ public:
     // ShenandoahEvacOOMScope has to be setup by ShenandoahContextEvacuateUpdateRootsClosure.
     // Otherwise, may deadlock with watermark lock
     ShenandoahContextEvacuateUpdateRootsClosure oops_cl;
-    ShenandoahConcurrentEvacThreadClosure thr_cl(&oops_cl);
+    ShenandoahConcurrentEvacThreadClosure<GENERATIONAL> thr_cl(&oops_cl);
     _java_threads.threads_do(&thr_cl, worker_id);
   }
 };
@@ -819,8 +815,13 @@ void ShenandoahConcurrentGC::op_thread_roots() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(heap->is_evacuation_in_progress(), "Checked by caller");
   ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::conc_thread_roots);
-  ShenandoahConcurrentEvacUpdateThreadTask task(heap->workers()->active_workers());
-  heap->workers()->run_task(&task);
+  if (heap->mode()->is_generational()) {
+    ShenandoahConcurrentEvacUpdateThreadTask<true> task(heap->workers()->active_workers());
+    heap->workers()->run_task(&task);
+  } else {
+    ShenandoahConcurrentEvacUpdateThreadTask<false> task(heap->workers()->active_workers());
+    heap->workers()->run_task(&task);
+  }
 }
 
 void ShenandoahConcurrentGC::op_weak_refs() {
