@@ -427,7 +427,7 @@ jint ShenandoahHeap::initialize() {
     // We are initializing free set.  We ignore cset region tallies.
     size_t first_old, last_old, num_old;
     _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-    _free_set->rebuild(young_cset_regions, old_cset_regions);
+    _free_set->finish_rebuild(young_cset_regions, old_cset_regions, num_old);
   }
 
   if (AlwaysPreTouch) {
@@ -1054,6 +1054,10 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
   }
 
   if (result == nullptr) {
+#undef KELVIN_ACTUAL
+#ifdef KELVIN_ACTUAL
+    log_info(gc)("set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at E", p2i(this), (size_t) 0);
+#endif
     req.set_actual_size(0);
   }
 
@@ -2082,7 +2086,7 @@ uint ShenandoahHeap::max_workers() {
 void ShenandoahHeap::stop() {
   // The shutdown sequence should be able to terminate when GC is running.
 
-  // Step 0. Notify policy to disable event recording.
+  // Step 0. Notify policy to disable event recording and prevent visiting gc threads during shutdown
   _shenandoah_policy->record_shutdown();
 
   // Step 1. Notify control thread that we are in shutdown.
@@ -2343,16 +2347,17 @@ public:
 private:
   template<class T>
   void do_work(uint worker_id) {
+    T cl;
     if (CONCURRENT && (worker_id == 0)) {
       // We ask the first worker to replenish the Mutator free set by moving regions previously reserved to hold the
       // results of evacuation.  These reserves are no longer necessary because evacuation has completed.
       size_t cset_regions = _heap->collection_set()->count();
-      // We cannot transfer any more regions than will be reclaimed when the existing collection set is recycled, because
+      // We cannot transfer any more regions than will be reclaimed when the existing collection set is recycled because
       // we need the reclaimed collection set regions to replenish the collector reserves
-      _heap->free_set()->move_collector_sets_to_mutator(cset_regions);
+      _heap->free_set()->move_regions_from_collector_to_mutator(cset_regions);
     }
     // If !CONCURRENT, there's no value in expanding Mutator free set
-    T cl;
+
     ShenandoahHeapRegion* r = _regions->next();
     while (r != nullptr) {
       HeapWord* update_watermark = r->get_update_watermark();
@@ -2495,7 +2500,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // within partially consumed regions of memory.
   }
   // Rebuild free set based on adjusted generation sizes.
-  _free_set->rebuild(young_cset_regions, old_cset_regions);
+  _free_set->finish_rebuild(young_cset_regions, old_cset_regions, old_region_count);
 
   if (mode()->is_generational()) {
     ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();

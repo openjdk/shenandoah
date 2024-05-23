@@ -118,7 +118,7 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affilia
 }
 
 // Change affiliation to YOUNG_GENERATION if _state is not _pinned_cset, _regular, or _pinned.  This implements
-// behavior previously performed as a side effect of make_regular_bypass().
+// behavior previously performed as a side effect of make_regular_bypass().  This is used by Full GC
 void ShenandoahHeapRegion::make_young_maybe() {
   shenandoah_assert_heaplocked();
   switch (_state) {
@@ -129,10 +129,34 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _humongous_cont:
      if (affiliation() != YOUNG_GENERATION) {
        if (is_old()) {
+#define KELVIN_REGIONS
+#ifdef KELVIN_REGIONS
+         size_t region_count =
+#endif
          ShenandoahHeap::heap()->old_generation()->decrement_affiliated_region_count();
+#ifdef KELVIN_REGIONS
+         size_t old_capacity =
+#endif
+         ShenandoahHeap::heap()->old_generation()->decrease_capacity(region_size_bytes());
+#ifdef KELVIN_REGIONS
+         log_info(gc)("make_young_maybe() decrements old regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
+                      region_count, old_capacity);
+#endif
        }
        set_affiliation(YOUNG_GENERATION);
+#ifdef KELVIN_REGIONS
+         size_t region_count =
+#endif
        ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
+#ifdef KELVIN_REGIONS
+       size_t young_capacity =
+#endif
+       ShenandoahHeap::heap()->young_generation()->increase_capacity(region_size_bytes());
+
+#ifdef KELVIN_REGIONS
+       log_info(gc)("make_young_maybe() increments young regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
+                    region_count, young_capacity);
+#endif
      }
      return;
    case _pinned_cset:
@@ -571,7 +595,18 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahGeneration* generation = heap->generation_for(affiliation());
 
   heap->decrease_used(generation, used());
+#ifdef KELVIN_REGIONS
+  size_t region_count =
+#endif
   generation->decrement_affiliated_region_count();
+#ifdef KELVIN_REGIONS
+  size_t gen_capacity =
+#endif
+  generation->decrease_capacity(region_size_bytes());
+#ifdef KELVIN_REGIONS
+  log_info(gc)("recycle() decrements %s regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
+               generation->name(), region_count, gen_capacity);
+#endif
 
   set_top(bottom());
   clear_live_data();

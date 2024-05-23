@@ -1021,6 +1021,11 @@ public:
 
   void update_generation_usage() {
     if (_is_generational) {
+#define KELVIN_REGIONS
+#ifdef KELVIN_REGIONS
+      log_info(gc)("update_generation_usage() sets old_regions: " SIZE_FORMAT ", young_regions: " SIZE_FORMAT,
+                   _old_regions, _young_regions);
+#endif
       _heap->old_generation()->establish_usage(_old_regions, _old_usage, _old_humongous_waste);
       _heap->young_generation()->establish_usage(_young_regions, _young_usage, _young_humongous_waste);
     } else {
@@ -1029,6 +1034,10 @@ public:
       assert(_old_humongous_waste == 0, "Old humongous waste only expected in generational mode");
     }
 
+#ifdef KELVIN_REGIONS
+    log_info(gc)("update_generation_usage() sets global_regions: " SIZE_FORMAT,
+                 _old_regions + _young_regions);
+#endif
     // In generational mode, global usage should be the sum of young and old. This is also true
     // for non-generational modes except that there are no old regions.
     _heap->global_generation()->establish_usage(_old_regions + _young_regions,
@@ -1194,7 +1203,7 @@ void ShenandoahFullGC::phase5_epilog() {
       ShenandoahGenerationalFullGC::compute_balances();
     }
 
-    heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
+    heap->free_set()->finish_rebuild(young_cset_regions, old_cset_regions, num_old);
 
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }

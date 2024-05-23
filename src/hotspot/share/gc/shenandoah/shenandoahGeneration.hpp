@@ -149,8 +149,10 @@ private:
 
   // These methods change the capacity of the region by adding or subtracting the given number of bytes from the current
   // capacity.
-  void increase_capacity(size_t increment);
-  void decrease_capacity(size_t decrement);
+  size_t increase_capacity(size_t increment);
+  size_t decrease_capacity(size_t decrement);
+
+  size_t establish_capacity(size_t byte_size);
 
   void log_status(const char* msg) const;
 
