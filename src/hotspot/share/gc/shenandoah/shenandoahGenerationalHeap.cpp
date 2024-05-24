@@ -937,6 +937,9 @@ void ShenandoahGenerationalHeap::update_heap_references(bool concurrent) {
     workers()->run_task(&task);
   }
 
-  assert(card_scan() != nullptr, "Card table must exist when card stats are enabled");
-  card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
+  if (ShenandoahEnableCardStats) {
+    // Only do this if we are collecting card stats
+    assert(card_scan() != nullptr, "Card table must exist when card stats are enabled");
+    card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
+  }
 }
