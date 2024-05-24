@@ -602,14 +602,6 @@ void ShenandoahHeapRegion::recycle() {
   size_t region_count =
 #endif
   generation->decrement_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-  size_t gen_capacity =
-#endif
-  generation->decrease_capacity(region_size_bytes());
-#ifdef KELVIN_REGIONS
-  log_info(gc)("recycle(" SIZE_FORMAT ") decrements %s regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
-               index(), generation->name(), region_count, gen_capacity);
-#endif
 
   set_top(bottom());
   clear_live_data();

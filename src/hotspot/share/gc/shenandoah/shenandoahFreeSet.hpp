@@ -286,15 +286,11 @@ private:
 
   HeapWord* allocate_aligned_plab(size_t size, ShenandoahAllocRequest& req, ShenandoahHeapRegion* r);
 
-#ifdef KELVIN_UNCERTAINTY
-  // Satisfy young-generation or single-generation collector allocation request req by finding memory that matches
-  // affiliation, which either equals req.affiliation or FREE.  We know req.is_young().
-  HeapWord* allocate_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
-#endif
-
-  // Satisfy allocation request req by finding memory that matches affiliation, which either equals req.affiliation
-  // or FREE. We know req.is_old().
-  HeapWord* allocate_old_with_affiliation(ShenandoahAffiliation affiliation, ShenandoahAllocRequest& req, bool& in_new_region);
+  // Satisfy collector allocation request req by finding memory that matches affiliation from within the
+  // free partition associated with which_partition.
+  inline HeapWord* allocate_from_partition_with_affiliation(ShenandoahFreeSetPartitionId which_partition,
+                                                            ShenandoahAffiliation affiliation,
+                                                            ShenandoahAllocRequest& req, bool& in_new_region);
 
   // We re-evaluate the left-to-right allocation bias whenever _alloc_bias_weight is less than zero.  Each time
   // we allocate an object, we decrement the count of this value.  Each time we re-evaluate whether to allocate
@@ -328,7 +324,7 @@ private:
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
   void clear_internal();
-  void try_recycle_trashed(ShenandoahHeapRegion *r);
+  void try_recycle_trashed(ShenandoahHeapRegion *r, bool is_generational);
 
   // Returns true iff this region is entirely available, either because it is empty() or because it has been found to represent
   // immediate trash and we'll be able to immediately recycle it.  Note that we cannot recycle immediate trash if
@@ -343,6 +339,8 @@ private:
 
   // Set max_capacity for young and old generations
   void establish_generation_sizes(size_t young_region_count, size_t old_region_count);
+
+  size_t get_usable_free_words(size_t free_bytes) const;
 
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);

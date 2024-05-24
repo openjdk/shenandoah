@@ -709,55 +709,6 @@ ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
   clear_internal();
 }
 
-#ifdef KELVIN_UNCERTAINTY  // Need to add these functions, but need to make sure implementation conforms
-                           // to conventions of upstream merged code
-
-// This allocates from a region within the old_collector_set.  If affiliation equals OLD, the allocation must be taken
-// from a region that is_old().  Otherwise, affiliation should be FREE, in which case this will put a previously unaffiliated
-// region into service.
-HeapWord* ShenandoahFreeSet::allocate_old_with_affiliation(ShenandoahAffiliation affiliation,
-                                                           ShenandoahAllocRequest& req, bool& in_new_region) {
-  shenandoah_assert_heaplocked();
-
-  size_t rightmost =
-    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.rightmost_empty(OldCollector): _free_sets.rightmost(OldCollector);
-  size_t leftmost =
-    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.leftmost_empty(OldCollector): _free_sets.leftmost(OldCollector);
-  if (_partitions.alloc_from_left_bias(OldCollector)) {
-    // This mode picks up stragglers left by a full GC
-    for (size_t idx = leftmost; idx <= rightmost; idx++) {
-      if (_free_sets.in_free_set(idx, OldCollector)) {
-        ShenandoahHeapRegion* r = _heap->get_region(idx);
-        assert(r->is_trash() || !r->is_affiliated() || r->is_old(), "old_collector_set region has bad affiliation");
-        if (r->affiliation() == affiliation) {
-          HeapWord* result = try_allocate_in(r, req, in_new_region);
-          if (result != nullptr) {
-            return result;
-          }
-        }
-      }
-    }
-  } else {
-    // This mode picks up stragglers left by a previous concurrent GC
-    for (size_t count = rightmost + 1; count > leftmost; count--) {
-      // size_t is unsigned, need to dodge underflow when _leftmost = 0
-      size_t idx = count - 1;
-      if (_free_sets.in_free_set(idx, OldCollector)) {
-        ShenandoahHeapRegion* r = _heap->get_region(idx);
-        assert(r->is_trash() || !r->is_affiliated() || r->is_old(), "old_collector_set region has bad affiliation");
-        if (r->affiliation() == affiliation) {
-          HeapWord* result = try_allocate_in(r, req, in_new_region);
-          if (result != nullptr) {
-            return result;
-          }
-        }
-      }
-    }
-  }
-  return nullptr;
-}
-#endif
-
 void ShenandoahFreeSet::add_promoted_in_place_region_to_old_collector(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
   size_t plab_min_size_in_bytes = ShenandoahGenerationalHeap::heap()->plab_min_size() * HeapWordSize;
@@ -771,19 +722,17 @@ void ShenandoahFreeSet::add_promoted_in_place_region_to_old_collector(Shenandoah
   }
 }
 
-#ifdef KELVIN_UNCERTAINTY  // Need to add these functions, but need to make sure implementation conforms
-                           // to conventions of upstream merged code
-HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahAffiliation affiliation,
-                                                       ShenandoahAllocRequest& req, bool& in_new_region) {
+HeapWord* ShenandoahFreeSet::allocate_from_partition_with_affiliation(ShenandoahFreeSetPartitionId which_partition,
+                                                                      ShenandoahAffiliation affiliation,
+                                                                      ShenandoahAllocRequest& req, bool& in_new_region) {
   shenandoah_assert_heaplocked();
-  size_t rightmost =
-    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.rightmost_empty(Collector): _free_sets.rightmost(Collector);
-  size_t leftmost =
-    (affiliation == ShenandoahAffiliation::FREE)? _free_sets.leftmost_empty(Collector): _free_sets.leftmost(Collector);
-  for (size_t c = rightmost + 1; c > leftmost; c--) {
-    // size_t is unsigned, need to dodge underflow when _leftmost = 0
-    size_t idx = c - 1;
-    if (_free_sets.in_free_set(idx, Collector)) {
+  idx_t rightmost_collector = ((affiliation == ShenandoahAffiliation::FREE)?
+                               _partitions.rightmost_empty(which_partition): _partitions.rightmost(which_partition));
+  idx_t leftmost_collector = ((affiliation == ShenandoahAffiliation::FREE)?
+                              _partitions.leftmost_empty(which_partition): _partitions.leftmost(which_partition));
+  if (_partitions.alloc_from_left_bias(which_partition)) {
+    for (idx_t idx = leftmost_collector; idx <= rightmost_collector; ) {
+      assert(_partitions.in_free_set(which_partition, idx), "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
       ShenandoahHeapRegion* r = _heap->get_region(idx);
       if (r->affiliation() == affiliation) {
         HeapWord* result = try_allocate_in(r, req, in_new_region);
@@ -791,14 +740,26 @@ HeapWord* ShenandoahFreeSet::allocate_with_affiliation(ShenandoahAffiliation aff
           return result;
         }
       }
+      idx = _partitions.find_index_of_next_available_region(which_partition, idx + 1);
+    }
+  } else {
+    for (idx_t idx = rightmost_collector; idx >= leftmost_collector; ) {
+      assert(_partitions.in_free_set(which_partition, idx),
+             "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
+      ShenandoahHeapRegion* r = _heap->get_region(idx);
+      if (r->affiliation() == affiliation) {
+        HeapWord* result = try_allocate_in(r, req, in_new_region);
+        if (result != nullptr) {
+          return result;
+        }
+      }
+      idx = _partitions.find_index_of_previous_available_region(which_partition, idx - 1);
     }
   }
   log_debug(gc, free)("Could not allocate collector region with affiliation: %s for request " PTR_FORMAT,
                       shenandoah_affiliation_name(affiliation), p2i(&req));
   return nullptr;
 }
-
-#endif  // KELVIN_UNCERTAINTY
 
 HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& in_new_region) {
   shenandoah_assert_heaplocked();
@@ -914,104 +875,78 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     case ShenandoahAllocRequest::_alloc_gclab:
       // GCLABs are for evacuation so we must be in evacuation phase.
 
+    case ShenandoahAllocRequest::_alloc_plab: {
+      // PLABs always reside in old-gen and are only allocated during
+      // evacuation phase.
+
     case ShenandoahAllocRequest::_alloc_shared_gc: {
       // Fast-path: try to allocate in the collector view first
-      idx_t leftmost_collector = _partitions.leftmost(ShenandoahFreeSetPartitionId::Collector);
-      for (idx_t idx = _partitions.rightmost(ShenandoahFreeSetPartitionId::Collector); idx >= leftmost_collector; ) {
-        assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Collector, idx),
-               "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
-        HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
+      HeapWord* result;
+      result = allocate_from_partition_with_affiliation(req.is_old()? ShenandoahFreeSetPartitionId::OldCollector:
+                                                        ShenandoahFreeSetPartitionId::Collector,
+                                                        req.affiliation(), req, in_new_region);
+      if (result != nullptr) {
+        return result;
+      } else if (allow_new_region) {
+        // Try a free region that is dedicated to GC allocations.
+        result = allocate_from_partition_with_affiliation(req.is_old()? ShenandoahFreeSetPartitionId::OldCollector:
+                                                          ShenandoahFreeSetPartitionId::Collector,
+                                                          ShenandoahAffiliation::FREE, req, in_new_region);
         if (result != nullptr) {
           return result;
         }
-        idx = _partitions.find_index_of_previous_available_region(ShenandoahFreeSetPartitionId::Collector, idx - 1);
-      }
-      // No dice. Can we borrow space from mutator view?
-      if (!ShenandoahEvacReserveOverflow) {
-        return nullptr;
-      }
-
-      // Try to steal an empty region from the mutator view.
-      // TODO: should we also consider stealing a non-empty region from the mutator view?
-
-      idx_t leftmost_mutator_empty = _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Mutator);
-      for (idx_t idx = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator); idx >= leftmost_mutator_empty; ) {
-        assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, idx),
-               "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
-        ShenandoahHeapRegion* r = _heap->get_region(idx);
-        if (can_allocate_from(r)) {
-          flip_to_gc(r);
-          HeapWord *result = try_allocate_in(r, req, in_new_region);
-          if (result != nullptr) {
-            log_debug(gc)("Flipped region " SIZE_FORMAT " to gc for request: " PTR_FORMAT, idx, p2i(&req));
-            return result;
-          }
-        }
-        idx = _partitions.find_index_of_previous_available_region(ShenandoahFreeSetPartitionId::Mutator, idx - 1);
-      }
-
-      // No dice. Do not try to mix mutator and GC allocations, because adjusting region UWM
-      // due to GC allocations would expose unparsable mutator allocations.
-      break;
-    }
-
-    case ShenandoahAllocRequest::_alloc_plab: {
-
-      // PLABs always reside in old-gen and are only allocated during evacuation phase.
-
-      if (_partitions.alloc_from_left_bias(ShenandoahFreeSetPartitionId::OldCollector)) {
-        // Fast-path: try to allocate in the collector view first
-        idx_t rightmost_old_collector = _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector);
-        for (idx_t idx = _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector); idx <= rightmost_old_collector; ) {
-          assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, idx),
-                 "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
-          HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
-          if (result != nullptr) {
-            return result;
-          }
-          idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::OldCollector, idx + 1);
-        }
-      } else {
-        // Fast-path: try to allocate in the collector view first
-        idx_t leftmost_old_collector = _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector);
-        for (idx_t idx = _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector); idx >= leftmost_old_collector; ) {
-          assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, idx),
-                 "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
-          HeapWord* result = try_allocate_in(_heap->get_region(idx), req, in_new_region);
-          if (result != nullptr) {
-            return result;
-          }
-          idx = _partitions.find_index_of_previous_available_region(ShenandoahFreeSetPartitionId::OldCollector, idx - 1);
-        }
       }
 
       // No dice. Can we borrow space from mutator view?
       if (!ShenandoahEvacReserveOverflow) {
         return nullptr;
       }
-
-      // Try to steal an empty region from the mutator view.
-      idx_t leftmost_mutator_empty = _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Mutator);
-      for (idx_t idx = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator); idx >= leftmost_mutator_empty; ) {
-        assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, idx),
-               "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
-        ShenandoahHeapRegion* r = _heap->get_region(idx);
-        if (can_allocate_from(r)) {
-          flip_to_old_gc(r);
-          HeapWord *result = try_allocate_in(r, req, in_new_region);
-          if (result != nullptr) {
-            log_debug(gc)("Flipped region " SIZE_FORMAT " to old gc for request: " PTR_FORMAT, idx, p2i(&req));
-            return result;
-          }
-        }
-        idx = _partitions.find_index_of_previous_available_region(ShenandoahFreeSetPartitionId::Mutator, idx - 1);
+      if (!allow_new_region && req.is_old() && (_heap->young_generation()->free_unaffiliated_regions() > 0)) {
+        // This allows us to flip a mutator region to old_collector
+        allow_new_region = true;
       }
 
+      // We should expand old-gen if this can prevent an old-gen evacuation failure.  We don't care so much about
+      // promotion failures since they can be mitigated in a subsequent GC pass.  Would be nice to know if this
+      // allocation request is for evacuation or promotion.  Individual threads limit their use of PLAB memory for
+      // promotions, so we already have an assurance that any additional memory set aside for old-gen will be used
+      // only for old-gen evacuations.
+
+      // TODO:
+      // if (GC is idle (out of cycle) and mutator allocation fails and there is memory reserved in Collector
+      // or OldCollector sets, transfer a region of memory so that we can satisfy the allocation request, and
+      // immediately trigger the start of GC.  Is better to satisfy the allocation than to trigger out-of-cycle
+      // allocation failure (even if this means we have a little less memory to handle evacuations during the
+      // subsequent GC pass).
+
+      if (allow_new_region) {
+        // Try to steal an empty region from the mutator view.
+        idx_t rightmost_mutator = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator);
+        idx_t leftmost_mutator =  _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Mutator);
+        for (idx_t idx = rightmost_mutator; idx >= leftmost_mutator; ) {
+          assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, idx),
+                 "Boundaries or find_prev_last_bit failed: " SSIZE_FORMAT, idx);
+          ShenandoahHeapRegion* r = _heap->get_region(idx);
+          if (can_allocate_from(r)) {
+            if (req.is_old()) {
+              flip_to_old_gc(r);
+            } else {
+              flip_to_gc(r);
+            }
+            // Region r is entirely empty.  If try_allocat_in fails on region r, something else is really wrong.
+            // Don't bother to retry with other regions.
+            log_debug(gc, free)("Flipped region " SIZE_FORMAT " to gc for request: " PTR_FORMAT, idx, p2i(&req));
+            return try_allocate_in(r, req, in_new_region);
+          }
+          idx = _partitions.find_index_of_previous_available_region(ShenandoahFreeSetPartitionId::Mutator, idx - 1);
+        }
+      }
+      
       // No dice. Do not try to mix mutator and GC allocations, because adjusting region UWM
       // due to GC allocations would expose unparsable mutator allocations.
       break;
     }
-
+    }
     default:
       ShouldNotReachHere();
   }
@@ -1030,7 +965,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 // at the start of the free space.
 //
 // This is merely a helper method to use for the purpose of such a calculation.
-size_t get_usable_free_words(size_t free_bytes) {
+size_t ShenandoahFreeSet::get_usable_free_words(size_t free_bytes) const {
   // e.g. card_size is 512, card_shift is 9, min_fill_size() is 8
   //      free is 514
   //      usable_free is 512, which is decreased to 0
@@ -1073,9 +1008,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   if (_heap->is_concurrent_weak_root_in_progress() && r->is_trash()) {
     return nullptr;
   }
-
   HeapWord* result = nullptr;
-  try_recycle_trashed(r);
+  bool is_generational = _heap->mode()->is_generational();
+  try_recycle_trashed(r, is_generational);
   in_new_region = r->is_empty();
 
   if (in_new_region) {
@@ -1120,7 +1055,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
   } else {
     assert(r->is_affiliated(), "Region " SIZE_FORMAT " that is not new should be affiliated", r->index());
     if (r->affiliation() != req.affiliation()) {
-      assert(_heap->mode()->is_generational(), "Request for %s from %s region should only happen in generational mode.",
+      assert(is_generational, "Request for %s from %s region should only happen in generational mode.",
              req.affiliation_name(), r->affiliation_name());
       return nullptr;
     }
@@ -1132,7 +1067,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     size_t free = r->free();    // free represents bytes available within region r
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
       // This is a PLAB allocation
-      assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
+      assert(is_generational, "PLABs are only for generational mode");
       assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, r->index()),
              "PLABS must be allocated in old_collector_free regions");
 
@@ -1345,10 +1280,11 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   size_t remainder = words_size & ShenandoahHeapRegion::region_size_words_mask();
   ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
 
+  bool is_generational = _heap->mode()->is_generational();
   // Initialize regions:
   for (idx_t i = beg; i <= end; i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
-    try_recycle_trashed(r);
+    try_recycle_trashed(r, is_generational);
 
     assert(i == beg || _heap->get_region(i - 1)->index() + 1 == r->index(), "Should be contiguous");
     assert(r->is_empty(), "Should be empty");
@@ -1404,21 +1340,35 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   return _heap->get_region(beg)->bottom();
 }
 
-void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
+void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r, bool is_generational) {
   if (r->is_trash()) {
     r->recycle();
+    if (is_generational) {
+      ShenandoahGeneration* generation = (r->is_old()?
+                                          (ShenandoahGeneration*) _heap->old_generation():
+                                          (ShenandoahGeneration*) _heap->young_generation());
+#undef KELVIN_REGIONS
+#ifdef KELVIN_REGIONS
+      size_t gen_capacity =
+#endif
+      generation->decrease_capacity(_partitions.region_size_bytes());
+#ifdef KELVIN_REGIONS
+      log_info(gc)("try_recycle_trashed(" SIZE_FORMAT ") decrements %s regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
+                   r->index(), generation->name(), region_count, gen_capacity);
+#endif
+    }
   }
 }
 
 void ShenandoahFreeSet::recycle_trash() {
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
-
+  bool is_generational = _heap->mode()->is_generational();
   for (size_t i = 0; i < _heap->num_regions(); i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_trash()) {
       ShenandoahHeapLocker locker(_heap->lock());
-      try_recycle_trashed(r);
+      try_recycle_trashed(r, is_generational);
     }
     SpinPause(); // allow allocators to take the lock
   }
