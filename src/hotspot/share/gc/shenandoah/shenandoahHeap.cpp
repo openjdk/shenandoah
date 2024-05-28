@@ -192,7 +192,7 @@ jint ShenandoahHeap::initialize() {
   _committed = _initial_size;
 
   // Now we know the number of regions and heap sizes, initialize the heuristics.
-  initialize_heuristics_generations();
+  initialize_heuristics();
 
   size_t heap_page_size   = UseLargePages ? os::large_page_size() : os::vm_page_size();
   size_t bitmap_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
@@ -248,6 +248,9 @@ jint ShenandoahHeap::initialize() {
     _age_census = new ShenandoahAgeCensus();
   }
 
+  //
+  // Worker threads must be initialized after the barrier is configured
+  //
   _workers = new ShenandoahWorkerThreads("Shenandoah GC Threads", _max_workers);
   if (_workers == nullptr) {
     vm_exit_during_initialization("Failed necessary allocation.");
@@ -501,7 +504,7 @@ void ShenandoahHeap::print_init_logger() const {
   ShenandoahInitLogger::print();
 }
 
-void ShenandoahHeap::initialize_heuristics_generations() {
+void ShenandoahHeap::initialize_mode() {
   if (ShenandoahGCMode != nullptr) {
     if (strcmp(ShenandoahGCMode, "satb") == 0) {
       _gc_mode = new ShenandoahSATBMode();
@@ -528,7 +531,9 @@ void ShenandoahHeap::initialize_heuristics_generations() {
             err_msg("GC mode \"%s\" is experimental, and must be enabled via -XX:+UnlockExperimentalVMOptions.",
                     _gc_mode->name()));
   }
+}
 
+void ShenandoahHeap::initialize_heuristics() {
   // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
   // for old would be total heap - minimum capacity of young. This means the sum of the maximum
   // allowed for old and young could exceed the total heap size. It remains the case that the
@@ -576,6 +581,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _old_generation(nullptr),
   _control_thread(nullptr),
   _shenandoah_policy(policy),
+  _gc_mode(nullptr),
   _free_set(nullptr),
   _pacer(nullptr),
   _verifier(nullptr),
@@ -599,6 +605,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _collection_set(nullptr),
   _card_scan(nullptr)
 {
+  // Initialize GC mode early, many subsequent initialization procedures depend on it
+  initialize_mode();
 }
 
 #ifdef _MSC_VER
