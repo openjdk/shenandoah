@@ -173,7 +173,7 @@ public:
 // A stronger version of the above that checks that we are at a safepoint if the vm thread
 #define shenandoah_assert_control_or_vm_thread_at_safepoint() \
                     assert(Thread::current() == ShenandoahHeap::heap()->control_thread() || (SafepointSynchronize::is_at_safepoint() && Thread::current()->is_VM_thread()), \
-                    "Expected control thread, or vm thread at a safepoint") 
+                    "Expected control thread, or vm thread at a safepoint")
 
 #define shenandoah_assert_generational() \
                     assert(ShenandoahHeap::heap()->mode()->is_generational(), "Must be in generational mode here.")
