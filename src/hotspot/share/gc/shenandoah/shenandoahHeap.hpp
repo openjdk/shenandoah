@@ -187,10 +187,6 @@ public:
   // a safepoint by the VMThread.
   void set_active_generation();
 
-  // Some limited sanity checking of the _gc_generation and
-  // _active_generation fields
-  void assert_generations_reconciled() PRODUCT_RETURN;
-
   ShenandoahHeuristics* heuristics();
 
 // ---------- Initialization, termination, identification, printing routines

@@ -760,7 +760,7 @@ private:
     ShenandoahHeapRegion* r = _regions->next();
     // We update references for global, old, and young collections.
     ShenandoahGeneration* const gc_generation = _heap->gc_generation();
-    _heap->assert_generations_reconciled();
+    shenandoah_assert_generations_reconciled();
     assert(gc_generation->is_mark_complete(), "Expected complete marking");
     ShenandoahMarkingContext* const ctx = _heap->marking_context();
     bool is_mixed = _heap->collection_set()->has_old_regions();

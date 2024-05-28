@@ -66,7 +66,7 @@ public:
     // Do not use active_generation() : we must use the gc_generation() set by
     // ShenandoahGCScope on the ControllerThread's stack; no safepoint may
     // intervene to update active_generation, so we can't
-    // assert_generations_reconciled() here.
+    // shenandoah_assert_generations_reconciled() here.
     ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
     assert(rp != nullptr, "need reference processor");
     StringDedup::Requests requests;
@@ -116,7 +116,7 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     StringDedup::Requests requests;
     ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
-    heap->assert_generations_reconciled();
+    shenandoah_assert_generations_reconciled();
 
     // First drain remaining SATB buffers.
     {

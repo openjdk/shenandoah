@@ -1587,17 +1587,6 @@ void ShenandoahHeap::set_active_generation() {
   _active_generation = _gc_generation;
 }
 
-#ifndef PRODUCT
-void ShenandoahHeap::assert_generations_reconciled() {
-  if (SafepointSynchronize::is_at_safepoint()) {
-    ShenandoahGeneration* ggen = gc_generation();
-    ShenandoahGeneration* agen = active_generation();
-    assert(agen == ggen, "active_gen(%d) should be reconciled with gc_gen(%d)at safepoint",
-           agen->type(), ggen->type());
-  }
-}
-#endif
-
 void ShenandoahHeap::on_cycle_start(GCCause::Cause cause, ShenandoahGeneration* generation) {
   shenandoah_policy()->record_collection_cause(cause);
 
@@ -1974,7 +1963,7 @@ void ShenandoahHeap::stw_weak_refs(bool full_gc) {
                                                 : ShenandoahPhaseTimings::degen_gc_weakrefs;
   ShenandoahTimingsTracker t(phase);
   ShenandoahGCWorkerPhase worker_phase(phase);
-  assert_generations_reconciled();
+  shenandoah_assert_generations_reconciled();
   gc_generation()->ref_processor()->process_references(phase, workers(), false /* concurrent */);
 }
 
@@ -2009,7 +1998,7 @@ void ShenandoahHeap::set_gc_state(uint mask, bool value) {
   _gc_state_changed = true;
   // Check that if concurrent weak root is set then active_gen isn't null
   assert(!is_concurrent_weak_root_in_progress() || active_generation() != nullptr, "Error");
-  assert_generations_reconciled();
+  shenandoah_assert_generations_reconciled();
 }
 
 void ShenandoahHeap::set_concurrent_young_mark_in_progress(bool in_progress) {
@@ -2303,7 +2292,7 @@ void ShenandoahHeap::sync_pinned_region_status() {
 void ShenandoahHeap::assert_pinned_region_status() {
   for (size_t i = 0; i < num_regions(); i++) {
     ShenandoahHeapRegion* r = get_region(i);
-    assert_generations_reconciled();
+    shenandoah_assert_generations_reconciled();
     if (gc_generation()->contains(r)) {
       assert((r->is_pinned() && r->pin_count() > 0) || (!r->is_pinned() && r->pin_count() == 0),
              "Region " SIZE_FORMAT " pinning status is inconsistent", i);

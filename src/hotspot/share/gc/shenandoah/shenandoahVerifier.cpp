@@ -96,7 +96,7 @@ public:
     if (_heap->mode()->is_generational()) {
       _generation = _heap->gc_generation();
       assert(_generation != nullptr, "Expected active generation in this mode");
-      _heap->assert_generations_reconciled();
+      shenandoah_assert_generations_reconciled();
     }
   }
 
@@ -192,7 +192,7 @@ private:
           check(ShenandoahAsserts::_safe_oop, obj, obj_reg->has_live() ||
                 (obj_reg->is_old() && _heap->gc_generation()->is_young()),
                    "Object must belong to region with live data");
-          _heap->assert_generations_reconciled();
+          shenandoah_assert_generations_reconciled();
           break;
         default:
           assert(false, "Unhandled liveness verification");
@@ -638,7 +638,7 @@ public:
     if (_heap->mode()->is_generational()) {
       _generation = _heap->gc_generation();
       assert(_generation != nullptr, "Expected active generation in this mode.");
-      _heap->assert_generations_reconciled();
+      shenandoah_assert_generations_reconciled();
     }
   };
 
@@ -880,7 +880,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
   if (_heap->mode()->is_generational()) {
     generation = _heap->gc_generation();
     guarantee(generation != nullptr, "Need to know which generation to verify.");
-    _heap->assert_generations_reconciled();
+    shenandoah_assert_generations_reconciled();
   } else {
     generation = nullptr;
   }
@@ -1353,7 +1353,7 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   ShenandoahOldGeneration* old_generation = _heap->old_generation();
   log_debug(gc)("Verifying remembered set at %s mark", old_generation->is_doing_mixed_evacuations() ? "mixed" : "young");
 
-  _heap->assert_generations_reconciled();
+  shenandoah_assert_generations_reconciled();
   if (old_generation->is_mark_complete() || _heap->gc_generation()->is_global()) {
     ctx = _heap->complete_marking_context();
   } else {
@@ -1434,7 +1434,7 @@ void ShenandoahVerifier::verify_rem_set_before_update_ref() {
 
   ShenandoahMarkingContext* ctx;
 
-  _heap->assert_generations_reconciled();
+  shenandoah_assert_generations_reconciled();
   if (_heap->old_generation()->is_mark_complete() || _heap->gc_generation()->is_global()) {
     ctx = _heap->complete_marking_context();
   } else {

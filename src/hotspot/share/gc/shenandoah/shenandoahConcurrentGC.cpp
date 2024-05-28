@@ -928,7 +928,7 @@ void ShenandoahEvacUpdateCleanupOopStorageRootsClosure::do_oop(oop* p) {
   const oop obj = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(obj)) {
     if (!_mark_context->is_marked(obj)) {
-      _heap->assert_generations_reconciled();
+      shenandoah_assert_generations_reconciled();
       if (_heap->is_in_active_generation(obj)) {
         // TODO: This worries me. Here we are asserting that an unmarked from-space object is 'correct'.
         // Normally, I would call this a bogus assert, but there seems to be a legitimate use-case for

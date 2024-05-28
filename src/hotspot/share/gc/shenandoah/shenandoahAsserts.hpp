@@ -173,6 +173,17 @@ public:
 
 #define shenandoah_assert_generational() \
                     assert(ShenandoahHeap::heap()->mode()->is_generational(), "Must be in generational mode here.")
+
+// Some limited sanity checking of the _gc_generation and _active_generation fields of ShenandoahHeap
+#define shenandoah_assert_generations_reconciled()                                                             \
+                    if (SafepointSynchronize::is_at_safepoint()) {                                             \
+                      ShenandoahHeap* heap = ShenandoahHeap::heap();                                           \
+                      ShenandoahGeneration* ggen = heap->gc_generation();                                      \
+                      ShenandoahGeneration* agen = heap->active_generation();                                  \
+                      assert(agen == ggen, "active_gen(%d) should be reconciled with gc_gen(%d)at safepoint",  \
+                             agen->type(), ggen->type());                                                      \
+                    }
+
 #else
 #define shenandoah_assert_in_heap(interior_loc, obj)
 #define shenandoah_assert_in_heap_or_null(interior_loc, obj)
@@ -226,6 +237,7 @@ public:
 #define shenandoah_assert_heaplocked_or_fullgc_safepoint()
 #define shenandoah_assert_control_or_vm_thread()
 #define shenandoah_assert_generational()
+#define shenandoah_assert_generations_reconciled()                                                             \
 
 #endif
 
