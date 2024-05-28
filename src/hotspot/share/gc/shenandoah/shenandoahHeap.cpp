@@ -1574,10 +1574,8 @@ void ShenandoahHeap::print_tracing_info() const {
 }
 
 void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
+  shenandoah_assert_control_or_vm_thread_at_safepoint();
   _gc_generation = generation;
-  assert(Thread::current() == ShenandoahController::thread() ||
-         (SafepointSynchronize::is_at_safepoint() && Thread::current()->is_VM_thread()),
-         "Unexpected thread or condition");
 }
 
 // Active generation may only be set by the VM thread at a safepoint.
