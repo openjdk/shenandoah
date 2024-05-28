@@ -28,19 +28,6 @@
 #include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 
-Thread* ShenandoahController::_thread = nullptr;
-
-Thread* ShenandoahController::thread() {
-  assert(_thread != nullptr, "None started");
-  return _thread;
-}
-
-void ShenandoahController::set_thread() {
-  assert(_thread == nullptr, "Only once!");
-  _thread = Thread::current();
-  assert(_thread->is_ConcurrentGC_thread(), "Error");
-}
-
 void ShenandoahController::pacing_notify_alloc(size_t words) {
   assert(ShenandoahPacing, "should only call when pacing is enabled");
   Atomic::add(&_allocs_seen, words, memory_order_relaxed);

@@ -36,7 +36,6 @@
  */
 class ShenandoahController: public ConcurrentGCThread {
 private:
-  static Thread* _thread;
   ShenandoahSharedFlag _graceful_shutdown;
 
   shenandoah_padding(0);
@@ -54,8 +53,6 @@ protected:
   // to make complete explicit cycle for demanding customers.
   Monitor _alloc_failure_waiters_lock;
   Monitor _gc_waiters_lock;
-
-  static void set_thread();
 
 public:
   ShenandoahController():
