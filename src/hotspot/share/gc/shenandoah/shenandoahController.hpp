@@ -63,8 +63,6 @@ public:
     _gc_waiters_lock(Mutex::safepoint-2, "ShenandoahRequestedGC_lock", true)
   { }
 
-  static Thread* thread();
-
   // Request a collection cycle. This handles "explicit" gc requests
   // like System.gc and "implicit" gc requests, like metaspace oom.
   virtual void request_gc(GCCause::Cause cause) = 0;
