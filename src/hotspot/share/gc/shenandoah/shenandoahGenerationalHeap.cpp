@@ -715,7 +715,7 @@ void ShenandoahGenerationalHeap::coalesce_and_fill_old_regions(bool concurrent) 
 template<bool CONCURRENT>
 class ShenandoahGenerationalUpdateHeapRefsTask : public WorkerTask {
 private:
-  ShenandoahHeap* _heap;
+  ShenandoahGenerationalHeap* _heap;
   ShenandoahRegionIterator* _regions;
   ShenandoahRegionChunkIterator* _work_chunks;
 
@@ -723,7 +723,7 @@ public:
   explicit ShenandoahGenerationalUpdateHeapRefsTask(ShenandoahRegionIterator* regions,
                                                     ShenandoahRegionChunkIterator* work_chunks) :
           WorkerTask("Shenandoah Update References"),
-          _heap(ShenandoahHeap::heap()),
+          _heap(ShenandoahGenerationalHeap::heap()),
           _regions(regions),
           _work_chunks(work_chunks)
   {

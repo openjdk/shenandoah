@@ -464,7 +464,7 @@ bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
     return true;
   }
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
 
   // Expect marking to be completed before these threads invoke this service.
@@ -515,7 +515,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
                                                        HeapWord* start, size_t words, bool write_table) {
   assert(words % CardTable::card_size_in_words() == 0, "Humongous iteration must span whole number of cards");
   assert(is_humongous(), "only humongous region here");
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
 
   // Find head.
   ShenandoahHeapRegion* r = humongous_start_region();
@@ -524,7 +524,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
          "slice must be integral number of cards");
 
   oop obj = cast_to_oop(r->bottom());
-  RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
+  RememberedScanner* scanner = heap->card_scan();
   size_t card_index = scanner->card_index_for_addr(start);
   size_t num_cards = words / CardTable::card_size_in_words();
 

@@ -280,13 +280,13 @@ bool ShenandoahMark::in_generation(ShenandoahHeap* const heap, oop obj) {
   // Each in-line expansion of in_generation() resolves GENERATION at compile time.
   if (GENERATION == YOUNG) {
     return heap->is_in_young(obj);
-  } else if (GENERATION == OLD) {
-    return heap->is_in_old(obj);
-  } else if (GENERATION == GLOBAL || GENERATION == NON_GEN) {
-    return true;
-  } else {
-    return false;
   }
+
+  if (GENERATION == OLD) {
+    return heap->is_in_old(obj);
+  }
+
+  return (GENERATION == GLOBAL || GENERATION == NON_GEN);
 }
 
 template<class T, ShenandoahGenerationType GENERATION>
@@ -298,7 +298,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
   if (!CompressedOops::is_null(o)) {
     oop obj = CompressedOops::decode_not_null(o);
 
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
     shenandoah_assert_not_forwarded(p, obj);
     shenandoah_assert_not_in_cset_except(p, obj, heap->cancelled_gc());
     if (in_generation<GENERATION>(heap, obj)) {
@@ -329,6 +329,32 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
         heap->mark_card_as_dirty(p);
       }
     }
+  }
+}
+
+template<>
+inline void ShenandoahMark::mark_through_ref<oop, ShenandoahGenerationType::NON_GEN>(oop *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old_q, ShenandoahMarkingContext* const mark_context, bool weak) {
+  mark_non_generational_ref(p, q, mark_context, weak);
+}
+
+template<>
+inline void ShenandoahMark::mark_through_ref<narrowOop, ShenandoahGenerationType::NON_GEN>(narrowOop *p, ShenandoahObjToScanQueue* q, ShenandoahObjToScanQueue* old_q, ShenandoahMarkingContext* const mark_context, bool weak) {
+  mark_non_generational_ref(p, q, mark_context, weak);
+}
+
+template<class T>
+inline void ShenandoahMark::mark_non_generational_ref(T* p, ShenandoahObjToScanQueue* q,
+                                                      ShenandoahMarkingContext* const mark_context, bool weak) {
+  oop o = RawAccess<>::oop_load(p);
+  if (!CompressedOops::is_null(o)) {
+    oop obj = CompressedOops::decode_not_null(o);
+
+    shenandoah_assert_not_forwarded(p, obj);
+    shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
+
+    mark_ref(q, mark_context, weak, obj);
+
+    shenandoah_assert_marked(p, obj);
   }
 }
 

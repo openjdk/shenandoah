@@ -89,36 +89,32 @@ class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
 // write-copy.
 class ShenandoahMergeWriteTable: public ShenandoahHeapRegionClosure {
  private:
-  ShenandoahHeap* _heap;
   RememberedScanner* _scanner;
  public:
-  ShenandoahMergeWriteTable() : _heap(ShenandoahHeap::heap()), _scanner(_heap->card_scan()) {}
+  ShenandoahMergeWriteTable(RememberedScanner* scanner) : _scanner(scanner) {}
 
-  virtual void heap_region_do(ShenandoahHeapRegion* r) override {
+  void heap_region_do(ShenandoahHeapRegion* r) override {
     assert(r->is_old(), "Don't waste time doing this for non-old regions");
     _scanner->merge_write_table(r->bottom(), ShenandoahHeapRegion::region_size_words());
   }
 
-  virtual bool is_thread_safe() override {
+  bool is_thread_safe() override {
     return true;
   }
 };
 
-class ShenandoahSquirrelAwayCardTable: public ShenandoahHeapRegionClosure {
+class ShenandoahCopyWriteCardTableToRead: public ShenandoahHeapRegionClosure {
  private:
-  ShenandoahHeap* _heap;
   RememberedScanner* _scanner;
  public:
-  ShenandoahSquirrelAwayCardTable() :
-    _heap(ShenandoahHeap::heap()),
-    _scanner(_heap->card_scan()) {}
+  ShenandoahCopyWriteCardTableToRead(RememberedScanner* scanner) : _scanner(scanner) {}
 
-  void heap_region_do(ShenandoahHeapRegion* region) {
+  void heap_region_do(ShenandoahHeapRegion* region) override {
     assert(region->is_old(), "Don't waste time doing this for non-old regions");
     _scanner->reset_remset(region->bottom(), ShenandoahHeapRegion::region_size_words());
   }
 
-  bool is_thread_safe() { return true; }
+  bool is_thread_safe() override { return true; }
 };
 
 void ShenandoahGeneration::confirm_heuristics_mode() {
@@ -207,12 +203,12 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 // onto the read-table and will then clear the write-table.
 void ShenandoahGeneration::swap_remembered_set() {
   // Must be sure that marking is complete before we swap remembered set.
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();
 
   // TODO: Eventually, we want replace this with a constant-time exchange of pointers.
-  ShenandoahSquirrelAwayCardTable task;
+  ShenandoahCopyWriteCardTableToRead task(heap->card_scan());
   heap->old_generation()->parallel_heap_region_iterate(&task);
 }
 
@@ -221,11 +217,11 @@ void ShenandoahGeneration::swap_remembered_set() {
 // worker threads.
 void ShenandoahGeneration::merge_write_table() {
   // This should only happen for degenerated cycles
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();
 
-  ShenandoahMergeWriteTable task;
+  ShenandoahMergeWriteTable task(heap->card_scan());
   heap->old_generation()->parallel_heap_region_iterate(&task);
 }
 
@@ -839,7 +835,7 @@ ShenandoahObjToScanQueueSet* ShenandoahGeneration::old_gen_task_queues() const {
 void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   assert(is_young(), "Should only scan remembered set for young generation.");
 
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* const heap = ShenandoahGenerationalHeap::heap();
   uint nworkers = heap->workers()->active_workers();
   reserve_task_queues(nworkers);
 
