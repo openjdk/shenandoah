@@ -287,7 +287,8 @@ bool ShenandoahMark::in_generation(ShenandoahHeap* const heap, oop obj) {
     return heap->is_in_old(obj);
   }
 
-  return (GENERATION == GLOBAL || GENERATION == NON_GEN);
+  assert((GENERATION == GLOBAL || GENERATION == NON_GEN), "Unexpected generation type");
+  return true;
 }
 
 template<class T, ShenandoahGenerationType GENERATION>

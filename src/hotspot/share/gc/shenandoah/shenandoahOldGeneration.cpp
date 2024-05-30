@@ -786,12 +786,3 @@ void ShenandoahOldGeneration::clear_cards_for(ShenandoahHeapRegion* region) {
 void ShenandoahOldGeneration::mark_card_as_dirty(void* location) {
   _card_scan->mark_card_as_dirty((HeapWord*)location);
 }
-
-void ShenandoahOldGeneration::trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region,
-                                                               size_t old_region_count, size_t num_regions) {
-  _old_heuristics->trigger_maybe(first_old_region, last_old_region, old_region_count, num_regions);
-}
-
-void ShenandoahOldGeneration::prime_collection_set(ShenandoahCollectionSet* collection_set) {
-  _old_heuristics->prime_collection_set(collection_set);
-}

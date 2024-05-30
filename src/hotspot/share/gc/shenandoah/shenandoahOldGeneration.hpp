@@ -313,10 +313,6 @@ public:
 
   static const char* state_name(State state);
 
-  void trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region,
-                                        size_t old_region_count, size_t num_regions);
-
-  void prime_collection_set(ShenandoahCollectionSet* collection_set);
 };
 
 
