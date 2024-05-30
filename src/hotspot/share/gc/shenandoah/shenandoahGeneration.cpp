@@ -208,8 +208,9 @@ void ShenandoahGeneration::swap_remembered_set() {
   shenandoah_assert_safepoint();
 
   // TODO: Eventually, we want replace this with a constant-time exchange of pointers.
-  ShenandoahCopyWriteCardTableToRead task(heap->card_scan());
-  heap->old_generation()->parallel_heap_region_iterate(&task);
+  ShenandoahOldGeneration* old_generation = heap->old_generation();
+  ShenandoahCopyWriteCardTableToRead task(old_generation->card_scan());
+  old_generation->parallel_heap_region_iterate(&task);
 }
 
 // Copy the write-version of the card-table into the read-version, clearing the
@@ -221,8 +222,9 @@ void ShenandoahGeneration::merge_write_table() {
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();
 
-  ShenandoahMergeWriteTable task(heap->card_scan());
-  heap->old_generation()->parallel_heap_region_iterate(&task);
+  ShenandoahOldGeneration* old_generation = heap->old_generation();
+  ShenandoahMergeWriteTable task(old_generation->card_scan());
+  old_generation->parallel_heap_region_iterate(&task);
 }
 
 void ShenandoahGeneration::prepare_gc() {
@@ -845,8 +847,9 @@ void ShenandoahGeneration::scan_remembered_set(bool is_concurrent) {
   heap->assert_gc_workers(nworkers);
   heap->workers()->run_task(&task);
   if (ShenandoahEnableCardStats) {
-    assert(heap->card_scan() != nullptr, "Not generational");
-    heap->card_scan()->log_card_stats(nworkers, CARD_STAT_SCAN_RS);
+    RememberedScanner* scanner = heap->old_generation()->card_scan();
+    assert(scanner != nullptr, "Not generational");
+    scanner->log_card_stats(nworkers, CARD_STAT_SCAN_RS);
   }
 }
 

@@ -33,7 +33,6 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
-#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahController.hpp"
@@ -728,16 +727,6 @@ public:
   // Call before/after evacuation.
   inline void enter_evacuation(Thread* t);
   inline void leave_evacuation(Thread* t);
-
-// ---------- Generational support
-//
-private:
-  RememberedScanner* _card_scan;
-
-public:
-  inline RememberedScanner* card_scan() { return _card_scan; }
-  void clear_cards_for(ShenandoahHeapRegion* region);
-  void mark_card_as_dirty(void* location);
 
 // ---------- Helper functions
 //

@@ -73,7 +73,7 @@ static void card_mark_barrier(T* field, oop value) {
     // list may result in the creation of _new_ old-to-young pointers which must dirty
     // the corresponding card. Failing to do this may cause heap verification errors and
     // lead to incorrect GC behavior.
-    heap->card_scan()->mark_card_as_dirty(reinterpret_cast<HeapWord*>(field));
+    heap->old_generation()->mark_card_as_dirty(field);
   }
 }
 
@@ -435,7 +435,7 @@ oop ShenandoahReferenceProcessor::drop(oop reference, ReferenceType type) {
   // evacuation begins so card does not need to be dirtied.
   if (heap->mode()->is_generational() && heap->is_in_old(reference) && heap->is_in_young(referent)) {
     // Note: would be sufficient to mark only the card that holds the start of this Reference object.
-    ShenandoahGenerationalHeap::heap()->card_scan()->mark_range_as_dirty(cast_from_oop<HeapWord*>(reference), reference->size());
+    heap->old_generation()->card_scan()->mark_range_as_dirty(cast_from_oop<HeapWord*>(reference), reference->size());
   }
   return next;
 }

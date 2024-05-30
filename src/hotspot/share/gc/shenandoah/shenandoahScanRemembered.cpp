@@ -43,7 +43,7 @@ protected:
 public:
   ShenandoahDirtyRememberedSetClosure() :
           _heap(ShenandoahGenerationalHeap::heap()),
-          _scanner(_heap->card_scan()) {}
+          _scanner(_heap->old_generation()->card_scan()) {}
 
   template<class T>
   inline void work(T* p) {
@@ -162,7 +162,7 @@ void ShenandoahScanRememberedTask::do_work(uint worker_id) {
   ShenandoahObjToScanQueue* old = _old_queue_set == nullptr ? nullptr : _old_queue_set->queue(worker_id);
   ShenandoahMarkRefsClosure<YOUNG> cl(q, _rp, old);
   ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
-  RememberedScanner* scanner = heap->card_scan();
+  RememberedScanner* scanner = heap->old_generation()->card_scan();
 
   // set up thread local closure for shen ref processor
   _rp->set_mark_closure(worker_id, &cl);
@@ -412,7 +412,7 @@ void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
   ShenandoahParallelWorkerSession worker_session(worker_id);
   ShenandoahHeapRegion* r = _regions->next();
   ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
-  RememberedScanner* scanner = heap->card_scan();
+  RememberedScanner* scanner = heap->old_generation()->card_scan();
   ShenandoahDirtyRememberedSetClosure dirty_cards_for_cross_generational_pointers;
 
   while (r != nullptr) {

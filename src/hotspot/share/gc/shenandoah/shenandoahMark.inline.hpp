@@ -33,6 +33,7 @@
 #include "gc/shenandoah/shenandoahBarrierSet.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
+#include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.inline.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
@@ -311,10 +312,10 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
       // precisely which cards to flag as dirty.
       if (GENERATION == YOUNG && heap->is_in_old(p)) {
         // Mark card as dirty because remembered set scanning still finds interesting pointer.
-        heap->mark_card_as_dirty((HeapWord*)p);
+        heap->old_generation()->mark_card_as_dirty((HeapWord*)p);
       } else if (GENERATION == GLOBAL && heap->is_in_old(p) && heap->is_in_young(obj)) {
         // Mark card as dirty because GLOBAL marking finds interesting pointer.
-        heap->mark_card_as_dirty((HeapWord*)p);
+        heap->old_generation()->mark_card_as_dirty((HeapWord*)p);
       }
     } else if (old_q != nullptr) {
       // Young mark, bootstrapping old_q or concurrent with old_q marking.
@@ -326,7 +327,7 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
       // and by mutator write barriers.  Assert
       if (heap->is_in(p)) {
         assert(heap->is_in_young(obj), "Expected young object.");
-        heap->mark_card_as_dirty(p);
+        heap->old_generation()->mark_card_as_dirty(p);
       }
     }
   }

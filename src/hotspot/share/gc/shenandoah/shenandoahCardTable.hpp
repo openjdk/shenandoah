@@ -25,7 +25,6 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP
 
-#include "gc/g1/g1RegionToSpaceMapper.hpp"
 #include "gc/shared/cardTable.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "utilities/macros.hpp"

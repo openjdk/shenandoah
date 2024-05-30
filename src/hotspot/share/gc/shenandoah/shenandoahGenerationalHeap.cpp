@@ -526,7 +526,7 @@ void ShenandoahGenerationalHeap::retire_plab(PLAB* plab, Thread* thread) {
     // safely walk the region backing the plab.
     log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
                   plab->waste() - original_waste, p2i(top));
-    card_scan()->register_object_without_lock(top);
+    old_generation()->card_scan()->register_object_without_lock(top);
   }
 }
 
@@ -820,7 +820,7 @@ private:
       // The remembered set workload is better balanced between threads, so threads that are "behind" can catch up with other
       // threads during this phase, allowing all threads to work more effectively in parallel.
       struct ShenandoahRegionChunk assignment;
-      RememberedScanner* scanner = _heap->card_scan();
+      RememberedScanner* scanner = _heap->old_generation()->card_scan();
 
       while (!_heap->check_cancelled_gc_and_yield(CONCURRENT) && _work_chunks->next(&assignment)) {
         // Keep grabbing next work chunk to process until finished, or asked to yield
@@ -942,8 +942,9 @@ void ShenandoahGenerationalHeap::update_heap_references(bool concurrent) {
 
   if (ShenandoahEnableCardStats) {
     // Only do this if we are collecting card stats
-    assert(card_scan() != nullptr, "Card table must exist when card stats are enabled");
-    card_scan()->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
+    RememberedScanner* card_scan = old_generation()->card_scan();
+    assert(card_scan != nullptr, "Card table must exist when card stats are enabled");
+    card_scan->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
   }
 }
 

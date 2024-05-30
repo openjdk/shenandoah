@@ -1259,7 +1259,7 @@ public:
   explicit ShenandoahVerifyRemSetClosure(bool init_mark) :
             _init_mark(init_mark),
             _heap(ShenandoahGenerationalHeap::heap()),
-            _scanner(_heap->card_scan()) {}
+            _scanner(_heap->old_generation()->card_scan()) {}
 
   template<class T>
   inline void work(T* p) {
@@ -1285,7 +1285,7 @@ public:
 
 void ShenandoahVerifier::help_verify_region_rem_set(ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx, HeapWord* from,
                                                     HeapWord* top, HeapWord* registration_watermark, const char* message) {
-  RememberedScanner* scanner = ShenandoahGenerationalHeap::heap()->card_scan();
+  RememberedScanner* scanner = ShenandoahGenerationalHeap::heap()->old_generation()->card_scan();
   ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
 
   HeapWord* obj_addr = from;
@@ -1342,7 +1342,7 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   shenandoah_assert_safepoint();
   assert(_heap->mode()->is_generational(), "Only verify remembered set for generational operational modes");
 
-  RememberedScanner* scanner = ShenandoahGenerationalHeap::heap()->card_scan();
+  RememberedScanner* scanner = ShenandoahGenerationalHeap::heap()->old_generation()->card_scan();
   ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
   ShenandoahMarkingContext* ctx;
 

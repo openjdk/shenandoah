@@ -237,12 +237,8 @@ jint ShenandoahHeap::initialize() {
   //
   // After reserving the Java heap, create the card table, barriers, and workers, in dependency order
   //
+  assert(_heap_region.byte_size() == heap_rs.size(), "Need to know reserved size for card table");
   if (mode()->is_generational()) {
-    ShenandoahDirectCardMarkRememberedSet *rs;
-    ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
-    size_t card_count = card_table->cards_required(heap_rs.size() / HeapWordSize);
-    rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
-    _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
 
     // Age census structure
     _age_census = new ShenandoahAgeCensus();
@@ -603,8 +599,7 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _bitmap_region_special(false),
   _aux_bitmap_region_special(false),
   _liveness_cache(nullptr),
-  _collection_set(nullptr),
-  _card_scan(nullptr)
+  _collection_set(nullptr)
 {
   // Initialize GC mode early, many subsequent initialization procedures depend on it
   initialize_mode();
@@ -1129,7 +1124,7 @@ HeapWord* ShenandoahHeap::allocate_memory_under_lock(ShenandoahAllocRequest& req
       // The thread allocating b and the thread allocating c can "race" in various ways, resulting in confusion, such as
       // last-start representing object b while first-start represents object c.  This is why we need to require all
       // register_object() invocations to be "mutually exclusive" with respect to each card's memory range.
-      ShenandoahGenerationalHeap::heap()->card_scan()->register_object(result);
+      old_generation()->card_scan()->register_object(result);
     }
   }
 
@@ -2510,8 +2505,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   if (mode()->is_generational()) {
     ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
     ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
-    ShenandoahOldHeuristics* old_heuristics = old_gen->heuristics();
-    old_heuristics->trigger_maybe(first_old_region, last_old_region, old_region_count, num_regions());
+    old_gen->trigger_collection_if_fragmented(first_old_region, last_old_region, old_region_count, num_regions());
   }
 }
 
@@ -2719,17 +2713,5 @@ void ShenandoahHeap::log_heap_status(const char* msg) const {
     old_generation()->log_status(msg);
   } else {
     global_generation()->log_status(msg);
-  }
-}
-
-void ShenandoahHeap::clear_cards_for(ShenandoahHeapRegion* region) {
-  if (mode()->is_generational()) {
-    _card_scan->mark_range_as_empty(region->bottom(), pointer_delta(region->end(), region->bottom()));
-  }
-}
-
-void ShenandoahHeap::mark_card_as_dirty(void* location) {
-  if (mode()->is_generational()) {
-    _card_scan->mark_card_as_dirty((HeapWord*)location);
   }
 }

@@ -33,6 +33,7 @@
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
+class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
 private:
@@ -174,6 +175,18 @@ public:
   // inclusion in a mixed evacuation are pinned. This should be rare.
   void abandon_mixed_evacuations();
 
+private:
+  RememberedScanner* _card_scan;
+
+public:
+  RememberedScanner* card_scan() { return _card_scan; }
+
+  // Clear cards for given region
+  void clear_cards_for(ShenandoahHeapRegion* region);
+
+  // Mark card for this location as dirty
+  void mark_card_as_dirty(void* location);
+
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
@@ -299,6 +312,11 @@ public:
   }
 
   static const char* state_name(State state);
+
+  void trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region,
+                                        size_t old_region_count, size_t num_regions);
+
+  void prime_collection_set(ShenandoahCollectionSet* collection_set);
 };
 
 
