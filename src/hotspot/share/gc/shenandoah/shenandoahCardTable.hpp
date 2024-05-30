@@ -26,6 +26,7 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHCARDTABLE_HPP
 
 #include "gc/shared/cardTable.hpp"
+#include "memory/virtualspace.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "utilities/macros.hpp"
 
