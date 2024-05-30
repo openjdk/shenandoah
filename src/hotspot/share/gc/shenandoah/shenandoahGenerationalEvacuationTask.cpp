@@ -197,7 +197,7 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     // otherwise been available to hold old evacuations, because old available is max_capacity - used and now
     // we would be trading a fully empty region for a partially used region.
     young_gen->decrease_used(region_used);
-#define KELVIN_REGIONS
+#undef KELVIN_REGIONS
 #ifdef KELVIN_REGIONS
     size_t region_count =
 #endif

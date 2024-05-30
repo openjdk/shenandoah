@@ -1021,7 +1021,7 @@ public:
 
   void update_generation_usage() {
     if (_is_generational) {
-#define KELVIN_REGIONS
+#undef KELVIN_REGIONS
 #ifdef KELVIN_REGIONS
       log_info(gc)("update_generation_usage() sets old_regions: " SIZE_FORMAT ", young_regions: " SIZE_FORMAT,
                    _old_regions, _young_regions);

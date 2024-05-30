@@ -169,7 +169,7 @@ void ShenandoahRegionPartitions::make_all_regions_unavailable() {
     _capacity[partition_id] = 0;
     _used[partition_id] = 0;
   }
-#define KELVIN_USAGE
+#undef KELVIN_USAGE
 #ifdef KELVIN_USAGE
   log_info(gc)("Usage set to zero for all partitions");
 #endif
@@ -313,7 +313,7 @@ void ShenandoahRegionPartitions::retire_from_partition(ShenandoahFreeSetPartitio
   if (used_bytes < _region_size_bytes) {
     // Count the alignment pad remnant of memory as used when we retire this region
     increase_used(partition, _region_size_bytes - used_bytes);
-#define KELVIN_USAGE
+#undef KELVIN_USAGE
 #ifdef KELVIN_USAGE
     log_info(gc)("retire_from_partition %s, idx: " SIZE_FORMAT " with waste: " SIZE_FORMAT ", partition usage: " SIZE_FORMAT,
                  partition_name(partition), idx, _region_size_bytes - used_bytes, _used[int(partition)]);
@@ -399,7 +399,7 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   _region_counts[int(orig_partition)]--;
   _region_counts[int(new_partition)]++;
 
-#define KELVIN_REGION_MOVES
+#undef KELVIN_REGION_MOVES
 #ifdef KELVIN_REGION_MOVES
   log_info(gc)("Moving region " SIZE_FORMAT " from partition %s to %s, with used: " SIZE_FORMAT,
                idx, partition_name(orig_partition), partition_name(new_partition), used);
@@ -1028,7 +1028,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // coalesce-and-fill processing.
       r->end_preemptible_coalesce_and_fill();
       _heap->clear_cards_for(r);
-#define KELVIN_REGIONS
+#undef KELVIN_REGIONS
 #ifdef KELVIN_REGIONS
       size_t region_count =
 #endif

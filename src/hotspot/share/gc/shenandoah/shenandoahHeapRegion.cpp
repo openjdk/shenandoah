@@ -129,7 +129,7 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _humongous_cont:
      if (affiliation() != YOUNG_GENERATION) {
        if (is_old()) {
-#define KELVIN_REGIONS
+#undef KELVIN_REGIONS
 #ifdef KELVIN_REGIONS
          size_t region_count =
 #endif
