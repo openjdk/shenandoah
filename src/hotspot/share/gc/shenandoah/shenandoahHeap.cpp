@@ -238,11 +238,6 @@ jint ShenandoahHeap::initialize() {
   // After reserving the Java heap, create the card table, barriers, and workers, in dependency order
   //
   assert(_heap_region.byte_size() == heap_rs.size(), "Need to know reserved size for card table");
-  if (mode()->is_generational()) {
-
-    // Age census structure
-    _age_census = new ShenandoahAgeCensus();
-  }
 
   //
   // Worker threads must be initialized after the barrier is configured
@@ -570,7 +565,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _affiliations(nullptr),
   _gc_state_changed(false),
   _gc_no_progress_count(0),
-  _age_census(nullptr),
   _cancel_requested_time(0),
   _update_refs_iterator(this),
   _young_generation(nullptr),

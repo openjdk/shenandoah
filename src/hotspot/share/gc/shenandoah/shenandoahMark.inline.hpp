@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahMark.hpp"
 
 #include "gc/shared/continuationGCSupport.inline.hpp"
+#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -122,8 +123,9 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
     if (ShenandoahGenerationalAdaptiveTenuring && !ShenandoahGenerationalCensusAtEvac) {
       assert(region->is_young(), "Only for young objects");
       uint age = ShenandoahHeap::get_object_age(obj);
-      CENSUS_NOISE(heap->age_census()->add(age, region->age(), region->youth(), size, worker_id);)
-      NO_CENSUS_NOISE(heap->age_census()->add(age, region->age(), size, worker_id);)
+      ShenandoahAgeCensus* const census = ShenandoahGenerationalHeap::heap()->age_census();
+      CENSUS_NOISE(census->add(age, region->age(), region->youth(), size, worker_id);)
+      NO_CENSUS_NOISE(census->add(age, region->age(), size, worker_id);)
     }
   }
 

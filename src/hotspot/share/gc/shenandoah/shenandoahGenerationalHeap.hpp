@@ -29,6 +29,7 @@
 
 class ShenandoahRegulatorThread;
 class ShenandoahGenerationalControlThread;
+class ShenandoahAgeCensus;
 
 class ShenandoahGenerationalHeap : public ShenandoahHeap {
 public:
@@ -39,15 +40,26 @@ public:
   void print_init_logger() const override;
   size_t unsafe_max_tlab_alloc(Thread *thread) const override;
 
+private:
   // ---------- Evacuations and Promotions
   //
+  // True when regions and objects should be aged during the current cycle
   ShenandoahSharedFlag  _is_aging_cycle;
+  // Age census used for adapting tenuring threshold in generational mode
+  ShenandoahAgeCensus* _age_census;
+
+public:
   void set_aging_cycle(bool cond) {
     _is_aging_cycle.set_cond(cond);
   }
 
   inline bool is_aging_cycle() const {
     return _is_aging_cycle.is_set();
+  }
+
+  // Return the age census object for young gen (in generational mode)
+  ShenandoahAgeCensus* age_census() const {
+    return _age_census;
   }
 
   // Ages regions that haven't been used for allocations in the current cycle.

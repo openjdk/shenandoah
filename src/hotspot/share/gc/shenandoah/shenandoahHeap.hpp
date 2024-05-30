@@ -31,7 +31,6 @@
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
-#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
@@ -345,8 +344,6 @@ private:
   // This updates the singlular, global gc state. This must happen on a safepoint.
   void set_gc_state(uint mask, bool value);
 
-  ShenandoahAgeCensus* _age_census;    // Age census used for adapting tenuring threshold in generational mode
-
 public:
   char gc_state() const;
 
@@ -392,9 +389,6 @@ public:
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
   bool is_prepare_for_old_mark_in_progress() const;
-
-  // Return the age census object for young gen (in generational mode)
-  inline ShenandoahAgeCensus* age_census() const;
 
 private:
   void manage_satb_barrier(bool active);

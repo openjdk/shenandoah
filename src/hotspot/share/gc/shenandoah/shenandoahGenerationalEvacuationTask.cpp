@@ -136,7 +136,7 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     assert(region->garbage_before_padded_for_promote() < old_garbage_threshold, "Region " SIZE_FORMAT " has too much garbage for promotion", region->index());
     assert(region->is_young(), "Only young regions can be promoted");
     assert(region->is_regular(), "Use different service to promote humongous regions");
-    assert(region->age() >= _heap->age_census()->tenuring_threshold(), "Only promote regions that are sufficiently aged");
+    assert(region->age() >= _tenuring_threshold, "Only promote regions that are sufficiently aged");
     assert(region->get_top_before_promote() == tams, "Region " SIZE_FORMAT " has been used for allocations before promotion", region->index());
   }
 
@@ -218,7 +218,7 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
   assert(_heap->active_generation()->is_mark_complete(), "sanity");
   assert(region->is_young(), "Only young regions can be promoted");
   assert(region->is_humongous_start(), "Should not promote humongous continuation in isolation");
-  assert(region->age() >= _heap->age_census()->tenuring_threshold(), "Only promote regions that are sufficiently aged");
+  assert(region->age() >= _tenuring_threshold, "Only promote regions that are sufficiently aged");
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
   // TODO: Consider not promoting humongous objects that represent primitive arrays.  Leaving a primitive array
