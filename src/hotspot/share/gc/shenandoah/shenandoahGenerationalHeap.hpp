@@ -27,6 +27,7 @@
 
 #include "gc/shenandoah/shenandoahHeap.hpp"
 
+class PLAB;
 class ShenandoahRegulatorThread;
 class ShenandoahGenerationalControlThread;
 class ShenandoahAgeCensus;
