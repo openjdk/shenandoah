@@ -102,7 +102,7 @@ size_t ShenandoahGenerationalHeap::unsafe_max_tlab_alloc(Thread *thread) const {
 
 ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy) :
   ShenandoahHeap(policy),
-  _age_census(new ShenandoahAgeCensus()),
+  _age_census(nullptr),
   _min_plab_size(calculate_min_plab()),
   _max_plab_size(calculate_max_plab()),
   _regulator_thread(nullptr),
@@ -110,6 +110,11 @@ ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy
   _old_gen_memory_pool(nullptr) {
   assert(is_aligned(_min_plab_size, CardTable::card_size_in_words()), "min_plab_size must be aligned");
   assert(is_aligned(_max_plab_size, CardTable::card_size_in_words()), "max_plab_size must be aligned");
+}
+
+void ShenandoahGenerationalHeap::post_initialize() {
+  ShenandoahHeap::post_initialize();
+  _age_census = new ShenandoahAgeCensus();
 }
 
 void ShenandoahGenerationalHeap::print_init_logger() const {

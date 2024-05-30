@@ -35,6 +35,7 @@ class ShenandoahAgeCensus;
 class ShenandoahGenerationalHeap : public ShenandoahHeap {
 public:
   explicit ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy);
+  void post_initialize() override;
 
   static ShenandoahGenerationalHeap* heap();
 
