@@ -189,10 +189,13 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
   // Always clear references for old generation
   ref_processor()->set_soft_reference_policy(true);
 
-  ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
-  size_t card_count = card_table->cards_required(ShenandoahHeap::heap()->reserved_region().word_size());
-  auto rs = new ShenandoahDirectCardMarkRememberedSet(ShenandoahBarrierSet::barrier_set()->card_table(), card_count);
-  _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
+  if (ShenandoahCardBarrier) {
+    // TODO: Old and young generations should only be instantiated for generational mode
+    ShenandoahCardTable* card_table = ShenandoahBarrierSet::barrier_set()->card_table();
+    size_t card_count = card_table->cards_required(ShenandoahHeap::heap()->reserved_region().word_size());
+    auto rs = new ShenandoahDirectCardMarkRememberedSet(card_table, card_count);
+    _card_scan = new ShenandoahScanRemembered<ShenandoahDirectCardMarkRememberedSet>(rs);
+  }
 }
 
 void ShenandoahOldGeneration::set_promoted_reserve(size_t new_val) {

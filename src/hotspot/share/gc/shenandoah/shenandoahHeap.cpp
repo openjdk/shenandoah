@@ -191,9 +191,6 @@ jint ShenandoahHeap::initialize() {
 
   _committed = _initial_size;
 
-  // Now we know the number of regions and heap sizes, initialize the heuristics.
-  initialize_heuristics();
-
   size_t heap_page_size   = UseLargePages ? os::large_page_size() : os::vm_page_size();
   size_t bitmap_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
   size_t region_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
@@ -233,6 +230,9 @@ jint ShenandoahHeap::initialize() {
   }
 
   BarrierSet::set_barrier_set(new ShenandoahBarrierSet(this, _heap_region));
+
+  // Now we know the number of regions and heap sizes, initialize the heuristics.
+  initialize_heuristics();
 
   //
   // After reserving the Java heap, create the card table, barriers, and workers, in dependency order
