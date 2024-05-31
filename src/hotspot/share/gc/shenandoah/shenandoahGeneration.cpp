@@ -775,8 +775,7 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
     size_t first_old, last_old, num_old;
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-    // Free set construction uses reserve quantities, because they are known to be valid here
-    heap->free_set()->rebuild(young_cset_regions, old_cset_regions, true);
+    heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
   }
 #ifdef KELVIN_DEPRECATE
   heap->set_evacuation_reserve_quantities(false);

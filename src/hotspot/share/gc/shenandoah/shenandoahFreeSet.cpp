@@ -1162,7 +1162,7 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
   find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
 }
 
-void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves) {
+void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regions) {
   shenandoah_assert_heaplocked();
   size_t young_reserve(0), old_reserve(0);
 
@@ -1170,8 +1170,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
     young_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
     old_reserve = 0;
   } else {
-    compute_young_and_old_reserves(young_cset_regions, old_cset_regions, have_evacuation_reserves,
-                                   young_reserve, old_reserve);
+    compute_young_and_old_reserves(young_cset_regions, old_cset_regions, young_reserve, old_reserve);
   }
 
   reserve_regions(young_reserve, old_reserve);
@@ -1180,7 +1179,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   log_status();
 }
 
-void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
+void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions,
                                                        size_t& young_reserve_result, size_t& old_reserve_result) const {
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   ShenandoahOldGeneration* const old_generation = _heap->old_generation();
@@ -1217,24 +1216,21 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   // which is reserved for promotion is enforced using thread-local variables that prescribe intentions for
   // each PLAB's available memory.
   
-#define KELVIN_CONFIRM_SUCCESSFUL_MERGE
-#ifdef KELVIN_CONFIRM_SUCCESSFUL_MERGE
-    assert(have_evacuation_reserves, "Always prepare reserve quantities before rebuild");
-    // After testing with this assert:
-    // 1. make the following code unconditional
-    // 2. toss the else arm
-    // 3. get rid of the have_evacuation_reserves argument
-    // 4. maybe even get rid of the state variable from which have_evacuation_reserves value is derived
-#endif
-  if (have_evacuation_reserves) {
-    // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
-    const size_t promoted_reserve = old_generation->get_promoted_reserve();
-    const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
-    young_reserve_result = young_generation->get_evacuation_reserve();
-    old_reserve_result = promoted_reserve + old_evac_reserve;
-    assert(old_reserve_result <= old_available,
-           "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
-           promoted_reserve, old_evac_reserve, old_available);
+
+  // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
+  const size_t promoted_reserve = old_generation->get_promoted_reserve();
+  const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
+  young_reserve_result = young_generation->get_evacuation_reserve();
+  old_reserve_result = promoted_reserve + old_evac_reserve;
+  assert(old_reserve_result <= old_available,
+         "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
+         promoted_reserve, old_evac_reserve, old_available);
+#ifdef KELVIN_DEPRECATE
+  // This code corresponds to a previous encarnation of this method,
+  // in which we would sometimes not have precomputed evacuation
+  // reserves,  It is now deprecated because we now always have
+  // precomputed evacuation reserves.
+
   } else {
     // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
     young_reserve_result = (young_capacity * ShenandoahEvacReserve) / 100;
@@ -1243,6 +1239,7 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
     // unaffiliated regions.
     old_reserve_result = old_available;
   }
+#endif
 
   // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector
   // free set.  Because of this, old_available may not have enough memory to represent the intended reserve.  Adjust

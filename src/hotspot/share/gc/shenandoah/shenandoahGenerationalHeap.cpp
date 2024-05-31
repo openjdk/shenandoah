@@ -567,8 +567,8 @@ ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_g
 
 // Make sure old-generation is large enough, but no larger than is necessary, to hold mixed evacuations
 // and promotions, if we anticipate either. Any deficit is provided by the young generation, subject to
-// xfer_limit, and any surplus is transferred to the young generation.
-// xfer_limit is the maximum we're able to transfer from young to old.
+// mutator_xfer_limit, and any surplus is transferred to the young generation.
+// mutator_xfer_limit is the maximum we're able to transfer from young to old.
 void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_xfer_limit, size_t old_cset_regions) {
 
   // We can limit the old reserve to the size of anticipated promotions:
@@ -590,11 +590,8 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   // We have to be careful in the event that SOEP is set to 100 by the user.
   assert(ShenandoahOldEvacRatioPercent <= 100, "Error");
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-#ifdef KELVIN_CHANGE_MISSING
-  const size_t old_available = old_generation()->available();
-#else
   const size_t old_available = old_generation()->available() + old_cset_regions * region_size_bytes;
-#endif
+
   // The free set will reserve this amount of memory to hold young evacuations (initialized to the ideal reserve)
   size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
 

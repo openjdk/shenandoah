@@ -148,18 +148,20 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
   // and rebuild free set.
   vmop_entry_final_roots();
 
-  // We do not rebuild_free following increments of old marking because memory has not been reclaimed. However, we may
-  // need to transfer memory to OLD in order to efficiently support the mixed evacuations that might immediately follow.
-
-  // TODO: if we do transfer memory, shouldn't we rebuild the free set?
-
-  size_t allocation_runway = heap->young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(0);
-  heap->compute_old_generation_balance(allocation_runway, 0);
-
+  // After concurrent old marking finishes, we may be able to reclaim immediate garbage from regions that are fully garbage.
+  // Furthermore, we may want to expand OLD in order to make room for the first mixed evacuation that immediately follows
+  // completion of OLD marking.  This is why we rebuild free set here.
   ShenandoahGenerationalHeap::TransferResult result;
   {
     ShenandoahHeapLocker locker(heap->lock());
+    size_t young_cset_regions, old_cset_regions;
+    size_t first_old, last_old, num_old;
+    size_t allocation_runway = heap->young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(0);
+    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
+    assert((young_cset_regions == 0) && (old_cset_regions == 0), "No ongoing evacuation when concurrent mark ends");
+    heap->compute_old_generation_balance(allocation_runway, 0);
     result = heap->balance_generations();
+    heap->free_set()->rebuild(0, 0);
   }
 
   LogTarget(Info, gc, ergo) lt;
