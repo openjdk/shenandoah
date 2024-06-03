@@ -39,6 +39,7 @@
 #include "gc/shenandoah/shenandoahEvacTracker.hpp"
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
+#include "gc/shenandoah/mode/shenandoahMode.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
@@ -57,7 +58,6 @@ class ShenandoahYoungGeneration;
 class ShenandoahOldGeneration;
 class ShenandoahHeuristics;
 class ShenandoahMarkingContext;
-class ShenandoahMode;
 class ShenandoahPhaseTimings;
 class ShenandoahHeap;
 class ShenandoahHeapRegion;
@@ -478,9 +478,15 @@ private:
 public:
   ShenandoahController*   control_thread() { return _control_thread; }
 
-  ShenandoahYoungGeneration* young_generation()  const { return _young_generation;  }
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
-  ShenandoahOldGeneration*   old_generation()    const { return _old_generation;    }
+  ShenandoahYoungGeneration* young_generation()  const {
+    assert(mode()->is_generational(), "Must be");
+    return _young_generation;
+  }
+  ShenandoahOldGeneration*   old_generation()    const {
+    assert(mode()->is_generational(), "Must be");
+    return _old_generation;
+  }
   ShenandoahGeneration*      generation_for(ShenandoahAffiliation affiliation) const;
   const ShenandoahGenerationSizer* generation_sizer()  const { return &_generation_sizer;  }
 
