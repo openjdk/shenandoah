@@ -1018,8 +1018,25 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     // is testing that the GC overhead limit has not been exceeded.
     // This will notify the collector to start a cycle, but will raise
     // an OOME to the mutator if the last Full GCs have not made progress.
-    if (result == nullptr && !req.is_lab_alloc() && get_gc_no_progress_count() > ShenandoahNoProgressThreshold) {
+#undef KELVIN_OOM_TRACE
+#ifdef KELVIN_OOM_TRACE
+    if (result == nullptr) {
+      log_info(gc)("alloc_under_lock(size: " SIZE_FORMAT") returned nullptr, no_progress count is: " SIZE_FORMAT ", NoProgressThreshold: " SIZE_FORMAT,
+                   req.size(), get_gc_no_progress_count(), ShenandoahNoProgressThreshold);
+    }
+#endif
+    // gc_no_progress_count is incremented following each degen or full GC that fails to achieve is_good_progress().
+    // Note that Generational Shenandoah may increment no_progress_count faster than traditional Shenandoah because young
+    // GCs, which may degenerate, typically occur more frequently than single-generation Global GCs.
+    if ((result == nullptr) && !req.is_lab_alloc() && (get_gc_no_progress_count() > ShenandoahNoProgressThreshold)) {
+#ifdef KELVIN_OOM_TRACE
+      log_info(gc)("  endeavoring to throw OOM exception in thread " PTR_FORMAT, p2i(Thread::current()));
+#endif
       control_thread()->handle_alloc_failure(req, false);
+#ifdef KELVIN_OOM_TRACE
+      log_info(gc)("  back from handle_alloc_failure(), throwing OOM");
+#endif
+      req.set_actual_size(0);
       return nullptr;
     }
 
@@ -1030,12 +1047,56 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     // other threads have already depleted the free storage. In this case, a better
     // strategy is to try again, as long as GC makes progress (or until at least
     // one full GC has completed).
+
     size_t original_count = shenandoah_policy()->full_gc_count();
-    while (result == nullptr
-        && (get_gc_no_progress_count() == 0 || original_count == shenandoah_policy()->full_gc_count())) {
+
+    // Stop retrying and return nullptr to cause OOMError exception if our allocation failed even after:
+    //   a) We experienced a GC that had good progress, or
+    //   b) We experienced at least one Full GC (whether or not it had good progress)
+    //
+    // TODO: Rather than require a Full GC before throwing OOMError, it might be more appropriate for handle_alloc_failure()
+    //       to trigger a concurrent GLOBAL GC, and throw OOMError if we cannot allocate even after GLOBAL GC has finished.
+    //       There is no "perfect" solution here:
+    //
+    //        1. As currently implemented, there may be a race between multiple allocating threads, both attempting
+    //           to allocate very large objects.  The first thread to retry its allocation might succeed and the second
+    //           thread to retry its allocation might fail (because the first thread consumed the newly available memory).
+    //           So the second thread experiences OOMError even through another GC would have reclaimed the memory it wanted
+    //           to allocate.
+    //        2. A GLOBAL GC won't necessarily reclaim all garbage.  Following a concurrent Generational GLOBAL GC, we may
+    //           need to perform multiple concurrent mixed evacuations in order to reclaim all of the dead memory identified
+    //           by the GLOBAL GC mark.  However, the first evacuation performed by the GLOBAL GC will normally reclaim
+    //           a significant amount of garbage (as guided by garbage first heuristic).  If this is not enough memory
+    //           to satisfy the pending allocation request, we are in "dire straits", and a fail-fast OOMError is probably
+    //           the better remediation than repeated attempts to allocate following repeated GC cycles.
+
+    while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
+      // Kelvin is removing this test: get_gc_no_progress_count() == 0
+
+#ifdef KELVIN_OOM_TRACE
+      log_info(gc)("  Thread " SIZE_FORMAT " to retry its allocation, no_progress_count: " SIZE_FORMAT
+                   ", full_gc_count: " SIZE_FORMAT " vs. original count: " SIZE_FORMAT,
+                   p2i(Thread::current()), get_gc_no_progress_count(), shenandoah_policy()->full_gc_count(), original_count);
+      // Note: handle_alloc_failure(req, true /* block */) blocks until gc progress has been made
+#endif
       control_thread()->handle_alloc_failure(req, true);
       result = allocate_memory_under_lock(req, in_new_region);
+#ifdef KELVIN_OOM_TRACE
+      if (result != nullptr) {
+        log_info(gc)("  Thread " SIZE_FORMAT " alloc retry was successful for size: " SIZE_FORMAT,
+                     p2i(Thread::current()), req.actual_size());
+      }
+      // Note: handle_alloc_failure(req, true /* block */) blocks until gc progress has been made
+#endif
     }
+
+#ifdef KELVIN_OOM_TRACE
+    if (result == nullptr) {
+      log_info(gc)("  Thread " SIZE_FORMAT " to throw OOM, no longer retrying its allocation, no_progress_count: " SIZE_FORMAT
+                   ", full_gc_count: " SIZE_FORMAT " vs. original count: " SIZE_FORMAT,
+                   p2i(Thread::current()), get_gc_no_progress_count(), shenandoah_policy()->full_gc_count(), original_count);
+    }
+#endif
 
     if (log_is_enabled(Debug, gc, alloc)) {
       ResourceMark rm;
