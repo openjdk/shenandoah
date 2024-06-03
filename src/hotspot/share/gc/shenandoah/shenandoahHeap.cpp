@@ -1583,6 +1583,7 @@ void ShenandoahHeap::set_gc_generation(ShenandoahGeneration* generation) {
 void ShenandoahHeap::set_active_generation() {
   assert(Thread::current()->is_VM_thread(), "Only the VM Thread");
   assert(SafepointSynchronize::is_at_safepoint(), "Only at a safepoint!");
+  assert(_gc_generation != nullptr, "Will set _active_generation to nullptr");
   _active_generation = _gc_generation;
 }
 

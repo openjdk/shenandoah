@@ -106,7 +106,6 @@ void ShenandoahSTWMark::mark() {
   // Weak reference processing
   ShenandoahReferenceProcessor* rp = heap->gc_generation()->ref_processor();
   shenandoah_assert_generations_reconciled();
-  assert(heap->gc_generation() == heap->active_generation(), "Should be identical at stw phases");
   rp->reset_thread_locals();
   rp->set_soft_reference_policy(heap->soft_ref_policy()->should_clear_all_soft_refs());
 

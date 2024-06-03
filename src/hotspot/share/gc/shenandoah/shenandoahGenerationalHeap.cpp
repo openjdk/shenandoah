@@ -165,10 +165,9 @@ oop ShenandoahGenerationalHeap::evacuate_object(oop p, Thread* thread) {
   assert(!r->is_humongous(), "never evacuate humongous objects");
 
   ShenandoahAffiliation target_gen = r->affiliation();
-  shenandoah_assert_generations_reconciled();
-  assert(gc_generation() != nullptr, "Error");
+  // gc_generation() can change asynchronously and should not be used here.
   assert(active_generation() != nullptr, "Error");
-  if (gc_generation()->is_young() && target_gen == YOUNG_GENERATION) {
+  if (active_generation()->is_young() && target_gen == YOUNG_GENERATION) {
     markWord mark = p->mark();
     if (mark.is_marked()) {
       // Already forwarded.
