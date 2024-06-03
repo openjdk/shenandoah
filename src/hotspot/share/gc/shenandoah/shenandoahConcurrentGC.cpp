@@ -221,6 +221,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       return false;
     }
 
+    // vmop_entry_final_updaterefs rebuilds free set in preparation for next GC.
     vmop_entry_final_updaterefs();
 
     // Update references freed up collection set, kick the cleanup to reclaim the space.
@@ -230,6 +231,8 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // do not check for cancellation here because, at this point, the cycle is effectively
     // complete. If the cycle has been cancelled here, the control thread will detect it
     // on its next iteration and run a degenerated young cycle.
+
+    // vmop_entry_final_updaterefs rebuilds free set in preparation for next GC.
     vmop_entry_final_roots();
     _abbreviated = true;
   }
@@ -410,6 +413,8 @@ void ShenandoahConcurrentGC::entry_final_roots() {
 
 #ifdef KELVIN_DEBUG
   log_info(gc)("KELVIN says we're no longer missing rebuild after abbreviated cycle");
+  // But, debug tracebacks suggest we have not rebalanced generations
+  // following the rebuild that happened at start of evacuation.
 #endif
   ShenandoahHeap::heap()->rebuild_free_set(true /*concurrent*/);
 }

@@ -674,8 +674,12 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
     // Round old_entitlement down to nearest multiple of regions to be transferred to old
     size_t entitled_xfer = old_entitlement - old_available;
     entitled_xfer = region_size_bytes * (entitled_xfer / region_size_bytes);
+    size_t unaffiliated_young_regions = young_generation()->free_unaffiliated_regions();
+    size_t unaffiliated_young_memory = unaffiliated_young_regions * region_size_bytes;
+    if (entitled_xfer > unaffiliated_young_memory) {
+      entitled_xfer = unaffiliated_young_memory;
+    }
     old_entitlement = old_available + entitled_xfer;
-
     if (old_entitlement < old_reserve) {
 #ifdef KELVIN_RESIZE
       log_info(gc)("KELVIN entitlement (" SIZE_FORMAT ") < old reserve (" SIZE_FORMAT
