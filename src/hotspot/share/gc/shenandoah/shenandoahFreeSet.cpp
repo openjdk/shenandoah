@@ -731,7 +731,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       _heap->old_generation()->clear_cards_for(r);
       _heap->old_generation()->increment_affiliated_region_count();
     } else {
-      _heap->young_generation()->increment_affiliated_region_count();
+      _heap->generation_for(r->affiliation())->increment_affiliated_region_count();
     }
 
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
@@ -928,7 +928,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     // While individual regions report their true use, all humongous regions are marked used in the free set.
     _free_sets.remove_from_free_sets(r->index());
   }
-  _heap->young_generation()->increase_affiliated_region_count(num);
+  generation->increase_affiliated_region_count(num);
 
   size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
   _free_sets.increase_used(Mutator, total_humongous_size);
@@ -1183,6 +1183,7 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
 
 void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
                                                        size_t& young_reserve_result, size_t& old_reserve_result) const {
+  shenandoah_assert_generational();
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
   ShenandoahOldGeneration* const old_generation = _heap->old_generation();

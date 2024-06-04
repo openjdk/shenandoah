@@ -112,16 +112,20 @@ ShenandoahHeuristics* ShenandoahGlobalGeneration::initialize_heuristics(Shenando
 
 void ShenandoahGlobalGeneration::set_mark_complete() {
   ShenandoahGeneration::set_mark_complete();
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  heap->young_generation()->set_mark_complete();
-  heap->old_generation()->set_mark_complete();
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    heap->young_generation()->set_mark_complete();
+    heap->old_generation()->set_mark_complete();
+  }
 }
 
 void ShenandoahGlobalGeneration::set_mark_incomplete() {
   ShenandoahGeneration::set_mark_incomplete();
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  heap->young_generation()->set_mark_incomplete();
-  heap->old_generation()->set_mark_incomplete();
+  if (ShenandoahHeap::heap()->mode()->is_generational()) {
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    heap->young_generation()->set_mark_incomplete();
+    heap->old_generation()->set_mark_incomplete();
+  }
 }
 
 void ShenandoahGlobalGeneration::prepare_gc() {

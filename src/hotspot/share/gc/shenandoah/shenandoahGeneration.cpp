@@ -241,6 +241,7 @@ void ShenandoahGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClos
 }
 
 void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap) {
+  shenandoah_assert_generational();
 
   ShenandoahOldGeneration* const old_generation = heap->old_generation();
   ShenandoahYoungGeneration* const young_generation = heap->young_generation();
@@ -354,6 +355,7 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap
 // that young_generation->available() now knows about recently discovered immediate garbage.
 //
 void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap, ShenandoahCollectionSet* const collection_set) {
+  shenandoah_assert_generational();
   // We may find that old_evacuation_reserve and/or loaned_for_young_evacuation are not fully consumed, in which case we may
   //  be able to increase regions_available_to_loan
 
