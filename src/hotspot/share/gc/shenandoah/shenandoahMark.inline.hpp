@@ -36,6 +36,7 @@
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.inline.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
@@ -290,6 +291,7 @@ bool ShenandoahMark::in_generation(ShenandoahHeap* const heap, oop obj) {
   }
 
   assert((GENERATION == GLOBAL || GENERATION == NON_GEN), "Unexpected generation type");
+  assert(heap->is_in(obj), "Object must be in heap");
   return true;
 }
 
@@ -326,10 +328,11 @@ inline void ShenandoahMark::mark_through_ref(T *p, ShenandoahObjToScanQueue* q, 
       shenandoah_assert_marked(p, obj);
     } else if (GENERATION == OLD) {
       // Old mark, found a young pointer.
-      // TODO:  Rethink this: may be redundant with dirtying of cards identified during young-gen remembered set scanning
-      // and by mutator write barriers.  Assert
+      // TODO: Rethink this: may be redundant with dirtying of cards identified during young-gen remembered set scanning
+      // and by mutator write barriers.
       if (heap->is_in(p)) {
         assert(heap->is_in_young(obj), "Expected young object.");
+        assert(heap->old_generation()->card_scan()->is_card_dirty((HeapWord*)p), "Card should already be marked.");
         heap->old_generation()->mark_card_as_dirty(p);
       }
     }
