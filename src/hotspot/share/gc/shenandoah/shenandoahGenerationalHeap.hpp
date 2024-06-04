@@ -38,6 +38,7 @@ public:
   void post_initialize() override;
 
   static ShenandoahGenerationalHeap* heap();
+  static ShenandoahGenerationalHeap* cast(CollectedHeap* heap);
 
   void print_init_logger() const override;
   size_t unsafe_max_tlab_alloc(Thread *thread) const override;

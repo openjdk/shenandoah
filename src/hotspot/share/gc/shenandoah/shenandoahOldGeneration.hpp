@@ -88,6 +88,10 @@ private:
 public:
   ShenandoahOldGeneration(uint max_queues, size_t max_capacity, size_t soft_max_capacity);
 
+  static ShenandoahOldGeneration* get(ShenandoahHeap* heap) {
+    return ShenandoahGenerationalHeap::cast(heap)->old_generation();
+  }
+
   virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
 
   const char* name() const override {

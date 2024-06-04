@@ -36,6 +36,10 @@ private:
 public:
   ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t max_soft_capacity);
 
+  static ShenandoahYoungGeneration* get(ShenandoahHeap* heap) {
+    return ShenandoahGenerationalHeap::cast(heap)->young_generation();
+  }
+
   virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
 
   const char* name() const override {

@@ -81,6 +81,11 @@ protected:
 ShenandoahGenerationalHeap* ShenandoahGenerationalHeap::heap() {
   shenandoah_assert_generational();
   CollectedHeap* heap = Universe::heap();
+  return cast(heap);
+}
+
+ShenandoahGenerationalHeap* ShenandoahGenerationalHeap::cast(CollectedHeap* heap) {
+  shenandoah_assert_generational();
   return checked_cast<ShenandoahGenerationalHeap*>(heap);
 }
 
