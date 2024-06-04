@@ -1211,20 +1211,23 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
     young_unaffiliated_regions += old_region_balance;
   }
 
+  size_t young_available = young_capacity - (young_generation->used() + young_generation->get_humongous_waste());
+  young_available += young_cset_regions * region_size_bytes;
+
   // All allocations taken from the old collector set are performed by GC, generally using PLABs for both
   // promotions and evacuations.  The partition between which old memory is reserved for evacuation and
   // which is reserved for promotion is enforced using thread-local variables that prescribe intentions for
   // each PLAB's available memory.
-  
 
   // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
   const size_t promoted_reserve = old_generation->get_promoted_reserve();
   const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
   young_reserve_result = young_generation->get_evacuation_reserve();
   old_reserve_result = promoted_reserve + old_evac_reserve;
-  assert(old_reserve_result <= old_available,
-         "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
-         promoted_reserve, old_evac_reserve, old_available);
+  assert(old_reserve_result + young_reserve_result <= old_available + young_available,
+         "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT " + " SIZE_FORMAT
+         ") more than is available: " SIZE_FORMAT " + " SIZE_FORMAT,
+         promoted_reserve, old_evac_reserve, young_reserve_result, old_available, young_available);
 #ifdef KELVIN_DEPRECATE
   // This code corresponds to a previous encarnation of this method,
   // in which we would sometimes not have precomputed evacuation

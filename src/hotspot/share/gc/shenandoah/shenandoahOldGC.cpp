@@ -159,7 +159,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     size_t allocation_runway = heap->young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(0);
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
     assert((young_cset_regions == 0) && (old_cset_regions == 0), "No ongoing evacuation when concurrent mark ends");
-    heap->compute_old_generation_balance(allocation_runway, 0);
+    heap->compute_old_generation_balance(allocation_runway, 0, 0);
     result = heap->balance_generations();
     heap->free_set()->rebuild(0, 0);
   }

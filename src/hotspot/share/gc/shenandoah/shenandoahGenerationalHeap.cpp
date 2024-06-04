@@ -569,7 +569,8 @@ ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_g
 // and promotions, if we anticipate either. Any deficit is provided by the young generation, subject to
 // mutator_xfer_limit, and any surplus is transferred to the young generation.
 // mutator_xfer_limit is the maximum we're able to transfer from young to old.
-void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_xfer_limit, size_t old_cset_regions) {
+void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_xfer_limit,
+                                                                size_t old_cset_regions, size_t young_cset_regions) {
 
   // We can limit the old reserve to the size of anticipated promotions:
   // max_old_reserve is an upper bound on memory evacuated from old and promoted to old,
@@ -591,6 +592,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   assert(ShenandoahOldEvacRatioPercent <= 100, "Error");
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   const size_t old_available = old_generation()->available() + old_cset_regions * region_size_bytes;
+  const size_t young_available = young_generation()->available() + young_cset_regions * region_size_bytes;
 
   // The free set will reserve this amount of memory to hold young evacuations (initialized to the ideal reserve)
   size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
@@ -600,6 +602,10 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   const size_t max_old_reserve = (ShenandoahOldEvacRatioPercent == 100)?
                                  bound_on_old_reserve: MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                                                             bound_on_old_reserve);
+
+  if (young_reserve > young_available) {
+    young_reserve = young_available;
+  }
 
 #ifdef KELVIN_RESIZE
   log_info(gc)("young_reserve: " SIZE_FORMAT ", bound_on_old_reserve: " SIZE_FORMAT ", max_old_reserve: " SIZE_FORMAT,
@@ -729,6 +735,10 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   log_info(gc)("KELVIN setting young_evac_reserve: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT ", promoted_reserve: " SIZE_FORMAT,
                 young_reserve, reserve_for_mixed, reserve_for_promo);
 #endif
+
+  assert(young_reserve + reserve_for_mixed + reserve_for_promo <= old_available + young_available,
+         "Cannot reserve more memory than is available: " SIZE_FORMAT " + " SIZE_FORMAT " + " SIZE_FORMAT " <= " 
+         SIZE_FORMAT " + " SIZE_FORMAT, young_reserve, reserve_for_mixed, reserve_for_promo, old_available, young_available);
 
   // deficit/surplus adjustments to generation sizes will precede rebuild
   young_generation()->set_evacuation_reserve(young_reserve);

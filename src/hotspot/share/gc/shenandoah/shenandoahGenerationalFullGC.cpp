@@ -180,7 +180,7 @@ void ShenandoahGenerationalFullGC::compute_balances() {
   // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
   heap->old_generation()->set_promotion_potential(0);
   // Invoke this in case we are able to transfer memory from OLD to YOUNG.
-  heap->compute_old_generation_balance(0, 0);
+  heap->compute_old_generation_balance(0, 0, 0);
 }
 
 ShenandoahPrepareForGenerationalCompactionObjectClosure::ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,

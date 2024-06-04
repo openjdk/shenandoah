@@ -2835,7 +2835,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
     // The computation of bytes_of_allocation_runway_before_gc_trigger is quite conservative so consider all of this
     // available for transfer to old. Note that transfer of humongous regions does not impact available.
     size_t allocation_runway = young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(young_cset_regions);
-    ShenandoahGenerationalHeap::heap()->compute_old_generation_balance(allocation_runway, old_cset_regions);
+    ShenandoahGenerationalHeap::heap()->compute_old_generation_balance(allocation_runway, old_cset_regions, young_cset_regions);
 
     // Total old_available may have been expanded to hold anticipated promotions.  We trigger if the fragmented available
     // memory represents more than 16 regions worth of data.  Note that fragmentation may increase when we promote regular
