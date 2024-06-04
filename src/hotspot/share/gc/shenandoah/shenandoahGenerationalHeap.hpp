@@ -47,7 +47,7 @@ private:
   //
   // True when regions and objects should be aged during the current cycle
   ShenandoahSharedFlag  _is_aging_cycle;
-  // Age census used for adapting tenuring threshold in generational mode
+  // Age census used for adapting tenuring threshold
   ShenandoahAgeCensus* _age_census;
 
 public:
@@ -59,7 +59,7 @@ public:
     return _is_aging_cycle.is_set();
   }
 
-  // Return the age census object for young gen (in generational mode)
+  // Return the age census object for young gen
   ShenandoahAgeCensus* age_census() const {
     return _age_census;
   }

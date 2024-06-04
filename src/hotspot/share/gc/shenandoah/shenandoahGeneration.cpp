@@ -207,7 +207,7 @@ void ShenandoahGeneration::swap_remembered_set() {
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();
 
-  // TODO: Eventually, we want replace this with a constant-time exchange of pointers.
+  // TODO: Eventually, we want to replace this with a constant-time exchange of pointers.
   ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahCopyWriteCardTableToRead task(old_generation->card_scan());
   old_generation->parallel_heap_region_iterate(&task);
