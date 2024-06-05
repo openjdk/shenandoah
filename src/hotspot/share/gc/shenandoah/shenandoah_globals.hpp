@@ -409,27 +409,28 @@
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
                                                                             \
-  product(uintx, ShenandoahOldEvacRatioPercent, 50, EXPERIMENTAL,           \
-          "The maximum proportion of evacuation from old-gen memory, "      \
-          "expressed as a percentage. The default value 50 denotes that no" \
-          "more than 50% of the collection set evacuation workload may be " \
-          "towards evacuation of old-gen heap regions. This limits both the"\
-          "promotion of aged regions and the compaction of existing old "   \
-          "regions.  A value of 50 denotes that the total evacuation work"  \
-          "may increase to up to two times the young gen evacuation work." \
-          "A larger value allows quicker promotion and allows"              \
+  product(uintx, ShenandoahOldEvacRatioPercent, 12, EXPERIMENTAL,           \
+          "The maximum proportion of evacuation to old-gen memory, "        \
+          "expressed as a percentage. The default value 12 denotes that no" \
+          "more than 12% of the collection set evacuation workload may be " \
+          "copied into old-gen regions.  This limits both the promotion of "\
+          "aged young regions and the compaction of existing old regions. " \
+          "Given a total evacuation budget of X, the amount of memory "     \
+          "dedicated to hold objects evacuated to young generation is 89.3%"\
+          "(100/112).  A larger value allows for quicker promotion and "    \
           "a smaller number of mixed evacuations to process "               \
           "the entire list of old-gen collection candidates at the cost "   \
           "of an increased disruption of the normal cadence of young-gen "  \
           "collections.  A value of 100 allows a mixed evacuation to "      \
           "focus entirely on old-gen memory, allowing no young-gen "        \
           "regions to be collected, likely resulting in subsequent "        \
-          "allocation failures because the allocation pool is not "         \
-          "replenished.  A value of 0 allows a mixed evacuation to"         \
-          "focus entirely on young-gen memory, allowing no old-gen "        \
-          "regions to be collected, likely resulting in subsequent "        \
-          "promotion failures and triggering of stop-the-world full GC "    \
-          "events.")                                                        \
+          "allocation failures because the young-gen allocation pool is "   \
+          "not replenished.  A value of 0 prevents mixed evacuations from " \
+          "defragmenting old-gen memory, likely resulting in "              \
+          "subsequent promotion failures and triggering of stop-the-world " \
+          "full GC events.  Faiure to defragment old-gen memory can also "  \
+          "result in unconstrained expansion of old-gen, and shrinkage of " \
+          "young gen, causing inefficient high frequency of young-gen GC.") \
           range(0,100)                                                      \
                                                                             \
   product(uintx, ShenandoahMinYoungPercentage, 20, EXPERIMENTAL,            \
