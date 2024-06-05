@@ -82,6 +82,7 @@ public:
   // ---------- Update References
   //
   void update_heap_references(bool concurrent) override;
+  void final_update_refs_do_regions() override;
 
 private:
   HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);

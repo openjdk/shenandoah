@@ -980,6 +980,75 @@ void ShenandoahGenerationalHeap::update_heap_references(bool concurrent) {
   }
 }
 
+namespace ShenandoahCompositeRegionClosure {
+  template<typename C1, typename C2>
+  class Closure : public ShenandoahHeapRegionClosure {
+  private:
+    C1 &_c1;
+    C2 &_c2;
+
+  public:
+    Closure(C1 &c1, C2 &c2) : ShenandoahHeapRegionClosure(), _c1(c1), _c2(c2) {}
+
+    void heap_region_do(ShenandoahHeapRegion* r) override {
+      _c1.heap_region_do(r);
+      _c2.heap_region_do(r);
+    }
+
+    bool is_thread_safe() override {
+      return _c1.is_thread_safe() && _c2.is_thread_safe();
+    }
+  };
+
+
+  template<typename C1, typename C2>
+  Closure<C1, C2> of(C1 &c1, C2 &c2) {
+    return Closure<C1, C2>(c1, c2);
+  }
+}
+
+class ShenandoahUpdateRegionAges : public ShenandoahHeapRegionClosure {
+private:
+  ShenandoahMarkingContext* _ctx;
+
+public:
+  explicit ShenandoahUpdateRegionAges(ShenandoahMarkingContext* ctx) : _ctx(ctx) { }
+
+  void heap_region_do(ShenandoahHeapRegion* r) override {
+    // Maintenance of region age must follow evacuation in order to account for
+    // evacuation allocations within survivor regions.  We consult region age during
+    // the subsequent evacuation to determine whether certain objects need to
+    // be promoted.
+    if (r->is_young() && r->is_active()) {
+      HeapWord *tams = _ctx->top_at_mark_start(r);
+      HeapWord *top = r->top();
+
+      // Allocations move the watermark when top moves.  However, compacting
+      // objects will sometimes lower top beneath the watermark, after which,
+      // attempts to read the watermark will assert out (watermark should not be
+      // higher than top).
+      if (top > tams) {
+        // There have been allocations in this region since the start of the cycle.
+        // Any objects new to this region must not assimilate elevated age.
+        r->reset_age();
+      } else if (ShenandoahGenerationalHeap::heap()->is_aging_cycle()) {
+        r->increment_age();
+      }
+    }
+  }
+
+  bool is_thread_safe() override {
+    return true;
+  }
+};
+
+void ShenandoahGenerationalHeap::final_update_refs_do_regions() {
+  ShenandoahSynchronizePinnedRegionStates pins;
+  ShenandoahUpdateRegionAges ages(active_generation()->complete_marking_context());
+  auto cl = ShenandoahCompositeRegionClosure::of(pins, ages);
+  parallel_heap_region_iterate(&cl);
+}
+
 void ShenandoahGenerationalHeap::complete_degenerated_cycle() {
   shenandoah_assert_heaplocked_or_safepoint();
   if (is_concurrent_old_mark_in_progress()) {
@@ -1048,17 +1117,7 @@ void ShenandoahGenerationalHeap::entry_global_coalesce_and_fill() {
 }
 
 void ShenandoahGenerationalHeap::update_region_ages() {
-  ShenandoahMarkingContext *ctx = complete_marking_context();
-  for (size_t i = 0; i < num_regions(); i++) {
-    ShenandoahHeapRegion *r = get_region(i);
-    if (r->is_active() && r->is_young()) {
-      HeapWord* tams = ctx->top_at_mark_start(r);
-      HeapWord* top = r->top();
-      if (top > tams) {
-        r->reset_age();
-      } else if (is_aging_cycle()) {
-        r->increment_age();
-      }
-    }
-  }
+  ShenandoahMarkingContext* ctx = active_generation()->complete_marking_context();
+  ShenandoahUpdateRegionAges cl(ctx);
+  parallel_heap_region_iterate(&cl);
 }

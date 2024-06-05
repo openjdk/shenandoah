@@ -121,6 +121,17 @@ typedef ShenandoahLock    ShenandoahHeapLock;
 typedef ShenandoahLocker  ShenandoahHeapLocker;
 typedef Stack<oop, mtGC>  ShenandoahScanObjectStack;
 
+class ShenandoahSynchronizePinnedRegionStates : public ShenandoahHeapRegionClosure {
+private:
+  ShenandoahHeapLock* const _lock;
+
+public:
+  ShenandoahSynchronizePinnedRegionStates();
+
+  void heap_region_do(ShenandoahHeapRegion* r) override;
+  bool is_thread_safe() override { return true; }
+};
+
 // Shenandoah GC is low-pause concurrent GC that uses Brooks forwarding pointers
 // to encode forwarding data. See BrooksPointer for details on forwarding data encoding.
 // See ShenandoahControlThread for GC cycle structure.
@@ -445,6 +456,7 @@ private:
   virtual void update_heap_references(bool concurrent);
   // Final update region states
   void update_heap_region_states(bool concurrent);
+  virtual void final_update_refs_do_regions();
 
   void rendezvous_threads();
   void recycle_trash();
