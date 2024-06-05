@@ -84,7 +84,7 @@ MemoryUsage ShenandoahGenerationalMemoryPool::get_memory_usage() {
   size_t initial   = initial_size();
   size_t max       = max_size();
   size_t used      = used_in_bytes();
-  size_t committed = ShenandoahYoungGeneration::get(_heap)->used_regions_size();
+  size_t committed = _generation->used_regions_size();
 
   return MemoryUsage(initial, used, committed, max);
 }
