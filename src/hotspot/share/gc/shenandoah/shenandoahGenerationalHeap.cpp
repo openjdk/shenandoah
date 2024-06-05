@@ -127,6 +127,26 @@ void ShenandoahGenerationalHeap::print_init_logger() const {
   logger.print_all();
 }
 
+void ShenandoahGenerationalHeap::initialize_heuristics() {
+  // Initialize global generation and heuristics even in generational mode.
+  ShenandoahHeap::initialize_heuristics();
+
+  // Max capacity is the maximum _allowed_ capacity. That is, the maximum allowed capacity
+  // for old would be total heap - minimum capacity of young. This means the sum of the maximum
+  // allowed for old and young could exceed the total heap size. It remains the case that the
+  // _actual_ capacity of young + old = total.
+  _generation_sizer.heap_size_changed(max_capacity());
+  size_t initial_capacity_young = _generation_sizer.max_young_size();
+  size_t max_capacity_young = _generation_sizer.max_young_size();
+  size_t initial_capacity_old = max_capacity() - max_capacity_young;
+  size_t max_capacity_old = max_capacity() - initial_capacity_young;
+
+  _young_generation = new ShenandoahYoungGeneration(max_workers(), max_capacity_young, initial_capacity_young);
+  _old_generation = new ShenandoahOldGeneration(max_workers(), max_capacity_old, initial_capacity_old);
+  _young_generation->initialize_heuristics(mode());
+  _old_generation->initialize_heuristics(mode());
+}
+
 void ShenandoahGenerationalHeap::initialize_serviceability() {
   assert(mode()->is_generational(), "Only for the generational mode");
   _young_gen_memory_pool = new ShenandoahYoungGenMemoryPool(this);

@@ -174,7 +174,7 @@ public:
   jint initialize() override;
   void post_initialize() override;
   void initialize_mode();
-  void initialize_heuristics();
+  virtual void initialize_heuristics();
   virtual void print_init_logger() const;
   void initialize_serviceability() override;
 
@@ -457,12 +457,13 @@ public:
 //
 // Mark support
 private:
-  ShenandoahYoungGeneration* _young_generation;
-  ShenandoahGeneration*      _global_generation;
-  ShenandoahOldGeneration*   _old_generation;
+  ShenandoahGeneration*  _global_generation;
 
 protected:
   ShenandoahController*  _control_thread;
+
+  ShenandoahYoungGeneration* _young_generation;
+  ShenandoahOldGeneration*   _old_generation;
 
 private:
   ShenandoahCollectorPolicy* _shenandoah_policy;
@@ -474,7 +475,6 @@ private:
   ShenandoahPhaseTimings*       _phase_timings;
   ShenandoahEvacuationTracker*  _evac_tracker;
   ShenandoahMmuTracker          _mmu_tracker;
-  ShenandoahGenerationSizer     _generation_sizer;
 
 public:
   ShenandoahController*   control_thread() { return _control_thread; }
@@ -489,7 +489,6 @@ public:
     return _old_generation;
   }
   ShenandoahGeneration*      generation_for(ShenandoahAffiliation affiliation) const;
-  const ShenandoahGenerationSizer* generation_sizer()  const { return &_generation_sizer;  }
 
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
   ShenandoahMode*            mode()              const { return _gc_mode;           }
