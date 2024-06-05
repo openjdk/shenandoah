@@ -515,14 +515,14 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
     switch (req.affiliation()) {
       case ShenandoahAffiliation::OLD_GENERATION:
         // Note: unsigned result from free_unaffiliated_regions() will never be less than zero, but it may equal zero.
-        if (ShenandoahOldGeneration::get(_heap)->free_unaffiliated_regions() <= 0) {
+        if (_heap->old_generation()->free_unaffiliated_regions() <= 0) {
           allow_new_region = false;
         }
         break;
 
       case ShenandoahAffiliation::YOUNG_GENERATION:
         // Note: unsigned result from free_unaffiliated_regions() will never be less than zero, but it may equal zero.
-        if (ShenandoahYoungGeneration::get(_heap)->free_unaffiliated_regions() <= 0) {
+        if (_heap->young_generation()->free_unaffiliated_regions() <= 0) {
           allow_new_region = false;
         }
         break;
@@ -1186,10 +1186,10 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   shenandoah_assert_generational();
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
-  ShenandoahOldGeneration* const old_generation = ShenandoahOldGeneration::get(_heap);
+  ShenandoahOldGeneration* const old_generation = _heap->old_generation();
   size_t old_available = old_generation->available();
   size_t old_unaffiliated_regions = old_generation->free_unaffiliated_regions();
-  ShenandoahYoungGeneration* const young_generation = ShenandoahYoungGeneration::get(_heap);
+  ShenandoahYoungGeneration* const young_generation = _heap->young_generation();
   size_t young_capacity = young_generation->max_capacity();
   size_t young_unaffiliated_regions = young_generation->free_unaffiliated_regions();
 

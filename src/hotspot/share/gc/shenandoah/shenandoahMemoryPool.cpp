@@ -101,9 +101,9 @@ size_t ShenandoahGenerationalMemoryPool::max_size() const {
 ShenandoahYoungGenMemoryPool::ShenandoahYoungGenMemoryPool(ShenandoahHeap* heap) :
         ShenandoahGenerationalMemoryPool(heap,
                              "Shenandoah Young Gen",
-                             ShenandoahYoungGeneration::get(heap)) { }
+                             heap->young_generation()) { }
 
 ShenandoahOldGenMemoryPool::ShenandoahOldGenMemoryPool(ShenandoahHeap* heap) :
         ShenandoahGenerationalMemoryPool(heap,
                              "Shenandoah Old Gen",
-                             ShenandoahOldGeneration::get(heap)) { }
+                             heap->old_generation()) { }

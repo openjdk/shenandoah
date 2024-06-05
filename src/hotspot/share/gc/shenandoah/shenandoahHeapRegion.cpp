@@ -131,12 +131,12 @@ void ShenandoahHeapRegion::make_young_maybe() {
        ShenandoahHeap* heap = ShenandoahHeap::heap();
        if (heap->mode()->is_generational()) {
          if (is_old()) {
-           ShenandoahOldGeneration::get(heap)->decrement_affiliated_region_count();
+           heap->old_generation()->decrement_affiliated_region_count();
          }
        }
        set_affiliation(YOUNG_GENERATION);
        if (heap->mode()->is_generational()) {
-         ShenandoahYoungGeneration::get(heap)->increment_affiliated_region_count();
+         heap->young_generation()->increment_affiliated_region_count();
        }
      }
      return;
