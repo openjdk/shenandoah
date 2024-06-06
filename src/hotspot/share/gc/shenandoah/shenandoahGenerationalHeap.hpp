@@ -66,11 +66,6 @@ public:
     return _age_census;
   }
 
-  // Return the age census object for young gen
-  ShenandoahAgeCensus* age_census() const {
-    return _age_census;
-  }
-
   // Ages regions that haven't been used for allocations in the current cycle.
   // Resets ages for regions that have been used for allocations.
   void update_region_ages();
