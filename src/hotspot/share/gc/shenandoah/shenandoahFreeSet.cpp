@@ -1228,21 +1228,6 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
          "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT " + " SIZE_FORMAT
          ") more than is available: " SIZE_FORMAT " + " SIZE_FORMAT,
          promoted_reserve, old_evac_reserve, young_reserve_result, old_available, young_available);
-#ifdef KELVIN_DEPRECATE
-  // This code corresponds to a previous encarnation of this method,
-  // in which we would sometimes not have precomputed evacuation
-  // reserves,  It is now deprecated because we now always have
-  // precomputed evacuation reserves.
-
-  } else {
-    // We are rebuilding at end of GC, so we set aside budgets specified on command line (or defaults)
-    young_reserve_result = (young_capacity * ShenandoahEvacReserve) / 100;
-    // The auto-sizer has already made old-gen large enough to hold all anticipated evacuations and promotions.
-    // Affiliated old-gen regions are already in the OldCollector free set.  Add in the relevant number of
-    // unaffiliated regions.
-    old_reserve_result = old_available;
-  }
-#endif
 
   // Old available regions that have less than PLAB::min_size() of available memory are not placed into the OldCollector
   // free set.  Because of this, old_available may not have enough memory to represent the intended reserve.  Adjust

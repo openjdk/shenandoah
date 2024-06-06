@@ -264,13 +264,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap
   const size_t maximum_young_evacuation_reserve = young_generation->get_evacuation_reserve();
   const size_t young_evacuation_reserve = MIN2(maximum_young_evacuation_reserve, young_generation->available_with_reserve());
 
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN compute_evac_budgets: max_young_evac_reserve: " SIZE_FORMAT ", young avail: " SIZE_FORMAT
-               ", young_evac_reserve: " SIZE_FORMAT, maximum_young_evacuation_reserve,
-               young_generation->available_with_reserve(), young_evacuation_reserve);
-#endif
-
   // maximum_old_evacuation_reserve is an upper bound on memory evacuated from old and evacuated to old (promoted),
   // clamped by the old generation space available.
   //
@@ -352,12 +345,6 @@ void ShenandoahGeneration::compute_evacuation_budgets(ShenandoahHeap* const heap
   // Note that unused old_promo_reserve might not be entirely consumed_by_advance_promotion.  Do not transfer this
   // to old_evacuation_reserve because this memory is likely very fragmented, and we do not want to increase the likelihood
   // of old evacuation failure.
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN compute_budgets sets young_evac_reserve: " SIZE_FORMAT ", old_evac_reserve: " SIZE_FORMAT
-               ", promoted_reserve: " SIZE_FORMAT, young_evacuation_reserve, old_evacuation_reserve,
-               consumed_by_advance_promotion);
-#endif
-
   young_generation->set_evacuation_reserve(young_evacuation_reserve);
   old_generation->set_evacuation_reserve(old_evacuation_reserve);
   old_generation->set_promoted_reserve(consumed_by_advance_promotion);
@@ -402,9 +389,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   } else if (old_evacuated_committed < old_evacuation_reserve) {
     // This happens if the old-gen collection consumes less than full budget.
     old_evacuation_reserve = old_evacuated_committed;
-#ifdef KELVIN_DEBUG
-    log_info(gc)("KELVIN adjust_evac_budgets sets old_evac_reserve: " SIZE_FORMAT, old_evacuation_reserve);
-#endif
     old_generation->set_evacuation_reserve(old_evacuation_reserve);
   }
 
@@ -416,9 +400,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
 
   size_t total_young_available = young_generation->available_with_reserve();
   assert(young_evacuated_reserve_used <= total_young_available, "Cannot evacuate more than is available in young");
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN adjust_evac_budgets sets young_evac_reserve: " SIZE_FORMAT, young_evacuated_reserve_used);
-#endif
   young_generation->set_evacuation_reserve(young_evacuated_reserve_used);
 
   size_t old_available = old_generation->available();
@@ -484,9 +465,6 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   // Add in the excess_old memory to hold unanticipated promotions, if any.  If there are more unanticipated
   // promotions than fit in reserved memory, they will be deferred until a future GC pass.
   size_t total_promotion_reserve = young_advance_promoted_reserve_used + excess_old;
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN adjust_evac_budgets sets promoted_reserve: " SIZE_FORMAT, total_promotion_reserve);
-#endif
   old_generation->set_promoted_reserve(total_promotion_reserve);
   old_generation->reset_promoted_expended();
 }
@@ -762,10 +740,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     }
   }
 
-#ifdef KELVIN_DEPRECATE
-  // Freeset construction uses reserve quantities if they are valid
-  heap->set_evacuation_reserve_quantities(true);
-#endif
   {
     ShenandoahGCPhase phase(concurrent ? ShenandoahPhaseTimings::final_rebuild_freeset :
                             ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
@@ -777,9 +751,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
     heap->free_set()->rebuild(young_cset_regions, old_cset_regions);
   }
-#ifdef KELVIN_DEPRECATE
-  heap->set_evacuation_reserve_quantities(false);
-#endif
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {

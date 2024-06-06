@@ -430,9 +430,6 @@ jint ShenandoahHeap::initialize() {
     young_generation()->set_evacuation_reserve(young_reserve);
     old_generation()->set_evacuation_reserve((size_t) 0);
     old_generation()->set_promoted_reserve((size_t) 0);
-#ifdef KELVIN_DEPRECATE
-    set_evacuation_reserve_quantities(true);
-#endif
     _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
     _free_set->rebuild(young_cset_regions, old_cset_regions);
   }
@@ -578,10 +575,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _gc_state_changed(false),
   _gc_no_progress_count(0),
   _age_census(nullptr),
-#ifdef KELVIN_DEPRECATE
-  // may be premature to deprecate
-  _has_evacuation_reserve_quantities(false),
-#endif
   _cancel_requested_time(0),
   _young_generation(nullptr),
   _global_generation(nullptr),
@@ -2812,10 +2805,6 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   ShenandoahHeapLocker locker(lock());
   size_t young_cset_regions, old_cset_regions;
   size_t first_old_region, last_old_region, old_region_count;
-
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN ShenHeap::rebuild_free_set(%s)", concurrent? "true": "false");
-#endif
 
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
   // If there are no old regions, first_old_region will be greater than last_old_region

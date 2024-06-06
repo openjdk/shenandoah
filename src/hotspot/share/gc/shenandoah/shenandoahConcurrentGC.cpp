@@ -54,8 +54,6 @@
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
 
-#undef KELVIN_DEBUG
-
 // Breakpoint support
 class ShenandoahBreakpointGCScope : public StackObj {
 private:
@@ -203,10 +201,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     }
   }
 
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN done with evacuation");
-#endif
-
   if (heap->has_forwarded_objects()) {
     // Perform update-refs phase.
     vmop_entry_init_updaterefs();
@@ -297,14 +291,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       result.print_on("Concurrent GC", &ls);
     }
   }
-#ifdef KELVIN_DEBUG
-  {
-    log_info(gc)("KELVIN finished resizing generations");
-    ShenandoahHeapLocker locker(heap->lock());
-    heap->free_set()->log_status();
-  }
-#endif
-
   return true;
 }
 
@@ -408,14 +394,7 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   static const char* msg = "Pause Final Roots";
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
-
   op_final_roots();
-
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN says we're no longer missing rebuild after abbreviated cycle");
-  // But, debug tracebacks suggest we have not rebalanced generations
-  // following the rebuild that happened at start of evacuation.
-#endif
   ShenandoahHeap::heap()->rebuild_free_set(true /*concurrent*/);
 }
 
@@ -1304,10 +1283,6 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
   if (VerifyAfterGC) {
     Universe::verify();
   }
-
-#ifdef KELVIN_DEBUG
-  log_info(gc)("KELVIN: op_final_updaterefs() invokes rebuild");
-#endif
   heap->rebuild_free_set(true /*concurrent*/);
 }
 
