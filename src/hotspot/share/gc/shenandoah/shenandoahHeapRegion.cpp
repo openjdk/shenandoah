@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, 2024, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2013, 2020, Red Hat, Inc. All rights reserved.
  * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -26,7 +26,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/cardTable.hpp"
-#include "gc/shared/space.inline.hpp"
+#include "gc/shared/space.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "gc/shenandoah/shenandoahCardTable.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
@@ -464,7 +464,7 @@ bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
     return true;
   }
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
   ShenandoahMarkingContext* marking_context = heap->marking_context();
 
   // Expect marking to be completed before these threads invoke this service.
@@ -493,7 +493,7 @@ bool ShenandoahHeapRegion::oop_coalesce_and_fill(bool cancellable) {
       size_t fill_size = next_marked_obj - obj_addr;
       assert(fill_size >= ShenandoahHeap::min_fill_size(), "previously allocated object known to be larger than min_size");
       ShenandoahHeap::fill_with_object(obj_addr, fill_size);
-      heap->card_scan()->coalesce_objects(obj_addr, fill_size);
+      heap->old_generation()->card_scan()->coalesce_objects(obj_addr, fill_size);
       obj_addr = next_marked_obj;
     }
     if (cancellable && ops_before_preempt_check-- == 0) {
@@ -515,7 +515,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
                                                        HeapWord* start, size_t words, bool write_table) {
   assert(words % CardTable::card_size_in_words() == 0, "Humongous iteration must span whole number of cards");
   assert(is_humongous(), "only humongous region here");
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
 
   // Find head.
   ShenandoahHeapRegion* r = humongous_start_region();
@@ -524,7 +524,7 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice(OopIterateClosure* blk, b
          "slice must be integral number of cards");
 
   oop obj = cast_to_oop(r->bottom());
-  RememberedScanner* scanner = ShenandoahHeap::heap()->card_scan();
+  RememberedScanner* scanner = heap->old_generation()->card_scan();
   size_t card_index = scanner->card_index_for_addr(start);
   size_t num_cards = words / CardTable::card_size_in_words();
 

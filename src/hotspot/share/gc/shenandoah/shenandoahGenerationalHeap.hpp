@@ -27,20 +27,47 @@
 
 #include "gc/shenandoah/shenandoahHeap.hpp"
 
+class PLAB;
 class ShenandoahRegulatorThread;
 class ShenandoahGenerationalControlThread;
+class ShenandoahAgeCensus;
 
 class ShenandoahGenerationalHeap : public ShenandoahHeap {
 public:
   explicit ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy);
+  void post_initialize() override;
 
   static ShenandoahGenerationalHeap* heap();
 
   void print_init_logger() const override;
   size_t unsafe_max_tlab_alloc(Thread *thread) const override;
 
+private:
   // ---------- Evacuations and Promotions
   //
+  // True when regions and objects should be aged during the current cycle
+  ShenandoahSharedFlag  _is_aging_cycle;
+  // Age census used for adapting tenuring threshold
+  ShenandoahAgeCensus* _age_census;
+
+public:
+  void set_aging_cycle(bool cond) {
+    _is_aging_cycle.set_cond(cond);
+  }
+
+  inline bool is_aging_cycle() const {
+    return _is_aging_cycle.is_set();
+  }
+
+  // Return the age census object for young gen
+  ShenandoahAgeCensus* age_census() const {
+    return _age_census;
+  }
+
+  // Ages regions that haven't been used for allocations in the current cycle.
+  // Resets ages for regions that have been used for allocations.
+  void update_region_ages();
+
   oop evacuate_object(oop p, Thread* thread) override;
   oop try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
 
@@ -49,6 +76,10 @@ public:
 
   void retire_plab(PLAB* plab);
   void retire_plab(PLAB* plab, Thread* thread);
+
+  // ---------- Update References
+  //
+  void update_heap_references(bool concurrent) override;
 
 private:
   HeapWord* allocate_from_plab(Thread* thread, size_t size, bool is_promotion);
@@ -91,10 +122,15 @@ public:
   // Transfers surplus old regions to young, or takes regions from young to satisfy old region deficit
   TransferResult balance_generations();
 
-  void coalesce_and_fill_old_regions(bool concurrent);
-
+  // Balances generations, coalesces and fills old regions if necessary
+  void complete_degenerated_cycle();
+  void complete_concurrent_cycle();
 private:
   void initialize_controller() override;
+  void entry_global_coalesce_and_fill();
+
+  // Makes old regions parsable. This will also rebuild card offsets, which is necessary if classes were unloaded
+  void coalesce_and_fill_old_regions(bool concurrent);
 
   ShenandoahRegulatorThread* _regulator_thread;
 

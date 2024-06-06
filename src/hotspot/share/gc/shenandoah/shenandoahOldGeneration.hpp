@@ -26,11 +26,15 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHOLDGENERATION_HPP
 
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
+#include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
+#include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
+#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 
 class ShenandoahHeapRegion;
 class ShenandoahHeapRegionClosure;
+class ShenandoahOldHeuristics;
 
 class ShenandoahOldGeneration : public ShenandoahGeneration {
 private:
@@ -111,7 +115,22 @@ public:
   size_t unexpend_promoted(size_t decrement);
 
   // This is used on the allocation path to gate promotions that would exceed the reserve
-  size_t get_promoted_expended();
+  size_t get_promoted_expended() const;
+
+  // Test if there is enough memory reserved for this promotion
+  bool can_promote(size_t requested_bytes) const {
+    size_t promotion_avail = get_promoted_reserve();
+    size_t promotion_expended = get_promoted_expended();
+    return promotion_expended + requested_bytes <= promotion_avail;
+  }
+
+  // Test if there is enough memory available in the old generation to accommodate this request.
+  // The request will be subject to constraints on promotion and evacuation reserves.
+  bool can_allocate(const ShenandoahAllocRequest& req) const;
+
+  // Updates the promotion expenditure tracking and configures whether the plab may be used
+  // for promotions and evacuations, or just evacuations.
+  void configure_plab_for_current_thread(const ShenandoahAllocRequest &req);
 
   // See description in field declaration
   void set_region_balance(ssize_t balance) { _region_balance = balance; }
@@ -157,6 +176,18 @@ public:
   // inclusion in a mixed evacuation are pinned. This should be rare.
   void abandon_mixed_evacuations();
 
+private:
+  RememberedScanner* _card_scan;
+
+public:
+  RememberedScanner* card_scan() { return _card_scan; }
+
+  // Clear cards for given region
+  void clear_cards_for(ShenandoahHeapRegion* region);
+
+  // Mark card for this location as dirty
+  void mark_card_as_dirty(void* location);
+
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
   void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
@@ -175,6 +206,9 @@ public:
   void prepare_regions_and_collection_set(bool concurrent) override;
   void record_success_concurrent(bool abbreviated) override;
   void cancel_marking() override;
+
+  // Cancels old gc and transitions to the idle state
+  void cancel_gc();
 
   // We leave the SATB barrier on for the entirety of the old generation
   // marking phase. In some cases, this can cause a write to a perfectly
@@ -221,7 +255,6 @@ public:
   // Abandon any regions waiting for mixed collections
   void abandon_collection_candidates();
 
-  void maybe_trigger_collection(size_t first_old_region, size_t last_old_region, size_t old_region_count);
 public:
   enum State {
     FILLING, WAITING_FOR_BOOTSTRAP, BOOTSTRAPPING, MARKING, EVACUATING, EVACUATING_AFTER_GLOBAL
@@ -234,7 +267,7 @@ public:
 private:
   State _state;
 
-  static const size_t FRACTIONAL_DENOMINATOR = 64536;
+  static const size_t FRACTIONAL_DENOMINATOR = 65536;
 
   // During initialization of the JVM, we search for the correct old-gen size by initially performing old-gen
   // collection when old-gen usage is 50% more (INITIAL_GROWTH_BEFORE_COMPACTION) than the initial old-gen size
@@ -280,6 +313,7 @@ public:
   }
 
   static const char* state_name(State state);
+
 };
 
 

@@ -27,13 +27,10 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHHEAP_HPP
 
-#include "gc/shared/ageTable.hpp"
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
-#include "gc/shenandoah/shenandoahAgeCensus.hpp"
 #include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
-#include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahController.hpp"
@@ -43,7 +40,6 @@
 #include "gc/shenandoah/shenandoahGenerationType.hpp"
 #include "gc/shenandoah/shenandoahMmuTracker.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
-#include "gc/shenandoah/shenandoahScanRemembered.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
 #include "memory/metaspace.hpp"
@@ -53,18 +49,15 @@
 
 class ConcurrentGCTimer;
 class ObjectIterateScanRootClosure;
-class PLAB;
 class ShenandoahCollectorPolicy;
-class ShenandoahRegulatorThread;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahGeneration;
 class ShenandoahYoungGeneration;
 class ShenandoahOldGeneration;
 class ShenandoahHeuristics;
-class ShenandoahOldHeuristics;
-class ShenandoahYoungHeuristics;
 class ShenandoahMarkingContext;
+class ShenandoahMode;
 class ShenandoahPhaseTimings;
 class ShenandoahHeap;
 class ShenandoahHeapRegion;
@@ -74,7 +67,6 @@ class ShenandoahFreeSet;
 class ShenandoahConcurrentMark;
 class ShenandoahFullGC;
 class ShenandoahMonitoringSupport;
-class ShenandoahMode;
 class ShenandoahPacer;
 class ShenandoahReferenceProcessor;
 class ShenandoahVerifier;
@@ -180,7 +172,8 @@ public:
   ShenandoahHeap(ShenandoahCollectorPolicy* policy);
   jint initialize() override;
   void post_initialize() override;
-  void initialize_heuristics_generations();
+  void initialize_mode();
+  void initialize_heuristics();
   virtual void print_init_logger() const;
   void initialize_serviceability() override;
 
@@ -193,9 +186,6 @@ public:
 
   void prepare_for_verify() override;
   void verify(VerifyOption vo) override;
-
-  bool verify_generation_usage(bool verify_old, size_t old_regions, size_t old_bytes, size_t old_waste,
-                               bool verify_young, size_t young_regions, size_t young_bytes, size_t young_waste);
 
 // WhiteBox testing support.
   bool supports_concurrent_gc_breakpoints() const override {
@@ -271,7 +261,6 @@ private:
   size_t    _num_regions;
   ShenandoahHeapRegion** _regions;
   uint8_t* _affiliations;       // Holds array of enum ShenandoahAffiliation, including FREE status in non-generational mode
-  ShenandoahRegionIterator _update_refs_iterator;
 
 public:
 
@@ -349,8 +338,6 @@ private:
   // This updates the singlular, global gc state. This must happen on a safepoint.
   void set_gc_state(uint mask, bool value);
 
-  ShenandoahAgeCensus* _age_census;    // Age census used for adapting tenuring threshold in generational mode
-
 public:
   char gc_state() const;
 
@@ -379,8 +366,6 @@ public:
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
 
-  void set_aging_cycle(bool cond);
-
   inline bool is_stable() const;
   inline bool is_idle() const;
 
@@ -398,10 +383,6 @@ public:
   inline bool is_concurrent_strong_root_in_progress() const;
   inline bool is_concurrent_weak_root_in_progress() const;
   bool is_prepare_for_old_mark_in_progress() const;
-  inline bool is_aging_cycle() const;
-
-  // Return the age census object for young gen (in generational mode)
-  inline ShenandoahAgeCensus* age_census() const;
 
 private:
   void manage_satb_barrier(bool active);
@@ -443,6 +424,12 @@ public:
   // Returns true if the soft maximum heap has been changed using management APIs.
   bool check_soft_max_changed();
 
+protected:
+  // This is shared between shConcurrentGC and shDegenerateGC so that degenerated
+  // GC can resume update refs from where the concurrent GC was cancelled. It is
+  // also used in shGenerationalHeap, which uses a different closure for update refs.
+  ShenandoahRegionIterator _update_refs_iterator;
+
 private:
   // GC support
   // Evacuation
@@ -454,7 +441,7 @@ private:
   void do_class_unloading();
   // Reference updating
   void prepare_update_heap_references(bool concurrent);
-  void update_heap_references(bool concurrent);
+  virtual void update_heap_references(bool concurrent);
   // Final update region states
   void update_heap_region_states(bool concurrent);
 
@@ -536,7 +523,6 @@ public:
 // ---------- Class Unloading
 //
 private:
-  ShenandoahSharedFlag  _is_aging_cycle;
   ShenandoahSharedFlag _unload_classes;
   ShenandoahUnload     _unloader;
 
@@ -730,17 +716,6 @@ public:
   inline void enter_evacuation(Thread* t);
   inline void leave_evacuation(Thread* t);
 
-// ---------- Generational support
-//
-private:
-  RememberedScanner* _card_scan;
-
-public:
-  inline RememberedScanner* card_scan() { return _card_scan; }
-  void clear_cards_for(ShenandoahHeapRegion* region);
-  void mark_card_as_dirty(void* location);
-  void cancel_old_gc();
-
 // ---------- Helper functions
 //
 public:
@@ -770,8 +745,6 @@ public:
   // necessarily be determined because of concurrent locking by the
   // mutator
   static inline uint get_object_age(oop obj);
-
-  void transfer_old_pointers_from_satb();
 
   void log_heap_status(const char *msg) const;
 

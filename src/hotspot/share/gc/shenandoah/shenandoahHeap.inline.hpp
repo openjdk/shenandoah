@@ -297,12 +297,6 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
   return allocate_from_gclab_slow(thread, size);
 }
 
-inline ShenandoahAgeCensus* ShenandoahHeap::age_census() const {
-  assert(mode()->is_generational(), "Only in generational mode");
-  assert(_age_census != nullptr, "Error: not initialized");
-  return _age_census;
-}
-
 void ShenandoahHeap::increase_object_age(oop obj, uint additional_age) {
   // This operates on new copy of an object. This means that the object's mark-word
   // is thread-local and therefore safe to access. However, when the mark is
@@ -505,10 +499,6 @@ inline bool ShenandoahHeap::is_concurrent_strong_root_in_progress() const {
 
 inline bool ShenandoahHeap::is_concurrent_weak_root_in_progress() const {
   return _gc_state.is_set(WEAK_ROOTS);
-}
-
-inline bool ShenandoahHeap::is_aging_cycle() const {
-  return _is_aging_cycle.is_set();
 }
 
 template<class T>
