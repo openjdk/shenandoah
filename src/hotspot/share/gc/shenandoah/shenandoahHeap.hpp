@@ -494,13 +494,15 @@ public:
 
   ShenandoahGeneration*      global_generation() const { return _global_generation; }
   ShenandoahYoungGeneration* young_generation()  const {
-    assert(mode()->is_generational(), "Must be");
+    assert(mode()->is_generational(), "Young generation requires generational mode");
     return _young_generation;
   }
+
   ShenandoahOldGeneration*   old_generation()    const {
-    assert(mode()->is_generational(), "Must be");
+    assert(mode()->is_generational(), "Old generation requires generational mode");
     return _old_generation;
   }
+
   ShenandoahGeneration*      generation_for(ShenandoahAffiliation affiliation) const;
 
   ShenandoahCollectorPolicy* shenandoah_policy() const { return _shenandoah_policy; }
