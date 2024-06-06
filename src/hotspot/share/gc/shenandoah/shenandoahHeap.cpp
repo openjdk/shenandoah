@@ -914,25 +914,20 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   // Figure out size of new GCLAB, looking back at heuristics. Expand aggressively.
   size_t new_size = ShenandoahThreadLocalData::gclab_size(thread) * 2;
 
-  // Limit growth of GCLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
-  // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
-  if (ShenandoahMaxEvacLABRatio > 0) {
-    log_debug(gc, free)("Allocate new gclab: " SIZE_FORMAT ", " SIZE_FORMAT, new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
-    new_size = MIN2(new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
-  }
-
+  // Clamp between ceiling and floor
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
   // heuristics should catch up with them.
+  log_debug(gc, free)("Thread " PTR_FORMAT " Set new gclab: " SIZE_FORMAT, p2i(thread), new_size);
   ShenandoahThreadLocalData::set_gclab_size(thread, new_size);
 
   if (new_size < size) {
     // New size still does not fit the object. Fall back to shared allocation.
     // This avoids retiring perfectly good GCLABs, when we encounter a large object.
-    log_debug(gc, free)("New gclab size (" SIZE_FORMAT ") is too small for " SIZE_FORMAT, new_size, size);
+    log_debug(gc, free)("Thread " PTR_FORMAT " new gclab size (" SIZE_FORMAT ") is too small for " SIZE_FORMAT, p2i(thread), new_size, size);
     return nullptr;
   }
 
