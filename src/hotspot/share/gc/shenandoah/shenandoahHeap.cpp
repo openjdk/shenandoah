@@ -920,7 +920,7 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
   // heuristics should catch up with them.
-  log_debug(gc, free)("Bump up GCLAB size to " SIZE_FORMAT, new_size);
+  log_debug(gc, free)("Set new GCLAB size: " SIZE_FORMAT, new_size);
   ShenandoahThreadLocalData::set_gclab_size(thread, new_size);
 
   if (new_size < size) {
