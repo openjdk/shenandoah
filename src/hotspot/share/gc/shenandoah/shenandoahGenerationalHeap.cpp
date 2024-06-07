@@ -1116,8 +1116,7 @@ void ShenandoahGenerationalHeap::entry_global_coalesce_and_fill() {
   coalesce_and_fill_old_regions(true);
 }
 
-void ShenandoahGenerationalHeap::update_region_ages() {
-  ShenandoahMarkingContext* ctx = active_generation()->complete_marking_context();
+void ShenandoahGenerationalHeap::update_region_ages(ShenandoahMarkingContext* ctx) {
   ShenandoahUpdateRegionAges cl(ctx);
   parallel_heap_region_iterate(&cl);
 }
