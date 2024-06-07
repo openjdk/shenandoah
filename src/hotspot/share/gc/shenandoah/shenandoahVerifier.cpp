@@ -426,8 +426,10 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
 
     size_t generation_capacity = generation->max_capacity();
     guarantee(stats.span() <= generation_capacity,
-              "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") must not exceed current capacity (" PROPERFMT ")",
-              label, generation->name(), stats.regions(), PROPERFMTARGS(generation_capacity));
+              "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") * region size: " PROPERFMT
+              " must not exceed current capacity (" PROPERFMT ")",
+              label, generation->name(), stats.regions(), PROPERFMTARGS(ShenandoahHeapRegion::region_size_bytes()),
+              PROPERFMTARGS(generation_capacity));
 
     size_t humongous_waste = generation->get_humongous_waste();
     guarantee(stats.waste() == humongous_waste,
