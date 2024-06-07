@@ -400,8 +400,8 @@ HeapWord* ShenandoahGenerationalHeap::allocate_from_plab_slow(Thread* thread, si
 
   assert(mode()->is_generational(), "PLABs only relevant to generational GC");
   const size_t plab_min_size = this->plab_min_size();
-  // PLABs must align on size of card table in order to avoid the need for synchronization when registering
-  // newly allocated objects within the card table.
+  // PLABs are aligned to card boundaries to avoid synchronization with concurrent
+  // allocations in other PLABs.
   const size_t min_size = (size > plab_min_size)? align_up(size, CardTable::card_size_in_words()): plab_min_size;
 
   // Figure out size of new PLAB, using value determined at last refill.
@@ -410,9 +410,10 @@ HeapWord* ShenandoahGenerationalHeap::allocate_from_plab_slow(Thread* thread, si
     cur_size = plab_min_size;
   }
 
-  // We'll expand aggressively, doubling at each refill in this epoch, clamping at plab_max_size()
+  // Expand aggressively, doubling at each refill in this epoch, ceiling at plab_max_size()
   size_t future_size = MIN2(cur_size * 2, plab_max_size());
-  // Since we start off a card-multiple, and grow by doubling, we should remain a card-multiple
+  // Doubling, starting at a card-multiple, should give us a card-multiple. (Ceiling and floor
+  // are card multiples.)
   assert(is_aligned(future_size, CardTable::card_size_in_words()), "Card multiple by construction, future_size: " SIZE_FORMAT
           ", card_size: " SIZE_FORMAT ", cur_size: " SIZE_FORMAT ", max: " SIZE_FORMAT,
          future_size, (size_t) CardTable::card_size_in_words(), cur_size, plab_max_size());
@@ -421,22 +422,21 @@ HeapWord* ShenandoahGenerationalHeap::allocate_from_plab_slow(Thread* thread, si
   // the case when moderately-sized objects always take a shortcut. At some point,
   // heuristics should catch up with them.  Note that the requested cur_size may
   // not be honored, but we remember that this is the preferred size.
-  log_debug(gc, free)("Thread " PTR_FORMAT " Set future PLAB: " SIZE_FORMAT, p2i(thread), future_size);
+  log_debug(gc, free)("Set new PLAB size: " SIZE_FORMAT, future_size);
   ShenandoahThreadLocalData::set_plab_size(thread, future_size);
   if (cur_size < size) {
     // The PLAB to be allocated is still not large enough to hold the object. Fall back to shared allocation.
     // This avoids retiring perfectly good PLABs in order to represent a single large object allocation.
-    log_debug(gc, free)("Thread " PTR_FORMAT " current PLAB size (" SIZE_FORMAT ") is too small for " SIZE_FORMAT, p2i(thread), cur_size, size);
+    log_debug(gc, free)("Current PLAB size (" SIZE_FORMAT ") is too small for " SIZE_FORMAT, cur_size, size);
     return nullptr;
   }
 
   // Retire current PLAB, and allocate a new one.
   PLAB* plab = ShenandoahThreadLocalData::plab(thread);
   if (plab->words_remaining() < plab_min_size) {
-    // Retire current PLAB. This does appropriate PLAB tracking accounting & book-keeping.
-    // CAUTION: retire_plab may register the remnant filler object with the remembered set scanner without a lock.
-    // This is safe iff each PLAB is card-aligned and is a multiple of card-size, so updates will never
-    // interfere or conflict.
+    // Retire current PLAB. This takes care of any PLAB book-keeping.
+    // retire_plab() registers the remnant filler object with the remembered set scanner without a lock.
+    // Since PLABs are card-aligned, concurrent registrations in other PLABs don't interfere.
     retire_plab(plab, thread);
 
     size_t actual_size = 0;
@@ -472,7 +472,7 @@ HeapWord* ShenandoahGenerationalHeap::allocate_from_plab_slow(Thread* thread, si
     }
     return plab->allocate(size);
   } else {
-    // If there's still at least min_size() words available within the current plab, don't retire it.  Let's gnaw
+    // If there's still at least min_size() words available within the current plab, don't retire it.  Let's nibble
     // away on this plab as long as we can.  Meanwhile, return nullptr to force this particular allocation request
     // to be satisfied with a shared allocation.  By packing more promotions into the previously allocated PLAB, we
     // reduce the likelihood of evacuation failures, and we reduce the need for downsizing our PLABs.
