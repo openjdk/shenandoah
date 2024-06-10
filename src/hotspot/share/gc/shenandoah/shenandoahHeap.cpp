@@ -1011,24 +1011,11 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     // is testing that the GC overhead limit has not been exceeded.
     // This will notify the collector to start a cycle, but will raise
     // an OOME to the mutator if the last Full GCs have not made progress.
-#undef KELVIN_OOM_TRACE
-#ifdef KELVIN_OOM_TRACE
-    if (result == nullptr) {
-      log_info(gc)("alloc_under_lock(size: " SIZE_FORMAT") returned nullptr, no_progress count is: " SIZE_FORMAT ", NoProgressThreshold: " SIZE_FORMAT,
-                   req.size(), get_gc_no_progress_count(), ShenandoahNoProgressThreshold);
-    }
-#endif
     // gc_no_progress_count is incremented following each degen or full GC that fails to achieve is_good_progress().
     // Note that Generational Shenandoah may increment no_progress_count faster than traditional Shenandoah because young
     // GCs, which may degenerate, typically occur more frequently than single-generation Global GCs.
     if ((result == nullptr) && !req.is_lab_alloc() && (get_gc_no_progress_count() > ShenandoahNoProgressThreshold)) {
-#ifdef KELVIN_OOM_TRACE
-      log_info(gc)("  endeavoring to throw OOM exception in thread " PTR_FORMAT, p2i(Thread::current()));
-#endif
       control_thread()->handle_alloc_failure(req, false);
-#ifdef KELVIN_OOM_TRACE
-      log_info(gc)("  back from handle_alloc_failure(), throwing OOM");
-#endif
       req.set_actual_size(0);
       return nullptr;
     }
@@ -1064,33 +1051,9 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     //           the better remediation than repeated attempts to allocate following repeated GC cycles.
 
     while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
-      // Kelvin is removing this test: get_gc_no_progress_count() == 0
-
-#ifdef KELVIN_OOM_TRACE
-      log_info(gc)("  Thread " SIZE_FORMAT " to retry its allocation, no_progress_count: " SIZE_FORMAT
-                   ", full_gc_count: " SIZE_FORMAT " vs. original count: " SIZE_FORMAT,
-                   p2i(Thread::current()), get_gc_no_progress_count(), shenandoah_policy()->full_gc_count(), original_count);
-      // Note: handle_alloc_failure(req, true /* block */) blocks until gc progress has been made
-#endif
       control_thread()->handle_alloc_failure(req, true);
       result = allocate_memory_under_lock(req, in_new_region);
-#ifdef KELVIN_OOM_TRACE
-      if (result != nullptr) {
-        log_info(gc)("  Thread " SIZE_FORMAT " alloc retry was successful for size: " SIZE_FORMAT,
-                     p2i(Thread::current()), req.actual_size());
-      }
-      // Note: handle_alloc_failure(req, true /* block */) blocks until gc progress has been made
-#endif
     }
-
-#ifdef KELVIN_OOM_TRACE
-    if (result == nullptr) {
-      log_info(gc)("  Thread " SIZE_FORMAT " to throw OOM, no longer retrying its allocation, no_progress_count: " SIZE_FORMAT
-                   ", full_gc_count: " SIZE_FORMAT " vs. original count: " SIZE_FORMAT,
-                   p2i(Thread::current()), get_gc_no_progress_count(), shenandoah_policy()->full_gc_count(), original_count);
-    }
-#endif
-
     if (log_is_enabled(Debug, gc, alloc)) {
       ResourceMark rm;
       log_debug(gc, alloc)("Thread: %s, Result: " PTR_FORMAT ", Request: %s, Size: " SIZE_FORMAT ", Original: " SIZE_FORMAT ", Latest: " SIZE_FORMAT,
@@ -1108,10 +1071,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
   }
 
   if (result == nullptr) {
-#undef KELVIN_ACTUAL
-#ifdef KELVIN_ACTUAL
-    log_info(gc)("set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at E", p2i(this), (size_t) 0);
-#endif
     req.set_actual_size(0);
   }
 

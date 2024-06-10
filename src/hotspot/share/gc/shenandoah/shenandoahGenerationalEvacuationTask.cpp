@@ -199,26 +199,13 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     // otherwise been available to hold old evacuations, because old available is max_capacity - used and now
     // we would be trading a fully empty region for a partially used region.
     young_gen->decrease_used(region_used);
-#undef KELVIN_REGIONS
-#ifdef KELVIN_REGIONS
-    size_t region_count =
-#endif
     young_gen->decrement_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-    log_info(gc)("pip decrements young regions: " SIZE_FORMAT, region_count);
-#endif
 
     // transfer_to_old() increases capacity of old and decreases capacity of young
     _heap->generation_sizer()->force_transfer_to_old(1);
     region->set_affiliation(OLD_GENERATION);
 
-#ifdef KELVIN_REGIONS
-    region_count =
-#endif
     old_gen->increment_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-    log_info(gc)("pip increments old regions: " SIZE_FORMAT, region_count);
-#endif
     old_gen->increase_used(region_used);
 
     // add_old_collector_free_region() increases promoted_reserve() if available space exceeds plab_min_size()
@@ -259,13 +246,7 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
 
     young_gen->decrease_used(used_bytes);
     young_gen->decrease_humongous_waste(humongous_waste);
-#ifdef KELVIN_REGIONS
-    size_t region_count =
-#endif
     young_gen->decrease_affiliated_region_count(spanned_regions);
-#ifdef KELVIN_REGIONS
-    log_info(gc)("promote_humongous decreases young regions: " SIZE_FORMAT, region_count);
-#endif
 
     // transfer_to_old() increases capacity of old and decreases capacity of young
     _heap->generation_sizer()->force_transfer_to_old(spanned_regions);
@@ -281,13 +262,7 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
       r->set_affiliation(OLD_GENERATION);
     }
 
-#ifdef KELVIN_REGIONS
-    region_count =
-#endif
     old_gen->increase_affiliated_region_count(spanned_regions);
-#ifdef KELVIN_REGIONS
-    log_info(gc)("promote_humongous increases old regions: " SIZE_FORMAT, region_count);
-#endif
     old_gen->increase_used(used_bytes);
     old_gen->increase_humongous_waste(humongous_waste);
   }

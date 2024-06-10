@@ -129,37 +129,15 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _humongous_cont:
      if (affiliation() != YOUNG_GENERATION) {
        if (is_old()) {
-#undef KELVIN_REGIONS
-#ifdef KELVIN_REGIONS
-         size_t region_count =
-#endif
          ShenandoahHeap::heap()->old_generation()->decrement_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-         size_t old_capacity =
-#endif
          ShenandoahHeap::heap()->old_generation()->decrease_capacity(region_size_bytes());
-#ifdef KELVIN_REGIONS
-         log_info(gc)("make_young_maybe(" SIZE_FORMAT ") decrements old regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
-                      index(), region_count, old_capacity);
-#endif
        } else {
          assert(!is_affiliated(), "Don't make young unless OLD or not already affiliated");
        }
 
        set_affiliation(YOUNG_GENERATION);
-#ifdef KELVIN_REGIONS
-         size_t region_count =
-#endif
        ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-       size_t young_capacity =
-#endif
        ShenandoahHeap::heap()->young_generation()->increase_capacity(region_size_bytes());
-
-#ifdef KELVIN_REGIONS
-       log_info(gc)("make_young_maybe() increments young regions: " SIZE_FORMAT ", capacity: " SIZE_FORMAT,
-                    region_count, young_capacity);
-#endif
      }
      return;
    case _pinned_cset:
@@ -598,9 +576,6 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahGeneration* generation = heap->generation_for(affiliation());
 
   heap->decrease_used(generation, used());
-#ifdef KELVIN_REGIONS
-  size_t region_count =
-#endif
   generation->decrement_affiliated_region_count();
 
   set_top(bottom());

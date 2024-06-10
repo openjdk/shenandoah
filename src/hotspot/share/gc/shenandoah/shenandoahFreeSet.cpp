@@ -169,10 +169,6 @@ void ShenandoahRegionPartitions::make_all_regions_unavailable() {
     _capacity[partition_id] = 0;
     _used[partition_id] = 0;
   }
-#undef KELVIN_USAGE
-#ifdef KELVIN_USAGE
-  log_info(gc)("Usage set to zero for all partitions");
-#endif
   _region_counts[int(ShenandoahFreeSetPartitionId::Mutator)] = _region_counts[int(ShenandoahFreeSetPartitionId::Collector)] = 0;
 }
 
@@ -197,10 +193,6 @@ void ShenandoahRegionPartitions::establish_mutator_intervals(idx_t mutator_leftm
   _region_counts[int(ShenandoahFreeSetPartitionId::Collector)] = 0;
   _used[int(ShenandoahFreeSetPartitionId::Collector)] = 0;
   _capacity[int(ShenandoahFreeSetPartitionId::Collector)] = 0;
-
-#ifdef KELVIN_USAGE
-  log_info(gc)("Usage set to " SIZE_FORMAT " for Mutator, zero for Collector", mutator_used);
-#endif
 }
 
 void ShenandoahRegionPartitions::establish_old_collector_intervals(idx_t old_collector_leftmost, idx_t old_collector_rightmost,
@@ -216,10 +208,6 @@ void ShenandoahRegionPartitions::establish_old_collector_intervals(idx_t old_col
   _region_counts[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count;
   _used[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_used;
   _capacity[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count * _region_size_bytes;
-
-#ifdef KELVIN_USAGE
-  log_info(gc)("Usage set to " SIZE_FORMAT " for OldCollector", old_collector_used);
-#endif
 }
 
 void ShenandoahRegionPartitions::increase_used(ShenandoahFreeSetPartitionId which_partition, size_t bytes) {
@@ -313,11 +301,6 @@ void ShenandoahRegionPartitions::retire_from_partition(ShenandoahFreeSetPartitio
   if (used_bytes < _region_size_bytes) {
     // Count the alignment pad remnant of memory as used when we retire this region
     increase_used(partition, _region_size_bytes - used_bytes);
-#undef KELVIN_USAGE
-#ifdef KELVIN_USAGE
-    log_info(gc)("retire_from_partition %s, idx: " SIZE_FORMAT " with waste: " SIZE_FORMAT ", partition usage: " SIZE_FORMAT,
-                 partition_name(partition), idx, _region_size_bytes - used_bytes, _used[int(partition)]);
-#endif
   }
   _membership[int(partition)].clear_bit(idx);
   shrink_interval_if_boundary_modified(partition, idx);
@@ -333,12 +316,7 @@ void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartition
   _membership[int(which_partition)].set_bit(idx);
   _capacity[int(which_partition)] += _region_size_bytes;
   _used[int(which_partition)] += _region_size_bytes - available;
-#ifdef KELVIN_USAGE
-  log_info(gc)("make_free(" SIZE_FORMAT ") %s usage incremented by " SIZE_FORMAT ", totalling: " SIZE_FORMAT,
-               idx, partition_name(which_partition), _region_size_bytes - available, _used[int(which_partition)]);
-#endif
   expand_interval_if_boundary_modified(which_partition, idx, available);
-
   _region_counts[int(which_partition)]++;
 }
 
@@ -398,26 +376,6 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
 
   _region_counts[int(orig_partition)]--;
   _region_counts[int(new_partition)]++;
-
-#undef KELVIN_REGION_MOVES
-#ifdef KELVIN_REGION_MOVES
-  log_info(gc)("Moving region " SIZE_FORMAT " from partition %s to %s, with used: " SIZE_FORMAT,
-               idx, partition_name(orig_partition), partition_name(new_partition), used);
-  log_info(gc)(" capacity[%s]: " SIZE_FORMAT ", used: " SIZE_FORMAT ", interval[" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
-               partition_name(orig_partition), _capacity[int(orig_partition)], _used[int(orig_partition)],
-               leftmost(orig_partition), rightmost(orig_partition));
-  log_info(gc)(" capacity[%s]: " SIZE_FORMAT ", used: " SIZE_FORMAT ", interval[" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
-               partition_name(new_partition), _capacity[int(new_partition)], _used[int(new_partition)],
-               leftmost(new_partition), rightmost(new_partition));
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational()) {
-    ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
-    ShenandoahYoungGeneration* young_generation = gen_heap->young_generation();
-    ShenandoahOldGeneration*   old_generation   = gen_heap->old_generation();
-    log_info(gc)(" young_gen->used_regions(): " SIZE_FORMAT, young_generation->used_regions());
-    log_info(gc)("   old_gen->used_regions(): " SIZE_FORMAT, old_generation->used_regions());
-  }
-#endif
 }
 
 const char* ShenandoahRegionPartitions::partition_membership_name(idx_t idx) const {
@@ -1029,24 +987,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       r->end_preemptible_coalesce_and_fill();
 
       _heap->old_generation()->clear_cards_for(r);
-#undef KELVIN_REGIONS
-#ifdef KELVIN_REGIONS
-      size_t region_count =
-#endif
       _heap->old_generation()->increment_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-      log_info(gc)("try_allocate_in(" SIZE_FORMAT ") increments region count for old: " SIZE_FORMAT,
-                   r->index(), region_count);
-#endif
     } else {
-#ifdef KELVIN_REGIONS
-      size_t region_count =
-#endif
       _heap->young_generation()->increment_affiliated_region_count();
-#ifdef KELVIN_REGIONS
-      log_info(gc)("try_allocate_in(" SIZE_FORMAT ") increments region count for young: " SIZE_FORMAT,
-                   r->index(), region_count);
-#endif
     }
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
@@ -1072,35 +1015,16 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, r->index()),
              "PLABS must be allocated in old_collector_free regions");
 
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-      log_info(gc)("try_allocate_in() has PLAB allocation of requested size: " SIZE_FORMAT
-                   ", min_size: " SIZE_FORMAT ", with free: " SIZE_FORMAT,
-                   req.min_size(), adjusted_size, free);
-#endif
       // Need to assure that plabs are aligned on multiple of card region
       // Convert free from unaligned bytes to aligned number of words
       size_t usable_free = get_usable_free_words(free);
-#ifdef KELVIN_DEBUG
-      log_info(gc)("  usable_free: " SIZE_FORMAT, usable_free);
-#endif
       if (adjusted_size > usable_free) {
         adjusted_size = usable_free;
-#ifdef KELVIN_DEBUG
-        log_info(gc)("  adjusted adjusted_size: " SIZE_FORMAT, adjusted_size);
-#endif
       }
       adjusted_size = align_down(adjusted_size, CardTable::card_size_in_words());
-#ifdef KELVIN_DEBUG
-      log_info(gc)("  aligned adjusted_size: " SIZE_FORMAT, adjusted_size);
-#endif
       if (adjusted_size >= req.min_size()) {
         result = allocate_aligned_plab(adjusted_size, req, r);
         assert(result != nullptr, "allocate must succeed");
-#undef KELVIN_ACTUAL
-#ifdef KELVIN_ACTUAL
-        log_info(gc)("set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at A", p2i(&req), adjusted_size);
-#endif
         req.set_actual_size(adjusted_size);
       } else {
         // Otherwise, leave result == nullptr because the adjusted size is smaller than min size.
@@ -1117,9 +1041,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       if (adjusted_size >= req.min_size()) {
         result = r->allocate(adjusted_size, req);
         assert (result != nullptr, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, adjusted_size);
-#ifdef KELVIN_ACTUAL
-        log_info(gc)("set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at B", p2i(&req), adjusted_size);
-#endif
         req.set_actual_size(adjusted_size);
       } else {
         log_trace(gc, free)("Failed to shrink TLAB or GCLAB request (" SIZE_FORMAT ") in region " SIZE_FORMAT " to " SIZE_FORMAT
@@ -1131,9 +1052,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     result = r->allocate(size, req);
     if (result != nullptr) {
       // Record actual allocation size
-#ifdef KELVIN_ACTUAL
-      log_info(gc)("set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at C", p2i(&req), size);
-#endif
       req.set_actual_size(size);
     }
   }
@@ -1143,12 +1061,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (req.is_mutator_alloc()) {
       assert(req.is_young(), "Mutator allocations always come from young generation.");
       _partitions.increase_used(ShenandoahFreeSetPartitionId::Mutator, req.actual_size() * HeapWordSize);
-#ifdef KELVIN_USAGE
-      log_info(gc)("successful mutator allocation in region " SIZE_FORMAT ", bytes: " SIZE_FORMAT
-                   ", region usage: " SIZE_FORMAT ", mutator usage: " SIZE_FORMAT ", heap used: " SIZE_FORMAT,
-                   r->index(), req.actual_size() * HeapWordSize, 
-                   r->used(), _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator), _heap->used());
-#endif
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
 
@@ -1162,30 +1074,13 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       r->set_update_watermark(r->top());
       if (r->is_old()) {
         _partitions.increase_used(ShenandoahFreeSetPartitionId::OldCollector, req.actual_size() * HeapWordSize);
-#ifdef KELVIN_USAGE
-        log_info(gc)("successful old collector allocation in region " SIZE_FORMAT ", bytes: " SIZE_FORMAT
-                     ", region usage: " SIZE_FORMAT ", old collector usage: " SIZE_FORMAT ", heap used: " SIZE_FORMAT,
-                     r->index(), req.actual_size() * HeapWordSize, r->used(),
-                     _partitions.used_by(ShenandoahFreeSetPartitionId::OldCollector), _heap->used());
-#endif
         assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
         // for plabs, we'll sort the difference between evac and promotion usage when we retire the plab
       } else {
         _partitions.increase_used(ShenandoahFreeSetPartitionId::Collector, req.actual_size() * HeapWordSize);
-#ifdef KELVIN_USAGE
-        log_info(gc)("successful collector allocation in region " SIZE_FORMAT ", bytes: " SIZE_FORMAT
-                     ", region usage: " SIZE_FORMAT ", collector usage: " SIZE_FORMAT ", heap used: " SIZE_FORMAT,
-                     r->index(), req.actual_size() * HeapWordSize, r->used(),
-                     _partitions.used_by(ShenandoahFreeSetPartitionId::Collector), _heap->used());
-#endif
       }
     }
   }
-#ifdef KELVIN_ACTUAL
-  else {
-    log_info(gc)("Not invoking set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at XXX", p2i(&req), (size_t) 0);
-  }
-#endif
 
   static const size_t min_capacity = (size_t) (ShenandoahHeapRegion::region_size_bytes() * (1.0 - 1.0 / ShenandoahEvacWaste));
   size_t ac = alloc_capacity(r);
@@ -1314,14 +1209,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     r->set_update_watermark(r->bottom());
     r->set_top(r->bottom() + used_words);
   }
-#ifdef KELVIN_REGIONS
-  size_t region_count =
-#endif
   _heap->young_generation()->increase_affiliated_region_count(num);
-#ifdef KELVIN_REGIONS
-  log_info(gc)("allocate_contiguous() increases region count for young: " SIZE_FORMAT, region_count);
-#endif
-
   if (remainder != 0) {
     // Record this remainder as allocation waste
     _heap->notify_mutator_alloc_words(ShenandoahHeapRegion::region_size_words() - remainder, true);
@@ -1332,14 +1220,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
   _partitions.increase_used(ShenandoahFreeSetPartitionId::Mutator, total_humongous_size);
-#ifdef KELVIN_USAGE
-  log_info(gc)("successful humongous mutator allocation in regions [" SIZE_FORMAT "," SIZE_FORMAT "] bytes: " SIZE_FORMAT ", collector usage: " SIZE_FORMAT,
-               beg, end, words_size * HeapWordSize, _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator));
-#endif
   _partitions.assert_bounds();
-#ifdef KELVIN_ACTUAL
-  log_info(gc)("set_actual_size " PTR_FORMAT "(" SIZE_FORMAT ") at D", p2i(&req), words_size);
-#endif
   req.set_actual_size(words_size);
   if (remainder != 0) {
     req.set_waste(ShenandoahHeapRegion::region_size_words() - remainder);
@@ -1669,14 +1550,6 @@ void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cse
   _partitions.assert_bounds();
   log_status();
 }
-
-#ifdef KELVIN_DEPRECATE
-void ShenandoahFreeSet::rebuild() {
-  size_t young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count;
-  prepare_to_rebuild(young_cset_regions, old_cset_regions, first_ld_region, last_old_region, old_region_count);
-  finish_rebuild(young_cset_regions, old_cset_regions);
-}
-#endif
 
 void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions,
                                                        bool have_evacuation_reserves,
@@ -2096,24 +1969,6 @@ HeapWord* ShenandoahFreeSet::allocate(ShenandoahAllocRequest& req, bool& in_new_
     return allocate_single(req, in_new_region);
   }
 }
-
-#ifdef KELVIN_UNCERTAINTY
-size_t ShenandoahFreeSet::unsafe_peek_free() const {
-  // Deliberately not locked, this method is unsafe when free set is modified.
-
-  for (size_t index = _free_sets.leftmost(Mutator); index <= _free_sets.rightmost(Mutator); index++) {
-    if (index < _free_sets.max() && _free_sets.in_free_set(index, Mutator)) {
-      ShenandoahHeapRegion* r = _heap->get_region(index);
-      if (r->free() >= MinTLABSize) {
-        return r->free();
-      }
-    }
-  }
-
-  // It appears that no regions left
-  return 0;
-}
-#endif
 
 void ShenandoahFreeSet::print_on(outputStream* out) const {
   out->print_cr("Mutator Free Set: " SIZE_FORMAT "", _partitions.count(ShenandoahFreeSetPartitionId::Mutator));
