@@ -409,24 +409,35 @@
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
                                                                             \
-  product(uintx, ShenandoahOldEvacRatioPercent, 16, EXPERIMENTAL,           \
-          "The maximum proportion of evacuation to old-gen memory, "        \
-          "expressed as a percentage. The default value 16 denotes that no" \
-          "more than 16% of the collection set evacuation workload may be " \
-          "copied into old-gen regions.  This limits both the promotion of "\
-          "aged young regions and the compaction of existing old regions. " \
-          "Given a total evacuation budget of X, the amount of memory "     \
-          "dedicated to hold objects evacuated to young generation is 89.3%"\
-          "(100/112).  A larger value allows for quicker promotion and "    \
-          "a smaller number of mixed evacuations to process "               \
-          "the entire list of old-gen collection candidates at the cost "   \
-          "of an increased disruption of the normal cadence of young-gen "  \
-          "collections.  A value of 100 allows a mixed evacuation to "      \
-          "focus entirely on old-gen memory, allowing no young-gen "        \
-          "regions to be collected, likely resulting in subsequent "        \
-          "allocation failures because the young-gen allocation pool is "   \
-          "not replenished.  A value of 0 prevents mixed evacuations from " \
-          "defragmenting old-gen memory, likely resulting in "              \
+  product(uintx, ShenandoahOldEvacRatioPercent, 35, EXPERIMENTAL,           \
+          "The maximum percentage by which the young evacuation reserve "   \
+          "can be adjusted in order to make room for old-generation "       \
+          "evacuations.  If there is an abundance of free memory, this "    \
+          "will result in a larger total evacuation effort.  If free "      \
+          "memory is in short supply, this may result in shrinking the "    \
+          "amount of young memory that can be evacuated by this amount.  "  \
+          "The default value 35 denotes that no more than 35% of the "      \
+          "collection set evacuation workload may initially dedicated "     \
+          "to holding objects evacuated into old-gen memory.  This limits " \
+          "both the promotion of aged young regions and the compaction of " \
+          "existing old regions.  It does not restrict the collector from " \
+          "copying more objects into old-generation memory if the "         \
+          "young-generation collection set does not consume all of the "    \
+          "memory originally set aside for young-generation evacuation.  "  \
+          "It also does not restrict the amount of memory that can be "     \
+          "promoted in place, by simply changing the affiliation of the "   \
+          "region from young to old.  Given a total evacuation budget of "  \
+          "X, the amount of memory initially dedicated to hold objects "    \
+          "evacuated to young generation is 65%.  A larger value allows "   \
+          "for quicker promotion and a smaller number of mixed evacuations "\
+          "to process the entire list of old-gen collection candidates at " \
+          "the cost of an increased disruption of the normal cadence of "   \
+          "young-gen collections.  A value of 100 allows a mixed "          \
+          "evacuation to focus entirely on old-gen memory, allowing no "    \
+          "young-gen regions to be collected, likely resulting in "         \
+          "subsequent ation failures because the young-gen allocation pool "\
+          "is not replenished.  A value of 0 prevents mixed evacuations "   \
+          "from defragmenting old-gen memory, likely resulting in "         \
           "subsequent promotion failures and triggering of stop-the-world " \
           "full GC events.  Faiure to defragment old-gen memory can also "  \
           "result in unconstrained expansion of old-gen, and shrinkage of " \
