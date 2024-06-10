@@ -328,7 +328,7 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   assert (new_partition < NumPartitions, "New partition must be valid");
   assert (available <= _region_size_bytes, "Available cannot exceed region size");
   assert (_membership[int(orig_partition)].is_set(idx), "Cannot move from partition unless in partition");
-  assert ((r = ShenandoahHeap::heap()->get_region(idx)) && 
+  assert ((r = ShenandoahHeap::heap()->get_region(idx)) &&
           ((r->is_trash() && (available == _region_size_bytes)) ||
            (r->used() + available == _region_size_bytes)),
           "Used: " SIZE_FORMAT " + available: " SIZE_FORMAT " should equal region size: " SIZE_FORMAT,
@@ -899,7 +899,6 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
           idx = _partitions.find_index_of_previous_available_region(ShenandoahFreeSetPartitionId::Mutator, idx - 1);
         }
       }
-      
       // No dice. Do not try to mix mutator and GC allocations, because adjusting region UWM
       // due to GC allocations would expose unparsable mutator allocations.
       break;
@@ -1390,7 +1389,6 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
       }
     }
   }
-  
   log_debug(gc)("  At end of prep_to_rebuild, mutator_leftmost: " SIZE_FORMAT
                 ", mutator_rightmost: " SIZE_FORMAT
                 ", mutator_leftmost_empty: " SIZE_FORMAT

@@ -68,7 +68,7 @@ public class TestThreadFailure {
         if (args.length > 0) {
             for (int t = 0; t < COUNT; t++) {
                 // If we experience OutOfMemoryError during our attempt to instantiate NastyThread, we'll abort
-                // main and will not print "All good".  We'll also report a non-zero termination code.  In the 
+                // main and will not print "All good".  We'll also report a non-zero termination code.  In the
                 // case that the previously instantiated NastyThread accumulated more than SheanndoahNoProgressThreshold
                 // unproductive GC cycles before failing, the main thread may not try a Full GC before it experiences
                 // OutOfMemoryError exception.
