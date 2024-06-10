@@ -409,10 +409,10 @@
           "reserve/waste is incorrect, at the risk that application "       \
           "runs out of memory too early.")                                  \
                                                                             \
-  product(uintx, ShenandoahOldEvacRatioPercent, 12, EXPERIMENTAL,           \
+  product(uintx, ShenandoahOldEvacRatioPercent, 16, EXPERIMENTAL,           \
           "The maximum proportion of evacuation to old-gen memory, "        \
-          "expressed as a percentage. The default value 12 denotes that no" \
-          "more than 12% of the collection set evacuation workload may be " \
+          "expressed as a percentage. The default value 16 denotes that no" \
+          "more than 16% of the collection set evacuation workload may be " \
           "copied into old-gen regions.  This limits both the promotion of "\
           "aged young regions and the compaction of existing old regions. " \
           "Given a total evacuation budget of X, the amount of memory "     \
