@@ -707,9 +707,12 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
       }
     }
 
+    // Because of adjustments above, old_reserve may be smaller now than it was when we tested the branch
+    //   condition above: "(old_available + mutator_xfer_limit >= old_reserve)
+    // Therefore, we do NOT know that: mutator_xfer_limit < old_reserve - old_available
+
     size_t old_deficit = old_reserve - old_available;
     old_region_deficit = (old_deficit + region_size_bytes - 1) / region_size_bytes;
-    assert(old_region_deficit >= mutator_region_xfer_limit, "Handle this in different conditional branch");
 
     // Shrink young_reserve to account for loan to old reserve
     const size_t reserve_xfer_regions = old_region_deficit - mutator_region_xfer_limit;
