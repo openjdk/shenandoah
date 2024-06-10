@@ -170,12 +170,50 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     // Only young collections need to prime the collection set.
+    
+    bool need_to_finalize_piggyback = false;
+    size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
+      fragmented_available,excess_fragmented_available;
+    uint included_old_regions;
+
     if (_generation->is_young()) {
-      heap->old_generation()->heuristics()->prime_collection_set(collection_set);
+      heap->old_generation()->heuristics()->initialize_piggyback_evacs(collection_set,
+                                                                       evacuated_old_bytes, collected_old_bytes,
+                                                                       included_old_regions, old_evacuation_reserve,
+                                                                       old_evacuation_budget, unfragmented_available,
+                                                                       fragmented_available, excess_fragmented_available);
+      need_to_finalize_piggyback =heap->old_generation()->heuristics()->prime_collection_set(collection_set,
+                                                                                             evacuated_old_bytes,
+                                                                                             collected_old_bytes,
+                                                                                             included_old_regions,
+                                                                                             old_evacuation_reserve,
+                                                                                             old_evacuation_budget,
+                                                                                             unfragmented_available,
+                                                                                             fragmented_available,
+                                                                                             excess_fragmented_available);
     }
 
     // Call the subclasses to add young-gen regions into the collection set.
     choose_collection_set_from_regiondata(collection_set, candidates, cand_idx, immediate_garbage + free);
+
+    if (_generation->is_young()) {
+      // Especially when young-gen trigger is expedited in order to finish mixed evacuations, there may not be
+      // enough consolidated garbage to make effective use of young-gen evacuation reserve.  If there is still
+      // young-gen reserve available following selection of the young-gen collection set, see if we can use
+      // this memory to expand the old-gen evacuation collection set.
+      need_to_finalize_piggyback |=
+        heap->old_generation()->heuristics()->top_off_collection_set(collection_set,
+                                                                     evacuated_old_bytes, collected_old_bytes,
+                                                                     included_old_regions, old_evacuation_reserve,
+                                                                     old_evacuation_budget, unfragmented_available,
+                                                                     fragmented_available, excess_fragmented_available);
+      if (need_to_finalize_piggyback) {
+        heap->old_generation()->heuristics()->finalize_piggyback_evacs(collection_set,
+                                                                       evacuated_old_bytes, collected_old_bytes,
+                                                                       included_old_regions, old_evacuation_reserve,
+                                                                       old_evacuation_budget, unfragmented_available);
+      }
+    }
   }
 
   if (collection_set->has_old_regions()) {

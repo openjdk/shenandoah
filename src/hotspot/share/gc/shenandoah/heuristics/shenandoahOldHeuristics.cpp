@@ -30,6 +30,7 @@
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "logging/log.hpp"
 #include "utilities/quickSort.hpp"
 
@@ -75,48 +76,33 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
 {
 }
 
-bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
+bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
+#ifdef ASSERT
+  if (uint(os::random()) % 100 < ShenandoahCoalesceChance) {
+    return true;
+  }
+#endif
+
+  for (uint i = _next_old_collection_candidate; i < _last_old_collection_candidate; ++i) {
+    ShenandoahHeapRegion* region = _region_data[i]._region;
+    if (!region->is_pinned()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ShenandoahOldHeuristics::add_old_regions_to_cset(ShenandoahCollectionSet* collection_set,
+                                                      size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                                                      uint &included_old_regions, const size_t old_evacuation_reserve,
+                                                      const size_t old_evacuation_budget,
+                                                      size_t &unfragmented_available,
+                                                      size_t &fragmented_available,
+                                                      size_t &excess_fragmented_available) {
   if (unprocessed_old_collection_candidates() == 0) {
     return false;
   }
-
   _first_pinned_candidate = NOT_FOUND;
-
-  uint included_old_regions = 0;
-  size_t evacuated_old_bytes = 0;
-  size_t collected_old_bytes = 0;
-
-  // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
-  // "available" to hold the results of other evacuations.  This may cause a decrease in the remaining amount
-  // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
-  // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
-  // budget is constrained by availability of free memory.
-  const size_t old_evacuation_reserve = _old_generation->get_evacuation_reserve();
-  const size_t old_evacuation_budget = (size_t) ((double) old_evacuation_reserve / ShenandoahOldEvacWaste);
-  size_t unfragmented_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
-  size_t fragmented_available;
-  size_t excess_fragmented_available;
-
-  if (unfragmented_available > old_evacuation_budget) {
-    unfragmented_available = old_evacuation_budget;
-    fragmented_available = 0;
-    excess_fragmented_available = 0;
-  } else {
-    assert(_old_generation->available() >= old_evacuation_budget, "Cannot budget more than is available");
-    fragmented_available = _old_generation->available() - unfragmented_available;
-    assert(fragmented_available + unfragmented_available >= old_evacuation_budget, "Budgets do not add up");
-    if (fragmented_available + unfragmented_available > old_evacuation_budget) {
-      excess_fragmented_available = (fragmented_available + unfragmented_available) - old_evacuation_budget;
-      fragmented_available -= excess_fragmented_available;
-    }
-  }
-
-  size_t remaining_old_evacuation_budget = old_evacuation_budget;
-  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
-               byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
-               unprocessed_old_collection_candidates());
-
-  size_t lost_evacuation_capacity = 0;
 
   // The number of old-gen regions that were selected as candidates for collection at the end of the most recent old-gen
   // concurrent marking phase and have not yet been collected is represented by unprocessed_old_collection_candidates().
@@ -135,64 +121,156 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
 
     size_t live_data_for_evacuation = r->get_live_data_bytes();
     size_t lost_available = r->free();
-
+#undef KELVIN_SHARE_RESERVES
+#ifdef KELVIN_SHARE_RESERVES
+    log_info(gc)("Trying to add_old_region_to_cset(" SIZE_FORMAT ") with live_data: " SIZE_FORMAT ", lost_available: " SIZE_FORMAT,
+                 r->index(), live_data_for_evacuation, lost_available);
+#endif
     if ((lost_available > 0) && (excess_fragmented_available > 0)) {
       if (lost_available < excess_fragmented_available) {
         excess_fragmented_available -= lost_available;
-        lost_evacuation_capacity -= lost_available;
-        lost_available  = 0;
+        lost_available = 0;
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Taking lost_available from excess_fragmented_available: " SIZE_FORMAT, excess_fragmented_available);
+#endif
       } else {
         lost_available -= excess_fragmented_available;
-        lost_evacuation_capacity -= excess_fragmented_available;
         excess_fragmented_available = 0;
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Reducing lost_available to " SIZE_FORMAT ", setting excess_fragmented_available to zero",
+                     lost_available);
+#endif
       }
     }
+
+    ssize_t fragmented_delta = 0;
+    ssize_t unfragmented_delta = 0;
+
     size_t scaled_loss = (size_t) ((double) lost_available / ShenandoahOldEvacWaste);
     if ((lost_available > 0) && (fragmented_available > 0)) {
-      if (scaled_loss + live_data_for_evacuation < fragmented_available) {
+      if (scaled_loss < fragmented_available) {
         fragmented_available -= scaled_loss;
+        fragmented_delta = -scaled_loss;
         scaled_loss = 0;
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Reducing fragmented_available to " SIZE_FORMAT ", scaled_loss to zero",
+                     fragmented_available);
+#endif
       } else {
-        // We will have to allocate this region's evacuation memory from unfragmented memory, so don't bother
-        // to decrement scaled_loss
-      }
-    }
-    if (scaled_loss > 0) {
-      // We were not able to account for the lost free memory within fragmented memory, so we need to take this
-      // allocation out of unfragmented memory.  Unfragmented memory does not need to account for loss of free.
-      if (live_data_for_evacuation > unfragmented_available) {
-        // There is not room to evacuate this region or any that come after it in within the candidates array.
-        break;
-      } else {
-        unfragmented_available -= live_data_for_evacuation;
-      }
-    } else {
-      // Since scaled_loss == 0, we have accounted for the loss of free memory, so we can allocate from either
-      // fragmented or unfragmented available memory.  Use up the fragmented memory budget first.
-      size_t evacuation_need = live_data_for_evacuation;
-
-      if (evacuation_need > fragmented_available) {
-        evacuation_need -= fragmented_available;
+        scaled_loss -= fragmented_available;
+        fragmented_delta = -fragmented_available;
         fragmented_available = 0;
-      } else {
-        fragmented_available -= evacuation_need;
-        evacuation_need = 0;
-      }
-      if (evacuation_need > unfragmented_available) {
-        // There is not room to evacuate this region or any that come after it in within the candidates array.
-        break;
-      } else {
-        unfragmented_available -= evacuation_need;
-        // dead code: evacuation_need == 0;
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Reducing fragmented_available to 0, scaled_loss to " SIZE_FORMAT,
+                     scaled_loss);
+#endif
       }
     }
+    // Allocate replica from unfragmented memory if that exists
+    size_t evacuation_need = live_data_for_evacuation;
+    if (evacuation_need < unfragmented_available) {
+      unfragmented_available -= evacuation_need;;
+#ifdef KELVIN_SHARE_RESERVES
+      log_info(gc)("  Satisfy allocation from unfragmented available: " SIZE_FORMAT,
+                   unfragmented_available);
+#endif
+    } else {
+      if (unfragmented_available > 0) {
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Partially satisfy from unfragmented_available: " SIZE_FORMAT ", which becomes zero",
+                     unfragmented_available);
+#endif
+        evacuation_need -= unfragmented_available;
+        unfragmented_delta = -unfragmented_available;
+        unfragmented_available = 0;
+      }
+      // Take the remaining allocation out of fragmented available
+      if (fragmented_available > evacuation_need) {
+        fragmented_available -= evacuation_need;
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Satisfied remnant " SIZE_FORMAT " from fragmented_available: " SIZE_FORMAT,
+                     evacuation_need, fragmented_available);
+#endif
+      } else {
+        // We cannot add this region into the collection set.  We're done.  Undo the adjustments to available.
+        fragmented_available -= fragmented_delta;
+        unfragmented_available -= unfragmented_delta;
+#ifdef KELVIN_SHARE_RESERVES
+        log_info(gc)("  Cannot collect, restored fragmented_available: " SIZE_FORMAT ", unfragmented_available: " SIZE_FORMAT,
+                     fragmented_available, unfragmented_available);
+#endif
+        break;
+      }
+    }    
     collection_set->add_region(r);
     included_old_regions++;
     evacuated_old_bytes += live_data_for_evacuation;
     collected_old_bytes += r->garbage();
     consume_old_collection_candidate();
   }
+  return true;
+}
 
+void ShenandoahOldHeuristics::initialize_piggyback_evacs(ShenandoahCollectionSet* collection_set,
+                                                         size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                                                         uint &included_old_regions, size_t &old_evacuation_reserve,
+                                                         size_t &old_evacuation_budget,
+                                                         size_t &unfragmented_available,
+                                                         size_t &fragmented_available,
+                                                         size_t &excess_fragmented_available) {
+  included_old_regions = 0;
+  evacuated_old_bytes = 0;
+  collected_old_bytes = 0;
+
+  // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
+  // "available" to hold the results of other evacuations.  This may cause a decrease in the remaining amount
+  // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
+  // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
+  // budget is constrained by availability of free memory.
+  old_evacuation_reserve = _old_generation->get_evacuation_reserve();
+  old_evacuation_budget = (size_t) ((double) old_evacuation_reserve / ShenandoahOldEvacWaste);
+
+  // fragmented_available is the amount of memory within partially consumed old regions that may be required to
+  // hold the results of old evacuations.  If all of the memory required by the old evacuation reserve is available
+  // in unfragmented regions (unaffiliated old regions), then fragmented_available is zero because we do not need
+  // to evacuate into the existing partially consumed old regions.
+
+  // if fragmented_available is non-zero, excess_fragmented_available represents the amount of fragmented memory
+  // that is available within old, but is not required to hold the resuilts of old evacuation.  As old-gen regions
+  // are added into the collection set, their free memory is subtracted from excess_fragmented_available until the
+  // excess is exhausted.  For old-gen regions subsequently added to the collection set, their free memory is
+  // subtracted from fragmented_available and from the old_evacuation_budget (since the budget decreases when this
+  // fragmented_available memory decreases).  After fragmented_available has been exhausted, any further old regions
+  // selected for the cset do not further decrease the old_evacuation_budget because all further evacuation is targeted
+  // to unfragmented regions.
+
+  size_t unaffiliated_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
+  if (unaffiliated_available > old_evacuation_reserve) {
+    unfragmented_available = old_evacuation_budget;
+    fragmented_available = 0;
+    excess_fragmented_available = 0;
+  } else {
+    assert(_old_generation->available() >= old_evacuation_reserve, "Cannot reserve more than is available");
+    size_t affiliated_available = _old_generation->available() - unaffiliated_available;
+    assert(affiliated_available + unaffiliated_available >= old_evacuation_reserve, "Budgets do not add up");
+    if (affiliated_available + unaffiliated_available > old_evacuation_reserve) {
+      excess_fragmented_available = (affiliated_available + unaffiliated_available) - old_evacuation_reserve;
+      affiliated_available -= excess_fragmented_available;
+    }
+    fragmented_available = (size_t) ((double) affiliated_available / ShenandoahOldEvacWaste);
+    unfragmented_available = (size_t) ((double) unaffiliated_available / ShenandoahOldEvacWaste);
+  }
+  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
+               byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
+               unprocessed_old_collection_candidates());
+}
+
+
+bool ShenandoahOldHeuristics::finalize_piggyback_evacs(ShenandoahCollectionSet* collection_set,
+                                                       const size_t evacuated_old_bytes, size_t collected_old_bytes,
+                                                       const uint included_old_regions, const size_t old_evacuation_reserve,
+                                                       const size_t old_evacuation_budget,
+                                                       const size_t unfragmented_available) {
   if (_first_pinned_candidate != NOT_FOUND) {
     // Need to deal with pinned regions
     slide_pinned_regions_to_front();
@@ -222,12 +300,8 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
       _old_generation->abandon_mixed_evacuations();
     } else {
       log_info(gc)("No regions selected for mixed collection. "
-                   "Old evacuation budget: " PROPERFMT ", Remaining evacuation budget: " PROPERFMT
-                   ", Lost capacity: " PROPERFMT
-                   ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
+                   "Old evacuation budget: " PROPERFMT ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
                    PROPERFMTARGS(old_evacuation_reserve),
-                   PROPERFMTARGS(remaining_old_evacuation_budget),
-                   PROPERFMTARGS(lost_evacuation_capacity),
                    _next_old_collection_candidate, _last_old_collection_candidate);
     }
   }
@@ -235,20 +309,61 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   return (included_old_regions > 0);
 }
 
-bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
-#ifdef ASSERT
-  if (uint(os::random()) % 100 < ShenandoahCoalesceChance) {
-    return true;
-  }
-#endif
+bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set,
+                                                   size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                                                   uint &included_old_regions, size_t &old_evacuation_reserve,
+                                                   size_t &old_evacuation_budget,
+                                                   size_t &unfragmented_available,
+                                                   size_t &fragmented_available,
+                                                   size_t &excess_fragmented_available) {
+  return add_old_regions_to_cset(collection_set, evacuated_old_bytes, collected_old_bytes, included_old_regions,
+                                 old_evacuation_reserve, old_evacuation_budget, unfragmented_available, fragmented_available,
+                                 excess_fragmented_available);
+}
 
-  for (uint i = _next_old_collection_candidate; i < _last_old_collection_candidate; ++i) {
-    ShenandoahHeapRegion* region = _region_data[i]._region;
-    if (!region->is_pinned()) {
+bool ShenandoahOldHeuristics::top_off_collection_set(ShenandoahCollectionSet* collection_set,
+                                                     size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                                                     uint &included_old_regions, size_t &old_evacuation_reserve,
+                                                     size_t &old_evacuation_budget,
+                                                     size_t &unfragmented_available,
+                                                     size_t &fragmented_available,
+                                                     size_t &excess_fragmented_available) {
+  if (unprocessed_old_collection_candidates() == 0) {
+    return false;
+  } else {
+    ShenandoahYoungGeneration* young_generation = _heap->young_generation();
+    size_t young_unaffiliated_regions = young_generation->free_unaffiliated_regions();
+
+    size_t max_young_cset = young_generation->get_evacuation_reserve();
+    size_t planned_young_evac = collection_set->get_young_bytes_reserved_for_evacuation();
+    size_t consumed_from_young_cset = (size_t) (planned_young_evac * ShenandoahEvacWaste);
+    size_t available_to_loan_from_young_reserve = ((consumed_from_young_cset >= max_young_cset)?
+                                                   0: max_young_cset - consumed_from_young_cset);
+    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+    if ((young_unaffiliated_regions == 0) || (available_to_loan_from_young_reserve < region_size_bytes)) {
       return false;
+    } else {
+      size_t regions_for_old_expansion = (available_to_loan_from_young_reserve / region_size_bytes);
+      log_info(gc)("Augmenting old-gen evacuation budget from unexpended young-generation reserve by " SIZE_FORMAT " regions",
+                   regions_for_old_expansion);
+      _heap->generation_sizer()->force_transfer_to_old(regions_for_old_expansion);
+      size_t budget_supplement = region_size_bytes * regions_for_old_expansion;
+      size_t supplement_after_waste = (size_t) (((double) budget_supplement) / ShenandoahOldEvacWaste);
+      old_evacuation_budget += supplement_after_waste;
+      unfragmented_available += supplement_after_waste;
+
+      _old_generation->augment_evacuation_reserve(budget_supplement);
+      young_generation->set_evacuation_reserve(max_young_cset - budget_supplement);
+
+#ifdef KELVIN_SHARE_RESERVES
+      log_info(gc)("top_off_collection_set() transfers " SIZE_FORMAT " bytes from young_reserve to old_reserve",
+                   budget_supplement);
+#endif
+      return add_old_regions_to_cset(collection_set, evacuated_old_bytes, collected_old_bytes, included_old_regions,
+                                     old_evacuation_reserve, old_evacuation_budget, unfragmented_available, fragmented_available,
+                                     excess_fragmented_available);
     }
   }
-  return true;
 }
 
 void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {

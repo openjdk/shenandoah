@@ -150,15 +150,31 @@ void ShenandoahGeneration::increase_allocated(size_t bytes) {
 }
 
 void ShenandoahGeneration::set_evacuation_reserve(size_t new_val) {
+#undef KELVIN_RESERVES
+#ifdef KELVIN_RESERVES
+  if (is_old()) {
+    log_info(gc)("set_evacuation_reserve(" SIZE_FORMAT ")", new_val);
+  }
+#endif
   _evacuation_reserve = new_val;
 }
 
 size_t ShenandoahGeneration::get_evacuation_reserve() const {
+#ifdef KELVIN_RESERVES
+  if (is_old()) {
+    log_info(gc)("get_evacuation_reserve() yields: " SIZE_FORMAT, _evacuation_reserve);
+  }
+#endif
   return _evacuation_reserve;
 }
 
 void ShenandoahGeneration::augment_evacuation_reserve(size_t increment) {
   _evacuation_reserve += increment;
+#ifdef KELVIN_RESERVES
+  if (is_old()) {
+    log_info(gc)("augment_evacuation_reserve(" SIZE_FORMAT ") yields: " SIZE_FORMAT, increment, _evacuation_reserve);
+  }
+#endif
 }
 
 void ShenandoahGeneration::log_status(const char *msg) const {
@@ -605,6 +621,11 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
         if (r->garbage() >= old_garbage_threshold) {
           promo_potential += r->get_live_data_bytes();
+#undef KELVIN_RESERVES
+#ifdef KELVIN_RESERVES
+          log_info(gc)("Adding " SIZE_FORMAT " to promo potential for region " SIZE_FORMAT " of age %u vs threshold %u",
+                       r->get_live_data_bytes(), r->index(), r->age(), tenuring_threshold);
+#endif
         }
       }
     }
@@ -630,6 +651,10 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
         // We rejected this promotable region from the collection set because we had no room to hold its copy.
         // Add this region to promo potential for next GC.
         promo_potential += region_live_data;
+#ifdef KELVIN_RESERVES
+        log_info(gc)("Adding " SIZE_FORMAT " to promo potential for rejected region " SIZE_FORMAT " of age %u vs threshold %u",
+                     region_live_data, region->index(), region->age(), tenuring_threshold);
+#endif
         assert(!candidate_regions_for_promotion_by_copy[region->index()], "Shouldn't be selected");
       }
       // We keep going even if one region is excluded from selection because we need to accumulate all eligible
@@ -642,6 +667,9 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
 
   heap->old_generation()->set_pad_for_promote_in_place(promote_in_place_pad);
   heap->old_generation()->set_promotion_potential(promo_potential);
+#ifdef KELVIN_RESERVES
+  log_info(gc)("Establishing promo_potential as " SIZE_FORMAT, promo_potential);
+#endif
   return old_consumed;
 }
 

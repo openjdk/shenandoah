@@ -67,8 +67,15 @@ void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(Shenandoah
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int) size, compare_by_garbage, false);
 
+#ifdef KELVIN_RESERVES
+  log_info(gc)("YoungHeuristics::add_preselected() with size: " SIZE_FORMAT, size);
+#endif
   size_t cur_young_garbage = add_preselected_regions_to_collection_set(cset, data, size);
 
+#ifdef KELVIN_RESERVES
+  log_info(gc)("YoungHeuristics::choose_young_cset() with size: " SIZE_FORMAT ", actual_free: " SIZE_FORMAT
+               ", cur_young_garbage: " SIZE_FORMAT, size, actual_free, cur_young_garbage);
+#endif
   choose_young_collection_set(cset, data, size, actual_free, cur_young_garbage);
 
   log_cset_composition(cset);
@@ -92,6 +99,9 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
   size_t cur_cset = 0;
   size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_cset;
   size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
+#ifdef KELVIN_RESERVES
+  log_info(gc)("YoungHeuristics::choose_young_collection_set with max_cset: " SIZE_FORMAT, max_cset);
+#endif
 
 
   log_info(gc, ergo)(

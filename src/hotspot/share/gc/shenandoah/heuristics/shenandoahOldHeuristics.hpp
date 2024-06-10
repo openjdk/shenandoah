@@ -127,14 +127,55 @@ private:
  protected:
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size, size_t free) override;
 
+// Return true iff we need to finalize piggyback evacs
+bool add_old_regions_to_cset(ShenandoahCollectionSet* collection_set,
+                             size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                             uint &included_old_regions, const size_t old_evacuation_reserve,
+                             const size_t old_evacuation_budget,
+                             size_t &unfragmented_available,
+                             size_t &fragmented_available,
+                             size_t &excess_fragmented_available);
+
 public:
   explicit ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap);
 
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
 
-  // Return true iff the collection set is primed with at least one old-gen region.
-  bool prime_collection_set(ShenandoahCollectionSet* set);
+  void initialize_piggyback_evacs(ShenandoahCollectionSet* collection_set,
+                                  size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                                  uint &included_old_regions, size_t &old_evacuation_reserve,
+                                  size_t &old_evacuation_budget,
+                                  size_t &unfragmented_available,
+                                  size_t &fragmented_available,
+                                  size_t &excess_fragmented_available);
+
+  // Return true iff we need to finalize piggyback evacs
+  bool prime_collection_set(ShenandoahCollectionSet* set,
+                            size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                            uint &included_old_regions, size_t &old_evacuation_reserve,
+                            size_t &old_evacuation_budget,
+                            size_t &unfragmented_available,
+                            size_t &fragmented_available,
+                            size_t &excess_fragmented_available);
+
+  // Return true iff we need to finalize piggyback evacs
+  bool top_off_collection_set(ShenandoahCollectionSet* collection_set,
+                              size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                              uint &included_old_regions, size_t &old_evacuation_reserve,
+                              size_t &old_evacuation_budget,
+                              size_t &unfragmented_available,
+                              size_t &fragmented_available,
+                              size_t &excess_fragmented_available);
+
+
+  // Return true iff the collection set holds at least one unpinned mixed evacuation candidate
+  bool finalize_piggyback_evacs(ShenandoahCollectionSet* collection_set,
+                                const size_t evacuated_old_bytes, size_t collected_old_bytes,
+                                const uint included_old_regions, const size_t old_evacuation_reserve,
+                                const size_t old_evacuation_budget,
+                                const size_t unfragmented_available);
+
 
   // How many old-collection candidates have not yet been processed?
   uint unprocessed_old_collection_candidates() const;
