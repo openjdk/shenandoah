@@ -728,10 +728,8 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // coalesce-and-fill processing.
       r->end_preemptible_coalesce_and_fill();
       _heap->old_generation()->clear_cards_for(r);
-      _heap->old_generation()->increment_affiliated_region_count();
-    } else {
-      _heap->generation_for(r->affiliation())->increment_affiliated_region_count();
     }
+    _heap->generation_for(r->affiliation())->increment_affiliated_region_count();
 
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
