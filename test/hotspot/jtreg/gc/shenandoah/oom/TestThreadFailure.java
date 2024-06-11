@@ -41,25 +41,12 @@ public class TestThreadFailure {
     static final int SIZE = 1024;
     static final int COUNT = 16;
 
-    static int thread_count = 0;
-
-    static synchronized final int get_thread_id() {
-      return ++thread_count;
-    }
-
     static class NastyThread extends Thread {
         @Override
         public void run() {
             List<Object> root = new ArrayList<Object>();
-            int my_thread_id = get_thread_id();
-            String msg = "NastyThread " + my_thread_id + " is shutting down";
-            try {
-              while (true) {
-                root.add(new Object[SIZE]);
-              }
-            } catch (Exception x) {
-              // This is probably a java.lang.OutOfMemoryError exception
-              System.out.println(msg);
+            while (true) {
+              root.add(new Object[SIZE]);
             }
         }
     }
@@ -88,7 +75,6 @@ public class TestThreadFailure {
                     "-Xmx32m",
                     "-XX:+UnlockExperimentalVMOptions",
                     "-XX:+UseShenandoahGC",
-                    "-Xlog:gc*=info",
                     TestThreadFailure.class.getName(),
                     "test");
 
@@ -106,7 +92,6 @@ public class TestThreadFailure {
                     "-Xmx32m",
                     "-XX:+UnlockExperimentalVMOptions", "-XX:ShenandoahNoProgressThreshold=24",
                     "-XX:+UseShenandoahGC", "-XX:ShenandoahGCMode=generational",
-                    "-Xlog:gc*=info",
                     TestThreadFailure.class.getName(),
                     "test");
 

@@ -306,6 +306,12 @@ private:
   //
   // Precondition: req.size() <= ShenandoahHeapRegion::humongous_threshold_words().
   HeapWord* allocate_single(ShenandoahAllocRequest& req, bool& in_new_region);
+
+  // While holding the heap lock, allocate memory for a humongous object which spans one or more regions that
+  // were previously empty.  Regions that represent humongous objects are entirely dedicated to the humongous
+  // object.  No other objects are packed into these regions.
+  //
+  // Precondition: req.size() > ShenandoahHeapRegion::humongous_threshold_words().
   HeapWord* allocate_contiguous(ShenandoahAllocRequest& req);
 
   // Change region r from the Mutator partition to the GC's Collector or OldCollector partition.  This requires that the
@@ -364,6 +370,17 @@ public:
   // When a region is promoted in place, we add the region's available memory if it is greater than plab_min_size()
   // into the old collector partition by invoking this method.
   void add_promoted_in_place_region_to_old_collector(ShenandoahHeapRegion* region);
+
+  // Move up to cset_regions number of regions from being available to the collector to being available to the mutator.
+  //
+  // Typical usage: At the end of evacuation, when the collector no longer needs the regions that had been reserved
+  // for evacuation, invoke this to make regions available for mutator allocations.
+  //
+  // Note that we plan to replenish the Collector reserve at the end of update refs, at which time all
+  // of the regions recycled from the collection set will be available.  In the very unlikely event that there
+  // are fewer regions in the collection set than remain in the collector's free set, we limit the transfer in order
+  // to assure that the replenished Collector reserves can be sufficiently large.
+  void move_regions_from_collector_to_mutator(size_t cset_regions);
 
   void recycle_trash();
 

@@ -726,12 +726,12 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   // Leftmost and rightmost bounds provide enough caching to walk bitmap efficiently. Normally,
   // we would find the region to allocate at right away.
   //
-  // Allocations are biased: new application allocs go to beginning of the heap, and GC allocs
-  // go to the end. This makes application allocation faster, because we would clear lots
-  // of regions from the beginning most of the time.
+  // Allocations are biased: GC allocations are taken from the high end of the heap.  Regular (and TLAB)
+  // mutator allocations are taken from the middle of heap, below the memory reserved for Collector.
+  // Humongous mutator allocations are taken from the bottom of the heap.
   //
-  // Free set maintains mutator and collector views, and normally they allocate in their views only,
-  // unless we special cases for stealing and mixed allocations.
+  // Free set maintains mutator and collector partitions.  Normally, each allocates only from its partition,
+  // except in special cases when the collector steals regions from the mutator partition.
 
   // Overwrite with non-zero (non-NULL) values only if necessary for allocation bookkeeping.
 
@@ -991,6 +991,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
+
     log_debug(gc)("Using new region (" SIZE_FORMAT ") for %s (" PTR_FORMAT ").",
                        r->index(), ShenandoahAllocRequest::alloc_type_to_string(req.type()), p2i(&req));
   } else {
@@ -1112,10 +1113,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 }
 
 HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
+  assert(req.is_mutator_alloc(), "All humongous allocations are performed by mutator");
   shenandoah_assert_heaplocked();
 
   size_t words_size = req.size();
-  size_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+  idx_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
 
   assert(req.is_young(), "Humongous regions always allocated in YOUNG");
 
@@ -1124,6 +1126,10 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     return nullptr;
   }
 
+  idx_t start_range = _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Mutator);
+  idx_t end_range = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator) + 1;
+  idx_t last_possible_start = end_range - num;
+    
   // Find the continuous interval of $num regions, starting from $beg and ending in $end,
   // inclusive. Contiguous allocations are biased to the beginning.
   idx_t beg = _partitions.find_index_of_next_available_cluster_of_regions(ShenandoahFreeSetPartitionId::Mutator,
@@ -1176,7 +1182,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   bool is_generational = _heap->mode()->is_generational();
   // Initialize regions:
-  for (size_t i = beg; i <= end; i++) {
+  for (idx_t i = beg; i <= end; i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     try_recycle_trashed(r, is_generational);
 
@@ -1826,7 +1832,7 @@ void ShenandoahFreeSet::log_status() {
     LogStream ls(lt);
 
     {
-      size_t last_idx = 0;
+      idx_t last_idx = 0;
       size_t max = 0;
       size_t max_contig = 0;
       size_t empty_contig = 0;
@@ -2049,7 +2055,7 @@ double ShenandoahFreeSet::internal_fragmentation() {
  *   d) Heap is half full, full and empty regions interleave => EF =~ 1
  */
 double ShenandoahFreeSet::external_fragmentation() {
-  size_t last_idx = 0;
+  idx_t last_idx = 0;
   size_t max_contig = 0;
   size_t empty_contig = 0;
   size_t free = 0;
