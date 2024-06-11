@@ -133,11 +133,9 @@ void ShenandoahHeapRegion::make_young_maybe() {
          if (is_old()) {
            heap->old_generation()->decrement_affiliated_region_count();
          }
-       }
-       set_affiliation(YOUNG_GENERATION);
-       if (heap->mode()->is_generational()) {
          heap->young_generation()->increment_affiliated_region_count();
        }
+       set_affiliation(YOUNG_GENERATION);
      }
      return;
    case _pinned_cset:
