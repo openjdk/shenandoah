@@ -457,7 +457,7 @@ private:
   virtual void update_heap_references(bool concurrent);
   // Final update region states
   void update_heap_region_states(bool concurrent);
-  virtual void final_update_refs_do_regions();
+  virtual void final_update_refs_update_region_states();
 
   void rendezvous_threads();
   void recycle_trash();

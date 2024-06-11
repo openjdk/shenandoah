@@ -2360,8 +2360,8 @@ void ShenandoahHeap::update_heap_references(bool concurrent) {
 ShenandoahSynchronizePinnedRegionStates::ShenandoahSynchronizePinnedRegionStates() : _lock(ShenandoahHeap::heap()->lock()) { }
 
 void ShenandoahSynchronizePinnedRegionStates::heap_region_do(ShenandoahHeapRegion* r) {
-  // Drop unnecessary "pinned" state from regions that does not have CP marks
-  // anymore, as this would allow trashing them.
+  // Drop "pinned" state from regions that no longer have a pinned count. Put
+  // regions with a pinned count into the "pinned" state.
   if (r->is_active()) {
     if (r->is_pinned()) {
       if (r->pin_count() == 0) {
@@ -2386,7 +2386,7 @@ void ShenandoahHeap::update_heap_region_states(bool concurrent) {
                             ShenandoahPhaseTimings::final_update_refs_update_region_states :
                             ShenandoahPhaseTimings::degen_gc_final_update_refs_update_region_states);
 
-    final_update_refs_do_regions();
+    final_update_refs_update_region_states();
 
     assert_pinned_region_status();
   }
@@ -2399,7 +2399,7 @@ void ShenandoahHeap::update_heap_region_states(bool concurrent) {
   }
 }
 
-void ShenandoahHeap::final_update_refs_do_regions() {
+void ShenandoahHeap::final_update_refs_update_region_states() {
   ShenandoahSynchronizePinnedRegionStates cl;
   parallel_heap_region_iterate(&cl);
 }
