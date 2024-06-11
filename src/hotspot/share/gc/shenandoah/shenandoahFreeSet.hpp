@@ -306,12 +306,6 @@ private:
   //
   // Precondition: req.size() <= ShenandoahHeapRegion::humongous_threshold_words().
   HeapWord* allocate_single(ShenandoahAllocRequest& req, bool& in_new_region);
-
-  // While holding the heap lock, allocate memory for a humongous object which spans one or more regions that
-  // were previously empty.  Regions that represent humongous objects are entirely dedicated to the humongous
-  // object.  No other objects are packed into these regions.
-  //
-  // Precondition: req.size() > ShenandoahHeapRegion::humongous_threshold_words().
   HeapWord* allocate_contiguous(ShenandoahAllocRequest& req);
 
   // Change region r from the Mutator partition to the GC's Collector or OldCollector partition.  This requires that the
@@ -339,7 +333,6 @@ private:
 
   // Set max_capacity for young and old generations
   void establish_generation_sizes(size_t young_region_count, size_t old_region_count);
-
   size_t get_usable_free_words(size_t free_bytes) const;
 
 public:
@@ -372,18 +365,8 @@ public:
   // into the old collector partition by invoking this method.
   void add_promoted_in_place_region_to_old_collector(ShenandoahHeapRegion* region);
 
-  // Move up to cset_regions number of regions from being available to the collector to being available to the mutator.
-  //
-  // Typical usage: At the end of evacuation, when the collector no longer needs the regions that had been reserved
-  // for evacuation, invoke this to make regions available for mutator allocations.
-  //
-  // Note that we plan to replenish the Collector reserve at the end of update refs, at which time all
-  // of the regions recycled from the collection set will be available.  If the very unlikely event that there
-  // are fewer regions in the collection set than remain in the collector set, we limit the transfer in order
-  // to assure that the replenished Collector reserve can be sufficiently large.
-  void move_regions_from_collector_to_mutator(size_t cset_regions);
-
   void recycle_trash();
+
   void log_status();
 
   inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator); }
@@ -396,42 +379,7 @@ public:
   HeapWord* allocate(ShenandoahAllocRequest& req, bool& in_new_region);
   size_t unsafe_peek_free() const;
 
-  /*
-   * Internal fragmentation metric: describes how fragmented the heap regions are.
-   *
-   * It is derived as:
-   *
-   *               sum(used[i]^2, i=0..k)
-   *   IF = 1 - ------------------------------
-   *              C * sum(used[i], i=0..k)
-   *
-   * ...where k is the number of regions in computation, C is the region capacity, and
-   * used[i] is the used space in the region.
-   *
-   * The non-linearity causes IF to be lower for the cases where the same total heap
-   * used is densely packed. For example:
-   *   a) Heap is completely full  => IF = 0
-   *   b) Heap is half full, first 50% regions are completely full => IF = 0
-   *   c) Heap is half full, each region is 50% full => IF = 1/2
-   *   d) Heap is quarter full, first 50% regions are completely full => IF = 0
-   *   e) Heap is quarter full, each region is 25% full => IF = 3/4
-   *   f) Heap has one small object per each region => IF =~ 1
-   */
   double internal_fragmentation();
-
-  /*
-   * External fragmentation metric: describes how fragmented the heap is.
-   *
-   * It is derived as:
-   *
-   *   EF = 1 - largest_contiguous_free / total_free
-   *
-   * For example:
-   *   a) Heap is completely empty => EF = 0
-   *   b) Heap is completely full => EF = 0
-   *   c) Heap is first-half full => EF = 1/2
-   *   d) Heap is half full, full and empty regions interleave => EF =~ 1
-   */
   double external_fragmentation();
 
   void print_on(outputStream* out) const;

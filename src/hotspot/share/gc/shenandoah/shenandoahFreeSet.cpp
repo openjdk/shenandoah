@@ -621,7 +621,6 @@ void ShenandoahRegionPartitions::assert_bounds() {
           "free empty regions past the rightmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
           end_off, rightmost_empty(ShenandoahFreeSetPartitionId::Collector));
 
-
   // Performance invariants. Failing these would not break the free partition, but performance would suffer.
   assert (leftmost(ShenandoahFreeSetPartitionId::OldCollector) <= _max, "leftmost in bounds: "  SSIZE_FORMAT " < " SSIZE_FORMAT,
           leftmost(ShenandoahFreeSetPartitionId::OldCollector),  _max);
@@ -724,15 +723,15 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 
   // Scan the bitmap looking for a first fit.
   //
-  // Leftmost and rightmost bounds provide enough caching to quickly find a region from which to allocate.
+  // Leftmost and rightmost bounds provide enough caching to walk bitmap efficiently. Normally,
+  // we would find the region to allocate at right away.
   //
-  // Allocations are biased: GC allocations are taken from the high end of the heap.  Regular (and TLAB)
-  // mutator allocations are taken from the middle of heap, below the memory reserved for Collector.
-  // Humongous mutator allocations are taken from the bottom of the heap.
+  // Allocations are biased: new application allocs go to beginning of the heap, and GC allocs
+  // go to the end. This makes application allocation faster, because we would clear lots
+  // of regions from the beginning most of the time.
   //
-  // Free set maintains mutator and collector partitions.  Mutator can only allocate from the
-  // Mutator partition.  Collector prefers to allocate from the Collector partition, but may steal
-  // regions from the Mutator partition if the Collector partition has been depleted.
+  // Free set maintains mutator and collector views, and normally they allocate in their views only,
+  // unless we special cases for stealing and mixed allocations.
 
   // Overwrite with non-zero (non-NULL) values only if necessary for allocation bookkeeping.
 
@@ -992,7 +991,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
-
     log_debug(gc)("Using new region (" SIZE_FORMAT ") for %s (" PTR_FORMAT ").",
                        r->index(), ShenandoahAllocRequest::alloc_type_to_string(req.type()), p2i(&req));
   } else {
@@ -1114,11 +1112,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
 }
 
 HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
-  assert(req.is_mutator_alloc(), "All humongous allocations are performed by mutator");
   shenandoah_assert_heaplocked();
 
   size_t words_size = req.size();
-  idx_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+  size_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
 
   assert(req.is_young(), "Humongous regions always allocated in YOUNG");
 
@@ -1126,10 +1123,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   if (num > (idx_t) _partitions.count(ShenandoahFreeSetPartitionId::Mutator)) {
     return nullptr;
   }
-
-  idx_t start_range = _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Mutator);
-  idx_t end_range = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator) + 1;
-  idx_t last_possible_start = end_range - num;
 
   // Find the continuous interval of $num regions, starting from $beg and ending in $end,
   // inclusive. Contiguous allocations are biased to the beginning.
@@ -1183,7 +1176,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
   bool is_generational = _heap->mode()->is_generational();
   // Initialize regions:
-  for (idx_t i = beg; i <= end; i++) {
+  for (size_t i = beg; i <= end; i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     try_recycle_trashed(r, is_generational);
 
@@ -1833,7 +1826,7 @@ void ShenandoahFreeSet::log_status() {
     LogStream ls(lt);
 
     {
-      idx_t last_idx = 0;
+      size_t last_idx = 0;
       size_t max = 0;
       size_t max_contig = 0;
       size_t empty_contig = 0;
@@ -1873,7 +1866,7 @@ void ShenandoahFreeSet::log_status() {
       // my internally tracked values of used() and free().
       assert(free == total_free, "Free memory should match");
       ls.print("Free: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s regular, " SIZE_FORMAT "%s humongous, ",
-               byte_size_in_proper_unit(free),          proper_unit_for_byte_size(free),
+               byte_size_in_proper_unit(total_free),    proper_unit_for_byte_size(total_free),
                byte_size_in_proper_unit(max),           proper_unit_for_byte_size(max),
                byte_size_in_proper_unit(max_humongous), proper_unit_for_byte_size(max_humongous)
       );
@@ -1996,6 +1989,27 @@ void ShenandoahFreeSet::print_on(outputStream* out) const {
   }
 }
 
+/*
+ * Internal fragmentation metric: describes how fragmented the heap regions are.
+ *
+ * It is derived as:
+ *
+ *               sum(used[i]^2, i=0..k)
+ *   IF = 1 - ------------------------------
+ *              C * sum(used[i], i=0..k)
+ *
+ * ...where k is the number of regions in computation, C is the region capacity, and
+ * used[i] is the used space in the region.
+ *
+ * The non-linearity causes IF to be lower for the cases where the same total heap
+ * used is densely packed. For example:
+ *   a) Heap is completely full  => IF = 0
+ *   b) Heap is half full, first 50% regions are completely full => IF = 0
+ *   c) Heap is half full, each region is 50% full => IF = 1/2
+ *   d) Heap is quarter full, first 50% regions are completely full => IF = 0
+ *   e) Heap is quarter full, each region is 25% full => IF = 3/4
+ *   f) Heap has one small object per each region => IF =~ 1
+ */
 double ShenandoahFreeSet::internal_fragmentation() {
   double squared = 0;
   double linear = 0;
@@ -2021,13 +2035,24 @@ double ShenandoahFreeSet::internal_fragmentation() {
   }
 }
 
+/*
+ * External fragmentation metric: describes how fragmented the heap is.
+ *
+ * It is derived as:
+ *
+ *   EF = 1 - largest_contiguous_free / total_free
+ *
+ * For example:
+ *   a) Heap is completely empty => EF = 0
+ *   b) Heap is completely full => EF = 0
+ *   c) Heap is first-half full => EF = 1/2
+ *   d) Heap is half full, full and empty regions interleave => EF =~ 1
+ */
 double ShenandoahFreeSet::external_fragmentation() {
-  idx_t last_idx = 0;
+  size_t last_idx = 0;
   size_t max_contig = 0;
   size_t empty_contig = 0;
-
   size_t free = 0;
-
   idx_t rightmost = _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator);
   for (idx_t index = _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator); index <= rightmost; ) {
     assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, index),
@@ -2038,14 +2063,12 @@ double ShenandoahFreeSet::external_fragmentation() {
       if (last_idx + 1 == index) {
         empty_contig++;
       } else {
-        empty_contig = 1;
+        empty_contig = 0;
       }
-    } else {
-      empty_contig = 0;
+
+      max_contig = MAX2(max_contig, empty_contig);
+      last_idx = index;
     }
-    max_contig = MAX2(max_contig, empty_contig);
-    last_idx = index;
-    index = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Mutator, index + 1);
   }
 
   if (free > 0) {
