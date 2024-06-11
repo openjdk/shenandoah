@@ -914,19 +914,13 @@ HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) 
   // Figure out size of new GCLAB, looking back at heuristics. Expand aggressively.
   size_t new_size = ShenandoahThreadLocalData::gclab_size(thread) * 2;
 
-  // Limit growth of GCLABs to ShenandoahMaxEvacLABRatio * the minimum size.  This enables more equitable distribution of
-  // available evacuation buidget between the many threads that are coordinating in the evacuation effort.
-  if (ShenandoahMaxEvacLABRatio > 0) {
-    log_debug(gc, free)("Allocate new gclab: " SIZE_FORMAT ", " SIZE_FORMAT, new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
-    new_size = MIN2(new_size, PLAB::min_size() * ShenandoahMaxEvacLABRatio);
-  }
-
   new_size = MIN2(new_size, PLAB::max_size());
   new_size = MAX2(new_size, PLAB::min_size());
 
   // Record new heuristic value even if we take any shortcut. This captures
   // the case when moderately-sized objects always take a shortcut. At some point,
   // heuristics should catch up with them.
+  log_debug(gc, free)("Set new GCLAB size: " SIZE_FORMAT, new_size);
   ShenandoahThreadLocalData::set_gclab_size(thread, new_size);
 
   if (new_size < size) {
@@ -2077,7 +2071,7 @@ uint ShenandoahHeap::max_workers() {
 void ShenandoahHeap::stop() {
   // The shutdown sequence should be able to terminate when GC is running.
 
-  // Step 0. Notify policy to disable event recording.
+  // Step 0. Notify policy to disable event recording and prevent visiting gc threads during shutdown
   _shenandoah_policy->record_shutdown();
 
   // Step 1. Notify control thread that we are in shutdown.
@@ -2342,7 +2336,7 @@ private:
       // We ask the first worker to replenish the Mutator free set by moving regions previously reserved to hold the
       // results of evacuation.  These reserves are no longer necessary because evacuation has completed.
       size_t cset_regions = _heap->collection_set()->count();
-      // We cannot transfer any more regions than will be reclaimed when the existing collection set is recycled, because
+      // We cannot transfer any more regions than will be reclaimed when the existing collection set is recycled because
       // we need the reclaimed collection set regions to replenish the collector reserves
       _heap->free_set()->move_collector_sets_to_mutator(cset_regions);
     }
