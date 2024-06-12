@@ -609,6 +609,12 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
                                   bound_on_old_reserve:
                                   MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                                        bound_on_old_reserve));
+#define KELVIN_RESERVES
+#ifdef KELVIN_RESERVES
+  log_info(gc)("max_old_reserve: " SIZE_FORMAT ", bound_on_old_reserve: " SIZE_FORMAT
+               ", old_available: " SIZE_FORMAT ", young_reserve: " SIZE_FORMAT ", mutator_xfer_limit: " SIZE_FORMAT,
+               max_old_reserve, bound_on_old_reserve, old_available, young_reserve, mutator_xfer_limit);
+#endif
 
   if (young_reserve > young_available) {
     young_reserve = young_available;
@@ -626,16 +632,23 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
            "Unaffiliated available must be less than total available");
     const size_t old_fragmented_available =
       old_available - (old_generation()->free_unaffiliated_regions() + old_cset_regions) * region_size_bytes;
+
+    // max_old_reserve is very conservative.  Assumes we evacuate the entirety of mixed-evac candidates into
+    // unfragmented memory.
     reserve_for_mixed = max_evac_need + old_fragmented_available;
+#ifdef KELVIN_RESERVES
+    log_info(gc)("max_evac_need: " SIZE_FORMAT ", old_available: " SIZE_FORMAT ", old_fragmented_available: " SIZE_FORMAT,
+                 max_evac_need, old_available, old_fragmented_available);
+#endif
     if (reserve_for_mixed > max_old_reserve) {
       reserve_for_mixed = max_old_reserve;
     }
   }
 
-  // Decide how much space we should reserve for promotions from young
+  // Decide how much space we should reserve for promotions from young.  We give priority to mixed evacations
+  // over promotions.
   size_t reserve_for_promo = 0;
   const size_t promo_load = old_generation()->get_promotion_potential();
-#undef KELVIN_RESERVES
 #ifdef KELVIN_RESERVES
   log_info(gc)("promo_load fetched from old-gen is: " SIZE_FORMAT ", times PromoEvacWaste: " SIZE_FORMAT
                ", available_for_promotions: " SIZE_FORMAT,
@@ -674,11 +687,18 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
     const size_t unaffiliated_old_regions = old_generation()->free_unaffiliated_regions() + old_cset_regions;
     old_region_surplus = MIN2(old_region_surplus, unaffiliated_old_regions);
     old_generation()->set_region_balance(checked_cast<ssize_t>(old_region_surplus));
+#ifdef KELVIN_RESERVES
+    log_info(gc)("old_avail > old_reserve, relinquishing " SIZE_FORMAT " regions from old to young", old_region_surplus);
+#endif
   } else if (old_available + mutator_xfer_limit >= old_reserve) {
     // Mutator's xfer limit is sufficient to satisfy our need: transfer all memory from there
     size_t old_deficit = old_reserve - old_available;
     old_region_deficit = (old_deficit + region_size_bytes - 1) / region_size_bytes;
     old_generation()->set_region_balance(0 - checked_cast<ssize_t>(old_region_deficit));
+#ifdef KELVIN_RESERVES
+    log_info(gc)("old_avail + mutator_xfer_limit > old_reserve, consuming " SIZE_FORMAT " regions from mutator_xfer_limit",
+             old_region_deficit);
+#endif
   } else {
     // We'll try to xfer from both mutator excess and from young collector reserve
     size_t available_reserves = old_available + young_reserve + mutator_xfer_limit;
@@ -693,6 +713,10 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
       entitled_xfer = unaffiliated_young_memory;
     }
     old_entitlement = old_available + entitled_xfer;
+#ifdef KELVIN_RESERVES
+    log_info(gc)("working with old_entitlement: " SIZE_FORMAT " based on unaffiliated_young_memory: " SIZE_FORMAT,
+             old_entitlement, unaffiliated_young_memory);
+#endif
     if (old_entitlement < old_reserve) {
       // There's not enough memory to satisfy our desire.  Scale back our old-gen intentions.
       size_t budget_overrun = old_reserve - old_entitlement;;
@@ -721,11 +745,11 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
     old_generation()->set_region_balance(0 - checked_cast<ssize_t>(old_region_deficit));
 
 #ifdef KELVIN_RESERVES
-  log_info(gc)("after adjustments, old_reserve: " SIZE_FORMAT " from promo: " SIZE_FORMAT " and evac: " SIZE_FORMAT,
-               old_reserve, reserve_for_promo, reserve_for_mixed);
-  log_info(gc)(" old_available: " SIZE_FORMAT, old_available);
-  log_info(gc)(" young_reserve: " SIZE_FORMAT, young_reserve);
-  log_info(gc)("       balance: " SSIZE_FORMAT, 0 - checked_cast<ssize_t>(old_region_deficit));
+    log_info(gc)("after adjustments, old_reserve: " SIZE_FORMAT " from promo: " SIZE_FORMAT " and evac: " SIZE_FORMAT,
+                 old_reserve, reserve_for_promo, reserve_for_mixed);
+    log_info(gc)(" old_available: " SIZE_FORMAT, old_available);
+    log_info(gc)(" young_reserve: " SIZE_FORMAT, young_reserve);
+    log_info(gc)("       balance: " SSIZE_FORMAT, 0 - checked_cast<ssize_t>(old_region_deficit));
 #endif
   }
 
