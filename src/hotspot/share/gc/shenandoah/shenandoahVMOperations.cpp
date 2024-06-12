@@ -46,6 +46,9 @@ bool VM_ShenandoahOperation::doit_prologue() {
 void VM_ShenandoahOperation::doit_epilogue() {
   log_active_generation("Epilogue");
   assert(!ShenandoahHeap::heap()->has_gc_state_changed(), "GC State was not synchronized to java threads.");
+  // GC thread root traversal likely used OopMapCache a lot, which
+  // might have created lots of old entries. Trigger the cleanup now.
+  OopMapCache::trigger_cleanup();
 }
 
 void VM_ShenandoahOperation::log_active_generation(const char* prefix) {
@@ -71,7 +74,6 @@ bool VM_ShenandoahReferenceOperation::doit_prologue() {
 
 void VM_ShenandoahReferenceOperation::doit_epilogue() {
   VM_ShenandoahOperation::doit_epilogue();
-  OopMapCache::cleanup_old_entries();
   if (Universe::has_reference_pending_list()) {
     Heap_lock->notify_all();
   }
