@@ -733,7 +733,6 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
   // except in special cases when the collector steals regions from the mutator partition.
 
   // Overwrite with non-zero (non-NULL) values only if necessary for allocation bookkeeping.
-
   bool allow_new_region = true;
   if (_heap->mode()->is_generational()) {
     switch (req.affiliation()) {
@@ -1206,7 +1205,6 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     r->set_top(r->bottom() + used_words);
   }
   generation->increase_affiliated_region_count(num);
-
   if (remainder != 0) {
     // Record this remainder as allocation waste
     _heap->notify_mutator_alloc_words(ShenandoahHeapRegion::region_size_words() - remainder, true);
@@ -1260,7 +1258,7 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   bool transferred = gen_heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
     log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
-    _heap->generation_sizer()->force_transfer_to_old(1);
+    gen_heap->generation_sizer()->force_transfer_to_old(1);
   }
   // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
   // to recycle trash before attempting to allocate anything in the region.
@@ -1467,7 +1465,7 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
       idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::OldCollector, idx + 1);
     }
     if (old_collector_regions > 0) {
-      _heap->generation_sizer()->transfer_to_young(old_collector_regions);
+      ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->transfer_to_young(old_collector_regions);
     }
   }
 
@@ -1551,6 +1549,7 @@ void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cse
 void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions,
                                                        bool have_evacuation_reserves,
                                                        size_t& young_reserve_result, size_t& old_reserve_result) const {
+  shenandoah_assert_generational();
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
   ShenandoahOldGeneration* const old_generation = _heap->old_generation();
