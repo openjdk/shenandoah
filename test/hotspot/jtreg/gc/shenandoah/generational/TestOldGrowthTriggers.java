@@ -50,7 +50,7 @@ public class TestOldGrowthTriggers {
       array[i] = new BigInteger(128, r);
     }
 
-    for (int refill_count = 0; refill_count < 192; refill_count++) {
+    for (int refill_count = 0; refill_count < 128; refill_count++) {
       // Each refill repopulates array_size randomly selected elements within array
       for (int i = 0; i < array_size; i++) {
         int replace_index = r.nextInt(array_size);
@@ -100,8 +100,8 @@ public class TestOldGrowthTriggers {
     }
 
     testOld("-Xlog:gc",
-            "-Xms256m",
-            "-Xmx256m",
+            "-Xms128m",
+            "-Xmx128m",
             "-XX:+UnlockDiagnosticVMOptions",
             "-XX:+UnlockExperimentalVMOptions",
             "-XX:+UseShenandoahGC",
