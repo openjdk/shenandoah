@@ -982,12 +982,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // concurrent preparations for mixed evacuations are completed), we mark this region as not requiring any
       // coalesce-and-fill processing.
       r->end_preemptible_coalesce_and_fill();
-
       _heap->old_generation()->clear_cards_for(r);
-      _heap->old_generation()->increment_affiliated_region_count();
-    } else {
-      _heap->young_generation()->increment_affiliated_region_count();
     }
+    _heap->generation_for(r->affiliation())->increment_affiliated_region_count();
+
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
 
@@ -1119,6 +1117,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   idx_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
 
   assert(req.is_young(), "Humongous regions always allocated in YOUNG");
+  ShenandoahGeneration* generation = _heap->generation_for(req.affiliation());
 
   // Check if there are enough regions left to satisfy allocation.
   if (num > (idx_t) _partitions.count(ShenandoahFreeSetPartitionId::Mutator)) {
@@ -1206,7 +1205,8 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
     r->set_update_watermark(r->bottom());
     r->set_top(r->bottom() + used_words);
   }
-  _heap->young_generation()->increase_affiliated_region_count(num);
+  generation->increase_affiliated_region_count(num);
+
   if (remainder != 0) {
     // Record this remainder as allocation waste
     _heap->notify_mutator_alloc_words(ShenandoahHeapRegion::region_size_words() - remainder, true);
@@ -1251,12 +1251,13 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   assert(_partitions.partition_id_matches(idx, ShenandoahFreeSetPartitionId::Mutator), "Should be in mutator view");
   assert(can_allocate_from(r), "Should not be allocated");
 
-  size_t ac = alloc_capacity(r);
+  ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+  size_t region_capacity = alloc_capacity(r);
   _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
-                                               ShenandoahFreeSetPartitionId::OldCollector, ac);
+                                               ShenandoahFreeSetPartitionId::OldCollector, region_capacity);
   _partitions.assert_bounds();
-  _heap->old_generation()->augment_evacuation_reserve(ac);
-  bool transferred = _heap->generation_sizer()->transfer_to_old(1);
+  _heap->old_generation()->augment_evacuation_reserve(region_capacity);
+  bool transferred = gen_heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
     log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
     _heap->generation_sizer()->force_transfer_to_old(1);

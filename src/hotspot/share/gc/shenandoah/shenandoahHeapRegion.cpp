@@ -127,17 +127,20 @@ void ShenandoahHeapRegion::make_young_maybe() {
    case _cset:
    case _humongous_start:
    case _humongous_cont:
-     if (affiliation() != YOUNG_GENERATION) {
-       if (is_old()) {
-         ShenandoahHeap::heap()->old_generation()->decrement_affiliated_region_count();
-         ShenandoahHeap::heap()->old_generation()->decrease_capacity(region_size_bytes());
-       } else {
-         assert(!is_affiliated(), "Don't make young unless OLD or not already affiliated");
-       }
 
+
+
+     if (affiliation() != YOUNG_GENERATION) {
+       ShenandoahHeap* heap = ShenandoahHeap::heap();
+       if (heap->mode()->is_generational()) {
+         if (is_old()) {
+           heap->old_generation()->decrement_affiliated_region_count();
+           heap->old_generation()->decrease_capacity(region_size_bytes());
+         }
+         heap->young_generation()->increment_affiliated_region_count();
+         heap->young_generation()->increase_capacity(region_size_bytes());
+       }
        set_affiliation(YOUNG_GENERATION);
-       ShenandoahHeap::heap()->young_generation()->increment_affiliated_region_count();
-       ShenandoahHeap::heap()->young_generation()->increase_capacity(region_size_bytes());
      }
      return;
    case _pinned_cset:
