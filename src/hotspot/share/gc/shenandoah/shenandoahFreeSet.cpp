@@ -322,15 +322,14 @@ void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartition
 
 void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, ShenandoahFreeSetPartitionId orig_partition,
                                                                   ShenandoahFreeSetPartitionId new_partition, size_t available) {
-  ShenandoahHeapRegion* r;
+  ShenandoahHeapRegion* r = ShenandoahHeap::heap()->get_region(idx);
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert (orig_partition < NumPartitions, "Original partition must be valid");
   assert (new_partition < NumPartitions, "New partition must be valid");
   assert (available <= _region_size_bytes, "Available cannot exceed region size");
   assert (_membership[int(orig_partition)].is_set(idx), "Cannot move from partition unless in partition");
-  assert ((r = ShenandoahHeap::heap()->get_region(idx)) &&
-          ((r->is_trash() && (available == _region_size_bytes)) ||
-           (r->used() + available == _region_size_bytes)),
+  assert ((r != nullptr) && ((r->is_trash() && (available == _region_size_bytes)) ||
+                             (r->used() + available == _region_size_bytes)),
           "Used: " SIZE_FORMAT " + available: " SIZE_FORMAT " should equal region size: " SIZE_FORMAT,
           ShenandoahHeap::heap()->get_region(idx)->used(), available, _region_size_bytes);
 
@@ -2075,6 +2074,7 @@ double ShenandoahFreeSet::external_fragmentation() {
       max_contig = MAX2(max_contig, empty_contig);
       last_idx = index;
     }
+    index = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Mutator, index + 1);
   }
 
   if (free > 0) {
