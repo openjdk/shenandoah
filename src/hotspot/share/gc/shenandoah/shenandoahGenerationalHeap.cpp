@@ -622,7 +622,9 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
 
   // Decide how much old space we should reserve for a mixed collection
   size_t reserve_for_mixed = 0;
-  size_t reserve_for_promo = 0;
+  const size_t old_fragmented_available =
+    old_available - (old_generation()->free_unaffiliated_regions() + old_cset_regions) * region_size_bytes;
+  size_t reserve_for_promo = old_fragmented_available;
   const size_t mixed_candidate_live_memory = old_generation()->unprocessed_collection_candidates_live_memory();
   const bool doing_mixed = (mixed_candidate_live_memory > 0);
   if (doing_mixed) {
@@ -631,12 +633,9 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
     const size_t max_evac_need = (size_t) (mixed_candidate_live_memory * ShenandoahOldEvacWaste);
     assert(old_available >= old_generation()->free_unaffiliated_regions() * region_size_bytes,
            "Unaffiliated available must be less than total available");
-    const size_t old_fragmented_available =
-      old_available - (old_generation()->free_unaffiliated_regions() + old_cset_regions) * region_size_bytes;
 
     // max_old_reserve is very conservative.  Assumes we evacuate the entirety of mixed-evac candidates into
     // unfragmented memory.
-    reserve_for_promo = old_fragmented_available;
     reserve_for_mixed = max_evac_need;
 #ifdef KELVIN_RESERVES
     log_info(gc)("max_evac_need: " SIZE_FORMAT ", old_available: " SIZE_FORMAT ", old_fragmented_available: " SIZE_FORMAT,
