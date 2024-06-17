@@ -238,8 +238,8 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // on its next iteration and run a degenerated young cycle.
 
     // vmop_entry_final_updaterefs rebuilds free set in preparation for next GC.
-    vmop_entry_final_roots();
     _abbreviated = true;
+    vmop_entry_final_roots();
   }
 
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
@@ -351,7 +351,10 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
   op_final_roots();
-  ShenandoahHeap::heap()->rebuild_free_set(true /*concurrent*/);
+  if (_abbreviated) {
+    ShenandoahHeap::heap()->rebuild_free_set(true /*concurrent*/);
+  }
+  // else, this is the end of old marking
 }
 
 void ShenandoahConcurrentGC::entry_reset() {

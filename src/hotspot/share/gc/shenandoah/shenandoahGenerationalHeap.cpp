@@ -609,7 +609,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
                                   bound_on_old_reserve:
                                   MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                                        bound_on_old_reserve));
-#define KELVIN_RESERVES
+#undef KELVIN_RESERVES
 #ifdef KELVIN_RESERVES
   log_info(gc)("max_old_reserve: " SIZE_FORMAT ", bound_on_old_reserve: " SIZE_FORMAT
                ", old_available: " SIZE_FORMAT ", young_reserve: " SIZE_FORMAT ", mutator_xfer_limit: " SIZE_FORMAT,
@@ -622,6 +622,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
 
   // Decide how much old space we should reserve for a mixed collection
   size_t reserve_for_mixed = 0;
+  size_t reserve_for_promo = 0;
   const size_t mixed_candidate_live_memory = old_generation()->unprocessed_collection_candidates_live_memory();
   const bool doing_mixed = (mixed_candidate_live_memory > 0);
   if (doing_mixed) {
@@ -635,19 +636,26 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
 
     // max_old_reserve is very conservative.  Assumes we evacuate the entirety of mixed-evac candidates into
     // unfragmented memory.
-    reserve_for_mixed = max_evac_need + old_fragmented_available;
+    reserve_for_promo = old_fragmented_available;
+    reserve_for_mixed = max_evac_need;
 #ifdef KELVIN_RESERVES
     log_info(gc)("max_evac_need: " SIZE_FORMAT ", old_available: " SIZE_FORMAT ", old_fragmented_available: " SIZE_FORMAT,
                  max_evac_need, old_available, old_fragmented_available);
 #endif
-    if (reserve_for_mixed > max_old_reserve) {
-      reserve_for_mixed = max_old_reserve;
-    }
+    if (reserve_for_mixed + reserve_for_promo > max_old_reserve) {
+      size_t excess_reserves = (reserve_for_mixed + reserve_for_promo) - max_old_reserve;
+      if (reserve_for_promo > excess_reserves) {
+        reserve_for_promo -= excess_reserves;
+      } else {
+        excess_reserves -= reserve_for_promo;
+        reserve_for_promo = 0;
+        reserve_for_mixed -= excess_reserves;
+      }
+    } 
   }
 
-  // Decide how much space we should reserve for promotions from young.  We give priority to mixed evacations
+  // Decide how much additional space we should reserve for promotions from young.  We give priority to mixed evacations
   // over promotions.
-  size_t reserve_for_promo = 0;
   const size_t promo_load = old_generation()->get_promotion_potential();
 #ifdef KELVIN_RESERVES
   log_info(gc)("promo_load fetched from old-gen is: " SIZE_FORMAT ", times PromoEvacWaste: " SIZE_FORMAT
@@ -656,10 +664,19 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
 #endif
   const bool doing_promotions = promo_load > 0;
   if (doing_promotions) {
-    // We're promoting and have a bound on the maximum amount that can be promoted
-    assert(max_old_reserve >= reserve_for_mixed, "Sanity");
-    const size_t available_for_promotions = max_old_reserve - reserve_for_mixed;
-    reserve_for_promo = MIN2((size_t)(promo_load * ShenandoahPromoEvacWaste), available_for_promotions);
+    // We've already set aside all of the fragmented available memory within old-gen to represent old objects
+    // to be promoted from young generation.  promo_load represents the memory that we anticipate to be promoted
+    // from regions that have reached tenure age.  We find that several workloads (e.g. Extremem-phased and
+    // specjbb2015 perform better when we reserve additional promotion memory to hold aged objects that might
+    // be scattered throughout the young-gen collection set.  In the ideal, we will always use the fragmented
+    // old-gen memory to hold these objects, and will use unfragmented old-gen memory to represent the old-gen
+    // evacuation workload and the promo_load.
+
+    // We're promoting and have an esimate of memory to be promoted from aged regions
+    assert(max_old_reserve >= (reserve_for_mixed + reserve_for_promo), "Sanity");
+    const size_t available_for_additional_promotions = max_old_reserve - (reserve_for_mixed + reserve_for_promo);
+    size_t promo_need = (size_t)(promo_load * ShenandoahPromoEvacWaste);
+    reserve_for_promo += MIN2(promo_need, available_for_additional_promotions);
   }
 
   // This is the total old we want to reserve (initialized to the ideal reserve)
