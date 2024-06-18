@@ -396,7 +396,42 @@ public:
   HeapWord* allocate(ShenandoahAllocRequest& req, bool& in_new_region);
   size_t unsafe_peek_free() const;
 
+  /*
+   * Internal fragmentation metric: describes how fragmented the heap regions are.
+   *
+   * It is derived as:
+   *
+   *               sum(used[i]^2, i=0..k)
+   *   IF = 1 - ------------------------------
+   *              C * sum(used[i], i=0..k)
+   *
+   * ...where k is the number of regions in computation, C is the region capacity, and
+   * used[i] is the used space in the region.
+   *
+   * The non-linearity causes IF to be lower for the cases where the same total heap
+   * used is densely packed. For example:
+   *   a) Heap is completely full  => IF = 0
+   *   b) Heap is half full, first 50% regions are completely full => IF = 0
+   *   c) Heap is half full, each region is 50% full => IF = 1/2
+   *   d) Heap is quarter full, first 50% regions are completely full => IF = 0
+   *   e) Heap is quarter full, each region is 25% full => IF = 3/4
+   *   f) Heap has one small object per each region => IF =~ 1
+   */
   double internal_fragmentation();
+
+  /*
+   * External fragmentation metric: describes how fragmented the heap is.
+   *
+   * It is derived as:
+   *
+   *   EF = 1 - largest_contiguous_free / total_free
+   *
+   * For example:
+   *   a) Heap is completely empty => EF = 0
+   *   b) Heap is completely full => EF = 0
+   *   c) Heap is first-half full => EF = 1/2
+   *   d) Heap is half full, full and empty regions interleave => EF =~ 1
+   */
   double external_fragmentation();
 
   void print_on(outputStream* out) const;
