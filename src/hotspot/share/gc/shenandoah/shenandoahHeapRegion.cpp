@@ -121,25 +121,14 @@ void ShenandoahHeapRegion::make_regular_allocation(ShenandoahAffiliation affilia
 // behavior previously performed as a side effect of make_regular_bypass().  This is used by Full GC
 void ShenandoahHeapRegion::make_young_maybe() {
   shenandoah_assert_heaplocked();
+  assert(!ShenandoahHeap::heap()->mode()->is_generational(), "Only call if non-generational");
   switch (_state) {
    case _empty_uncommitted:
    case _empty_committed:
    case _cset:
    case _humongous_start:
    case _humongous_cont:
-
-
-
      if (affiliation() != YOUNG_GENERATION) {
-       ShenandoahHeap* heap = ShenandoahHeap::heap();
-       if (heap->mode()->is_generational()) {
-         if (is_old()) {
-           heap->old_generation()->decrement_affiliated_region_count();
-           heap->old_generation()->decrease_capacity(region_size_bytes());
-         }
-         heap->young_generation()->increment_affiliated_region_count();
-         heap->young_generation()->increase_capacity(region_size_bytes());
-       }
        set_affiliation(YOUNG_GENERATION);
      }
      return;
