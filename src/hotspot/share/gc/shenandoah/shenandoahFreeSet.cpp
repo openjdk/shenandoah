@@ -972,8 +972,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     return nullptr;
   }
   HeapWord* result = nullptr;
-  bool is_generational = _heap->mode()->is_generational();
-  try_recycle_trashed(r, is_generational);
+  try_recycle_trashed(r);
   in_new_region = r->is_empty();
 
   if (in_new_region) {
@@ -981,7 +980,6 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
                        r->index(), ShenandoahAllocRequest::alloc_type_to_string(req.type()), p2i(&req));
     assert(!r->is_affiliated(), "New region " SIZE_FORMAT " should be unaffiliated", r->index());
     r->set_affiliation(req.affiliation());
-    ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
     if (r->is_old()) {
       // Any OLD region allocated during concurrent coalesce-and-fill does not need to be coalesced and filled because
       // all objects allocated within this region are above TAMS (and thus are implicitly marked).  In case this is an
@@ -994,15 +992,17 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
     _heap->generation_for(r->affiliation())->increment_affiliated_region_count();
 
+#ifdef ASSERT
+    ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
     assert(ctx->top_at_mark_start(r) == r->bottom(), "Newly established allocation region starts with TAMS equal to bottom");
     assert(ctx->is_bitmap_clear_range(ctx->top_bitmap(r), r->end()), "Bitmap above top_bitmap() must be clear");
-
+#endif
     log_debug(gc)("Using new region (" SIZE_FORMAT ") for %s (" PTR_FORMAT ").",
                        r->index(), ShenandoahAllocRequest::alloc_type_to_string(req.type()), p2i(&req));
   } else {
     assert(r->is_affiliated(), "Region " SIZE_FORMAT " that is not new should be affiliated", r->index());
     if (r->affiliation() != req.affiliation()) {
-      assert(is_generational, "Request for %s from %s region should only happen in generational mode.",
+      assert(_heap->mode()->is_generational(), "Request for %s from %s region should only happen in generational mode.",
              req.affiliation_name(), r->affiliation_name());
       return nullptr;
     }
@@ -1014,7 +1014,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     size_t free = r->free();    // free represents bytes available within region r
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
       // This is a PLAB allocation
-      assert(is_generational, "PLABs are only for generational mode");
+      assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
       assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, r->index()),
              "PLABS must be allocated in old_collector_free regions");
 
@@ -1184,13 +1184,11 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   }
 
   size_t remainder = words_size & ShenandoahHeapRegion::region_size_words_mask();
-  ShenandoahMarkingContext* const ctx = _heap->complete_marking_context();
-
   bool is_generational = _heap->mode()->is_generational();
   // Initialize regions:
   for (idx_t i = beg; i <= end; i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
-    try_recycle_trashed(r, is_generational);
+    try_recycle_trashed(r);
 
     assert(i == beg || _heap->get_region(i - 1)->index() + 1 == r->index(), "Should be contiguous");
     assert(r->is_empty(), "Should be empty");
@@ -1232,7 +1230,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   return _heap->get_region(beg)->bottom();
 }
 
-void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r, bool is_generational) {
+void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
   if (r->is_trash()) {
     r->recycle();
   }
@@ -1241,12 +1239,11 @@ void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r, bool is_gen
 void ShenandoahFreeSet::recycle_trash() {
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
-  bool is_generational = _heap->mode()->is_generational();
   for (size_t i = 0; i < _heap->num_regions(); i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_trash()) {
       ShenandoahHeapLocker locker(_heap->lock());
-      try_recycle_trashed(r, is_generational);
+      try_recycle_trashed(r);
     }
     SpinPause(); // allow allocators to take the lock
   }

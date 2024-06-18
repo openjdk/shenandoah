@@ -329,7 +329,7 @@ private:
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
   void clear_internal();
-  void try_recycle_trashed(ShenandoahHeapRegion *r, bool is_generational);
+  void try_recycle_trashed(ShenandoahHeapRegion *r);
 
   // Returns true iff this region is entirely available, either because it is empty() or because it has been found to represent
   // immediate trash and we'll be able to immediately recycle it.  Note that we cannot recycle immediate trash if
