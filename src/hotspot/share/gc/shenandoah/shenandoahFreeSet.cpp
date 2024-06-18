@@ -175,7 +175,6 @@ void ShenandoahRegionPartitions::make_all_regions_unavailable() {
 void ShenandoahRegionPartitions::establish_mutator_intervals(idx_t mutator_leftmost, idx_t mutator_rightmost,
                                                              idx_t mutator_leftmost_empty, idx_t mutator_rightmost_empty,
                                                              size_t mutator_region_count, size_t mutator_used) {
-  _region_counts[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_region_count;
   _leftmosts[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_leftmost;
   _rightmosts[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_rightmost;
   _leftmosts_empty[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_leftmost_empty;
@@ -199,7 +198,6 @@ void ShenandoahRegionPartitions::establish_old_collector_intervals(idx_t old_col
                                                                    idx_t old_collector_leftmost_empty,
                                                                    idx_t old_collector_rightmost_empty,
                                                                    size_t old_collector_region_count, size_t old_collector_used) {
-  _region_counts[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count;
   _leftmosts[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_leftmost;
   _rightmosts[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_rightmost;
   _leftmosts_empty[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_leftmost_empty;
@@ -320,6 +318,23 @@ void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartition
   _region_counts[int(which_partition)]++;
 }
 
+bool ShenandoahRegionPartitions::is_mutator_partition(ShenandoahFreeSetPartitionId p) {
+  return (p == ShenandoahFreeSetPartitionId::Mutator);
+}
+
+bool ShenandoahRegionPartitions::is_young_collector_partition(ShenandoahFreeSetPartitionId p) {
+  return (p == ShenandoahFreeSetPartitionId::Collector);
+}
+
+bool ShenandoahRegionPartitions::is_old_collector_partition(ShenandoahFreeSetPartitionId p) {
+  return (p == ShenandoahFreeSetPartitionId::OldCollector);
+}
+
+bool ShenandoahRegionPartitions::available_implies_empty(size_t available_in_region) {
+  return (available_in_region == _region_size_bytes);
+}
+
+
 void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, ShenandoahFreeSetPartitionId orig_partition,
                                                                   ShenandoahFreeSetPartitionId new_partition, size_t available) {
   ShenandoahHeapRegion* r = ShenandoahHeap::heap()->get_region(idx);
@@ -341,18 +356,12 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   //                          Mutator empty => OldCollector
   // At start of update refs: Collector => Mutator
   //                          OldCollector Empty => Mutator
-  assert (((available <= _region_size_bytes) &&
-           ((((orig_partition == ShenandoahFreeSetPartitionId::Mutator)
-              && (new_partition == ShenandoahFreeSetPartitionId::Collector)) ||
-             ((orig_partition == ShenandoahFreeSetPartitionId::Collector)
-              && (new_partition == ShenandoahFreeSetPartitionId::Mutator))))) ||
-          ((available == _region_size_bytes) &&
-           (((orig_partition == ShenandoahFreeSetPartitionId::Mutator)
-             && (new_partition == ShenandoahFreeSetPartitionId::Collector)) ||
-            ((orig_partition == ShenandoahFreeSetPartitionId::Mutator)
-             && (new_partition == ShenandoahFreeSetPartitionId::OldCollector)) ||
-            ((orig_partition == ShenandoahFreeSetPartitionId::OldCollector)
-             && (new_partition == ShenandoahFreeSetPartitionId::Mutator)))),
+  assert ((is_mutator_partition(orig_partition) && is_young_collector_partition(new_partition)) ||
+          (is_mutator_partition(orig_partition) &&
+           available_implies_empty(available) && is_old_collector_partition(new_partition)) ||
+          (is_young_collector_partition(orig_partition) && is_mutator_partition(new_partition)) ||
+          (is_old_collector_partition(orig_partition)
+           && available_implies_empty(available) && is_mutator_partition(new_partition)),
           "Unexpected movement between partitions, available: " SIZE_FORMAT ", _region_size_bytes: " SIZE_FORMAT
           ", orig_partition: %s, new_partition: %s",
           available, _region_size_bytes, partition_name(orig_partition), partition_name(new_partition));

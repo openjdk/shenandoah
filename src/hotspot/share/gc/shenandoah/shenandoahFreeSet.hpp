@@ -95,6 +95,11 @@ private:
                                                                 ssize_t low_idx, ssize_t high_idx);
   inline void expand_interval_if_boundary_modified(ShenandoahFreeSetPartitionId partition, ssize_t idx, size_t capacity);
 
+  inline bool is_mutator_partition(ShenandoahFreeSetPartitionId p);
+  inline bool is_young_collector_partition(ShenandoahFreeSetPartitionId p);
+  inline bool is_old_collector_partition(ShenandoahFreeSetPartitionId p);
+  inline bool available_implies_empty(size_t available);
+
 #ifndef PRODUCT
   void dump_bitmap_row(ssize_t region_idx) const;
   void dump_bitmap_range(ssize_t start_region_idx, ssize_t end_region_idx) const;
