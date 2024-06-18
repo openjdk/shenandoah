@@ -2029,7 +2029,9 @@ double ShenandoahFreeSet::external_fragmentation() {
   idx_t last_idx = 0;
   size_t max_contig = 0;
   size_t empty_contig = 0;
+
   size_t free = 0;
+
   idx_t rightmost = _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator);
   for (idx_t index = _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator); index <= rightmost; ) {
     assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, index),
@@ -2040,12 +2042,13 @@ double ShenandoahFreeSet::external_fragmentation() {
       if (last_idx + 1 == index) {
         empty_contig++;
       } else {
-        empty_contig = 0;
+        empty_contig = 1;
       }
-
-      max_contig = MAX2(max_contig, empty_contig);
-      last_idx = index;
+    } else {
+      empty_contig = 0;
     }
+    max_contig = MAX2(max_contig, empty_contig);
+    last_idx = index;
     index = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Mutator, index + 1);
   }
 
