@@ -665,17 +665,19 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   if (doing_promotions) {
     // We've already set aside all of the fragmented available memory within old-gen to represent old objects
     // to be promoted from young generation.  promo_load represents the memory that we anticipate to be promoted
-    // from regions that have reached tenure age.  We find that several workloads (e.g. Extremem-phased and
-    // specjbb2015 perform better when we reserve additional promotion memory to hold aged objects that might
-    // be scattered throughout the young-gen collection set.  In the ideal, we will always use the fragmented
-    // old-gen memory to hold these objects, and will use unfragmented old-gen memory to represent the old-gen
-    // evacuation workload and the promo_load.
+    // from regions that have reached tenure age.  In the ideal, we will always use fragmented old-gen memory
+    // to hold individually promoted objects and will use unfragmented old-gen memory to represent the old-gen
+    // evacuation workloa.
 
     // We're promoting and have an esimate of memory to be promoted from aged regions
     assert(max_old_reserve >= (reserve_for_mixed + reserve_for_promo), "Sanity");
     const size_t available_for_additional_promotions = max_old_reserve - (reserve_for_mixed + reserve_for_promo);
     size_t promo_need = (size_t)(promo_load * ShenandoahPromoEvacWaste);
-    reserve_for_promo += MIN2(promo_need, available_for_additional_promotions);
+    if (promo_need > reserve_for_promo) {
+      reserve_for_promo += MIN2(promo_need - reserve_for_promo, available_for_additional_promotions);
+    }
+    // We've already reserved all the memory required for the promo_load, and possibly more.  The excess
+    // can be consumed by objects promoted from regions that have not yet reached tenure age.
   }
 
   // This is the total old we want to reserve (initialized to the ideal reserve)
