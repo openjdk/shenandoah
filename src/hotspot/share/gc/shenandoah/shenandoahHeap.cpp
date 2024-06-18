@@ -1028,8 +1028,7 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     // strategy is to try again, as long as GC makes progress (or until at least
     // one full GC has completed).
     size_t original_count = shenandoah_policy()->full_gc_count();
-    while (result == nullptr
-        && (get_gc_no_progress_count() == 0 || original_count == shenandoah_policy()->full_gc_count())) {
+    while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
       control_thread()->handle_alloc_failure(req, true);
       result = allocate_memory_under_lock(req, in_new_region);
     }
