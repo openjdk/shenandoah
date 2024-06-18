@@ -46,7 +46,7 @@ public class TestThreadFailure {
         public void run() {
             List<Object> root = new ArrayList<Object>();
             while (true) {
-              root.add(new Object[SIZE]);
+                root.add(new Object[SIZE]);
             }
         }
     }

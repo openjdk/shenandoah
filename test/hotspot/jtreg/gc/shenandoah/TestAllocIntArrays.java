@@ -208,7 +208,7 @@ public class TestAllocIntArrays {
         final int min = 0;
         final int max = 384 * 1024;
         // Each allocated int array is assumed to consume 16 bytes for alignment and header, plus
-        //  an everage of 4 * the average number of elements in the array.
+        //  an average of 4 * the average number of elements in the array.
         long count = TARGET_MB * 1024 * 1024 / (16 + 4 * (min + (max - min) / 2));
 
         Random r = Utils.getRandomInstance();
