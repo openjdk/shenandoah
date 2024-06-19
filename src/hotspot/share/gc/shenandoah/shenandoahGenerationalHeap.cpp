@@ -604,12 +604,12 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;
 
   // If ShenandoahOldEvacRatioPercent equals 100, max_old_reserve is limited only by mutator_xfer_limit and young_reserve
-  const size_t bound_on_old_reserve = old_available + mutator_xfer_limit + young_reserve;
+  const size_t bound_on_old_reserve = ((old_available + mutator_xfer_limit + young_reserve) * ShenandoahOldEvacRatioPercent) / 100;
   const size_t max_old_reserve = ((ShenandoahOldEvacRatioPercent == 100)?
                                   bound_on_old_reserve:
                                   MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                                        bound_on_old_reserve));
-#undef KELVIN_RESERVES
+#define KELVIN_RESERVES
 #ifdef KELVIN_RESERVES
   log_info(gc)("max_old_reserve: " SIZE_FORMAT ", bound_on_old_reserve: " SIZE_FORMAT
                ", old_available: " SIZE_FORMAT ", young_reserve: " SIZE_FORMAT ", mutator_xfer_limit: " SIZE_FORMAT,
@@ -682,7 +682,12 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
 
   // This is the total old we want to reserve (initialized to the ideal reserve)
   size_t old_reserve = reserve_for_mixed + reserve_for_promo;
-  assert(old_reserve <= max_old_reserve, "cannot reserve more than max for old evacuations");
+  if (old_reserve > max_old_reserve) {
+    // This may happen if fragmented old is larger than max_old_reserve
+    size_t old_overrun = old_reserve - max_old_reserve;
+    assert (old_overrun <= young_reserve, "sanity");
+    young_reserve -= old_overrun;
+  }
 
   // We now check if the old generation is running a surplus or a deficit.
   size_t old_region_deficit = 0;
