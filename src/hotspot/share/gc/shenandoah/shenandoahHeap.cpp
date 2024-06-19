@@ -988,8 +988,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     // This will notify the collector to start a cycle, but will raise
     // an OOME to the mutator if the last Full GCs have not made progress.
     // gc_no_progress_count is incremented following each degen or full GC that fails to achieve is_good_progress().
-    // Note that Generational Shenandoah may increment no_progress_count faster than traditional Shenandoah because young
-    // GCs, which may degenerate, typically occur more frequently than single-generation Global GCs.
     if ((result == nullptr) && !req.is_lab_alloc() && (get_gc_no_progress_count() > ShenandoahNoProgressThreshold)) {
       control_thread()->handle_alloc_failure(req, false);
       req.set_actual_size(0);

@@ -304,7 +304,10 @@ void ShenandoahDegenGC::op_degenerated() {
   // Check for futility and fail. There is no reason to do several back-to-back Degenerated cycles,
   // because that probably means the heap is overloaded and/or fragmented.
   if (!metrics.is_good_progress()) {
+#ifdef KELVIN_DEPRECATE
+    // We should only increment no-progress count following a full GC failure
     heap->notify_gc_no_progress();
+#endif
     heap->cancel_gc(GCCause::_shenandoah_upgrade_to_full_gc);
     op_degenerated_futile();
   } else {
