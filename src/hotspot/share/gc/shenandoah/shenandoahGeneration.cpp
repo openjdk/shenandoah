@@ -984,7 +984,7 @@ size_t ShenandoahGeneration::increase_capacity(size_t increment) {
   return _max_capacity;
 }
 
-size_t ShenandoahGeneration::establish_capacity(size_t byte_size) {
+size_t ShenandoahGeneration::set_capacity(size_t byte_size) {
   shenandoah_assert_heaplocked_or_safepoint();
   _max_capacity = byte_size;
   return _max_capacity;

@@ -1422,54 +1422,68 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
                 _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector));
 }
 
-void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_regions) {
+// Returns number of regions transferred, adds transferred bytes to var argument bytes_transferred
+size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId which_collector,
+                                                                                   size_t max_xfer_regions,
+                                                                                   size_t& bytes_transferred) {
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-  size_t collector_empty_xfer = 0;
-  size_t collector_not_empty_xfer = 0;
-  size_t old_collector_empty_xfer = 0;
+  size_t transferred_regions = 0;
+  ShenandoahHeapLocker locker(_heap->lock());
+  idx_t rightmost = _partitions.rightmost_empty(which_collector);
+  for (idx_t idx = _partitions.leftmost_empty(which_collector); (transferred_regions < max_xfer_regions) && (idx <= rightmost); ) {
+    assert(_partitions.in_free_set(which_collector, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
+    // Note: can_allocate_from() denotes that region is entirely empty
+    if (can_allocate_from(idx)) {
+      _partitions.move_from_partition_to_partition(idx, which_collector, ShenandoahFreeSetPartitionId::Mutator, region_size_bytes);
+      transferred_regions++;
+      bytes_transferred += region_size_bytes;
+    }
+    idx = _partitions.find_index_of_next_available_region(which_collector, idx + 1);
+  }
+  return transferred_regions;
+}
+
+// Returns number of regions transferred, adds transferred bytes to var argument bytes_transferred
+size_t ShenandoahFreeSet::transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId collector_id,
+                                                                                       size_t max_xfer_regions,
+                                                                                       size_t& bytes_transferred) {
+  size_t transferred_regions = 0;
+  ShenandoahHeapLocker locker(_heap->lock());
+  idx_t rightmost = _partitions.rightmost(collector_id);
+  for (idx_t idx = _partitions.leftmost(collector_id); (transferred_regions < max_xfer_regions) && (idx <= rightmost); ) {
+    assert(_partitions.in_free_set(collector_id, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
+    size_t ac = alloc_capacity(idx);
+    if (ac > 0) {
+      _partitions.move_from_partition_to_partition(idx, collector_id, ShenandoahFreeSetPartitionId::Mutator, ac);
+      transferred_regions++;
+      bytes_transferred += ac;
+    }
+    idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Collector, idx + 1);
+  }
+  return transferred_regions;
+}
+
+void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_regions) {
+  size_t collector_xfer = 0;
+  size_t old_collector_xfer = 0;
 
   // Process empty regions within the Collector free partition
   if ((max_xfer_regions > 0) &&
       (_partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Collector)
        <= _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Collector))) {
-    ShenandoahHeapLocker locker(_heap->lock());
-    idx_t rightmost = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Collector);
-    for (idx_t idx = _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Collector);
-         (max_xfer_regions > 0) && (idx <= rightmost); ) {
-      assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Collector, idx),
-             "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
-      // Note: can_allocate_from() denotes that region is entirely empty
-      if (can_allocate_from(idx)) {
-        _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Collector,
-                                                     ShenandoahFreeSetPartitionId::Mutator, region_size_bytes);
-        max_xfer_regions--;
-        collector_empty_xfer += region_size_bytes;
-      }
-      idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Collector, idx + 1);
-    }
+    max_xfer_regions -=
+      transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::Collector, max_xfer_regions,
+                                                               collector_xfer);
   }
 
   // Process empty regions within the OldCollector free partition
   if ((max_xfer_regions > 0) &&
       (_partitions.leftmost_empty(ShenandoahFreeSetPartitionId::OldCollector)
        <= _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::OldCollector))) {
-    ShenandoahHeapLocker locker(_heap->lock());
-    size_t old_collector_regions = 0;
-    idx_t rightmost = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::OldCollector);
-    for (idx_t idx = _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::OldCollector);
-         (max_xfer_regions > 0) && (idx <= rightmost); ) {
-      assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, idx),
-             "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
-      // Note: can_allocate_from() denotes that region is entirely empty
-      if (can_allocate_from(idx)) {
-        _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::OldCollector,
-                                                     ShenandoahFreeSetPartitionId::Mutator, region_size_bytes);
-        max_xfer_regions--;
-        old_collector_regions++;
-        old_collector_empty_xfer += region_size_bytes;
-      }
-      idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::OldCollector, idx + 1);
-    }
+    size_t old_collector_regions =
+      transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::OldCollector, max_xfer_regions,
+                                                               old_collector_xfer);
+    max_xfer_regions -= old_collector_regions;
     if (old_collector_regions > 0) {
       ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->transfer_to_young(old_collector_regions);
     }
@@ -1478,30 +1492,17 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
   // If there are any non-empty regions within Collector partition, we can also move them to the Mutator free partition
   if ((max_xfer_regions > 0) && (_partitions.leftmost(ShenandoahFreeSetPartitionId::Collector)
                                  <= _partitions.rightmost(ShenandoahFreeSetPartitionId::Collector))) {
-    ShenandoahHeapLocker locker(_heap->lock());
-    idx_t rightmost = _partitions.rightmost(ShenandoahFreeSetPartitionId::Collector);
-    for (idx_t idx = _partitions.leftmost(ShenandoahFreeSetPartitionId::Collector);
-         (max_xfer_regions > 0) && (idx <= rightmost); ) {
-      assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Collector, idx),
-             "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
-      size_t ac = alloc_capacity(idx);
-      if (ac > 0) {
-        _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Collector,
-                                                     ShenandoahFreeSetPartitionId::Mutator, ac);
-        max_xfer_regions--;
-        collector_not_empty_xfer += ac;
-      }
-      idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Collector, idx + 1);
-    }
+    max_xfer_regions -=
+      transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::Collector, max_xfer_regions,
+                                                                   collector_xfer);
   }
 
-  size_t collector_xfer = collector_empty_xfer + collector_not_empty_xfer;
-  size_t total_xfer = collector_xfer + old_collector_empty_xfer;
+  size_t total_xfer = collector_xfer + old_collector_xfer;
   log_info(gc, free)("At start of update refs, moving " SIZE_FORMAT "%s to Mutator free set from Collector Reserve ("
                      SIZE_FORMAT "%s) and from Old Collector Reserve (" SIZE_FORMAT "%s)",
                      byte_size_in_proper_unit(total_xfer), proper_unit_for_byte_size(total_xfer),
                      byte_size_in_proper_unit(collector_xfer), proper_unit_for_byte_size(collector_xfer),
-                     byte_size_in_proper_unit(old_collector_empty_xfer), proper_unit_for_byte_size(old_collector_empty_xfer));
+                     byte_size_in_proper_unit(old_collector_xfer), proper_unit_for_byte_size(old_collector_xfer));
 }
 
 
@@ -1526,8 +1527,8 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
     ShenandoahYoungGeneration* young_gen = heap->young_generation();
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
-    old_gen->establish_capacity(old_region_count * region_size_bytes);
-    young_gen->establish_capacity(young_region_count * region_size_bytes);
+    old_gen->set_capacity(old_region_count * region_size_bytes);
+    young_gen->set_capacity(young_region_count * region_size_bytes);
   }
 }
 

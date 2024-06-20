@@ -339,6 +339,14 @@ private:
 
   inline bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
 
+  size_t transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId which_collector,
+                                                                  size_t max_xfer_regions,
+                                                                  size_t& bytes_transferred);
+  size_t transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId collector_id,
+                                                                      size_t max_xfer_regions,
+                                                                      size_t& bytes_transferred);
+
+
   // Determine whether we prefer to allocate from left to right or from right to left within the OldCollector free-set.
   void establish_old_collector_alloc_bias();
 
@@ -354,21 +362,37 @@ public:
   inline size_t alloc_capacity(size_t idx) const;
 
   void clear();
+
+  // Examine the existing free set representation, capturing the current state into var arguments:
+  //
+  // young_cset_regions is the number of regions currently in the young cset if we are starting to evacuate, or zero
+  //   old_cset_regions is the number of regions currently in the old cset if we are starting a mixed evacuation, or zero
+  //   first_old_region is the index of the first region that is part of the OldCollector set
+  //    last_old_region is the index of the last region that is part of the OldCollector set
+  //   old_region_count is the number of regions in the OldCollector set that have memory available to be allocated
   void prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions,
                           size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
 
   // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
-  // hold the results of evacuating to young-gen and to old-gen.  These quantities, stored in reserves for their,
-  // respective generations, are consulted prior to rebuilding the free set (ShenandoahFreeSet) in preparation for
-  // evacuation.  When the free set is rebuilt, we make sure to reserve sufficient memory in the collector and
-  // old_collector sets to hold evacuations, if have_evacuation_reserves is true.  The other time we rebuild the free
-  // set is at the end of GC, as we prepare to idle GC until the next trigger.  In this case, have_evacuation_reserves
-  // is false because we don't yet know how much memory will need to be evacuated in the next GC cycle.  When
-  // have_evacuation_reserves is false, the free set rebuild operation reserves for the collector and old_collector sets
-  // based on alternative mechanisms, such as ShenandoahEvacReserve, ShenandoahOldEvacReserve, and
+  // hold the results of evacuating to young-gen and to old-gen, and have_evacuation_reserves should be true.
+  // These quantities, stored as reserves for their respective generations, are consulted prior to rebuilding
+  // the free set (ShenandoahFreeSet) in preparation for evacuation.  When the free set is rebuilt, we make sure
+  // to reserve sufficient memory in the collector and old_collector sets to hold evacuations.
+  //
+  // We also rebuild the free set at the end of GC, as we prepare to idle GC until the next trigger.  In this case, 
+  // have_evacuation_reserves is false because we don't yet know how much memory will need to be evacuated in the
+  // next GC cycle.  When have_evacuation_reserves is false, the free set rebuild operation reserves for the collector
+  // and old_collector sets based on alternative mechanisms, such as ShenandoahEvacReserve, ShenandoahOldEvacReserve, and
   // ShenandoahOldCompactionReserve.  In a future planned enhancement, the reserve for old_collector set when the
   // evacuation reserves are unknown, is based in part on anticipated promotion as determined by analysis of live data
   // found during the previous GC pass which is one less than the current tenure age.
+  //
+  // young_cset_regions is the number of regions currently in the young cset if we are starting to evacuate, or zero
+  //   old_cset_regions is the number of regions currently in the old cset if we are starting a mixed evacuation, or zero
+  //    num_old_regions is the number of old-gen regions that have available memory for further allocations (excluding old cset)
+  // have_evacuation_reserves is true iff the desired values of young-gen and old-gen evacuation reserves and old-gen
+  //                    promotion reserve have been precomputed (and can be obtained by invoking
+  //                    <generation>->get_evacuation_reserve() or old_gen->get_promoted_reserve()
   void finish_rebuild(size_t young_cset_regions, size_t old_cset_regions, size_t num_old_regions,
                       bool have_evacuation_reserves = false);
 
@@ -380,11 +404,6 @@ public:
   //
   // Typical usage: At the end of evacuation, when the collector no longer needs the regions that had been reserved
   // for evacuation, invoke this to make regions available for mutator allocations.
-  //
-  // Note that we plan to replenish the Collector reserve at the end of update refs, at which time all
-  // of the regions recycled from the collection set will be available.  In the very unlikely event that there
-  // are fewer regions in the collection set than remain in the collector's free set, we limit the transfer in order
-  // to assure that the replenished Collector reserves can be sufficiently large.
   void move_regions_from_collector_to_mutator(size_t cset_regions);
 
   void recycle_trash();
@@ -446,6 +465,14 @@ public:
   // capacity as NotFree.  Subsequently, we will move some of the mutator regions into the collector and old collector
   // partitions with the intent of packing old collector memory into the highest (far rightmost) addresses of the heap,
   // young collector memory into higher address, and mutator memory consuming the lowest addresses of the heap.
+  //
+  // Examine the existing free set representation, capturing the current state into var arguments:
+  //
+  // young_cset_regions is the number of regions currently in the young cset if we are starting to evacuate, or zero
+  //   old_cset_regions is the number of regions currently in the old cset if we are starting a mixed evacuation, or zero
+  //   first_old_region is the index of the first region that is part of the OldCollector set
+  //    last_old_region is the index of the last region that is part of the OldCollector set
+  //   old_region_count is the number of regions in the OldCollector set that have memory available to be allocated
   void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                         size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
 

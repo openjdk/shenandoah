@@ -147,12 +147,13 @@ private:
   void reset_bytes_allocated_since_gc_start();
   void increase_allocated(size_t bytes);
 
-  // These methods change the capacity of the region by adding or subtracting the given number of bytes from the current
-  // capacity.
+  // These methods change the capacity of the generation by adding or subtracting the given number of bytes from the current
+  // capacity, returning the capacity of the generation following the change.
   size_t increase_capacity(size_t increment);
   size_t decrease_capacity(size_t decrement);
 
-  size_t establish_capacity(size_t byte_size);
+  // Set the capacity of the generation, returning the value set
+  size_t set_capacity(size_t byte_size);
 
   void log_status(const char* msg) const;
 
