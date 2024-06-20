@@ -1426,9 +1426,9 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
 size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId which_collector,
                                                                                    size_t max_xfer_regions,
                                                                                    size_t& bytes_transferred) {
+  shenandoah_assert_heaplocked();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t transferred_regions = 0;
-  ShenandoahHeapLocker locker(_heap->lock());
   idx_t rightmost = _partitions.rightmost_empty(which_collector);
   for (idx_t idx = _partitions.leftmost_empty(which_collector); (transferred_regions < max_xfer_regions) && (idx <= rightmost); ) {
     assert(_partitions.in_free_set(which_collector, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
@@ -1447,8 +1447,8 @@ size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_s
 size_t ShenandoahFreeSet::transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId collector_id,
                                                                                        size_t max_xfer_regions,
                                                                                        size_t& bytes_transferred) {
+  shenandoah_assert_heaplocked();
   size_t transferred_regions = 0;
-  ShenandoahHeapLocker locker(_heap->lock());
   idx_t rightmost = _partitions.rightmost(collector_id);
   for (idx_t idx = _partitions.leftmost(collector_id); (transferred_regions < max_xfer_regions) && (idx <= rightmost); ) {
     assert(_partitions.in_free_set(collector_id, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
@@ -1471,6 +1471,7 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
   if ((max_xfer_regions > 0) &&
       (_partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Collector)
        <= _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Collector))) {
+    ShenandoahHeapLocker locker(_heap->lock());
     max_xfer_regions -=
       transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::Collector, max_xfer_regions,
                                                                collector_xfer);
@@ -1480,12 +1481,12 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
   if ((max_xfer_regions > 0) &&
       (_partitions.leftmost_empty(ShenandoahFreeSetPartitionId::OldCollector)
        <= _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::OldCollector))) {
+    ShenandoahHeapLocker locker(_heap->lock());
     size_t old_collector_regions =
       transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::OldCollector, max_xfer_regions,
                                                                old_collector_xfer);
     max_xfer_regions -= old_collector_regions;
     if (old_collector_regions > 0) {
-      ShenandoahHeapLocker locker(_heap->lock());
       ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->transfer_to_young(old_collector_regions);
     }
   }
@@ -1493,6 +1494,7 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
   // If there are any non-empty regions within Collector partition, we can also move them to the Mutator free partition
   if ((max_xfer_regions > 0) && (_partitions.leftmost(ShenandoahFreeSetPartitionId::Collector)
                                  <= _partitions.rightmost(ShenandoahFreeSetPartitionId::Collector))) {
+    ShenandoahHeapLocker locker(_heap->lock());
     max_xfer_regions -=
       transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::Collector, max_xfer_regions,
                                                                    collector_xfer);
