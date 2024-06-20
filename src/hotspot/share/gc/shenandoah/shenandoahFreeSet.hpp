@@ -379,7 +379,7 @@ public:
   // the free set (ShenandoahFreeSet) in preparation for evacuation.  When the free set is rebuilt, we make sure
   // to reserve sufficient memory in the collector and old_collector sets to hold evacuations.
   //
-  // We also rebuild the free set at the end of GC, as we prepare to idle GC until the next trigger.  In this case, 
+  // We also rebuild the free set at the end of GC, as we prepare to idle GC until the next trigger.  In this case,
   // have_evacuation_reserves is false because we don't yet know how much memory will need to be evacuated in the
   // next GC cycle.  When have_evacuation_reserves is false, the free set rebuild operation reserves for the collector
   // and old_collector sets based on alternative mechanisms, such as ShenandoahEvacReserve, ShenandoahOldEvacReserve, and
