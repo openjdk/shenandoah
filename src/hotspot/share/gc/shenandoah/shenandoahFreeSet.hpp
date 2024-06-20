@@ -266,7 +266,7 @@ public:
 // The Shenandoah garbage collector evacuates live objects out of specific regions that are identified as members of the
 // collection set (cset).
 //
-// The ShenandoahFreeSet endeavors to congregrate survivor objects (objects that have been evacuated at least once) at the
+// The ShenandoahFreeSet tries to colocate survivor objects (objects that have been evacuated at least once) at the
 // high end of memory.  New mutator allocations are taken from the low end of memory.  Within the mutator's range of regions,
 // humongous allocations are taken from the lowest addresses, and LAB (local allocation buffers) and regular shared allocations
 // are taken from the higher address of the mutator's range of regions.  This approach allows longer lasting survivor regions
@@ -291,8 +291,8 @@ private:
 
   HeapWord* allocate_aligned_plab(size_t size, ShenandoahAllocRequest& req, ShenandoahHeapRegion* r);
 
-  // Satisfy collector allocation request req by finding memory that matches affiliation from within the
-  // free partition associated with which_partition.
+  // Return the address of memory allocated, setting in_new_region to true iff the allocation is taken
+  // from a region that was previously empty.  Return nullptr if memory could not be allocated.
   inline HeapWord* allocate_from_partition_with_affiliation(ShenandoahFreeSetPartitionId which_partition,
                                                             ShenandoahAffiliation affiliation,
                                                             ShenandoahAllocRequest& req, bool& in_new_region);
