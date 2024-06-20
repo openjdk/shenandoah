@@ -462,11 +462,7 @@ public:
 
   // This function places all regions that have allocation capacity into the mutator partition, or if the region
   // is already affiliated with old, into the old collector partition, identifying regions that have no allocation
-  // capacity as NotFree.  Subsequently, we will move some of the mutator regions into the collector and old collector
-  // partitions with the intent of packing old collector memory into the highest (far rightmost) addresses of the heap,
-  // young collector memory into higher address, and mutator memory consuming the lowest addresses of the heap.
-  //
-  // Examine the existing free set representation, capturing the current state into var arguments:
+  // capacity as NotFree.  Capture the modified state of the freeset into var arguments:
   //
   // young_cset_regions is the number of regions currently in the young cset if we are starting to evacuate, or zero
   //   old_cset_regions is the number of regions currently in the old cset if we are starting a mixed evacuation, or zero
@@ -476,15 +472,10 @@ public:
   void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                         size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
 
-
-  // Having placed all regions that have allocation capacity into the mutator partition, move some of these regions from
-  // the mutator partition into the collector partition in order to assure that the memory available for allocations within
-  // the collector partition is at least to_reserve, and move others of these regions from the mutator partition into the
-  // old collector partition to assure that old collector partition has at least old_reserve.  Update old_region_count
-  // to represent the total number of regions in the old generation by adding the number of regions moved from the
-  // mutator partition to the old collector partition.
+  // Ensure that Collector has at least to_reserve bytes of available memory, and OldCollector has at least old_reserve
+  // bytes of available memory.  On input, old_region_count holds the number of regions already present in the
+  // OldCollector partition.  Upon return, old_region_count holds the updated number of regions in the OldCollector partition.
   void reserve_regions(size_t to_reserve, size_t old_reserve, size_t &old_region_count);
-
 
 
   void reserve_regions(size_t young_reserve, size_t old_reserve);

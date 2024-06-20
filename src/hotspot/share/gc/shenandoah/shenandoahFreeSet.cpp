@@ -1548,6 +1548,8 @@ void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cse
     old_reserve = 0;
   }
 
+  // Move some of the mutator regions in the Collector and OldCollector partitions in order to satisfy
+  // young_reserve and old_reserve.
   reserve_regions(young_reserve, old_reserve, old_region_count);
   size_t young_region_count = _heap->num_regions() - (old_region_count + old_cset_regions);
   establish_generation_sizes(young_region_count, old_region_count + old_cset_regions);
