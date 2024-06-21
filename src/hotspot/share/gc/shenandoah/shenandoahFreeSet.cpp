@@ -1179,6 +1179,34 @@ void ShenandoahFreeSet::rebuild(size_t young_cset_regions, size_t old_cset_regio
   log_status();
 }
 
+// Reduce old reserve (when there are insufficient resources to satisfy the original request).
+void ShenandoahFreeSet::reduce_old_reserve(size_t adjusted_old_reserve, size_t requested_old_reserve) {
+  ShenandoahOldGeneration* const old_generation = _heap->old_generation();
+  size_t requested_promoted_reserve = old_generation->get_promoted_reserve();
+  size_t requested_old_evac_reserve = old_generation->get_evacuation_reserve();
+  assert(adjusted_old_reserve < requested_old_reserve, "Only allow reduction");
+  assert(requested_promoted_reserve + requested_old_evac_reserve >= adjusted_old_reserve, "Sanity");
+  size_t delta = requested_old_reserve - adjusted_old_reserve;
+
+  if (requested_promoted_reserve >= delta) {
+    requested_promoted_reserve -= delta;
+    old_generation->set_promoted_reserve(requested_promoted_reserve);
+  } else {
+    delta -= requested_promoted_reserve;
+    requested_promoted_reserve = 0;
+    requested_old_evac_reserve -= delta;
+    old_generation->set_promoted_reserve(requested_promoted_reserve);
+    old_generation->set_evacuation_reserve(requested_old_evac_reserve);
+  }
+}
+
+// Reduce young reserve (when there are insufficient resources to satisfy the original request).
+void ShenandoahFreeSet::reduce_young_reserve(size_t adjusted_young_reserve, size_t requested_young_reserve) {
+  ShenandoahYoungGeneration* const young_generation = _heap->young_generation();
+  assert(adjusted_young_reserve < requested_young_reserve, "Only allow reduction");
+  young_generation->set_evacuation_reserve(adjusted_young_reserve);
+}
+
 void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions,
                                                        size_t& young_reserve_result, size_t& old_reserve_result) const {
   const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
@@ -1286,17 +1314,17 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     }
   }
 
-  if (LogTarget(Info, gc, free)::is_enabled()) {
-    size_t old_reserve = _free_sets.capacity_of(OldCollector);
-    if (old_reserve < to_reserve_old) {
-      log_info(gc, free)("Wanted " PROPERFMT " for old reserve, but only reserved: " PROPERFMT,
-                         PROPERFMTARGS(to_reserve_old), PROPERFMTARGS(old_reserve));
-    }
-    size_t young_reserve = _free_sets.capacity_of(Collector);
-    if (young_reserve < to_reserve) {
-      log_info(gc, free)("Wanted " PROPERFMT " for young reserve, but only reserved: " PROPERFMT,
-                         PROPERFMTARGS(to_reserve), PROPERFMTARGS(young_reserve));
-    }
+  size_t old_reserve = _free_sets.capacity_of(OldCollector);
+  if (old_reserve < to_reserve_old) {
+    reduce_old_reserve(old_reserve, to_reserve_old);
+    log_info(gc, free)("Wanted " PROPERFMT " for old reserve, but only reserved: " PROPERFMT,
+                       PROPERFMTARGS(to_reserve_old), PROPERFMTARGS(old_reserve));
+  }
+  size_t young_reserve = _free_sets.capacity_of(Collector);
+  if (young_reserve < to_reserve) {
+    reduce_young_reserve(young_reserve, to_reserve);
+    log_info(gc, free)("Wanted " PROPERFMT " for young reserve, but only reserved: " PROPERFMT,
+                       PROPERFMTARGS(to_reserve), PROPERFMTARGS(young_reserve));
   }
 }
 

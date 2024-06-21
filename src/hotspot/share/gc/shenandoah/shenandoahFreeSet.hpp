@@ -183,6 +183,9 @@ private:
   bool can_allocate_from(size_t idx) const;
   bool has_alloc_capacity(ShenandoahHeapRegion *r) const;
 
+  void reduce_young_reserve(size_t adjusted_young_reserve, size_t requested_young_reserve);
+  void reduce_old_reserve(size_t adjusted_old_reserve, size_t requested_old_reserve);
+
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
