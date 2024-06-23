@@ -647,7 +647,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
   return old_consumed;
 }
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
 static void validate_young_gen_size(ShenandoahHeap* heap) {
   ShenandoahYoungGeneration* young_gen = heap->young_generation();

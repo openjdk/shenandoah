@@ -1535,6 +1535,52 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
   }
 }
 
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+static void validate_young_gen_size(ShenandoahHeap* heap, size_t young_cset_regions, size_t old_cset_regions,
+                                    size_t young_region_count, size_t old_region_count, size_t original_old_region_count,
+                                    size_t young_reserve, size_t old_reserve) {
+  ShenandoahYoungGeneration* young_gen = heap->young_generation();
+  ShenandoahOldGeneration* old_gen = heap->old_generation();
+  size_t young_capacity = young_gen->max_capacity();
+  size_t young_used = young_gen->used();
+  size_t young_used_regions = young_gen->used_regions();
+  size_t pad_for_promote_in_place = old_gen->get_pad_for_promote_in_place();
+
+  size_t free_count = 0;
+  size_t old_count = 0;
+  size_t young_count = 0;
+
+  for (size_t i = 0; i < heap->num_regions(); i++) {
+    ShenandoahHeapRegion* r = heap->get_region(i);
+    switch (r->affiliation()) {
+      case FREE:
+        free_count++;
+        break;
+      case YOUNG_GENERATION:
+        young_count++;
+        break;
+      case OLD_GENERATION:
+        old_count++;
+        break;
+      default:
+        ShouldNotReachHere();
+    }
+  }
+  size_t num_regions = heap->num_regions();
+  assert (young_count * ShenandoahHeapRegion::region_size_bytes() <= young_capacity,
+          "young_count (" SIZE_FORMAT ") * region_size (" SIZE_FORMAT ") must be <= young_capacity (" SIZE_FORMAT
+          "): free_count (" SIZE_FORMAT "), old_count (" SIZE_FORMAT "), num_regions (" SIZE_FORMAT
+          "), free_set->capacity (" SIZE_FORMAT "), free_set->used (" SIZE_FORMAT "), free_set->available (" SIZE_FORMAT
+          "), young_cset_regions (" SIZE_FORMAT "), old_cset_regions (" SIZE_FORMAT "), young_region_count (" SIZE_FORMAT
+          "), old_region_count (" SIZE_FORMAT "), original_old_region_count (" SIZE_FORMAT "), young_reserve (" SIZE_FORMAT
+          "), old_reserve (" SIZE_FORMAT ")",
+          young_count, ShenandoahHeapRegion::region_size_bytes(), young_capacity, free_count, old_count, num_regions,
+          heap->free_set()->capacity(), heap->free_set()->used(), heap->free_set()->available(), young_cset_regions,
+          old_cset_regions, young_region_count, old_region_count, original_old_region_count, young_reserve, old_reserve);
+}
+#endif
+
 void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cset_regions, size_t old_region_count,
                                        bool have_evacuation_reserves) {
   shenandoah_assert_heaplocked();
@@ -1548,6 +1594,9 @@ void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cse
     old_reserve = 0;
   }
 
+#ifdef KELVIN_DEBUG
+  size_t original_old_region_count = old_region_count;
+#endif
   // Move some of the mutator regions in the Collector and OldCollector partitions in order to satisfy
   // young_reserve and old_reserve.
   reserve_regions(young_reserve, old_reserve, old_region_count);
@@ -1555,6 +1604,15 @@ void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cse
   establish_generation_sizes(young_region_count, old_region_count + old_cset_regions);
   establish_old_collector_alloc_bias();
   _partitions.assert_bounds();
+
+
+#ifdef KELVIN_DEBUG
+  if (_heap->mode()->is_generational()) {
+    validate_young_gen_size(_heap, young_cset_regions, old_cset_regions, young_region_count, old_region_count,
+                            original_old_region_count, young_reserve, old_reserve);
+  }
+#endif
+
   log_status();
 }
 
@@ -1657,7 +1715,16 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 
     if (move_to_old_collector) {
       if (r->is_trash() || !r->is_affiliated()) {
-        // OLD regions that have available memory are already in the old_collector free set
+        // OLD regions that have available memory are already in the old_collector free set.
+#ifdef KELVIN_DEBUG
+        // OLD trashed (CSET) regions are also already in the old_collector free set.
+        // It looks to me like we should test (r->is_trash() && r->is_young()) above.  The failure to do so
+        // might possibly account for double-counting of certain regions within the old_region_count.  The problem
+        // with this hypothesis is it does not explain why we did not experience an assertion failure in
+        // _partitions.move_from_partition_to_partition() below.  But if this assertion fails, that is a good
+        // clue of where the problem arises.
+        assert(!r->is_old(), "Expecting old is-trashed regions to already be in the OldCollector partition");
+#endif
         _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
                                                      ShenandoahFreeSetPartitionId::OldCollector, ac);
         log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
