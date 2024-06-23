@@ -108,16 +108,29 @@ void ShenandoahMmuTracker::update_utilization(size_t gcid, const char* msg) {
                        msg, _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_period);
   }
 }
+#undef KELVIN_DEBUG_WO_LOGGING
 
 void ShenandoahMmuTracker::record_young(size_t gcid) {
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("GC(" SIZE_FORMAT "): record young\n", gcid);
+  fflush(stdout);
+#endif
   update_utilization(gcid, "Concurrent Young GC");
 }
 
 void ShenandoahMmuTracker::record_global(size_t gcid) {
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("GC(" SIZE_FORMAT "): record global\n", gcid);
+  fflush(stdout);
+#endif
   update_utilization(gcid, "Concurrent Global GC");
 }
 
 void ShenandoahMmuTracker::record_bootstrap(size_t gcid) {
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("GC(" SIZE_FORMAT "): record bootstrap\n", gcid);
+  fflush(stdout);
+#endif
   // Not likely that this will represent an "ideal" GCU, but doesn't hurt to try
   update_utilization(gcid, "Concurrent Bootstrap GC");
 }
@@ -126,6 +139,11 @@ void ShenandoahMmuTracker::record_old_marking_increment(bool old_marking_done) {
   // No special processing for old marking
   double now = os::elapsedTime();
   double duration = now - _most_recent_timestamp;
+
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("     record %sold marking increment\n", old_marking_done? "last ": "");
+  fflush(stdout);
+#endif
 
   double gc_time, mutator_time;
   fetch_cpu_times(gc_time, mutator_time);
@@ -137,10 +155,18 @@ void ShenandoahMmuTracker::record_old_marking_increment(bool old_marking_done) {
 }
 
 void ShenandoahMmuTracker::record_mixed(size_t gcid) {
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("GC(" SIZE_FORMAT "): record mixed\n", gcid);
+  fflush(stdout);
+#endif
   update_utilization(gcid, "Mixed Concurrent GC");
 }
 
 void ShenandoahMmuTracker::record_degenerated(size_t gcid, bool is_old_bootstrap) {
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("GC(" SIZE_FORMAT "): record degenerated\n", gcid);
+  fflush(stdout);
+#endif
   if ((gcid == _most_recent_gcid) && _most_recent_is_full) {
     // Do nothing.  This is a redundant recording for the full gc that just completed.
     // TODO: avoid making the call to record_degenerated() in the case that this degenerated upgraded to full gc.
@@ -152,6 +178,10 @@ void ShenandoahMmuTracker::record_degenerated(size_t gcid, bool is_old_bootstrap
 }
 
 void ShenandoahMmuTracker::record_full(size_t gcid) {
+#ifdef KELVIN_DEBUG_WO_LOGGING
+  printf("GC(" SIZE_FORMAT "): record full\n", gcid);
+  fflush(stdout);
+#endif
   update_utilization(gcid, "Full GC");
   _most_recent_is_full = true;
 }

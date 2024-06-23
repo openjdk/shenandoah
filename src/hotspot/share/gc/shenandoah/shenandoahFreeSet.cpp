@@ -1745,9 +1745,19 @@ void ShenandoahFreeSet::establish_old_collector_alloc_bias() {
 void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+#undef ASSERT
+#define ASSERT
+#endif
+
 #ifdef ASSERT
   // Dump of the FreeSet details is only enabled if assertions are enabled
+#ifdef KELVIN_DEBUG
+  {
+#else
   if (LogTarget(Debug, gc, free)::is_enabled()) {
+#endif
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
@@ -1769,6 +1779,24 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
+
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("FreeSet map legend:"
+                 " M:mutator_free C:collector_free O:old_collector_free"
+                 " H:humongous ~:retired old _:retired young");
+    log_info(gc)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocating from %s, "
+                 " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
+                 "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocates from %s",
+                 _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
+                 _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator),
+                 _partitions.alloc_from_left_bias(ShenandoahFreeSetPartitionId::Mutator)? "left to right": "right to left",
+                 _partitions.leftmost(ShenandoahFreeSetPartitionId::Collector),
+                 _partitions.rightmost(ShenandoahFreeSetPartitionId::Collector),
+                 _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector),
+                 _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector),
+                 _partitions.alloc_from_left_bias(ShenandoahFreeSetPartitionId::OldCollector)? "left to right": "right to left");
+#endif
     log_debug(gc)("FreeSet map legend:"
                        " M:mutator_free C:collector_free O:old_collector_free"
                        " H:humongous ~:retired old _:retired young");
@@ -1788,6 +1816,9 @@ void ShenandoahFreeSet::log_status() {
       ShenandoahHeapRegion *r = _heap->get_region(i);
       uint idx = i % 64;
       if ((i != 0) && (idx == 0)) {
+#ifdef KELVIN_DEBUG
+        log_info(gc)(" %6u: %s", i-64, buffer);
+#endif
         log_debug(gc)(" %6u: %s", i-64, buffer);
       }
       if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, i)) {
@@ -1833,6 +1864,9 @@ void ShenandoahFreeSet::log_status() {
     } else {
       remnant = 64;
     }
+#ifdef KELVIN_DEBUG
+    log_info(gc)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
+#endif
     log_debug(gc)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
   }
 #endif
