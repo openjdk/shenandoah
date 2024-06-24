@@ -201,7 +201,7 @@ bool ShenandoahOldHeuristics::add_old_regions_to_cset(ShenandoahCollectionSet* c
 #endif
         break;
       }
-    }    
+    }
     collection_set->add_region(r);
     included_old_regions++;
     evacuated_old_bytes += live_data_for_evacuation;

@@ -170,7 +170,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   bool doing_promote_in_place = (humongous_regions_promoted + regular_regions_promoted_in_place > 0);
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     // Only young collections need to prime the collection set.
-    
+
     bool need_to_finalize_piggyback = false;
     size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
       fragmented_available,excess_fragmented_available;

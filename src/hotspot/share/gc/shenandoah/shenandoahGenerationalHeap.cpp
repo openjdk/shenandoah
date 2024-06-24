@@ -664,7 +664,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
         reserve_for_promo = 0;
         reserve_for_mixed -= excess_reserves;
       }
-    } 
+    }
   }
 
   // Decide how much additional space we should reserve for promotions from young.  We give priority to mixed evacations
@@ -786,7 +786,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
 
   assert(old_region_deficit == 0 || old_region_surplus == 0, "Only surplus or deficit, never both");
   assert(young_reserve + reserve_for_mixed + reserve_for_promo <= old_available + young_available,
-         "Cannot reserve more memory than is available: " SIZE_FORMAT " + " SIZE_FORMAT " + " SIZE_FORMAT " <= " 
+         "Cannot reserve more memory than is available: " SIZE_FORMAT " + " SIZE_FORMAT " + " SIZE_FORMAT " <= "
          SIZE_FORMAT " + " SIZE_FORMAT, young_reserve, reserve_for_mixed, reserve_for_promo, old_available, young_available);
 
   // deficit/surplus adjustments to generation sizes will precede rebuild
