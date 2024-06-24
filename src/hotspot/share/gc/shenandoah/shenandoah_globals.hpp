@@ -219,7 +219,7 @@
           "cases. In percents of (soft) max heap size.")                    \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahLearningSteps, 10, EXPERIMENTAL,                 \
+  product(uintx, ShenandoahLearningSteps, 5, EXPERIMENTAL,                  \
           "The number of cycles some heuristics take to collect in order "  \
           "to learn application and GC performance.")                       \
           range(0,100)                                                      \
@@ -253,7 +253,7 @@
           "the heuristic is to allocation spikes. Decreasing this number "  \
           "increases the sensitivity. ")                                    \
                                                                             \
-  product(double, ShenandoahAdaptiveDecayFactor, 0.1, EXPERIMENTAL,         \
+  product(double, ShenandoahAdaptiveDecayFactor, 0.5, EXPERIMENTAL,         \
           "The decay factor (alpha) used for values in the weighted "       \
           "moving average of cycle time and allocation rate. "              \
           "Larger values give more weight to recent values.")               \
@@ -382,26 +382,6 @@
           "GC cycle.  Smaller values increase the risk of evacuation "      \
           "failures, which will trigger stop-the-world Full GC passes.")    \
           range(1.0,100.0)                                                  \
-                                                                            \
-  product(uintx, ShenandoahMaxEvacLABRatio, 0, EXPERIMENTAL,                \
-          "Potentially, each running thread maintains a PLAB for "          \
-          "evacuating objects into old-gen memory and a GCLAB for "         \
-          "evacuating objects into young-gen memory.  Each time a thread "  \
-          "exhausts its PLAB or GCLAB, a new local buffer is allocated. "   \
-          "By default, the new buffer is twice the size of the previous "   \
-          "buffer.  The sizes are reset to the minimum at the start of "    \
-          "each GC pass.  This parameter limits the growth of evacuation "  \
-          "buffer sizes to its value multiplied by the minimum buffer "     \
-          "size.  A higher value allows evacuation allocations to be more " \
-          "efficient because less synchronization is required by "          \
-          "individual threads.  However, a larger value increases the "     \
-          "likelihood of evacuation failures, leading to long "             \
-          "stop-the-world pauses.  This is because a large value "          \
-          "allows individual threads to consume large percentages of "      \
-          "the total evacuation budget without necessarily effectively "    \
-          "filling their local evacuation buffers with evacuated "          \
-          "objects.  A value of zero means no maximum size is enforced.")   \
-          range(0, 1024)                                                    \
                                                                             \
   product(bool, ShenandoahEvacReserveOverflow, true, EXPERIMENTAL,          \
           "Allow evacuations to overflow the reserved space. Enabling it "  \

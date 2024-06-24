@@ -46,7 +46,7 @@ ShenandoahOldGC::ShenandoahOldGC(ShenandoahOldGeneration* generation, Shenandoah
 // override the implementation.
 void ShenandoahOldGC::op_final_mark() {
 
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  ShenandoahGenerationalHeap* const heap = ShenandoahGenerationalHeap::heap();
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Should be at safepoint");
   assert(!heap->has_forwarded_objects(), "No forwarded objects on this path");
 
@@ -110,6 +110,12 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
 
   // Complete marking under STW
   vmop_entry_final_mark();
+
+  if (_generation->is_concurrent_mark_in_progress()) {
+    assert(heap->cancelled_gc(), "Safepoint operation observed gc cancellation");
+    // GC may have been cancelled before final mark, but after the preceding cancellation check.
+    return false;
+  }
 
   // We aren't dealing with old generation evacuation yet. Our heuristic
   // should not have built a cset in final mark.
