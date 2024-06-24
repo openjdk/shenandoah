@@ -1352,25 +1352,8 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
       // Do not add regions that would almost surely fail allocation
       size_t ac = alloc_capacity(region);
       if (ac > PLAB::min_size() * HeapWordSize) {
-        if (region->is_old()) {
-          _partitions.raw_assign_membership(idx, ShenandoahFreeSetPartitionId::OldCollector);
-          if (idx < old_collector_leftmost) {
-            old_collector_leftmost = idx;
-          }
-          if (idx > old_collector_rightmost) {
-            old_collector_rightmost = idx;
-          }
-          if (ac == region_size_bytes) {
-            if (idx < old_collector_leftmost_empty) {
-              old_collector_leftmost_empty = idx;
-            }
-            if (idx > old_collector_rightmost_empty) {
-              old_collector_rightmost_empty = idx;
-            }
-          }
-          old_collector_regions++;
-          old_collector_used += (region_size_bytes - ac);
-        } else {
+        if (region->is_trash() || !region->is_old()) {
+          // Both young and old collected regions (trashed) are placed into the Mutator set
           _partitions.raw_assign_membership(idx, ShenandoahFreeSetPartitionId::Mutator);
           if (idx < mutator_leftmost) {
             mutator_leftmost = idx;
@@ -1388,6 +1371,25 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
           }
           mutator_regions++;
           mutator_used += (region_size_bytes - ac);
+        } else {
+          // !region->is_trash() && region is_old()
+          _partitions.raw_assign_membership(idx, ShenandoahFreeSetPartitionId::OldCollector);
+          if (idx < old_collector_leftmost) {
+            old_collector_leftmost = idx;
+          }
+          if (idx > old_collector_rightmost) {
+            old_collector_rightmost = idx;
+          }
+          if (ac == region_size_bytes) {
+            if (idx < old_collector_leftmost_empty) {
+              old_collector_leftmost_empty = idx;
+            }
+            if (idx > old_collector_rightmost_empty) {
+              old_collector_rightmost_empty = idx;
+            }
+          }
+          old_collector_regions++;
+          old_collector_used += (region_size_bytes - ac);
         }
       }
     }
@@ -1518,7 +1520,7 @@ void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &o
   log_debug(gc, free)("Rebuilding FreeSet");
 
   // This places regions that have alloc_capacity into the old_collector set if they identify as is_old() or the
-  // mutator set otherwise.
+  // mutator set otherwise.  All trashed (cset) regions are affiliated young and placed in mutator set.
   find_regions_with_alloc_capacity(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
 }
 
@@ -1600,11 +1602,10 @@ void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cse
   // Move some of the mutator regions in the Collector and OldCollector partitions in order to satisfy
   // young_reserve and old_reserve.
   reserve_regions(young_reserve, old_reserve, old_region_count);
-  size_t young_region_count = _heap->num_regions() - (old_region_count + old_cset_regions);
-  establish_generation_sizes(young_region_count, old_region_count + old_cset_regions);
+  size_t young_region_count = _heap->num_regions() - old_region_count;
+  establish_generation_sizes(young_region_count, old_region_count);
   establish_old_collector_alloc_bias();
   _partitions.assert_bounds();
-
 
 #ifdef KELVIN_DEBUG
   if (_heap->mode()->is_generational()) {
@@ -1631,18 +1632,19 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
 
   // Add in the regions we anticipate to be freed by evacuation of the collection set
   old_unaffiliated_regions += old_cset_regions;
-  old_available += old_cset_regions * region_size_bytes;
   young_unaffiliated_regions += young_cset_regions;
 
   // Consult old-region balance to make adjustments to current generation capacities and availability.
   // The generation region transfers take place after we rebuild.
   const ssize_t old_region_balance = old_generation->get_region_balance();
+#ifdef ASSERT
   if (old_region_balance != 0) {
     if (old_region_balance > 0) {
       assert(old_region_balance <= checked_cast<ssize_t>(old_unaffiliated_regions), "Cannot transfer regions that are affiliated");
     } else {
       assert(0 - old_region_balance <= checked_cast<ssize_t>(young_unaffiliated_regions), "Cannot transfer regions that are affiliated");
     }
+#endif
 
     ssize_t xfer_bytes = old_region_balance * checked_cast<ssize_t>(region_size_bytes);
     old_available -= xfer_bytes;
@@ -1683,7 +1685,7 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
       _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes;
   }
 
-  if (old_reserve_result > young_unaffiliated_regions * region_size_bytes) {
+  if (young_reserve_result > young_unaffiliated_regions * region_size_bytes) {
     young_reserve_result = young_unaffiliated_regions * region_size_bytes;
   }
 }
@@ -1714,9 +1716,15 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     }
 
     if (move_to_old_collector) {
+      // We give priority to OldCollector partition because we desire to pack OldCollector regions into higher
+      // addresses than Collector regions.  Presumably, OldCollector regions are more "stable" and less likely to
+      // be collected in the near future.
       if (r->is_trash() || !r->is_affiliated()) {
         // OLD regions that have available memory are already in the old_collector free set.
-#ifdef KELVIN_DEBUG
+#ifdef KELVIN_DEPRECATE
+        // I was puzzling over this code here.  My confusion arose because I overlooked that this loop exits early
+        // (continues) if idx is not in the Mutator partition.
+
         // OLD trashed (CSET) regions are also already in the old_collector free set.
         // It looks to me like we should test (r->is_trash() && r->is_young()) above.  The failure to do so
         // might possibly account for double-counting of certain regions within the old_region_count.  The problem
