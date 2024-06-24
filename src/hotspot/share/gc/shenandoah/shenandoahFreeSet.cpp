@@ -1537,7 +1537,7 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
   }
 }
 
-#define KELVIN_DEBUG
+#undef KELVIN_DEBUG
 #ifdef KELVIN_DEBUG
 static void validate_young_gen_size(ShenandoahHeap* heap, size_t young_cset_regions, size_t old_cset_regions,
                                     size_t young_region_count, size_t old_region_count, size_t original_old_region_count,
