@@ -1637,8 +1637,8 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   // Consult old-region balance to make adjustments to current generation capacities and availability.
   // The generation region transfers take place after we rebuild.
   const ssize_t old_region_balance = old_generation->get_region_balance();
-#ifdef ASSERT
   if (old_region_balance != 0) {
+#ifdef ASSERT
     if (old_region_balance > 0) {
       assert(old_region_balance <= checked_cast<ssize_t>(old_unaffiliated_regions), "Cannot transfer regions that are affiliated");
     } else {
