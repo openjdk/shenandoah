@@ -1705,7 +1705,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 
     size_t ac = alloc_capacity(r);
     assert (ac > 0, "Membership in free set implies has capacity");
-    assert (!r->is_old(), "mutator_is_free regions should not be affiliated OLD");
+    assert (!r->is_old() || r->is_trash(), "Except for trash, mutator_is_free regions should not be affiliated OLD");
 
     bool move_to_old_collector = _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) < to_reserve_old;
     bool move_to_collector = _partitions.capacity_of(ShenandoahFreeSetPartitionId::Collector) < to_reserve;
@@ -1898,13 +1898,13 @@ void ShenandoahFreeSet::log_status() {
       }
       if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, i)) {
         size_t capacity = alloc_capacity(r);
-        assert(!r->is_old(), "Old regions should not be in mutator_free set");
+        assert(!r->is_old() || r->is_trash(), "Old regions except trash regions should not be in mutator_free set");
         available_mutator += capacity;
         consumed_mutator += region_size_bytes - capacity;
         buffer[idx] = (capacity == region_size_bytes)? 'M': 'm';
       } else if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::Collector, i)) {
         size_t capacity = alloc_capacity(r);
-        assert(!r->is_old(), "Old regions should not be in collector_free set");
+        assert(!r->is_old() || r->is_trash(), "Old regions except trash regions should not be in collector_free set");
         available_collector += capacity;
         consumed_collector += region_size_bytes - capacity;
         buffer[idx] = (capacity == region_size_bytes)? 'C': 'c';
