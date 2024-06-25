@@ -381,89 +381,6 @@ public:
   size_t non_trashed_span() const { return (_regions - _trashed_regions) * ShenandoahHeapRegion::region_size_bytes(); }
 };
 
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-class ShenandoahNoDumpDetails : public ShenandoahHeapRegionClosure {
-private:
-  size_t _used, _committed, _garbage, _regions, _humongous_waste;
-public:
-  ShenandoahNoDumpDetails() : _used(0), _committed(0), _garbage(0), _regions(0), _humongous_waste(0) {};
-
-  void heap_region_do(ShenandoahHeapRegion* r) override {
-    _used += r->used();
-    _garbage += r->garbage();
-    _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
-    if (r->is_humongous()) {
-      _humongous_waste += r->free();
-    }
-    _regions++;
-    // log_info(gc)("ShenandoahNoDumpDetails: adding " SIZE_FORMAT " for %s Region " SIZE_FORMAT ", yielding: " SIZE_FORMAT,
-    //              r->used(), (r->is_humongous() ? "humongous" : "regular"), r->index(), _used);
-  }
-
-  size_t used() const { return _used; }
-  size_t committed() const { return _committed; }
-  size_t garbage() const { return _garbage; }
-  size_t regions() const { return _regions; }
-  size_t waste() const { return _humongous_waste; }
-
-  // span is the total memory affiliated with these stats (some of which is in use and other is available)
-  size_t span() const { return _regions * ShenandoahHeapRegion::region_size_bytes(); }
-};
-
-class ShenandoahDumpDetails : public ShenandoahHeapRegionClosure {
-private:
-  size_t _used, _committed, _garbage, _regions, _humongous_waste;
-public:
-  ShenandoahDumpDetails() : _used(0), _committed(0), _garbage(0), _regions(0), _humongous_waste(0) {};
-
-  void heap_region_do(ShenandoahHeapRegion* r) override {
-    _used += r->used();
-    _garbage += r->garbage();
-    _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
-    if (r->is_humongous()) {
-      _humongous_waste += r->free();
-    }
-    _regions++;
-    log_info(gc)("ShenandoahDumpDetails: adding " SIZE_FORMAT " for %s Region " SIZE_FORMAT ", yielding: " SIZE_FORMAT,
-            r->used(), (r->is_humongous() ? "humongous" : "regular"), r->index(), _used);
-  }
-
-  size_t used() const { return _used; }
-  size_t committed() const { return _committed; }
-  size_t garbage() const { return _garbage; }
-  size_t regions() const { return _regions; }
-  size_t waste() const { return _humongous_waste; }
-
-  // span is the total memory affiliated with these stats (some of which is in use and other is available)
-  size_t span() const { return _regions * ShenandoahHeapRegion::region_size_bytes(); }
-};
-
-class ShenandoahDebugVerificationClosure: public ShenandoahHeapRegionClosure {
- public:
-  ShenandoahNoDumpDetails old;
-  ShenandoahDumpDetails young;
-  ShenandoahNoDumpDetails global;
-
-  void heap_region_do(ShenandoahHeapRegion* r) override {
-    switch (r->affiliation()) {
-      case FREE:
-        return;
-      case YOUNG_GENERATION:
-        young.heap_region_do(r);
-        global.heap_region_do(r);
-        break;
-      case OLD_GENERATION:
-        old.heap_region_do(r);
-        global.heap_region_do(r);
-        break;
-      default:
-        ShouldNotReachHere();
-    }
-  }
-};
-#endif
-
 class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
  public:
   ShenandoahCalculateRegionStatsClosure old;
@@ -513,13 +430,6 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               label, generation->name(), generation->used_regions(), stats.regions());
 
     size_t generation_capacity = generation->max_capacity();
-#ifdef KELVIN_DEBUG
-    if (stats.span() > generation_capacity) {
-      ShenandoahDebugVerificationClosure cl_debug;
-      heap->heap_region_iterate(&cl_debug);
-      log_info(gc)("cl_debug.used() is " SIZE_FORMAT, cl_debug.young.used());
-    }
-#endif
     guarantee(stats.non_trashed_span() <= generation_capacity,
               "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") * region size (" PROPERFMT
               ") must not exceed current capacity (" PROPERFMT ")",

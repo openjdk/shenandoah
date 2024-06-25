@@ -647,46 +647,6 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
   return old_consumed;
 }
 
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-static void validate_young_gen_size(ShenandoahHeap* heap) {
-  ShenandoahYoungGeneration* young_gen = heap->young_generation();
-  ShenandoahOldGeneration* old_gen = heap->old_generation();
-  size_t young_capacity = young_gen->max_capacity();
-  size_t young_used = young_gen->used();
-  size_t young_used_regions = young_gen->used_regions();
-  size_t pad_for_promote_in_place = old_gen->get_pad_for_promote_in_place();
-
-  size_t free_count = 0;
-  size_t old_count = 0;
-  size_t young_count = 0;
-
-  for (size_t i = 0; i < heap->num_regions(); i++) {
-    ShenandoahHeapRegion* r = heap->get_region(i);
-    switch (r->affiliation()) {
-      case FREE:
-        free_count++;
-        break;
-      case YOUNG_GENERATION:
-        young_count++;
-        break;
-      case OLD_GENERATION:
-        old_count++;
-        break;
-      default:
-        ShouldNotReachHere();
-    }
-  }
-  size_t num_regions = heap->num_regions();
-  assert (young_count * ShenandoahHeapRegion::region_size_bytes() <= young_capacity,
-          "young_count (" SIZE_FORMAT ") * region_size (" SIZE_FORMAT ") must be <= young_capacity (" SIZE_FORMAT
-          "): free_count (" SIZE_FORMAT "), old_count (" SIZE_FORMAT "), num_regions (" SIZE_FORMAT
-          "), free_set->capacity (" SIZE_FORMAT "), free_set->used (" SIZE_FORMAT "), free_set->available (" SIZE_FORMAT ")",
-          young_count, ShenandoahHeapRegion::region_size_bytes(), young_capacity, free_count, old_count, num_regions,
-          heap->free_set()->capacity(), heap->free_set()->used(), heap->free_set()->available());
-}
-#endif
-
 void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahCollectionSet* collection_set = heap->collection_set();
@@ -796,12 +756,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // Free set construction uses reserve quantities, because they are known to be valid here
     heap->free_set()->finish_rebuild(young_cset_regions, old_cset_regions, num_old, true);
   }
-
-#ifdef KELVIN_DEBUG
-  if (heap->mode()->is_generational()) {
-    validate_young_gen_size(heap);
-  }
-#endif
 }
 
 bool ShenandoahGeneration::is_bitmap_clear() {
