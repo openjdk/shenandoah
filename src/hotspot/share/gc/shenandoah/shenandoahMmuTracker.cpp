@@ -126,6 +126,7 @@ void ShenandoahMmuTracker::record_old_marking_increment(bool old_marking_done) {
   // No special processing for old marking
   double now = os::elapsedTime();
   double duration = now - _most_recent_timestamp;
+
   double gc_time, mutator_time;
   fetch_cpu_times(gc_time, mutator_time);
   double gcu = (gc_time - _most_recent_gc_time) / duration;
