@@ -84,13 +84,9 @@ public class TestThreadFailure {
         }
 
         {
-            // Generational Shenandoah needs a higher value of ShenandaohNoProgressThreshold than traditional
-            // Shenandoah.  This is because Generational Shenandoah may experience many failed young-generation
-            // GC's which degenerate and increment the count of no-progress collections in the same time that a
-            // global collection occurs in traditional Shenandoah.
             ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder(
                     "-Xmx32m",
-                    "-XX:+UnlockExperimentalVMOptions", "-XX:ShenandoahNoProgressThreshold=24",
+                    "-XX:+UnlockExperimentalVMOptions",
                     "-XX:+UseShenandoahGC", "-XX:ShenandoahGCMode=generational",
                     TestThreadFailure.class.getName(),
                     "test");

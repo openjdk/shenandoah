@@ -1024,9 +1024,14 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     //           to satisfy the pending allocation request, we are in "dire straits", and a fail-fast OOMError is probably
     //           the better remediation than repeated attempts to allocate following repeated GC cycles.
 
-    while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
-      control_thread()->handle_alloc_failure(req, true);
-      result = allocate_memory_under_lock(req, in_new_region);
+    if (result == nullptr) {
+      while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
+        control_thread()->handle_alloc_failure(req, true);
+        result = allocate_memory_under_lock(req, in_new_region);
+      }
+      if ((result != nullptr) && mode()->is_generational()) {
+        notify_gc_progress();
+      }
     }
     if (log_is_enabled(Debug, gc, alloc)) {
       ResourceMark rm;
