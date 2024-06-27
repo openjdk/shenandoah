@@ -1335,10 +1335,35 @@ void ShenandoahVerifier::help_verify_region_rem_set(ShenandoahHeapRegion* r, She
       } else {
         // This object is not live so we don't verify dirty cards contained therein
         HeapWord* tams = ctx->top_at_mark_start(r);
+        HeapWord* orig_obj_addr = obj_addr;
         obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
+        confirm_filled(orig_obj_addr, obj_addr, message);
       }
     }
   }
+}
+
+void ShenandoahVerifier::confirm_filled(HeapWord* start, HeapWord* end, const char *message) {
+  ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
+  ShenandoahOldGeneration* old_gen = gen_heap->old_generation();
+  ShenandoahOldHeuristics* old_heuristics = old_gen->heuristics();
+
+  bool check_fill_objects = !old_heuristics->has_coalesce_and_fill_candidates();
+  while (start < end) {
+    oop obj = cast_to_oop(start);
+
+    // This object is not marked.  It should be a fill object, or an object that is about to be filled.  If it is a fill
+    // object, it should be array of int.
+
+    // if there are coalesce-and-fill candidates, skip over this object.  Otherwise, this regions has already been
+    // coalesced and filled, so this should be a fill object.
+    if (check_fill_objects && !obj->is_array()) {
+      ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, start, nullptr, message,
+                                       "Fill object should be an array of int", __FILE__, __LINE__);
+    }
+    start += obj->size();
+  }
+  assert(start == end, "Fill words should precisely cover the span to end");
 }
 
 // Assure that the remember set has a dirty card everywhere there is an interesting pointer.
@@ -1354,9 +1379,20 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   ShenandoahMarkingContext* ctx;
 
   ShenandoahOldGeneration* old_generation = _heap->old_generation();
-  log_debug(gc)("Verifying remembered set at %s mark", old_generation->is_doing_mixed_evacuations() ? "mixed" : "young");
+  log_debug(gc)("Verifying remembered set at %s%s mark",
+                _heap->active_generation()->name(), old_generation->is_doing_mixed_evacuations()? " (mixed)": "");
 
-  if (old_generation->is_mark_complete() || _heap->active_generation()->is_global()) {
+  if (_heap->active_generation()->is_global()) {
+    ShenandoahOldGeneration::State state = old_generation->state();
+    if ((state == ShenandoahOldGeneration::EVACUATING) || (state == ShenandoahOldGeneration::FILLING)) {
+      // If we are EVACUATING or FILLING at the start of GLOBAL GC, we cannot verify the remembered set since the remembered
+      // set is not valid until evacuation is complete and all unevacuated old-gen regions have been coalesced and filled.
+      // Since GLOBAL GC does not need the remembered set, don't bother to verify it.
+      return;
+    }
+  }
+
+  if (_heap->old_generation()->is_mark_complete()) {
     ctx = _heap->complete_marking_context();
   } else {
     ctx = nullptr;
@@ -1406,7 +1442,9 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
           } else {
             // This object is not live so we don't verify dirty cards contained therein
             assert(tams != nullptr, "If object is not live, ctx and tams should be non-null");
+            HeapWord* orig_obj_addr = obj_addr;
             obj_addr = ctx->get_next_marked_addr(obj_addr, tams);
+            confirm_filled(orig_obj_addr, obj_addr, "Verify remembered set before mark");
           }
         }
       } // else, we ignore humongous continuation region

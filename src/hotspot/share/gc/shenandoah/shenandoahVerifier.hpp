@@ -237,6 +237,7 @@ private:
   void verify_rem_set_before_mark();
   void verify_rem_set_before_update_ref();
   void verify_rem_set_after_full_gc();
+  void confirm_filled(HeapWord* start, HeapWord* end, const char *msg);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHVERIFIER_HPP
