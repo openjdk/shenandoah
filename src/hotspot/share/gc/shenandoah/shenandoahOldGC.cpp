@@ -167,7 +167,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     assert((young_cset_regions == 0) && (old_cset_regions == 0), "No ongoing evacuation when concurrent mark ends");
     heap->compute_old_generation_balance(allocation_runway, 0, 0);
     result = heap->balance_generations();
-    heap->free_set()->rebuild(0, 0);
+    heap->free_set()->finish_rebuild(0, 0, 0);
   }
 
   LogTarget(Info, gc, ergo) lt;
