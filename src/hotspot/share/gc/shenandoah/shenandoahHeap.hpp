@@ -158,7 +158,8 @@ private:
   ShenandoahHeapLock _lock;
 
   // Indicates the generation whose collection is in
-  // proress
+  // progress. Mutator threads aren't allowed to read
+  // this field.
   ShenandoahGeneration* _gc_generation;
 
   // This is set and cleared by only the VMThread
@@ -175,6 +176,8 @@ public:
   }
 
   ShenandoahGeneration* gc_generation() const {
+    // We don't want this field read by a mutator thread
+    assert(!Thread::current()->is_Java_thread(), "Not allowed");
     // value of _gc_generation field, see above
     return _gc_generation;
   }
