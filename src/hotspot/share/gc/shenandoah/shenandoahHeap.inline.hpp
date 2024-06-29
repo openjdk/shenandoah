@@ -367,7 +367,7 @@ inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
   }
 
   assert(is_in(obj), "only check if is in active generation for objects (" PTR_FORMAT ") in heap", p2i(obj));
-  assert(gen == (ShenandoahGeneration*)old_generation() || gen == (ShenandoahGeneration*)young_generation() || gen == (ShenandoahGeneration*)global_generation(),
+  assert(gen->is_old() || gen->is_young() || gen->is_global(),
          "Active generation must be old, young, or global");
 
   size_t index = heap_region_containing(obj)->index();

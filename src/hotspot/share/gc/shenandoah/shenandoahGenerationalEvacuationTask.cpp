@@ -126,12 +126,11 @@ void ShenandoahGenerationalEvacuationTask::do_work() {
 // We identify the entirety of the region as DIRTY to force the next remembered set scan to identify the "interesting poitners"
 // contained herein.
 void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion* region) {
-  ShenandoahMarkingContext* const marking_context = _heap->marking_context();
+  ShenandoahMarkingContext* const marking_context = _heap->complete_marking_context();
   HeapWord* const tams = marking_context->top_at_mark_start(region);
 
   {
     const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
-    assert(_heap->gc_generation()->is_mark_complete(), "sanity");
     shenandoah_assert_generations_reconciled();
     assert(!_heap->is_concurrent_old_mark_in_progress(), "Cannot promote in place during old marking");
     assert(region->garbage_before_padded_for_promote() < old_garbage_threshold, "Region " SIZE_FORMAT " has too much garbage for promotion", region->index());
