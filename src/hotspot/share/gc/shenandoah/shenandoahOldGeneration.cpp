@@ -200,16 +200,26 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
 
 void ShenandoahOldGeneration::set_promoted_reserve(size_t new_val) {
   shenandoah_assert_heaplocked_or_safepoint();
+#undef KELVIN_RESERVES
+#ifdef KELVIN_RESERVES
+  log_info(gc)("set_promoted_reserve(" SIZE_FORMAT ")", new_val);
+#endif
   _promoted_reserve = new_val;
 }
 
 size_t ShenandoahOldGeneration::get_promoted_reserve() const {
+#ifdef KELVIN_RESERVES
+  log_info(gc)("get_promoted_reserve() yields: " SIZE_FORMAT, _promoted_reserve);
+#endif
   return _promoted_reserve;
 }
 
 void ShenandoahOldGeneration::augment_promoted_reserve(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
   _promoted_reserve += increment;
+#ifdef KELVIN_RESERVES
+  log_info(gc)("augment_promoted_reserve(" SIZE_FORMAT ") yields " SIZE_FORMAT, increment, _promoted_reserve);
+#endif
 }
 
 void ShenandoahOldGeneration::reset_promoted_expended() {

@@ -212,6 +212,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
       return false;
     }
 
+    // vmop_entry_final_updaterefs rebuilds free set in preparation for next GC.
     vmop_entry_final_updaterefs();
 
     // Update references freed up collection set, kick the cleanup to reclaim the space.
@@ -221,8 +222,10 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // do not check for cancellation here because, at this point, the cycle is effectively
     // complete. If the cycle has been cancelled here, the control thread will detect it
     // on its next iteration and run a degenerated young cycle.
-    vmop_entry_final_roots();
+
+    // vmop_entry_final_updaterefs rebuilds free set in preparation for next GC.
     _abbreviated = true;
+    vmop_entry_final_roots();
   }
 
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
@@ -333,8 +336,11 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   static const char* msg = "Pause Final Roots";
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
-
   op_final_roots();
+  if (_abbreviated) {
+    ShenandoahHeap::heap()->rebuild_free_set(true /*concurrent*/);
+  }
+  // else, this is the end of old marking
 }
 
 void ShenandoahConcurrentGC::entry_reset() {
@@ -706,16 +712,16 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Upon return from prepare_regions_and_collection_set(), certain parameters have been established to govern the
     // evacuation efforts that are about to begin.  In particular:
     //
-    // heap->get_promoted_reserve() represents the amount of memory within old-gen's available memory that has
+    // old_generation->get_promoted_reserve() represents the amount of memory within old-gen's available memory that has
     //   been set aside to hold objects promoted from young-gen memory.  This represents an estimated percentage
     //   of the live young-gen memory within the collection set.  If there is more data ready to be promoted than
     //   can fit within this reserve, the promotion of some objects will be deferred until a subsequent evacuation
     //   pass.
     //
-    // heap->get_old_evac_reserve() represents the amount of memory within old-gen's available memory that has been
+    // old_generation->get_evacuation_reserve() represents the amount of memory within old-gen's available memory that has been
     //  set aside to hold objects evacuated from the old-gen collection set.
     //
-    // heap->get_young_evac_reserve() represents the amount of memory within young-gen's available memory that has
+    // young_generation->get_evacuation_reserve() represents the amount of memory within young-gen's available memory that has
     //  been set aside to hold objects evacuated from the young-gen collection set.  Conservatively, this value
     //  equals the entire amount of live young-gen memory within the collection set, even though some of this memory
     //  will likely be promoted.
@@ -1196,7 +1202,6 @@ void ShenandoahConcurrentGC::op_final_updaterefs() {
   if (VerifyAfterGC) {
     Universe::verify();
   }
-
   heap->rebuild_free_set(true /*concurrent*/);
 }
 

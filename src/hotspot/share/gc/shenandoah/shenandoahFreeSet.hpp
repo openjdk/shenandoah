@@ -354,6 +354,9 @@ private:
   void establish_generation_sizes(size_t young_region_count, size_t old_region_count);
   size_t get_usable_free_words(size_t free_bytes) const;
 
+  void reduce_young_reserve(size_t adjusted_young_reserve, size_t requested_young_reserve);
+  void reduce_old_reserve(size_t adjusted_old_reserve, size_t requested_old_reserve);
+
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
@@ -374,27 +377,15 @@ public:
                           size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
 
   // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
-  // hold the results of evacuating to young-gen and to old-gen, and have_evacuation_reserves should be true.
-  // These quantities, stored as reserves for their respective generations, are consulted prior to rebuilding
-  // the free set (ShenandoahFreeSet) in preparation for evacuation.  When the free set is rebuilt, we make sure
-  // to reserve sufficient memory in the collector and old_collector sets to hold evacuations.
-  //
-  // We also rebuild the free set at the end of GC, as we prepare to idle GC until the next trigger.  In this case,
-  // have_evacuation_reserves is false because we don't yet know how much memory will need to be evacuated in the
-  // next GC cycle.  When have_evacuation_reserves is false, the free set rebuild operation reserves for the collector
-  // and old_collector sets based on alternative mechanisms, such as ShenandoahEvacReserve, ShenandoahOldEvacReserve, and
-  // ShenandoahOldCompactionReserve.  In a future planned enhancement, the reserve for old_collector set when the
-  // evacuation reserves are unknown, is based in part on anticipated promotion as determined by analysis of live data
-  // found during the previous GC pass which is one less than the current tenure age.
+   // hold the results of evacuating to young-gen and to old-gen.  These quantities, stored in reserves for their,
+  // respective generations, are consulted prior to rebuilding the free set (ShenandoahFreeSet) in preparation for
+  // evacuation.  When the free set is rebuilt, we make sure to reserve sufficient memory in the collector and
+  // old_collector sets to hold evacuations.
   //
   // young_cset_regions is the number of regions currently in the young cset if we are starting to evacuate, or zero
   //   old_cset_regions is the number of regions currently in the old cset if we are starting a mixed evacuation, or zero
   //    num_old_regions is the number of old-gen regions that have available memory for further allocations (excluding old cset)
-  // have_evacuation_reserves is true iff the desired values of young-gen and old-gen evacuation reserves and old-gen
-  //                    promotion reserve have been precomputed (and can be obtained by invoking
-  //                    <generation>->get_evacuation_reserve() or old_gen->get_promoted_reserve()
-  void finish_rebuild(size_t young_cset_regions, size_t old_cset_regions, size_t num_old_regions,
-                      bool have_evacuation_reserves = false);
+  void finish_rebuild(size_t young_cset_regions, size_t old_cset_regions, size_t num_old_regions);
 
   // When a region is promoted in place, we add the region's available memory if it is greater than plab_min_size()
   // into the old collector partition by invoking this method.
@@ -479,7 +470,7 @@ public:
 
   // Reserve space for evacuations, with regions reserved for old evacuations placed to the right
   // of regions reserved of young evacuations.
-  void compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
+  void compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions,
                                       size_t &young_reserve_result, size_t &old_reserve_result) const;
 };
 
