@@ -55,9 +55,6 @@ void ShenandoahGenerationalFullGC::prepare() {
   // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
   heap->set_gc_generation(heap->global_generation());
 
-  // No need for old_gen->increase_used() as this was done when plabs were allocated.
-  heap->reset_generation_reserves();
-
   // Full GC supersedes any marking or coalescing in old generation.
   heap->old_generation()->cancel_gc();
 }

@@ -817,16 +817,6 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
   old_generation()->set_promoted_reserve(reserve_for_promo);
 }
 
-void ShenandoahGenerationalHeap::reset_generation_reserves() {
-#undef KELVIN_RESERVES
-#ifdef KELVIN_RESERVES
-  log_info(gc)("reset_generation_reserves() clears everything");
-#endif
-  young_generation()->set_evacuation_reserve(0);
-  old_generation()->set_evacuation_reserve(0);
-  old_generation()->set_promoted_reserve(0);
-}
-
 void ShenandoahGenerationalHeap::TransferResult::print_on(const char* when, outputStream* ss) const {
   auto heap = ShenandoahGenerationalHeap::heap();
   ShenandoahYoungGeneration* const young_gen = heap->young_generation();
