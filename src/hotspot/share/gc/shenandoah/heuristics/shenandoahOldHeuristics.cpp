@@ -653,6 +653,7 @@ unsigned int ShenandoahOldHeuristics::get_coalesce_and_fill_candidates(Shenandoa
 void ShenandoahOldHeuristics::abandon_collection_candidates() {
   _last_old_collection_candidate = 0;
   _next_old_collection_candidate = 0;
+  _live_bytes_in_unprocessed_candidates = 0;
   _last_old_region = 0;
 }
 
