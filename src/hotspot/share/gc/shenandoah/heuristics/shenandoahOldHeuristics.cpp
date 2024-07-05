@@ -344,6 +344,9 @@ bool ShenandoahOldHeuristics::top_off_collection_set(ShenandoahCollectionSet* co
       return false;
     } else {
       size_t regions_for_old_expansion = (available_to_loan_from_young_reserve / region_size_bytes);
+      if (regions_for_old_expansion > young_unaffiliated_regions) {
+        regions_for_old_expansion = young_unaffiliated_regions;
+      }
       log_info(gc)("Augmenting old-gen evacuation budget from unexpended young-generation reserve by " SIZE_FORMAT " regions",
                    regions_for_old_expansion);
       _heap->generation_sizer()->force_transfer_to_old(regions_for_old_expansion);
