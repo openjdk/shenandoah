@@ -589,12 +589,12 @@ void ShenandoahRegionPartitions::assert_bounds() {
 
   beg_off = empty_leftmosts[int(ShenandoahFreeSetPartitionId::Mutator)];
   end_off = empty_rightmosts[int(ShenandoahFreeSetPartitionId::Mutator)];
-  assert (beg_off >= leftmost_empty(ShenandoahFreeSetPartitionId::Mutator),
-          "free empty regions before the leftmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
-          beg_off, leftmost_empty(ShenandoahFreeSetPartitionId::Mutator));
-  assert (end_off <= rightmost_empty(ShenandoahFreeSetPartitionId::Mutator),
-          "free empty regions past the rightmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
-          end_off, rightmost_empty(ShenandoahFreeSetPartitionId::Mutator));
+  assert (beg_off >= _leftmosts_empty[int(ShenandoahFreeSetPartitionId::Mutator)],
+          "free empty region (" SSIZE_FORMAT ") before the leftmost bound " SSIZE_FORMAT,
+          beg_off, _leftmosts_empty[int(ShenandoahFreeSetPartitionId::Mutator)]);
+  assert (end_off <= _rightmosts_empty[int(ShenandoahFreeSetPartitionId::Mutator)],
+          "free empty region (" SSIZE_FORMAT ") past the rightmost bound " SSIZE_FORMAT,
+          end_off, _rightmosts_empty[int(ShenandoahFreeSetPartitionId::Mutator)]);
 
   // Performance invariants. Failing these would not break the free partition, but performance would suffer.
   assert (leftmost(ShenandoahFreeSetPartitionId::Collector) <= _max, "leftmost in bounds: "  SSIZE_FORMAT " < " SSIZE_FORMAT,
@@ -623,11 +623,11 @@ void ShenandoahRegionPartitions::assert_bounds() {
   beg_off = empty_leftmosts[int(ShenandoahFreeSetPartitionId::Collector)];
   end_off = empty_rightmosts[int(ShenandoahFreeSetPartitionId::Collector)];
   assert (beg_off >= _leftmosts_empty[int(ShenandoahFreeSetPartitionId::Collector)],
-          "free empty regions before the leftmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
-          beg_off, leftmost_empty(ShenandoahFreeSetPartitionId::Collector));
+          "free empty region (" SSIZE_FORMAT ") before the leftmost bound " SSIZE_FORMAT,
+          beg_off, _leftmosts_empty[int(ShenandoahFreeSetPartitionId::Collector)]);
   assert (end_off <= _rightmosts_empty[int(ShenandoahFreeSetPartitionId::Collector)],
-          "free empty regions past the rightmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
-          end_off, rightmost_empty(ShenandoahFreeSetPartitionId::Collector));
+          "free empty region (" SSIZE_FORMAT ") past the rightmost bound " SSIZE_FORMAT,
+          end_off, _rightmosts_empty[int(ShenandoahFreeSetPartitionId::Collector)]);
 
   // Performance invariants. Failing these would not break the free partition, but performance would suffer.
   assert (leftmost(ShenandoahFreeSetPartitionId::OldCollector) <= _max, "leftmost in bounds: "  SSIZE_FORMAT " < " SSIZE_FORMAT,
@@ -658,11 +658,11 @@ void ShenandoahRegionPartitions::assert_bounds() {
   beg_off = empty_leftmosts[int(ShenandoahFreeSetPartitionId::OldCollector)];
   end_off = empty_rightmosts[int(ShenandoahFreeSetPartitionId::OldCollector)];
   assert (beg_off >= _leftmosts_empty[int(ShenandoahFreeSetPartitionId::OldCollector)],
-          "free empty regions before the leftmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
-          beg_off, leftmost_empty(ShenandoahFreeSetPartitionId::OldCollector));
+          "free empty region (" SSIZE_FORMAT ") before the leftmost bound " SSIZE_FORMAT,
+          beg_off, _leftmosts_empty[int(ShenandoahFreeSetPartitionId::OldCollector)]);
   assert (end_off <= _rightmosts_empty[int(ShenandoahFreeSetPartitionId::OldCollector)],
-          "free empty regions past the rightmost: " SSIZE_FORMAT ", bound " SSIZE_FORMAT,
-          end_off, rightmost_empty(ShenandoahFreeSetPartitionId::OldCollector));
+          "free empty region (" SSIZE_FORMAT ") past the rightmost bound " SSIZE_FORMAT,
+          end_off, _rightmosts_empty[int(ShenandoahFreeSetPartitionId::OldCollector)]);
 }
 #endif
 
