@@ -474,6 +474,9 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     _old_heuristics->prepare_for_old_collections();
   }
 
+#ifdef KELVIN_DEPRECATE
+  // Kelvin is removing this code because vmop_entry_final_roots() does the rebuild.
+
   {
     // Though we did not choose a collection set above, we still may have
     // freed up immediate garbage regions so proceed with rebuilding the free set.
@@ -488,6 +491,7 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     // is in case there was any immediate old garbage identified.
     heap->free_set()->finish_rebuild(cset_young_regions, cset_old_regions, num_old);
   }
+#endif
 }
 
 const char* ShenandoahOldGeneration::state_name(State state) {

@@ -147,18 +147,27 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
 
   assert(!heap->is_concurrent_strong_root_in_progress(), "No evacuations during old gc.");
 
-  // We must execute this vm operation if we completed final mark. We cannot
-  // return from here with weak roots in progress. This is not a valid gc state
-  // for any young collections (or allocation failures) that interrupt the old
-  // collection.  This will reclaim immediate garbage, adjust generation sizes,
-  // and rebuild free set.
+  // We must execute this vm operation if we completed final mark. We cannot return from here with weak roots in progress.
+  // This is not a valid gc state for any young collections (or allocation failures) that interrupt the old collection.
+  // This will reclaim immediate garbage.  vmop_entry_final_roots() will also rebuild the free set.
   vmop_entry_final_roots();
+
+#ifdef KELVIN_DEPRECATE
+  // Deprecating because vmop_entry_final_roots() does the free-set rebuild.
 
   // After concurrent old marking finishes, we may be able to reclaim immediate garbage from regions that are fully garbage.
   // Furthermore, we may want to expand OLD in order to make room for the first mixed evacuation that immediately follows
   // completion of OLD marking.  This is why we rebuild free set here.
   ShenandoahGenerationalHeap::TransferResult result;
   {
+    // Though we did not choose a collection set above, we still may have freed up immediate garbage regions so
+    // proceed with rebuilding the free set.  A second reason to rebuild free set now is to prepare for mixed evacuations
+    // which are likely to follow completion of old-gen marking.  Preparation for mixed evacuations likely involves
+    // expansion of the old generation.
+
+    // Old marking does not degenerate.  It is always concurrent.  In case of out-of-cycle memory allocation failures
+    // while old marking is ongoing, we will degenerate to a young GC, which may, if necessary upgrade to Full GC.
+    // If the young degenerated GC upgrades to full GC, concurrent old marking will be cancelled.
     ShenandoahHeapLocker locker(heap->lock());
     size_t young_cset_regions, old_cset_regions;
     size_t first_old, last_old, num_old;
@@ -169,11 +178,12 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     result = heap->balance_generations();
     heap->free_set()->finish_rebuild(0, 0, num_old);
   }
-
+  
   LogTarget(Info, gc, ergo) lt;
   if (lt.is_enabled()) {
     LogStream ls(lt);
     result.print_on("Old Mark", &ls);
   }
+#endif
   return true;
 }
