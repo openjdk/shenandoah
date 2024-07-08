@@ -1424,7 +1424,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
         ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
         // We're going to place this region into the Mutator set.  We increment old_cset_regions because this count represents
         // regions that the old generation is entitled to without any transfer from young.  We do not place this region into
-        // the OldCollector partition at this time.  Instead, we let reserve_regions() decide whether to place this region 
+        // the OldCollector partition at this time.  Instead, we let reserve_regions() decide whether to place this region
         // into the OldCollector partition.  Deferring the decision allows reserve_regions() to more effectively pack the
         // OldCollector regions into high-address memory.  We do not adjust capacities of old and young generations at this
         // time.  At the end of finish_rebuild(), the capacities are adjusted based on the results of reserve_regions().
@@ -1648,7 +1648,7 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
     }
 
     // Having transferred regions based on results of rebuild(), reset the rebalance request.
-    old_gen->set_region_balance(0); 
+    old_gen->set_region_balance(0);
   }
 }
 
