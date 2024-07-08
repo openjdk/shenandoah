@@ -1756,7 +1756,6 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   // which is reserved for promotion is enforced using thread-local variables that prescribe intentions for
   // each PLAB's available memory.
 
-  // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
   const size_t promoted_reserve = old_generation->get_promoted_reserve();
   const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
   young_reserve_result = young_generation->get_evacuation_reserve();
@@ -1771,9 +1770,9 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   // the reserve downward to account for this possibility. This loss is part of the reason why the original budget
   // was adjusted with ShenandoahOldEvacWaste and ShenandoahOldPromoWaste multipliers.
   if (old_reserve_result >
-      _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes) {
+      _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes) {
     old_reserve_result =
-      _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes;
+      _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes;
   }
 
   if (young_reserve_result > young_unaffiliated_regions * region_size_bytes) {
