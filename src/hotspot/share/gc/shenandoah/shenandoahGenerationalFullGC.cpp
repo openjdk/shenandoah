@@ -54,6 +54,7 @@ void ShenandoahGenerationalFullGC::prepare() {
   auto heap = ShenandoahGenerationalHeap::heap();
   // Since we may arrive here from degenerated GC failure of either young or old, establish generation as GLOBAL.
   heap->set_gc_generation(heap->global_generation());
+  heap->set_active_generation();
 
   // Full GC supersedes any marking or coalescing in old generation.
   heap->old_generation()->cancel_gc();
