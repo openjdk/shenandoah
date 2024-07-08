@@ -92,6 +92,7 @@ class ShenandoahOldHeuristicTest : public ::testing::Test {
   }
 
   ~ShenandoahOldHeuristicTest() override {
+    SKIP_IF_NOT_SHENANDOAH();
     _heap->lock()->unlock();
   }
 
