@@ -149,6 +149,10 @@ public:
   void move_from_partition_to_partition(ssize_t idx, ShenandoahFreeSetPartitionId orig_partition,
                                         ShenandoahFreeSetPartitionId new_partition, size_t available);
 
+  // In case recycled region r is in the OldCollector partition but not within the interval for empty OldCollector regions, expand
+  // the empty interval to include this region.  If recycled region r is not in the OldCollector partition, do nothing.
+  inline void adjust_interval_for_recycled_old_region(ShenandoahHeapRegion* r);
+
   const char* partition_membership_name(ssize_t idx) const;
 
   // Return the index of the next available region >= start_index, or maximum_regions if not found.
@@ -236,6 +240,7 @@ public:
 
   inline size_t count(ShenandoahFreeSetPartitionId which_partition) const { return _region_counts[int(which_partition)]; }
 
+#ifdef ASSERT
   // Assure leftmost, rightmost, leftmost_empty, and rightmost_empty bounds are valid for all free sets.
   // Valid bounds honor all of the following (where max is the number of heap regions):
   //   if the set is empty, leftmost equals max and rightmost equals 0
@@ -256,7 +261,10 @@ public:
   //       idx >= leftmost &&
   //       idx <= rightmost
   //     }
-  void assert_bounds() NOT_DEBUG_RETURN;
+  //
+  // If old_trash_not_in_bounds, do not require old-generation trashed regions to be within the OldCollector bounds.
+  void assert_bounds(bool old_trash_not_in_bounds) NOT_DEBUG_RETURN;
+#endif
 };
 
 // Publicly, ShenandoahFreeSet represents memory that is available to mutator threads.  The public capacity(), used(),
@@ -296,7 +304,9 @@ private:
   inline HeapWord* allocate_from_partition_with_affiliation(ShenandoahFreeSetPartitionId which_partition,
                                                             ShenandoahAffiliation affiliation,
                                                             ShenandoahAllocRequest& req, bool& in_new_region);
-
+#ifdef ASSERT
+  bool _old_trash_not_in_bounds;
+#endif
   // We re-evaluate the left-to-right allocation bias whenever _alloc_bias_weight is less than zero.  Each time
   // we allocate an object, we decrement the count of this value.  Each time we re-evaluate whether to allocate
   // from right-to-left or left-to-right, we reset the value of this counter to _InitialAllocBiasWeight.
@@ -397,6 +407,17 @@ public:
   // for evacuation, invoke this to make regions available for mutator allocations.
   void move_regions_from_collector_to_mutator(size_t cset_regions);
 
+#ifdef ASSERT
+  // Advise FreeSet that old trash regions have not yet been accounted for in OldCollector partition bounds
+  void advise_of_old_trash() {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("DANGER WILL ROBINSON!  old_trash is not in bounds!");
+#endif
+    shenandoah_assert_heaplocked();
+    _old_trash_not_in_bounds = true;
+  }
+#endif
   void recycle_trash();
 
   void log_status();

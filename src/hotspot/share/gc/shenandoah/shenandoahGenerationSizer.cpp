@@ -194,7 +194,6 @@ void ShenandoahGenerationSizer::force_transfer_to_old(size_t regions) const {
           regions, young_gen->name(), old_gen->name(), PROPERFMTARGS(new_size));
 }
 
-
 bool ShenandoahGenerationSizer::transfer_to_young(size_t regions) const {
   ShenandoahGenerationalHeap* heap = ShenandoahGenerationalHeap::heap();
   return transfer_regions(heap->old_generation(), heap->young_generation(), regions);

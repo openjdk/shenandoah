@@ -631,7 +631,7 @@ void ShenandoahGenerationalHeap::compute_old_generation_balance(size_t mutator_x
                              bound_on_old_reserve:
                              MIN2((young_reserve * ShenandoahOldEvacRatioPercent) / (100 - ShenandoahOldEvacRatioPercent),
                                   bound_on_old_reserve));
-#define KELVIN_RESERVES
+#undef KELVIN_RESERVES
 #ifdef KELVIN_RESERVES
   log_info(gc)("proposed_max_old: " SIZE_FORMAT ", bound_on_old_reserve: " SIZE_FORMAT
                ", old_available: " SIZE_FORMAT ", young_reserve: " SIZE_FORMAT ", mutator_xfer_limit: " SIZE_FORMAT,

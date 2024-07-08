@@ -27,6 +27,7 @@
 #include "gc/shenandoah/heuristics/shenandoahOldHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
+#include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
@@ -433,7 +434,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t immediate_garbage = 0;
   size_t immediate_regions = 0;
   size_t live_data = 0;
-
+#ifdef ASSERT
+  bool reclaimed_immediate = false;
+#endif
   RegionData* candidates = _region_data;
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
@@ -446,12 +449,24 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     live_data += live_bytes;
 
     if (region->is_regular() || region->is_regular_pinned()) {
-        // Only place regular or pinned regions with live data into the candidate set.
-        // Pinned regions cannot be evacuated, but we are not actually choosing candidates
-        // for the collection set here. That happens later during the next young GC cycle,
-        // by which time, the pinned region may no longer be pinned.
+      // Only place regular or pinned regions with live data into the candidate set.
+      // Pinned regions cannot be evacuated, but we are not actually choosing candidates
+      // for the collection set here. That happens later during the next young GC cycle,
+      // by which time, the pinned region may no longer be pinned.
       if (!region->has_live()) {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+        log_info(gc)("prepare_for_old_collections() found immediate trash in region " SIZE_FORMAT, i);
+#endif
         assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
+#ifdef ASSERT
+        if (!reclaimed_immediate) {
+          reclaimed_immediate = true;
+          // Inform the free-set that old trash regions may temporarily violate OldCollector bounds
+          shenandoah_assert_heaplocked();
+          heap->free_set()->advise_of_old_trash();
+        }
+#endif
         region->make_trash_immediate();
         immediate_regions++;
         immediate_garbage += garbage;
@@ -466,11 +481,22 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       // If they are pinned, we expect them to hold live data, so they will not be
       // turned into immediate garbage.
       if (!region->has_live()) {
+#ifdef KELVIN_DEBUG
+        log_info(gc)("prepare_for_old_collections() found immediate humongous start trash in region " SIZE_FORMAT, i);
+#endif
         assert(!region->is_pinned(), "Pinned region should have live (pinned) objects.");
         // The humongous object is dead, we can just return this region and the continuations
         // immediately to the freeset - no evacuations are necessary here. The continuations
         // will be made into trash by this method, so they'll be skipped by the 'is_regular'
         // check above, but we still need to count the start region.
+#ifdef ASSERT
+        if (!reclaimed_immediate) {
+          reclaimed_immediate = true;
+          // Inform the free-set that old trash regions may temporarily violate OldCollector bounds
+          shenandoah_assert_heaplocked();
+          heap->free_set()->advise_of_old_trash();
+        }
+#endif
         immediate_regions++;
         immediate_garbage += garbage;
         size_t region_count = heap->trash_humongous_region_at(region);
@@ -478,6 +504,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       }
     } else if (region->is_trash()) {
       // Count humongous objects made into trash here.
+#ifdef KELVIN_DEBUG
+      log_info(gc)("prepare_for_old_collections() found immediate humongous continuation trash in region " SIZE_FORMAT, i);
+#endif
       immediate_regions++;
       immediate_garbage += garbage;
     }

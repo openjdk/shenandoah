@@ -178,7 +178,7 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     result = heap->balance_generations();
     heap->free_set()->finish_rebuild(0, 0, num_old);
   }
-  
+
   LogTarget(Info, gc, ergo) lt;
   if (lt.is_enabled()) {
     LogStream ls(lt);

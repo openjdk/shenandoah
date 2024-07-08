@@ -382,6 +382,10 @@ bool ShenandoahDegenGC::has_in_place_promotions(const ShenandoahHeap* heap) cons
 }
 
 void ShenandoahDegenGC::op_cleanup_early() {
+#undef KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenDegenGC::op_cleanup_early()");
+#endif
   ShenandoahHeap::heap()->recycle_trash();
 }
 
@@ -427,6 +431,9 @@ void ShenandoahDegenGC::op_update_roots() {
 
 void ShenandoahDegenGC::op_cleanup_complete() {
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_cleanup_complete);
+#ifdef KELVIN_DEBUG
+  log_info(gc)("ShenDegenGC::op_cleanup_complete()");
+#endif
   ShenandoahHeap::heap()->recycle_trash();
 }
 
