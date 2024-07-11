@@ -566,6 +566,7 @@ void ShenandoahGenerationalHeap::retire_plab(PLAB* plab) {
   retire_plab(plab, thread);
 }
 
+#ifdef KELVIN_DEPRECATE
 ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_generations() {
   shenandoah_assert_heaplocked_or_safepoint();
 
@@ -594,6 +595,7 @@ ShenandoahGenerationalHeap::TransferResult ShenandoahGenerationalHeap::balance_g
 
   return TransferResult {true, 0, "none"};
 }
+#endif
 
 // Make sure old-generation is large enough, but no larger than is necessary, to hold mixed evacuations
 // and promotions, if we anticipate either. Any deficit is provided by the young generation, subject to
@@ -1187,7 +1189,7 @@ void ShenandoahGenerationalHeap::complete_degenerated_cycle() {
     // a more detailed explanation.
     old_generation()->transfer_pointers_from_satb();
   }
-
+#ifdef KELVIN_DEPRECATE
   // We defer generation resizing actions until after cset regions have been recycled.
   TransferResult result = balance_generations();
   LogTarget(Info, gc, ergo) lt;
@@ -1195,7 +1197,7 @@ void ShenandoahGenerationalHeap::complete_degenerated_cycle() {
     LogStream ls(lt);
     result.print_on("Degenerated GC", &ls);
   }
-
+#endif
   if (!old_generation()->is_parseable()) {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_coalesce_and_fill);
     coalesce_and_fill_old_regions(false);
@@ -1214,6 +1216,7 @@ void ShenandoahGenerationalHeap::complete_concurrent_cycle() {
     entry_global_coalesce_and_fill();
   }
 
+#ifdef KELVIN_DEPRECATE
   TransferResult result;
   {
     ShenandoahHeapLocker locker(lock());
@@ -1226,6 +1229,7 @@ void ShenandoahGenerationalHeap::complete_concurrent_cycle() {
     LogStream ls(lt);
     result.print_on("Concurrent GC", &ls);
   }
+#endif
 }
 
 void ShenandoahGenerationalHeap::entry_global_coalesce_and_fill() {

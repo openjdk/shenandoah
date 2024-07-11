@@ -1351,6 +1351,10 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   bool transferred = gen_heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
     log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
+#define KELVIN_DEBUG
+#ifdef KELVIN_DEBUG
+    log_info(gc)("flip_to_old_gc() region " SIZE_FORMAT, r->index());
+#endif
     gen_heap->generation_sizer()->force_transfer_to_old(1);
   }
   // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
@@ -1592,7 +1596,7 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
                                                                old_collector_xfer);
     max_xfer_regions -= old_collector_regions;
     if (old_collector_regions > 0) {
-      ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->transfer_to_young(old_collector_regions);
+      ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->force_transfer_to_young(old_collector_regions);
     }
   }
 
@@ -1643,7 +1647,7 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
       log_info(gc)("Transfer " SIZE_FORMAT " regions from OLD to YOUNG during rebuild of freeset",
                    original_old_regions - old_region_count);
     } else if (original_old_regions < old_region_count) {
-      log_info(gc)("Transfer " SIZE_FORMAT " regions from YOUGN to OLD during rebuild of freeset",
+      log_info(gc)("Transfer " SIZE_FORMAT " regions from YOUNG to OLD during rebuild of freeset",
                    old_region_count - original_old_regions);
     }
 

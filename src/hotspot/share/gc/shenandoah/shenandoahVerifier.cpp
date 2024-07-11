@@ -439,10 +439,15 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     size_t generation_used = generation->used();
     size_t generation_used_regions = generation->used_regions();
+    size_t generation_max_capacity = generation->max_capacity();
     if (adjust_for_padding && (generation->is_young() || generation->is_global())) {
       size_t pad = heap->old_generation()->get_pad_for_promote_in_place();
       generation_used += pad;
     }
+
+    guarantee(stats.committed() <= generation_max_capacity,
+              "%s: generation (%s) committed: " PROPERFMT " must not exceed generation capacity: " PROPERFMT,
+              label, generation->name(), PROPERFMTARGS(stats.committed()), PROPERFMTARGS(generation_max_capacity));
 
     guarantee(stats.used() == generation_used,
               "%s: generation (%s) used size must be consistent: generation-used: " PROPERFMT ", regions-used: " PROPERFMT,

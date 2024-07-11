@@ -355,13 +355,7 @@ void ShenandoahConcurrentGC::entry_final_roots() {
       assert((young_cset_regions == 0) && (old_cset_regions == 0),
              "No ongoing evacuation after abbreviated or concurrent OLD marking cycle");
       gen_heap->compute_old_generation_balance(allocation_runway, 0, 0);
-      result = gen_heap->balance_generations();
       heap->free_set()->finish_rebuild(0, 0, num_old);
-    }
-    LogTarget(Info, gc, ergo) lt;
-    if (lt.is_enabled()) {
-      LogStream ls(lt);
-      result.print_on(_generation->is_old()? "Old Mark": "Abbreviated", &ls);
     }
   } else {
     assert (_abbreviated, "Only rebuild free set for abbreviated");
