@@ -344,7 +344,6 @@ void ShenandoahConcurrentGC::entry_final_roots() {
     // After concurrent old marking finishes and after an abbreviated cycle, we reclaim immediate garbage.
     // Further, we may also want to expand OLD in order to make room for anticipated promotions and/or for mixed
     // evacuations.  Mixed evacuations are especially likely to following the end of OLD marking.
-    ShenandoahGenerationalHeap::TransferResult result;
     {
       ShenandoahHeapLocker locker(heap->lock());
       ShenandoahGenerationalHeap* const gen_heap = ShenandoahGenerationalHeap::heap();
