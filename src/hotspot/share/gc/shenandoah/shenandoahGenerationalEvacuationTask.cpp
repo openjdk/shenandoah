@@ -202,10 +202,6 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     young_gen->decrement_affiliated_region_count();
 
     // transfer_to_old() increases capacity of old and decreases capacity of young
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-    log_info(gc)("promote_in_place region " SIZE_FORMAT " shifting " SIZE_FORMAT " of used bytes", region->index(), region_used);
-#endif
     _heap->generation_sizer()->force_transfer_to_old(1);
     region->set_affiliation(OLD_GENERATION);
 
@@ -253,10 +249,6 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
     young_gen->decrease_humongous_waste(humongous_waste);
     young_gen->decrease_affiliated_region_count(spanned_regions);
 
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-    log_info(gc)("promote humongous transfers to old " SIZE_FORMAT " regions", spanned_regions);
-#endif
     // transfer_to_old() increases capacity of old and decreases capacity of young
     _heap->generation_sizer()->force_transfer_to_old(spanned_regions);
 

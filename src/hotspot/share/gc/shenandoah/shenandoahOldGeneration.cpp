@@ -200,26 +200,16 @@ ShenandoahOldGeneration::ShenandoahOldGeneration(uint max_queues, size_t max_cap
 
 void ShenandoahOldGeneration::set_promoted_reserve(size_t new_val) {
   shenandoah_assert_heaplocked_or_safepoint();
-#undef KELVIN_RESERVES
-#ifdef KELVIN_RESERVES
-  log_info(gc)("set_promoted_reserve(" SIZE_FORMAT ")", new_val);
-#endif
   _promoted_reserve = new_val;
 }
 
 size_t ShenandoahOldGeneration::get_promoted_reserve() const {
-#ifdef KELVIN_RESERVES
-  log_info(gc)("get_promoted_reserve() yields: " SIZE_FORMAT, _promoted_reserve);
-#endif
   return _promoted_reserve;
 }
 
 void ShenandoahOldGeneration::augment_promoted_reserve(size_t increment) {
   shenandoah_assert_heaplocked_or_safepoint();
   _promoted_reserve += increment;
-#ifdef KELVIN_RESERVES
-  log_info(gc)("augment_promoted_reserve(" SIZE_FORMAT ") yields " SIZE_FORMAT, increment, _promoted_reserve);
-#endif
 }
 
 void ShenandoahOldGeneration::reset_promoted_expended() {
@@ -473,25 +463,6 @@ void ShenandoahOldGeneration::prepare_regions_and_collection_set(bool concurrent
     ShenandoahHeapLocker locker(heap->lock());
     _old_heuristics->prepare_for_old_collections();
   }
-
-#ifdef KELVIN_DEPRECATE
-  // Kelvin is removing this code because vmop_entry_final_roots() does the rebuild.
-
-  {
-    // Though we did not choose a collection set above, we still may have
-    // freed up immediate garbage regions so proceed with rebuilding the free set.
-    ShenandoahGCPhase phase(concurrent ?
-        ShenandoahPhaseTimings::final_rebuild_freeset :
-        ShenandoahPhaseTimings::degen_gc_final_rebuild_freeset);
-    ShenandoahHeapLocker locker(heap->lock());
-    size_t cset_young_regions, cset_old_regions;
-    size_t first_old, last_old, num_old;
-    heap->free_set()->prepare_to_rebuild(cset_young_regions, cset_old_regions, first_old, last_old, num_old);
-    // This is just old-gen completion.  No future budgeting required here.  The only reason to rebuild the freeset here
-    // is in case there was any immediate old garbage identified.
-    heap->free_set()->finish_rebuild(cset_young_regions, cset_old_regions, num_old);
-  }
-#endif
 }
 
 const char* ShenandoahOldGeneration::state_name(State state) {

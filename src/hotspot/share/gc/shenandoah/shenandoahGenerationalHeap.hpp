@@ -121,10 +121,6 @@ public:
   // Computes the optimal size for the old generation, represented as a surplus or deficit of old regions
   void compute_old_generation_balance(size_t old_xfer_limit, size_t old_cset_regions, size_t young_cset_regions);
 
-#ifdef KELVIN_DEPRECATE
-  // Transfers surplus old regions to young, or takes regions from young to satisfy old region deficit
-  TransferResult balance_generations();
-#endif
   // Balances generations, coalesces and fills old regions if necessary
   void complete_degenerated_cycle();
   void complete_concurrent_cycle();

@@ -410,10 +410,6 @@ public:
 #ifdef ASSERT
   // Advise FreeSet that old trash regions have not yet been accounted for in OldCollector partition bounds
   void advise_of_old_trash() {
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-    log_info(gc)("DANGER WILL ROBINSON!  old_trash is not in bounds!");
-#endif
     shenandoah_assert_heaplocked();
     _old_trash_not_in_bounds = true;
   }

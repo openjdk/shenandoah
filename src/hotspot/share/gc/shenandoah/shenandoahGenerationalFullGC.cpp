@@ -144,31 +144,11 @@ void ShenandoahGenerationalFullGC::balance_generations_after_gc(ShenandoahHeap* 
   size_t reserve_for_promo = 0;
   size_t reserve_for_mixed = 0;
 
-#ifdef KELVIN_RESERVES
-  size_t old_reserve = reserve_for_promo + reserve_for_mixed;
-  log_info(gc)("after adjustments, old_reserve: " SIZE_FORMAT " from promo: " SIZE_FORMAT " and evac: " SIZE_FORMAT,
-               old_reserve, reserve_for_promo, reserve_for_mixed);
-  log_info(gc)(" young_reserve: " SIZE_FORMAT, young_reserve);
-  log_info(gc)("       balance: " SSIZE_FORMAT, region_balance);
-#endif
-
   // Reserves feed into rebuild calculations
   young_gen->set_evacuation_reserve(young_reserve);
   old_gen->set_evacuation_reserve(reserve_for_mixed);
   old_gen->set_promoted_reserve(reserve_for_promo);
 }
-
-#ifdef KELVIN_DEPRECATE
-// deprecate because rebuild does balance
-void ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set() {
-  auto result = ShenandoahGenerationalHeap::heap()->balance_generations();
-  LogTarget(Info, gc, ergo) lt;
-  if (lt.is_enabled()) {
-    LogStream ls(lt);
-    result.print_on("Full GC", &ls);
-  }
-}
-#endif
 
 void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {
   LogTarget(Info, gc) lt;
@@ -216,17 +196,6 @@ void ShenandoahGenerationalFullGC::maybe_coalesce_and_fill_region(ShenandoahHeap
     r->oop_coalesce_and_fill(false);
   }
 }
-
-#ifdef KELVIN_DEPRECATE
-void ShenandoahGenerationalFullGC::compute_balances() {
-  auto heap = ShenandoahGenerationalHeap::heap();
-
-  // In case this Full GC resulted from degeneration, clear the tally on anticipated promotion.
-  heap->old_generation()->set_promotion_potential(0);
-  // Invoke this in case we are able to transfer memory from OLD to YOUNG.
-  heap->compute_old_generation_balance(0, 0, 0);
-}
-#endif
 
 ShenandoahPrepareForGenerationalCompactionObjectClosure::ShenandoahPrepareForGenerationalCompactionObjectClosure(PreservedMarks* preserved_marks,
                                                           GrowableArray<ShenandoahHeapRegion*>& empty_regions,

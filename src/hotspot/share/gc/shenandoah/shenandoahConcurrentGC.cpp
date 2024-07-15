@@ -1124,10 +1124,6 @@ void ShenandoahConcurrentGC::op_strong_roots() {
 }
 
 void ShenandoahConcurrentGC::op_cleanup_early() {
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  log_info(gc)("ShenConcGC::op_cleanup_early() is recycling trash");
-#endif
   ShenandoahHeap::heap()->free_set()->recycle_trash();
 }
 
@@ -1256,9 +1252,6 @@ void ShenandoahConcurrentGC::op_final_roots() {
 }
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {
-#ifdef KELVIN_DEBUG
-  log_info(gc)("ShenConcGC::op_cleanup_complete() is invoking recycle_trash()");
-#endif
   ShenandoahHeap::heap()->free_set()->recycle_trash();
 }
 

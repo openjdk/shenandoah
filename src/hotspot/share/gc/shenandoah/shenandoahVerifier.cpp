@@ -46,10 +46,6 @@
 #include "runtime/orderAccess.hpp"
 #include "runtime/threads.hpp"
 #include "utilities/align.hpp"
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-#include "gc/shenandoah/shenandoahFreeSet.hpp"
-#endif
 
 // Avoid name collision on verify_oop (defined in macroAssembler_arm.hpp)
 #ifdef verify_oop
@@ -417,23 +413,6 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     }
   }
 
-#ifdef KELVIN_DEBUG
-  static bool dump_details(ShenandoahGeneration* generation) {
-    log_info(gc)("Safepoint verification is unhappy with Generation %s", generation->name());
-    ShenandoahHeap* heap = ShenandoahHeap::heap();
-    for (unsigned int i = 0; i < heap->num_regions(); i++) {
-      ShenandoahHeapRegion* r = heap->get_region(i);
-      log_info(gc)("%s region %u BTE (" PTR_FORMAT " " PTR_FORMAT " " PTR_FORMAT ") is %s",
-                   r->is_affiliated()? (r->is_young()? (r->is_humongous()? "Young humongous": "Young regular"):
-                                        (r->is_humongous()? "Old humongous": "Old regular")): "Free",
-                   i, p2i(r->bottom()), p2i(r->top()), p2i(r->end()),
-                   r->is_trash()? "trash": "not trash");
-    }
-    heap->free_set()->log_status();
-    return true;
-  }
-#endif
-
   static void log_usage(ShenandoahGeneration* generation, ShenandoahCalculateRegionStatsClosure& stats) {
     log_debug(gc)("Safepoint verification: %s verified usage: " SIZE_FORMAT "%s, recorded usage: " SIZE_FORMAT "%s",
                   generation->name(),
@@ -465,19 +444,11 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               label, generation->name(), generation->used_regions(), stats.regions());
 
     size_t generation_capacity = generation->max_capacity();
-#ifdef KELVIN_DEBUG
-    guarantee(stats.non_trashed_span() <= generation_capacity,
-              "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") * region size (" PROPERFMT
-              ") must not exceed current capacity (" PROPERFMT ")",
-              dump_details(generation)? label: label, generation->name(), stats.regions(), PROPERFMTARGS(ShenandoahHeapRegion::region_size_bytes()),
-              PROPERFMTARGS(generation_capacity));
-#else
     guarantee(stats.non_trashed_span() <= generation_capacity,
               "%s: generation (%s) size spanned by regions (" SIZE_FORMAT ") * region size (" PROPERFMT
               ") must not exceed current capacity (" PROPERFMT ")",
               label, generation->name(), stats.regions(), PROPERFMTARGS(ShenandoahHeapRegion::region_size_bytes()),
               PROPERFMTARGS(generation_capacity));
-#endif
     size_t humongous_waste = generation->get_humongous_waste();
     guarantee(stats.waste() == humongous_waste,
               "%s: generation (%s) humongous waste must be consistent: generation: " PROPERFMT ", regions: " PROPERFMT,

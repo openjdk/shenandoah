@@ -1185,11 +1185,6 @@ void ShenandoahFullGC::phase5_epilog() {
     //       A partial solution would be to remember how many objects are of tenure age following Full GC, but
     //       this is probably suboptimal, because most of these objects will not reside in a region that will be
     //       selected for the next evacuation phase.
-#ifdef KELVIN_DEPRECATE
-    if (heap->mode()->is_generational()) {
-      ShenandoahGenerationalFullGC::compute_balances();
-    }
-#endif
     heap->free_set()->finish_rebuild(young_cset_regions, old_cset_regions, num_old);
 
     heap->clear_cancelled_gc(true /* clear oom handler */);
@@ -1201,9 +1196,6 @@ void ShenandoahFullGC::phase5_epilog() {
   // We defer generation resizing actions until after cset regions have been recycled.  We do this even following an
   // abbreviated cycle.
   if (heap->mode()->is_generational()) {
-#ifdef KELVIN_DEPRECATE
-    ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set();
-#endif
     ShenandoahGenerationalFullGC::rebuild_remembered_set(heap);
   }
 }

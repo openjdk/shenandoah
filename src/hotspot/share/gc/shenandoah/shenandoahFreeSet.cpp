@@ -274,11 +274,6 @@ inline void ShenandoahRegionPartitions::expand_interval_if_boundary_modified(She
 }
 
 inline void ShenandoahRegionPartitions::adjust_interval_for_recycled_old_region(ShenandoahHeapRegion* r) {
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  log_info(gc)("adjusting interval for recycled region " SIZE_FORMAT ", free: " SIZE_FORMAT ", is_trash: %s, is_old: %s",
-               r->index(), r->free(), r->is_trash()? "true": "false", r->is_old()? "true": "false");
-#endif
   assert(!r->is_trash() && (r->free() == _region_size_bytes), "Bad argument");
   idx_t idx = (idx_t) r->index();
   // Note that a recycled old trashed region may be in any one of the free set partitions according to the following scenarios:
@@ -586,13 +581,6 @@ void ShenandoahRegionPartitions::assert_bounds(bool old_trash_not_in_bounds) {
         //    causes the empty-free interval to be updated.
         // Only in case 2 do we need to disable the assert checking, but it is difficult to distinguish case 2 from case 5,
         //    so we do not assert bounds for case 2 or case 5.
-
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-        if (old_trash_not_in_bounds && r->is_old() && r->is_trash()) {
-          log_info(gc)("assert_bounds() sees old trashed region " SIZE_FORMAT " residing in partition %d", i, int(partition));
-        }
-#endif
 
         if (old_trash_not_in_bounds && (partition == ShenandoahFreeSetPartitionId::OldCollector) && r->is_old() && r->is_trash()) {
           // If Old trash has been identified but we have not yet rebuilt the freeset to acount for the trashed regions,
@@ -1304,15 +1292,9 @@ void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
 void ShenandoahFreeSet::recycle_trash() {
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
-#ifdef KELVIN_DEBUG
-  int recycled_regions = 0;
-#endif
   for (size_t i = 0; i < _heap->num_regions(); i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_trash()) {
-#ifdef KELVIN_DEBUG
-      recycled_regions++;
-#endif
       ShenandoahHeapLocker locker(_heap->lock());
       try_recycle_trashed(r);
 #ifdef ASSERT
@@ -1326,9 +1308,6 @@ void ShenandoahFreeSet::recycle_trash() {
     SpinPause(); // allow allocators to take the lock
   }
 #ifdef ASSERT
-#ifdef KELVIN_DEBUG
-  log_info(gc)("WILL ROBINSON, WARNING IS NO LONGER REQUIRED AFTER TRYING TO RECYCLE %d!", recycled_regions);
-#endif
   ShenandoahHeapLocker locker(_heap->lock());
   _old_trash_not_in_bounds = false;
 #endif
@@ -1351,10 +1330,6 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   bool transferred = gen_heap->generation_sizer()->transfer_to_old(1);
   if (!transferred) {
     log_warning(gc, free)("Forcing transfer of " SIZE_FORMAT " to old reserve.", idx);
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-    log_info(gc)("flip_to_old_gc() region " SIZE_FORMAT, r->index());
-#endif
     gen_heap->generation_sizer()->force_transfer_to_old(1);
   }
   // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
@@ -1432,9 +1407,6 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
         // into the OldCollector partition.  Deferring the decision allows reserve_regions() to more effectively pack the
         // OldCollector regions into high-address memory.  We do not adjust capacities of old and young generations at this
         // time.  At the end of finish_rebuild(), the capacities are adjusted based on the results of reserve_regions().
-#ifdef KELVIN_DEBUG
-        log_info(gc)("find_regions_with_alloc_capacity() is looking at old trash region " SIZE_FORMAT, idx);
-#endif
         old_cset_regions++;
       } else {
         assert(region->is_young(), "Trashed region should be old or young");
@@ -1456,11 +1428,6 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
       if (ac > PLAB::min_size() * HeapWordSize) {
         if (region->is_trash() || !region->is_old()) {
           // Young and old (possibly immediately) collected regions (trashed) are placed into the Mutator set
-#ifdef KELVIN_DEBUG
-          if (region->is_old()) {
-            log_info(gc)("find_regions_with_alloc_capacity() moves old trash region " SIZE_FORMAT " to mutator partition", idx);
-          }
-#endif
           _partitions.raw_assign_membership(idx, ShenandoahFreeSetPartitionId::Mutator);
           if (idx < mutator_leftmost) {
             mutator_leftmost = idx;
@@ -1790,10 +1757,6 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
 // the collector set is at least to_reserve and the memory available for allocations within the old collector set
 // is at least to_reserve_old.
 void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old, size_t &old_region_count) {
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-    size_t initial_old_region_count = old_region_count;
-#endif
   for (size_t i = _heap->num_regions(); i > 0; i--) {
     size_t idx = i - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
@@ -1819,43 +1782,8 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
       // be collected in the near future.
       if (r->is_trash() || !r->is_affiliated()) {
         // OLD regions that have available memory are already in the old_collector free set.
-#ifdef KELVIN_DEBUG
-        if (_old_trash_not_in_bounds) {
-          log_info(gc)("reserve_regions() moving %s %sregion " SIZE_FORMAT " with alloc capacity " SIZE_FORMAT
-                       " from Mutator to OldCollector",
-                       r->is_affiliated()? r->affiliation_name(): "unaffiliated", r->is_trash()? "trash ": "", idx, ac);
-          log_info(gc)("Before move: Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
-                      "  Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector));
-          log_info(gc)("Empty Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
-                      "  Empty Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector));
-        }
-#endif
         _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
                                                      ShenandoahFreeSetPartitionId::OldCollector, ac);
-#ifdef KELVIN_DEBUG
-        if (_old_trash_not_in_bounds) {
-          log_info(gc)("After move: Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
-                      "  Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector));
-          log_info(gc)("Empty Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
-                      "  Empty Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator),
-                      _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector),
-                      _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector));
-        }
-#endif
         log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
         log_debug(gc)("  Shifted Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
                       "  Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
@@ -1904,10 +1832,6 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     log_info(gc, free)("Wanted " PROPERFMT " for young reserve, but only reserved: " PROPERFMT,
                        PROPERFMTARGS(to_reserve), PROPERFMTARGS(young_reserve));
   }
-#ifdef KELVIN_DEBUG
-  log_info(gc)("At end of reserve_regions(), old_region_count: " SIZE_FORMAT ", at entry, was: " SIZE_FORMAT,
-               old_region_count, initial_old_region_count);
-#endif
 }
 
 void ShenandoahFreeSet::establish_old_collector_alloc_bias() {
@@ -1949,13 +1873,8 @@ void ShenandoahFreeSet::log_status() {
   shenandoah_assert_heaplocked();
 
 #ifdef ASSERT
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  if (true) {
-#else
   // Dump of the FreeSet details is only enabled if assertions are enabled
   if (LogTarget(Debug, gc, free)::is_enabled()) {
-#endif
 #define BUFFER_SIZE 80
     size_t retired_old = 0;
     size_t retired_old_humongous = 0;
@@ -1977,22 +1896,6 @@ void ShenandoahFreeSet::log_status() {
     for (uint i = 0; i < BUFFER_SIZE; i++) {
       buffer[i] = '\0';
     }
-#ifdef KELVIN_DEBUG
-    log_info(gc)("FreeSet map legend:"
-                       " M:mutator_free C:collector_free O:old_collector_free"
-                       " H:humongous ~:retired old _:retired young");
-    log_info(gc)(" mutator free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocating from %s, "
-                  " collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "], "
-                  "old collector free range [" SIZE_FORMAT ".." SIZE_FORMAT "] allocates from %s",
-                  _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
-                  _partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator),
-                  _partitions.alloc_from_left_bias(ShenandoahFreeSetPartitionId::Mutator)? "left to right": "right to left",
-                  _partitions.leftmost(ShenandoahFreeSetPartitionId::Collector),
-                  _partitions.rightmost(ShenandoahFreeSetPartitionId::Collector),
-                  _partitions.leftmost(ShenandoahFreeSetPartitionId::OldCollector),
-                  _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector),
-                  _partitions.alloc_from_left_bias(ShenandoahFreeSetPartitionId::OldCollector)? "left to right": "right to left");
-#endif
     log_debug(gc)("FreeSet map legend:"
                        " M:mutator_free C:collector_free O:old_collector_free"
                        " H:humongous ~:retired old _:retired young");
@@ -2012,9 +1915,6 @@ void ShenandoahFreeSet::log_status() {
       ShenandoahHeapRegion *r = _heap->get_region(i);
       uint idx = i % 64;
       if ((i != 0) && (idx == 0)) {
-#ifdef KELVIN_DEBUG
-        log_info(gc)(" %6u: %s", i-64, buffer);
-#endif
         log_debug(gc)(" %6u: %s", i-64, buffer);
       }
       if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, i)) {
@@ -2060,9 +1960,6 @@ void ShenandoahFreeSet::log_status() {
     } else {
       remnant = 64;
     }
-#ifdef KELVIN_DEBUG
-    log_info(gc)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
-#endif
     log_debug(gc)(" %6u: %s", (uint) (_heap->num_regions() - remnant), buffer);
   }
 #endif

@@ -1949,10 +1949,6 @@ void ShenandoahHeap::rendezvous_threads() {
 }
 
 void ShenandoahHeap::recycle_trash() {
-#undef KELVIN_DEBUG
-#ifdef KELVIN_DEBUG
-  log_info(gc)("ShenHeap::recycle_trash() calls free_set()->recycle_trash()");
-#endif
   free_set()->recycle_trash();
 }
 
