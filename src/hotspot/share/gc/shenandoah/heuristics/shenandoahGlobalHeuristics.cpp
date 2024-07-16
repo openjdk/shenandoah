@@ -129,9 +129,6 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
   size_t old_evac_bytes = 0;
   size_t young_evac_bytes = 0;
 
-  // Keep track of how many regions we plan to transfer from young to old.
-  size_t shared_regions_consumed_by_old, shared_regions_consumed_by_young;
-
   size_t max_total_cset = (max_young_cset + max_old_cset +
                            (size_t) (shared_reserve_regions * region_size_bytes) / ShenandoahOldEvacWaste);
   size_t free_target = ((young_capacity + old_capacity) * ShenandoahMinFreeThreshold) / 100 + max_total_cset;
@@ -170,7 +167,6 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
         }
         // We already know: add_regardless || region_garbage > garbage_threshold
         if (new_cset <= max_old_cset) {
-          shared_regions_consumed_by_old += proposed_old_region_consumption;
           add_region = true;
           old_cur_cset = new_cset;
           cur_garbage = new_garbage;
