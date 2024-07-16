@@ -176,13 +176,13 @@ bool ShenandoahOldHeuristics::add_old_regions_to_cset(ShenandoahCollectionSet* c
   return true;
 }
 
-void ShenandoahOldHeuristics::initialize_piggyback_evacs(ShenandoahCollectionSet* collection_set,
-                                                         size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                                                         uint &included_old_regions, size_t &old_evacuation_reserve,
-                                                         size_t &old_evacuation_budget,
-                                                         size_t &unfragmented_available,
-                                                         size_t &fragmented_available,
-                                                         size_t &excess_fragmented_available) {
+void ShenandoahOldHeuristics::initialize_mixed_evacs(ShenandoahCollectionSet* collection_set,
+                                                     size_t &evacuated_old_bytes, size_t &collected_old_bytes,
+                                                     uint &included_old_regions, size_t &old_evacuation_reserve,
+                                                     size_t &old_evacuation_budget,
+                                                     size_t &unfragmented_available,
+                                                     size_t &fragmented_available,
+                                                     size_t &excess_fragmented_available) {
   included_old_regions = 0;
   evacuated_old_bytes = 0;
   collected_old_bytes = 0;
@@ -231,18 +231,18 @@ void ShenandoahOldHeuristics::initialize_piggyback_evacs(ShenandoahCollectionSet
 }
 
 
-bool ShenandoahOldHeuristics::finalize_piggyback_evacs(ShenandoahCollectionSet* collection_set,
-                                                       const size_t evacuated_old_bytes, size_t collected_old_bytes,
-                                                       const uint included_old_regions, const size_t old_evacuation_reserve,
-                                                       const size_t old_evacuation_budget,
-                                                       const size_t unfragmented_available) {
+bool ShenandoahOldHeuristics::finalize_mixed_evacs(ShenandoahCollectionSet* collection_set,
+                                                   const size_t evacuated_old_bytes, size_t collected_old_bytes,
+                                                   const uint included_old_regions, const size_t old_evacuation_reserve,
+                                                   const size_t old_evacuation_budget,
+                                                   const size_t unfragmented_available) {
   if (_first_pinned_candidate != NOT_FOUND) {
     // Need to deal with pinned regions
     slide_pinned_regions_to_front();
   }
   decrease_unprocessed_old_collection_candidates_live_memory(evacuated_old_bytes);
   if (included_old_regions > 0) {
-    log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
+    log_info(gc)("Old-gen mixed evac (" UINT32_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
                  included_old_regions,
                  byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes),
                  byte_size_in_proper_unit(collected_old_bytes), proper_unit_for_byte_size(collected_old_bytes));

@@ -171,26 +171,26 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   if (doing_promote_in_place || (preselected_candidates > 0) || (immediate_percent <= ShenandoahImmediateThreshold)) {
     // Only young collections need to prime the collection set.
 
-    bool need_to_finalize_piggyback = false;
+    bool need_to_finalize_mixed = false;
     size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
       fragmented_available,excess_fragmented_available;
     uint included_old_regions;
 
     if (_generation->is_young()) {
-      heap->old_generation()->heuristics()->initialize_piggyback_evacs(collection_set,
-                                                                       evacuated_old_bytes, collected_old_bytes,
-                                                                       included_old_regions, old_evacuation_reserve,
-                                                                       old_evacuation_budget, unfragmented_available,
-                                                                       fragmented_available, excess_fragmented_available);
-      need_to_finalize_piggyback =heap->old_generation()->heuristics()->prime_collection_set(collection_set,
-                                                                                             evacuated_old_bytes,
-                                                                                             collected_old_bytes,
-                                                                                             included_old_regions,
-                                                                                             old_evacuation_reserve,
-                                                                                             old_evacuation_budget,
-                                                                                             unfragmented_available,
-                                                                                             fragmented_available,
-                                                                                             excess_fragmented_available);
+      heap->old_generation()->heuristics()->initialize_mixed_evacs(collection_set,
+                                                                   evacuated_old_bytes, collected_old_bytes,
+                                                                   included_old_regions, old_evacuation_reserve,
+                                                                   old_evacuation_budget, unfragmented_available,
+                                                                   fragmented_available, excess_fragmented_available);
+      need_to_finalize_mixed = heap->old_generation()->heuristics()->prime_collection_set(collection_set,
+                                                                                          evacuated_old_bytes,
+                                                                                          collected_old_bytes,
+                                                                                          included_old_regions,
+                                                                                          old_evacuation_reserve,
+                                                                                          old_evacuation_budget,
+                                                                                          unfragmented_available,
+                                                                                          fragmented_available,
+                                                                                          excess_fragmented_available);
     }
 
     // Call the subclasses to add young-gen regions into the collection set.
@@ -201,17 +201,17 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
       // enough consolidated garbage to make effective use of young-gen evacuation reserve.  If there is still
       // young-gen reserve available following selection of the young-gen collection set, see if we can use
       // this memory to expand the old-gen evacuation collection set.
-      need_to_finalize_piggyback |=
+      need_to_finalize_mixed |=
         heap->old_generation()->heuristics()->top_off_collection_set(collection_set,
                                                                      evacuated_old_bytes, collected_old_bytes,
                                                                      included_old_regions, old_evacuation_reserve,
                                                                      old_evacuation_budget, unfragmented_available,
                                                                      fragmented_available, excess_fragmented_available);
-      if (need_to_finalize_piggyback) {
-        heap->old_generation()->heuristics()->finalize_piggyback_evacs(collection_set,
-                                                                       evacuated_old_bytes, collected_old_bytes,
-                                                                       included_old_regions, old_evacuation_reserve,
-                                                                       old_evacuation_budget, unfragmented_available);
+      if (need_to_finalize_mixed) {
+        heap->old_generation()->heuristics()->finalize_mixed_evacs(collection_set,
+                                                                   evacuated_old_bytes, collected_old_bytes,
+                                                                   included_old_regions, old_evacuation_reserve,
+                                                                   old_evacuation_budget, unfragmented_available);
       }
     }
   }
