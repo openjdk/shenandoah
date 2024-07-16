@@ -177,20 +177,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     uint included_old_regions;
 
     if (_generation->is_young()) {
-      heap->old_generation()->heuristics()->initialize_mixed_evacs(collection_set,
-                                                                   evacuated_old_bytes, collected_old_bytes,
-                                                                   included_old_regions, old_evacuation_reserve,
-                                                                   old_evacuation_budget, unfragmented_available,
-                                                                   fragmented_available, excess_fragmented_available);
-      need_to_finalize_mixed = heap->old_generation()->heuristics()->prime_collection_set(collection_set,
-                                                                                          evacuated_old_bytes,
-                                                                                          collected_old_bytes,
-                                                                                          included_old_regions,
-                                                                                          old_evacuation_reserve,
-                                                                                          old_evacuation_budget,
-                                                                                          unfragmented_available,
-                                                                                          fragmented_available,
-                                                                                          excess_fragmented_available);
+      need_to_finalize_mixed = heap->old_generation()->heuristics()->prime_collection_set(collection_set);
     }
 
     // Call the subclasses to add young-gen regions into the collection set.
@@ -202,16 +189,9 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
       // young-gen reserve available following selection of the young-gen collection set, see if we can use
       // this memory to expand the old-gen evacuation collection set.
       need_to_finalize_mixed |=
-        heap->old_generation()->heuristics()->top_off_collection_set(collection_set,
-                                                                     evacuated_old_bytes, collected_old_bytes,
-                                                                     included_old_regions, old_evacuation_reserve,
-                                                                     old_evacuation_budget, unfragmented_available,
-                                                                     fragmented_available, excess_fragmented_available);
+        heap->old_generation()->heuristics()->top_off_collection_set();
       if (need_to_finalize_mixed) {
-        heap->old_generation()->heuristics()->finalize_mixed_evacs(collection_set,
-                                                                   evacuated_old_bytes, collected_old_bytes,
-                                                                   included_old_regions, old_evacuation_reserve,
-                                                                   old_evacuation_budget, unfragmented_available);
+        heap->old_generation()->heuristics()->finalize_mixed_evacs();
       }
     }
   }

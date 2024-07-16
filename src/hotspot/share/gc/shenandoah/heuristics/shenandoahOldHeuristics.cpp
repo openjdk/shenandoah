@@ -93,13 +93,7 @@ bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
   return true;
 }
 
-bool ShenandoahOldHeuristics::add_old_regions_to_cset(ShenandoahCollectionSet* collection_set,
-                                                      size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                                                      uint &included_old_regions, const size_t old_evacuation_reserve,
-                                                      const size_t old_evacuation_budget,
-                                                      size_t &unfragmented_available,
-                                                      size_t &fragmented_available,
-                                                      size_t &excess_fragmented_available) {
+bool ShenandoahOldHeuristics::add_old_regions_to_cset() {
   if (unprocessed_old_collection_candidates() == 0) {
     return false;
   }
@@ -122,78 +116,110 @@ bool ShenandoahOldHeuristics::add_old_regions_to_cset(ShenandoahCollectionSet* c
 
     size_t live_data_for_evacuation = r->get_live_data_bytes();
     size_t lost_available = r->free();
-    if ((lost_available > 0) && (excess_fragmented_available > 0)) {
-      if (lost_available < excess_fragmented_available) {
-        excess_fragmented_available -= lost_available;
+    if ((lost_available > 0) && (_excess_fragmented_available > 0)) {
+      if (lost_available < _excess_fragmented_available) {
+        _excess_fragmented_available -= lost_available;
         lost_available = 0;
       } else {
-        lost_available -= excess_fragmented_available;
-        excess_fragmented_available = 0;
+        lost_available -= _excess_fragmented_available;
+        _excess_fragmented_available = 0;
       }
     }
 
     ssize_t fragmented_delta = 0;
     ssize_t unfragmented_delta = 0;
-
     size_t scaled_loss = (size_t) ((double) lost_available / ShenandoahOldEvacWaste);
-    if ((lost_available > 0) && (fragmented_available > 0)) {
-      if (scaled_loss < fragmented_available) {
-        fragmented_available -= scaled_loss;
+    if ((lost_available > 0) && (_fragmented_available > 0)) {
+      if (scaled_loss < _fragmented_available) {
+        _fragmented_available -= scaled_loss;
         fragmented_delta = -scaled_loss;
         scaled_loss = 0;
       } else {
-        scaled_loss -= fragmented_available;
-        fragmented_delta = -fragmented_available;
-        fragmented_available = 0;
+        scaled_loss -= _fragmented_available;
+        fragmented_delta = -_fragmented_available;
+        _fragmented_available = 0;
       }
     }
     // Allocate replica from unfragmented memory if that exists
     size_t evacuation_need = live_data_for_evacuation;
-    if (evacuation_need < unfragmented_available) {
-      unfragmented_available -= evacuation_need;;
+    if (evacuation_need < _unfragmented_available) {
+      _unfragmented_available -= evacuation_need;;
     } else {
-      if (unfragmented_available > 0) {
-        evacuation_need -= unfragmented_available;
-        unfragmented_delta = -unfragmented_available;
-        unfragmented_available = 0;
+      if (_unfragmented_available > 0) {
+        evacuation_need -= _unfragmented_available;
+        unfragmented_delta = -_unfragmented_available;
+        _unfragmented_available = 0;
       }
       // Take the remaining allocation out of fragmented available
-      if (fragmented_available > evacuation_need) {
-        fragmented_available -= evacuation_need;
+      if (_fragmented_available > evacuation_need) {
+        _fragmented_available -= evacuation_need;
       } else {
         // We cannot add this region into the collection set.  We're done.  Undo the adjustments to available.
-        fragmented_available -= fragmented_delta;
-        unfragmented_available -= unfragmented_delta;
+        _fragmented_available -= fragmented_delta;
+        _unfragmented_available -= unfragmented_delta;
         break;
       }
     }
-    collection_set->add_region(r);
-    included_old_regions++;
-    evacuated_old_bytes += live_data_for_evacuation;
-    collected_old_bytes += r->garbage();
+    _mixed_evac_cset->add_region(r);
+    _included_old_regions++;
+    _evacuated_old_bytes += live_data_for_evacuation;
+    _collected_old_bytes += r->garbage();
     consume_old_collection_candidate();
   }
   return true;
 }
 
-void ShenandoahOldHeuristics::initialize_mixed_evacs(ShenandoahCollectionSet* collection_set,
-                                                     size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                                                     uint &included_old_regions, size_t &old_evacuation_reserve,
-                                                     size_t &old_evacuation_budget,
-                                                     size_t &unfragmented_available,
-                                                     size_t &fragmented_available,
-                                                     size_t &excess_fragmented_available) {
-  included_old_regions = 0;
-  evacuated_old_bytes = 0;
-  collected_old_bytes = 0;
+bool ShenandoahOldHeuristics::finalize_mixed_evacs() {
+  if (_first_pinned_candidate != NOT_FOUND) {
+    // Need to deal with pinned regions
+    slide_pinned_regions_to_front();
+  }
+  decrease_unprocessed_old_collection_candidates_live_memory(_evacuated_old_bytes);
+  if (_included_old_regions > 0) {
+    log_info(gc)("Old-gen mixed evac (" SIZE_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
+                 _included_old_regions,
+                 byte_size_in_proper_unit(_evacuated_old_bytes), proper_unit_for_byte_size(_evacuated_old_bytes),
+                 byte_size_in_proper_unit(_collected_old_bytes), proper_unit_for_byte_size(_collected_old_bytes));
+  }
+
+  if (unprocessed_old_collection_candidates() == 0) {
+    // We have added the last of our collection candidates to a mixed collection.
+    // Any triggers that occurred during mixed evacuations may no longer be valid.  They can retrigger if appropriate.
+    clear_triggers();
+
+    _old_generation->complete_mixed_evacuations();
+  } else if (_included_old_regions == 0) {
+    // We have candidates, but none were included for evacuation - are they all pinned?
+    // or did we just not have enough room for any of them in this collection set?
+    // We don't want a region with a stuck pin to prevent subsequent old collections, so
+    // if they are all pinned we transition to a state that will allow us to make these uncollected
+    // (pinned) regions parsable.
+    if (all_candidates_are_pinned()) {
+      log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
+      _old_generation->abandon_mixed_evacuations();
+    } else {
+      log_info(gc)("No regions selected for mixed collection. "
+                   "Old evacuation budget: " PROPERFMT ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
+                   PROPERFMTARGS(_old_evacuation_reserve),
+                   _next_old_collection_candidate, _last_old_collection_candidate);
+    }
+  }
+  return (_included_old_regions > 0);
+}
+
+bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
+  _mixed_evac_cset = collection_set;
+  _included_old_regions = 0;
+  _evacuated_old_bytes = 0;
+  _collected_old_bytes = 0;
 
   // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
   // "available" to hold the results of other evacuations.  This may cause a decrease in the remaining amount
   // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
   // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
   // budget is constrained by availability of free memory.
-  old_evacuation_reserve = _old_generation->get_evacuation_reserve();
-  old_evacuation_budget = (size_t) ((double) old_evacuation_reserve / ShenandoahOldEvacWaste);
+  _old_evacuation_reserve = _old_generation->get_evacuation_reserve();
+  _old_evacuation_budget = (size_t) ((double) _old_evacuation_reserve / ShenandoahOldEvacWaste);
 
   // fragmented_available is the amount of memory within partially consumed old regions that may be required to
   // hold the results of old evacuations.  If all of the memory required by the old evacuation reserve is available
@@ -210,97 +236,35 @@ void ShenandoahOldHeuristics::initialize_mixed_evacs(ShenandoahCollectionSet* co
   // to unfragmented regions.
 
   size_t unaffiliated_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
-  if (unaffiliated_available > old_evacuation_reserve) {
-    unfragmented_available = old_evacuation_budget;
-    fragmented_available = 0;
-    excess_fragmented_available = 0;
+  if (unaffiliated_available > _old_evacuation_reserve) {
+    _unfragmented_available = _old_evacuation_budget;
+    _fragmented_available = 0;
+    _excess_fragmented_available = 0;
   } else {
-    assert(_old_generation->available() >= old_evacuation_reserve, "Cannot reserve more than is available");
+    assert(_old_generation->available() >= _old_evacuation_reserve, "Cannot reserve more than is available");
     size_t affiliated_available = _old_generation->available() - unaffiliated_available;
-    assert(affiliated_available + unaffiliated_available >= old_evacuation_reserve, "Budgets do not add up");
-    if (affiliated_available + unaffiliated_available > old_evacuation_reserve) {
-      excess_fragmented_available = (affiliated_available + unaffiliated_available) - old_evacuation_reserve;
-      affiliated_available -= excess_fragmented_available;
+    assert(affiliated_available + unaffiliated_available >= _old_evacuation_reserve, "Budgets do not add up");
+    if (affiliated_available + unaffiliated_available > _old_evacuation_reserve) {
+      _excess_fragmented_available = (affiliated_available + unaffiliated_available) - _old_evacuation_reserve;
+      affiliated_available -= _excess_fragmented_available;
     }
-    fragmented_available = (size_t) ((double) affiliated_available / ShenandoahOldEvacWaste);
-    unfragmented_available = (size_t) ((double) unaffiliated_available / ShenandoahOldEvacWaste);
+    _fragmented_available = (size_t) ((double) affiliated_available / ShenandoahOldEvacWaste);
+    _unfragmented_available = (size_t) ((double) unaffiliated_available / ShenandoahOldEvacWaste);
   }
   log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
-               byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
+               byte_size_in_proper_unit(_old_evacuation_budget), proper_unit_for_byte_size(_old_evacuation_budget),
                unprocessed_old_collection_candidates());
+  return add_old_regions_to_cset();
 }
 
-
-bool ShenandoahOldHeuristics::finalize_mixed_evacs(ShenandoahCollectionSet* collection_set,
-                                                   const size_t evacuated_old_bytes, size_t collected_old_bytes,
-                                                   const uint included_old_regions, const size_t old_evacuation_reserve,
-                                                   const size_t old_evacuation_budget,
-                                                   const size_t unfragmented_available) {
-  if (_first_pinned_candidate != NOT_FOUND) {
-    // Need to deal with pinned regions
-    slide_pinned_regions_to_front();
-  }
-  decrease_unprocessed_old_collection_candidates_live_memory(evacuated_old_bytes);
-  if (included_old_regions > 0) {
-    log_info(gc)("Old-gen mixed evac (" UINT32_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
-                 included_old_regions,
-                 byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes),
-                 byte_size_in_proper_unit(collected_old_bytes), proper_unit_for_byte_size(collected_old_bytes));
-  }
-
-  if (unprocessed_old_collection_candidates() == 0) {
-    // We have added the last of our collection candidates to a mixed collection.
-    // Any triggers that occurred during mixed evacuations may no longer be valid.  They can retrigger if appropriate.
-    clear_triggers();
-
-    _old_generation->complete_mixed_evacuations();
-  } else if (included_old_regions == 0) {
-    // We have candidates, but none were included for evacuation - are they all pinned?
-    // or did we just not have enough room for any of them in this collection set?
-    // We don't want a region with a stuck pin to prevent subsequent old collections, so
-    // if they are all pinned we transition to a state that will allow us to make these uncollected
-    // (pinned) regions parsable.
-    if (all_candidates_are_pinned()) {
-      log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
-      _old_generation->abandon_mixed_evacuations();
-    } else {
-      log_info(gc)("No regions selected for mixed collection. "
-                   "Old evacuation budget: " PROPERFMT ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
-                   PROPERFMTARGS(old_evacuation_reserve),
-                   _next_old_collection_candidate, _last_old_collection_candidate);
-    }
-  }
-
-  return (included_old_regions > 0);
-}
-
-bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set,
-                                                   size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                                                   uint &included_old_regions, size_t &old_evacuation_reserve,
-                                                   size_t &old_evacuation_budget,
-                                                   size_t &unfragmented_available,
-                                                   size_t &fragmented_available,
-                                                   size_t &excess_fragmented_available) {
-  return add_old_regions_to_cset(collection_set, evacuated_old_bytes, collected_old_bytes, included_old_regions,
-                                 old_evacuation_reserve, old_evacuation_budget, unfragmented_available, fragmented_available,
-                                 excess_fragmented_available);
-}
-
-bool ShenandoahOldHeuristics::top_off_collection_set(ShenandoahCollectionSet* collection_set,
-                                                     size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                                                     uint &included_old_regions, size_t &old_evacuation_reserve,
-                                                     size_t &old_evacuation_budget,
-                                                     size_t &unfragmented_available,
-                                                     size_t &fragmented_available,
-                                                     size_t &excess_fragmented_available) {
+bool ShenandoahOldHeuristics::top_off_collection_set() {
   if (unprocessed_old_collection_candidates() == 0) {
     return false;
   } else {
     ShenandoahYoungGeneration* young_generation = _heap->young_generation();
     size_t young_unaffiliated_regions = young_generation->free_unaffiliated_regions();
-
     size_t max_young_cset = young_generation->get_evacuation_reserve();
-    size_t planned_young_evac = collection_set->get_young_bytes_reserved_for_evacuation();
+    size_t planned_young_evac = _mixed_evac_cset->get_young_bytes_reserved_for_evacuation();
     size_t consumed_from_young_cset = (size_t) (planned_young_evac * ShenandoahEvacWaste);
     size_t available_to_loan_from_young_reserve = ((consumed_from_young_cset >= max_young_cset)?
                                                    0: max_young_cset - consumed_from_young_cset);
@@ -317,15 +281,13 @@ bool ShenandoahOldHeuristics::top_off_collection_set(ShenandoahCollectionSet* co
       _heap->generation_sizer()->force_transfer_to_old(regions_for_old_expansion);
       size_t budget_supplement = region_size_bytes * regions_for_old_expansion;
       size_t supplement_after_waste = (size_t) (((double) budget_supplement) / ShenandoahOldEvacWaste);
-      old_evacuation_budget += supplement_after_waste;
-      unfragmented_available += supplement_after_waste;
+      _old_evacuation_budget += supplement_after_waste;
+      _unfragmented_available += supplement_after_waste;
 
       _old_generation->augment_evacuation_reserve(budget_supplement);
       young_generation->set_evacuation_reserve(max_young_cset - budget_supplement);
 
-      return add_old_regions_to_cset(collection_set, evacuated_old_bytes, collected_old_bytes, included_old_regions,
-                                     old_evacuation_reserve, old_evacuation_budget, unfragmented_available, fragmented_available,
-                                     excess_fragmented_available);
+      return add_old_regions_to_cset();
     }
   }
 }

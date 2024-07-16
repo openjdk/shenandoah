@@ -198,25 +198,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, prime_one_old_region) {
 
   size_t garbage = make_garbage_above_collection_threshold(10);
   _heuristics->prepare_for_old_collections();
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                         evacuated_old_bytes, collected_old_bytes,
-                                         included_old_regions, old_evacuation_reserve,
-                                         old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_TRUE(collection_set_is(10UL));
   EXPECT_EQ(garbage, _collection_set->get_old_garbage());
@@ -229,24 +212,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, prime_many_old_regions) {
   size_t g1 = make_garbage_above_collection_threshold(100);
   size_t g2 = make_garbage_above_collection_threshold(101);
   _heuristics->prepare_for_old_collections();
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_TRUE(collection_set_is(100UL, 101UL));
   EXPECT_EQ(g1 + g2, _collection_set->get_old_garbage());
@@ -258,24 +225,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, require_multiple_mixed_evacuations) {
 
   size_t garbage = create_too_much_garbage_for_one_mixed_evacuation();
   _heuristics->prepare_for_old_collections();
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_LT(_collection_set->get_old_garbage(), garbage);
   EXPECT_GT(_heuristics->unprocessed_old_collection_candidates(), 0UL);
@@ -297,23 +248,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, skip_pinned_regions) {
   ASSERT_EQ(3UL, _heuristics->unprocessed_old_collection_candidates());
 
   // Here the region is still pinned, so it cannot be added to the collection set.
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
 
   // The two unpinned regions should be added to the collection set and the pinned
@@ -328,20 +264,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, skip_pinned_regions) {
   make_unpinned(1);
   _collection_set->clear();
 
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_EQ(_collection_set->get_old_garbage(), g2);
   EXPECT_TRUE(collection_set_is(1UL));
@@ -358,24 +282,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_first) {
 
   make_pinned(0);
   _heuristics->prepare_for_old_collections();
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
 
   EXPECT_TRUE(collection_set_is(1UL, 2UL));
@@ -383,21 +291,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_first) {
 
   make_unpinned(0);
   _collection_set->clear();
-
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
 
   EXPECT_TRUE(collection_set_is(0UL));
@@ -414,24 +309,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_last) {
 
   make_pinned(2);
   _heuristics->prepare_for_old_collections();
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_TRUE(collection_set_is(0UL, 1UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g2);
@@ -439,21 +318,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, pinned_region_is_last) {
 
   make_unpinned(2);
   _collection_set->clear();
-
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_TRUE(collection_set_is(2UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g3);
@@ -471,24 +337,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
   make_pinned(0);
   make_pinned(2);
   _heuristics->prepare_for_old_collections();
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_TRUE(collection_set_is(1UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g2);
@@ -497,21 +347,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, unpinned_region_is_middle) {
   make_unpinned(0);
   make_unpinned(2);
   _collection_set->clear();
-
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   EXPECT_TRUE(collection_set_is(0UL, 2UL));
   EXPECT_EQ(_collection_set->get_old_garbage(), g1 + g3);
@@ -529,25 +366,8 @@ TEST_VM_F(ShenandoahOldHeuristicTest, all_candidates_are_pinned) {
   make_pinned(1);
   make_pinned(2);
   _heuristics->prepare_for_old_collections();
-
-
-  size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-    fragmented_available,excess_fragmented_available;
-  uint included_old_regions;
-  _heuristics->initialize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available,
-                                          fragmented_available, excess_fragmented_available);
-  if (_heuristics->prime_collection_set(_collection_set,
-                                        evacuated_old_bytes, collected_old_bytes,
-                                        included_old_regions, old_evacuation_reserve,
-                                        old_evacuation_budget, unfragmented_available,
-                                        fragmented_available, excess_fragmented_available)) {
-    _heuristics->finalize_piggyback_evacs(_collection_set,
-                                          evacuated_old_bytes, collected_old_bytes,
-                                          included_old_regions, old_evacuation_reserve,
-                                          old_evacuation_budget, unfragmented_available);
+  if (_heuristics->prime_collection_set(_collection_set)) {
+    _heuristics->finalize_mixed_evacs();
   }
   // In the case when all candidates are pinned, we want to abandon
   // this set of mixed collection candidates so that another old collection

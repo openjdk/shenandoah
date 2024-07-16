@@ -103,6 +103,17 @@ private:
   size_t _fragmentation_first_old_region;
   size_t _fragmentation_last_old_region;
 
+  // State variables involved in construction of a mixed-evacuation collection set
+  ShenandoahCollectionSet* _mixed_evac_cset;
+  size_t _evacuated_old_bytes;
+  size_t _collected_old_bytes;
+  size_t _included_old_regions;
+  size_t _old_evacuation_reserve;
+  size_t _old_evacuation_budget;
+  size_t _unfragmented_available;
+  size_t _fragmented_available;
+  size_t _excess_fragmented_available;
+
   // Compare by live is used to prioritize compaction of old-gen regions.  With old-gen compaction, the goal is
   // to tightly pack long-lived objects into available regions.  In most cases, there has not been an accumulation
   // of garbage within old-gen regions.  The more likely opportunity will be to combine multiple sparsely populated
@@ -127,14 +138,8 @@ private:
  protected:
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set, RegionData* data, size_t data_size, size_t free) override;
 
-// Return true iff we need to finalize mixed evacs
-bool add_old_regions_to_cset(ShenandoahCollectionSet* collection_set,
-                             size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                             uint &included_old_regions, const size_t old_evacuation_reserve,
-                             const size_t old_evacuation_budget,
-                             size_t &unfragmented_available,
-                             size_t &fragmented_available,
-                             size_t &excess_fragmented_available);
+  // Return true iff we need to finalize mixed evacs
+  bool add_old_regions_to_cset();
 
 public:
   explicit ShenandoahOldHeuristics(ShenandoahOldGeneration* generation, ShenandoahGenerationalHeap* gen_heap);
@@ -142,40 +147,14 @@ public:
   // Prepare for evacuation of old-gen regions by capturing the mark results of a recently completed concurrent mark pass.
   void prepare_for_old_collections();
 
-  void initialize_mixed_evacs(ShenandoahCollectionSet* collection_set,
-                              size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                              uint &included_old_regions, size_t &old_evacuation_reserve,
-                              size_t &old_evacuation_budget,
-                              size_t &unfragmented_available,
-                              size_t &fragmented_available,
-                              size_t &excess_fragmented_available);
+  // Return true iff we need to finalize mixed evacs
+  bool prime_collection_set(ShenandoahCollectionSet* collection_set);
 
   // Return true iff we need to finalize mixed evacs
-  bool prime_collection_set(ShenandoahCollectionSet* set,
-                            size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                            uint &included_old_regions, size_t &old_evacuation_reserve,
-                            size_t &old_evacuation_budget,
-                            size_t &unfragmented_available,
-                            size_t &fragmented_available,
-                            size_t &excess_fragmented_available);
-
-  // Return true iff we need to finalize mixed evacs
-  bool top_off_collection_set(ShenandoahCollectionSet* collection_set,
-                              size_t &evacuated_old_bytes, size_t &collected_old_bytes,
-                              uint &included_old_regions, size_t &old_evacuation_reserve,
-                              size_t &old_evacuation_budget,
-                              size_t &unfragmented_available,
-                              size_t &fragmented_available,
-                              size_t &excess_fragmented_available);
-
+  bool top_off_collection_set();
 
   // Return true iff the collection set holds at least one unpinned mixed evacuation candidate
-  bool finalize_mixed_evacs(ShenandoahCollectionSet* collection_set,
-                            const size_t evacuated_old_bytes, size_t collected_old_bytes,
-                            const uint included_old_regions, const size_t old_evacuation_reserve,
-                            const size_t old_evacuation_budget,
-                            const size_t unfragmented_available);
-
+  bool finalize_mixed_evacs();
 
   // How many old-collection candidates have not yet been processed?
   uint unprocessed_old_collection_candidates() const;
