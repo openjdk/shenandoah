@@ -172,10 +172,6 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     // Only young collections need to prime the collection set.
 
     bool need_to_finalize_mixed = false;
-    size_t evacuated_old_bytes, collected_old_bytes, old_evacuation_reserve, old_evacuation_budget, unfragmented_available,
-      fragmented_available,excess_fragmented_available;
-    uint included_old_regions;
-
     if (_generation->is_young()) {
       need_to_finalize_mixed = heap->old_generation()->heuristics()->prime_collection_set(collection_set);
     }
