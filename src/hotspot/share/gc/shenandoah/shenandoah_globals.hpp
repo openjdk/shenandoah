@@ -380,16 +380,15 @@
           "runs out of memory too early.")                                  \
                                                                             \
   product(uintx, ShenandoahOldEvacRatioPercent, 75, EXPERIMENTAL,           \
-          "The maximum percentage by which the young evacuation reserve "   \
-          "can be adjusted in order to make room for old-generation "       \
-          "evacuations.  With the default setting, given a total "          \
-          "evacuation budget of X, the amount of memory initially "         \
-          "dedicated to holding objects evacuated to old generation is "    \
-          "75%.  This limits both the promotion of aged young regions and " \
+          "The maximum percent of memory that can be reserved for "         \
+          "evacuation into old generation.  With the default setting, "     \
+          "given a total evacuation budget of X, the amount of memory "     \
+          "reserved to hold objects evacuated to old generation is 0.75x."  \
+          "This limits both the promotion of aged young regions and "       \
           "the compaction of existing old regions.  It does not restrict "  \
           "the collector from copying more objects into old-generation "    \
           "memory if the young-generation collection set does not consume " \
-          "all of the memory originally set aside for young-generation "    \
+          "all of the memory originally reserved for young-generation "     \
           "evacuation.  It also does not restrict the amount of memory "    \
           "that can be promoted in place, by simply changing the "          \
           "affiliation of the region from young to old.  If there is an "   \
@@ -397,11 +396,12 @@
           "evacuation effort, roughly quadrupling the amount of memory "    \
           "normally evacuated during young evacuations (so that old "       \
           "evacuates three times as much as young, and young evacuates its "\
-          "normal amount.  If free memory is in short supply, this may "    \
+          "normal amount).  If free memory is in short supply, this may "   \
           "result in paring back both young-gen and old-gen evacuations, "  \
           "such that the fraction of old is 75% (in the default "           \
-          "configuration) of the total available evacuation reserve and "   \
-          "young evacuates one fourth of its normal amount.  "              \
+          "configuration) of the total available evacuation reserve, "      \
+          "with young evacuating one fourth of its normal amount, "         \
+          "and old evacuating three times as much as young evacuates.  "    \
           "Setting a larger value allows for quicker promotion and a "      \
           "smaller number of mixed evacuations to process the entire list " \
           "of old-gen collection candidates at the cost of increased "      \
