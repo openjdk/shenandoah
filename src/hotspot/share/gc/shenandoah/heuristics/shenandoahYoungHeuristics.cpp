@@ -93,7 +93,6 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
   size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_cset;
   size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
 
-
   log_info(gc, ergo)(
           "Adaptive CSet Selection for YOUNG. Max Evacuation: " SIZE_FORMAT "%s, Actual Free: " SIZE_FORMAT "%s.",
           byte_size_in_proper_unit(max_cset), proper_unit_for_byte_size(max_cset),

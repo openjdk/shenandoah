@@ -380,7 +380,14 @@ public:
 
   // span is the total memory affiliated with these stats (some of which is in use and other is available)
   size_t span() const { return _regions * ShenandoahHeapRegion::region_size_bytes(); }
-  size_t non_trashed_span() const { return (_regions - _trashed_regions) * ShenandoahHeapRegion::region_size_bytes(); }
+  size_t non_trashed_span() const {
+    assert(_regions >= _trashed_regions, "sanity");
+    return (_regions - _trashed_regions) * ShenandoahHeapRegion::region_size_bytes();
+  }
+  size_t non_trashed_committed() const {
+    assert(_committed >= _trashed_regions * ShenandoahHeapRegion::region_size_bytes(), "sanity");
+    return _committed - (_trashed_regions * ShenandoahHeapRegion::region_size_bytes());
+  }
 };
 
 class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
@@ -418,10 +425,15 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     size_t generation_used = generation->used();
     size_t generation_used_regions = generation->used_regions();
+    size_t generation_max_capacity = generation->max_capacity();
     if (adjust_for_padding && (generation->is_young() || generation->is_global())) {
       size_t pad = heap->old_generation()->get_pad_for_promote_in_place();
       generation_used += pad;
     }
+
+    guarantee(stats.non_trashed_committed() <= generation_max_capacity,
+              "%s: generation (%s) non_trashed_committed: " PROPERFMT " must not exceed generation capacity: " PROPERFMT,
+              label, generation->name(), PROPERFMTARGS(stats.non_trashed_committed()), PROPERFMTARGS(generation_max_capacity));
 
     guarantee(stats.used() == generation_used,
               "%s: generation (%s) used size must be consistent: generation-used: " PROPERFMT ", regions-used: " PROPERFMT,
@@ -437,7 +449,6 @@ class ShenandoahGenerationStatsClosure : public ShenandoahHeapRegionClosure {
               ") must not exceed current capacity (" PROPERFMT ")",
               label, generation->name(), stats.regions(), PROPERFMTARGS(ShenandoahHeapRegion::region_size_bytes()),
               PROPERFMTARGS(generation_capacity));
-
     size_t humongous_waste = generation->get_humongous_waste();
     guarantee(stats.waste() == humongous_waste,
               "%s: generation (%s) humongous waste must be consistent: generation: " PROPERFMT ", regions: " PROPERFMT,
