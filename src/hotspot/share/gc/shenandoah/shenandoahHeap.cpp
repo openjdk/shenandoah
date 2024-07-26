@@ -410,12 +410,7 @@ jint ShenandoahHeap::initialize() {
 
     // Initialize to complete
     _marking_context->mark_complete();
-    size_t young_cset_regions, old_cset_regions;
-
-    // We are initializing free set.  We ignore cset region tallies.
-    size_t first_old, last_old, num_old;
-    _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-    _free_set->finish_rebuild(young_cset_regions, old_cset_regions, num_old);
+    _free_set->rebuild();
 
     if (mode()->is_generational()) {
       size_t young_reserve = (young_generation()->max_capacity() * ShenandoahEvacReserve) / 100;

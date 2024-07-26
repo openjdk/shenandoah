@@ -376,6 +376,12 @@ public:
 
   void clear();
 
+  // Rebuild the free set.  This combines the effects of prepare_to_rebuild() and finish_rebuild() with no intervening
+  // efforts to rebalance generation sizes.  When the free set is rebuild, we reserve sufficient memory within the
+  // collector partition (and, for generational mode, the old collector partition) based on the amount reserved
+  // by heuristics to support the next planned evacuation effort.
+  void rebuild();
+
   // Examine the existing free set representation, capturing the current state into var arguments:
   //
   // young_cset_regions is the number of regions currently in the young cset if we are starting to evacuate, or zero
@@ -387,7 +393,7 @@ public:
                           size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
 
   // At the end of final mark, but before we begin evacuating, heuristics calculate how much memory is required to
-   // hold the results of evacuating to young-gen and to old-gen.  These quantities, stored in reserves for their,
+  // hold the results of evacuating to young-gen and to old-gen.  These quantities, stored in reserves for their,
   // respective generations, are consulted prior to rebuilding the free set (ShenandoahFreeSet) in preparation for
   // evacuation.  When the free set is rebuilt, we make sure to reserve sufficient memory in the collector and
   // old_collector sets to hold evacuations.

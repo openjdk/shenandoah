@@ -1585,6 +1585,12 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
 }
 
 
+void ShenandoahFreeSet::rebuild() {
+  size_t young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count;
+  prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
+  finish_rebuild(young_cset_regions, old_cset_regions, old_region_count);
+}
+
 // Overwrite arguments to represent the amount of memory in each generation that is about to be recycled
 void ShenandoahFreeSet::prepare_to_rebuild(size_t &young_cset_regions, size_t &old_cset_regions,
                                            size_t &first_old_region, size_t &last_old_region, size_t &old_region_count) {

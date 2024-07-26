@@ -1177,16 +1177,11 @@ void ShenandoahFullGC::phase5_epilog() {
     }
 
     heap->collection_set()->clear();
-    size_t young_cset_regions, old_cset_regions;
-    size_t first_old, last_old, num_old;
-    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-
     // TODO: Do we need to fix FullGC so that it maintains aged segregation of objects into distinct regions?
     //       A partial solution would be to remember how many objects are of tenure age following Full GC, but
     //       this is probably suboptimal, because most of these objects will not reside in a region that will be
     //       selected for the next evacuation phase.
-    heap->free_set()->finish_rebuild(young_cset_regions, old_cset_regions, num_old);
-
+    heap->free_set()->rebuild();
     heap->clear_cancelled_gc(true /* clear oom handler */);
   }
 

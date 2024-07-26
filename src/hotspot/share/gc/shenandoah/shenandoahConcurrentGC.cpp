@@ -360,11 +360,7 @@ void ShenandoahConcurrentGC::entry_final_roots() {
     assert (_abbreviated, "Only rebuild free set for abbreviated");
     // Rebuild free set after reclaiming immediate garbage
     ShenandoahHeapLocker locker(heap->lock());
-    size_t young_cset_regions, old_cset_regions;
-    size_t first_old, last_old, num_old;
-    heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-    assert((young_cset_regions == 0) && (old_cset_regions == 0), "No ongoing evacuation after abbreviated cycle");
-    heap->free_set()->finish_rebuild(0, 0, num_old);
+    heap->free_set()->rebuild();
   }
 }
 
