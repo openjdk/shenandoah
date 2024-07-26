@@ -186,7 +186,6 @@ bool ShenandoahOldHeuristics::finalize_mixed_evacs() {
     // We have added the last of our collection candidates to a mixed collection.
     // Any triggers that occurred during mixed evacuations may no longer be valid.  They can retrigger if appropriate.
     clear_triggers();
-
     _old_generation->complete_mixed_evacuations();
   } else if (_included_old_regions == 0) {
     // We have candidates, but none were included for evacuation - are they all pinned?
