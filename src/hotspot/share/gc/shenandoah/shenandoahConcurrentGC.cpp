@@ -334,30 +334,12 @@ void ShenandoahConcurrentGC::entry_final_roots() {
   EventMark em("%s", msg);
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   op_final_roots();
-
-  if (heap->mode()->is_generational()) {
-    assert (_abbreviated || _generation->is_old(), "Only rebuild free set for abbreviated and old-marking cycles");
-    // After concurrent old marking finishes and after an abbreviated cycle, we reclaim immediate garbage.
-    // Further, we may also want to expand OLD in order to make room for anticipated promotions and/or for mixed
-    // evacuations.  Mixed evacuations are especially likely to following the end of OLD marking.
-    {
-      ShenandoahHeapLocker locker(heap->lock());
-      ShenandoahGenerationalHeap* const gen_heap = ShenandoahGenerationalHeap::heap();
-      size_t young_cset_regions, old_cset_regions;
-      size_t first_old, last_old, num_old;
-      size_t allocation_runway = heap->young_generation()->heuristics()->bytes_of_allocation_runway_before_gc_trigger(0);
-      heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
-      assert((young_cset_regions == 0) && (old_cset_regions == 0),
-             "No ongoing evacuation after abbreviated or concurrent OLD marking cycle");
-      gen_heap->compute_old_generation_balance(allocation_runway, 0, 0);
-      heap->free_set()->finish_rebuild(0, 0, num_old);
-    }
-  } else {
-    assert (_abbreviated, "Only rebuild free set for abbreviated");
-    // Rebuild free set after reclaiming immediate garbage
-    ShenandoahHeapLocker locker(heap->lock());
-    heap->free_set()->rebuild();
-  }
+  // After concurrent old marking finishes and after an abbreviated cycle, we reclaim immediate garbage.
+  // Further, we may also want to expand OLD in order to make room for anticipated promotions and/or for mixed
+  // evacuations.  Mixed evacuations are especially likely to following the end of OLD marking.
+  assert(_abbreviated || (heap->mode()->is_generational() && _generation->is_old()),
+         "Only rebuild free set for abbreviated and old-marking cycles");
+  heap->rebuild_free_set(true /*concurrent*/);
 }
 
 void ShenandoahConcurrentGC::entry_reset() {
