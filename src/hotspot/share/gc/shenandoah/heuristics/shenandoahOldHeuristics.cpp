@@ -77,6 +77,56 @@ ShenandoahOldHeuristics::ShenandoahOldHeuristics(ShenandoahOldGeneration* genera
 {
 }
 
+bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
+  _mixed_evac_cset = collection_set;
+  _included_old_regions = 0;
+  _evacuated_old_bytes = 0;
+  _collected_old_bytes = 0;
+
+  // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
+  // "available" to hold the results of other evacuations.  This may cause a decrease in the remaining amount
+  // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
+  // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
+  // budget is constrained by availability of free memory.
+  _old_evacuation_reserve = _old_generation->get_evacuation_reserve();
+  _old_evacuation_budget = (size_t) ((double) _old_evacuation_reserve / ShenandoahOldEvacWaste);
+
+  // fragmented_available is the amount of memory within partially consumed old regions that may be required to
+  // hold the results of old evacuations.  If all of the memory required by the old evacuation reserve is available
+  // in unfragmented regions (unaffiliated old regions), then fragmented_available is zero because we do not need
+  // to evacuate into the existing partially consumed old regions.
+
+  // if fragmented_available is non-zero, excess_fragmented_available represents the amount of fragmented memory
+  // that is available within old, but is not required to hold the resuilts of old evacuation.  As old-gen regions
+  // are added into the collection set, their free memory is subtracted from excess_fragmented_available until the
+  // excess is exhausted.  For old-gen regions subsequently added to the collection set, their free memory is
+  // subtracted from fragmented_available and from the old_evacuation_budget (since the budget decreases when this
+  // fragmented_available memory decreases).  After fragmented_available has been exhausted, any further old regions
+  // selected for the cset do not further decrease the old_evacuation_budget because all further evacuation is targeted
+  // to unfragmented regions.
+
+  size_t unaffiliated_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
+  if (unaffiliated_available > _old_evacuation_reserve) {
+    _unfragmented_available = _old_evacuation_budget;
+    _fragmented_available = 0;
+    _excess_fragmented_available = 0;
+  } else {
+    assert(_old_generation->available() >= _old_evacuation_reserve, "Cannot reserve more than is available");
+    size_t affiliated_available = _old_generation->available() - unaffiliated_available;
+    assert(affiliated_available + unaffiliated_available >= _old_evacuation_reserve, "Budgets do not add up");
+    if (affiliated_available + unaffiliated_available > _old_evacuation_reserve) {
+      _excess_fragmented_available = (affiliated_available + unaffiliated_available) - _old_evacuation_reserve;
+      affiliated_available -= _excess_fragmented_available;
+    }
+    _fragmented_available = (size_t) ((double) affiliated_available / ShenandoahOldEvacWaste);
+    _unfragmented_available = (size_t) ((double) unaffiliated_available / ShenandoahOldEvacWaste);
+  }
+  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
+               byte_size_in_proper_unit(_old_evacuation_budget), proper_unit_for_byte_size(_old_evacuation_budget),
+               unprocessed_old_collection_candidates());
+  return add_old_regions_to_cset();
+}
+
 bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
 #ifdef ASSERT
   if (uint(os::random()) % 100 < ShenandoahCoalesceChance) {
@@ -91,6 +141,62 @@ bool ShenandoahOldHeuristics::all_candidates_are_pinned() {
     }
   }
   return true;
+}
+
+void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
+  // Find the first unpinned region to the left of the next region that
+  // will be added to the collection set. These regions will have been
+  // added to the cset, so we can use them to hold pointers to regions
+  // that were pinned when the cset was chosen.
+  // [ r p r p p p r r ]
+  //     ^         ^ ^
+  //     |         | | pointer to next region to add to a mixed collection is here.
+  //     |         | first r to the left should be in the collection set now.
+  //     | first pinned region, we don't need to look past this
+  uint write_index = NOT_FOUND;
+  for (uint search = _next_old_collection_candidate - 1; search > _first_pinned_candidate; --search) {
+    ShenandoahHeapRegion* region = _region_data[search]._region;
+    if (!region->is_pinned()) {
+      write_index = search;
+      assert(region->is_cset(), "Expected unpinned region to be added to the collection set.");
+      break;
+    }
+  }
+
+  // If we could not find an unpinned region, it means there are no slots available
+  // to move up the pinned regions. In this case, we just reset our next index in the
+  // hopes that some of these regions will become unpinned before the next mixed
+  // collection. We may want to bailout of here instead, as it should be quite
+  // rare to have so many pinned regions and may indicate something is wrong.
+  if (write_index == NOT_FOUND) {
+    assert(_first_pinned_candidate != NOT_FOUND, "Should only be here if there are pinned regions.");
+    _next_old_collection_candidate = _first_pinned_candidate;
+    return;
+  }
+
+  // Find pinned regions to the left and move their pointer into a slot
+  // that was pointing at a region that has been added to the cset (or was pointing
+  // to a pinned region that we've already moved up). We are done when the leftmost
+  // pinned region has been slid up.
+  // [ r p r x p p p r ]
+  //         ^       ^
+  //         |       | next region for mixed collections
+  //         | Write pointer is here. We know this region is already in the cset
+  //         | so we can clobber it with the next pinned region we find.
+  for (int32_t search = (int32_t)write_index - 1; search >= (int32_t)_first_pinned_candidate; --search) {
+    RegionData& skipped = _region_data[search];
+    if (skipped._region->is_pinned()) {
+      RegionData& available_slot = _region_data[write_index];
+      available_slot._region = skipped._region;
+      available_slot._u._live_data = skipped._u._live_data;
+      --write_index;
+    }
+  }
+
+  // Update to read from the leftmost pinned region. Plus one here because we decremented
+  // the write index to hold the next found pinned region. We are just moving it back now
+  // to point to the first pinned region.
+  _next_old_collection_candidate = write_index + 1;
 }
 
 bool ShenandoahOldHeuristics::add_old_regions_to_cset() {
@@ -206,56 +312,6 @@ bool ShenandoahOldHeuristics::finalize_mixed_evacs() {
   return (_included_old_regions > 0);
 }
 
-bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* collection_set) {
-  _mixed_evac_cset = collection_set;
-  _included_old_regions = 0;
-  _evacuated_old_bytes = 0;
-  _collected_old_bytes = 0;
-
-  // If a region is put into the collection set, then this region's free (not yet used) bytes are no longer
-  // "available" to hold the results of other evacuations.  This may cause a decrease in the remaining amount
-  // of memory that can still be evacuated.  We address this by reducing the evacuation budget by the amount
-  // of live memory in that region and by the amount of unallocated memory in that region if the evacuation
-  // budget is constrained by availability of free memory.
-  _old_evacuation_reserve = _old_generation->get_evacuation_reserve();
-  _old_evacuation_budget = (size_t) ((double) _old_evacuation_reserve / ShenandoahOldEvacWaste);
-
-  // fragmented_available is the amount of memory within partially consumed old regions that may be required to
-  // hold the results of old evacuations.  If all of the memory required by the old evacuation reserve is available
-  // in unfragmented regions (unaffiliated old regions), then fragmented_available is zero because we do not need
-  // to evacuate into the existing partially consumed old regions.
-
-  // if fragmented_available is non-zero, excess_fragmented_available represents the amount of fragmented memory
-  // that is available within old, but is not required to hold the resuilts of old evacuation.  As old-gen regions
-  // are added into the collection set, their free memory is subtracted from excess_fragmented_available until the
-  // excess is exhausted.  For old-gen regions subsequently added to the collection set, their free memory is
-  // subtracted from fragmented_available and from the old_evacuation_budget (since the budget decreases when this
-  // fragmented_available memory decreases).  After fragmented_available has been exhausted, any further old regions
-  // selected for the cset do not further decrease the old_evacuation_budget because all further evacuation is targeted
-  // to unfragmented regions.
-
-  size_t unaffiliated_available = _old_generation->free_unaffiliated_regions() * ShenandoahHeapRegion::region_size_bytes();
-  if (unaffiliated_available > _old_evacuation_reserve) {
-    _unfragmented_available = _old_evacuation_budget;
-    _fragmented_available = 0;
-    _excess_fragmented_available = 0;
-  } else {
-    assert(_old_generation->available() >= _old_evacuation_reserve, "Cannot reserve more than is available");
-    size_t affiliated_available = _old_generation->available() - unaffiliated_available;
-    assert(affiliated_available + unaffiliated_available >= _old_evacuation_reserve, "Budgets do not add up");
-    if (affiliated_available + unaffiliated_available > _old_evacuation_reserve) {
-      _excess_fragmented_available = (affiliated_available + unaffiliated_available) - _old_evacuation_reserve;
-      affiliated_available -= _excess_fragmented_available;
-    }
-    _fragmented_available = (size_t) ((double) affiliated_available / ShenandoahOldEvacWaste);
-    _unfragmented_available = (size_t) ((double) unaffiliated_available / ShenandoahOldEvacWaste);
-  }
-  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
-               byte_size_in_proper_unit(_old_evacuation_budget), proper_unit_for_byte_size(_old_evacuation_budget),
-               unprocessed_old_collection_candidates());
-  return add_old_regions_to_cset();
-}
-
 bool ShenandoahOldHeuristics::top_off_collection_set() {
   if (unprocessed_old_collection_candidates() == 0) {
     return false;
@@ -289,62 +345,6 @@ bool ShenandoahOldHeuristics::top_off_collection_set() {
       return add_old_regions_to_cset();
     }
   }
-}
-
-void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
-  // Find the first unpinned region to the left of the next region that
-  // will be added to the collection set. These regions will have been
-  // added to the cset, so we can use them to hold pointers to regions
-  // that were pinned when the cset was chosen.
-  // [ r p r p p p r r ]
-  //     ^         ^ ^
-  //     |         | | pointer to next region to add to a mixed collection is here.
-  //     |         | first r to the left should be in the collection set now.
-  //     | first pinned region, we don't need to look past this
-  uint write_index = NOT_FOUND;
-  for (uint search = _next_old_collection_candidate - 1; search > _first_pinned_candidate; --search) {
-    ShenandoahHeapRegion* region = _region_data[search]._region;
-    if (!region->is_pinned()) {
-      write_index = search;
-      assert(region->is_cset(), "Expected unpinned region to be added to the collection set.");
-      break;
-    }
-  }
-
-  // If we could not find an unpinned region, it means there are no slots available
-  // to move up the pinned regions. In this case, we just reset our next index in the
-  // hopes that some of these regions will become unpinned before the next mixed
-  // collection. We may want to bailout of here instead, as it should be quite
-  // rare to have so many pinned regions and may indicate something is wrong.
-  if (write_index == NOT_FOUND) {
-    assert(_first_pinned_candidate != NOT_FOUND, "Should only be here if there are pinned regions.");
-    _next_old_collection_candidate = _first_pinned_candidate;
-    return;
-  }
-
-  // Find pinned regions to the left and move their pointer into a slot
-  // that was pointing at a region that has been added to the cset (or was pointing
-  // to a pinned region that we've already moved up). We are done when the leftmost
-  // pinned region has been slid up.
-  // [ r p r x p p p r ]
-  //         ^       ^
-  //         |       | next region for mixed collections
-  //         | Write pointer is here. We know this region is already in the cset
-  //         | so we can clobber it with the next pinned region we find.
-  for (int32_t search = (int32_t)write_index - 1; search >= (int32_t)_first_pinned_candidate; --search) {
-    RegionData& skipped = _region_data[search];
-    if (skipped._region->is_pinned()) {
-      RegionData& available_slot = _region_data[write_index];
-      available_slot._region = skipped._region;
-      available_slot._u._live_data = skipped._u._live_data;
-      --write_index;
-    }
-  }
-
-  // Update to read from the leftmost pinned region. Plus one here because we decremented
-  // the write index to hold the next found pinned region. We are just moving it back now
-  // to point to the first pinned region.
-  _next_old_collection_candidate = write_index + 1;
 }
 
 void ShenandoahOldHeuristics::prepare_for_old_collections() {

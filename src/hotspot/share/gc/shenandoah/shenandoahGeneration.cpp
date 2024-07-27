@@ -650,6 +650,13 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
   ShenandoahCollectionSet* collection_set = heap->collection_set();
   bool is_generational = heap->mode()->is_generational();
 
+  // TODO: Under severe memory overload conditions that can be checked here, we may want to limit
+  // the inclusion of old-gen candidates within the collection set.  This would allow us to prioritize efforts on
+  // evacuating young-gen,  This remediation is most appropriate when old-gen availability is very high (so there
+  // are negligible negative impacts from delaying completion of old-gen evacuation) and when young-gen collections
+  // are "under duress" (as signalled by very low availability of memory within young-gen, indicating that young-gen
+  // collections are not triggering frequently enough).
+
   assert(!heap->is_full_gc_in_progress(), "Only for concurrent and degenerated GC");
   assert(!is_old(), "Only YOUNG and GLOBAL GC perform evacuations");
   {
