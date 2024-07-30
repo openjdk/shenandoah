@@ -690,7 +690,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
                                    val != noreg /* tosca_live */,
                                    false /* expand_call */);
     }
-    
+
     BarrierSetAssembler::store_at(masm, decorators, type, Address(tmp1, 0), val, noreg, noreg, noreg);
     if (val != noreg) {
       if (ShenandoahCardBarrier) {
