@@ -295,6 +295,7 @@ class ShenandoahFreeSet : public CHeapObj<mtGC> {
 private:
   ShenandoahHeap* const _heap;
   ShenandoahRegionPartitions _partitions;
+  ShenandoahHeapRegion** _trash_regions;
   size_t _retired_old_regions;
 
   HeapWord* allocate_aligned_plab(size_t size, ShenandoahAllocRequest& req, ShenandoahHeapRegion* r);
@@ -367,6 +368,9 @@ private:
   void reduce_young_reserve(size_t adjusted_young_reserve, size_t requested_young_reserve);
   void reduce_old_reserve(size_t adjusted_old_reserve, size_t requested_old_reserve);
 
+  // log status, assuming lock has already been acquired by the caller.
+  void log_status();
+
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
@@ -422,7 +426,8 @@ public:
 #endif
   void recycle_trash();
 
-  void log_status();
+  // Acquire heap lock and log status, assuming heap lock is not acquired by the caller.
+  void log_status_under_lock();
 
   inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator); }
   inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator);     }
