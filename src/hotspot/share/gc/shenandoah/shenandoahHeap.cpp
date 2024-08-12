@@ -76,7 +76,6 @@
 #include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/mode/shenandoahGenerationalMode.hpp"
-#include "gc/shenandoah/mode/shenandoahIUMode.hpp"
 #include "gc/shenandoah/mode/shenandoahPassiveMode.hpp"
 #include "gc/shenandoah/mode/shenandoahSATBMode.hpp"
 #include "utilities/globalDefinitions.hpp"
@@ -493,8 +492,6 @@ void ShenandoahHeap::initialize_mode() {
   if (ShenandoahGCMode != nullptr) {
     if (strcmp(ShenandoahGCMode, "satb") == 0) {
       _gc_mode = new ShenandoahSATBMode();
-    } else if (strcmp(ShenandoahGCMode, "iu") == 0) {
-      _gc_mode = new ShenandoahIUMode();
     } else if (strcmp(ShenandoahGCMode, "passive") == 0) {
       _gc_mode = new ShenandoahPassiveMode();
     } else if (strcmp(ShenandoahGCMode, "generational") == 0) {
@@ -989,55 +986,42 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
     // This will notify the collector to start a cycle, but will raise
     // an OOME to the mutator if the last Full GCs have not made progress.
     // gc_no_progress_count is incremented following each degen or full GC that fails to achieve is_good_progress().
-    if ((result == nullptr) && !req.is_lab_alloc() && (get_gc_no_progress_count() > ShenandoahNoProgressThreshold)) {
+    if (result == nullptr && !req.is_lab_alloc() && get_gc_no_progress_count() > ShenandoahNoProgressThreshold) {
       control_thread()->handle_alloc_failure(req, false);
       req.set_actual_size(0);
       return nullptr;
     }
 
-    // Block until control thread reacted, then retry allocation.
-    //
-    // It might happen that one of the threads requesting allocation would unblock
-    // way later after GC happened, only to fail the second allocation, because
-    // other threads have already depleted the free storage. In this case, a better
-    // strategy is to try again, as long as GC makes progress (or until at least
-    // one full GC has completed).
-
-    size_t original_count = shenandoah_policy()->full_gc_count();
-
-    // Stop retrying and return nullptr to cause OOMError exception if our allocation failed even after:
-    //   a) We experienced a GC that had good progress, or
-    //   b) We experienced at least one Full GC (whether or not it had good progress)
-    //
-    // TODO: Rather than require a Full GC before throwing OOMError, it might be more appropriate for handle_alloc_failure()
-    //       to trigger a concurrent GLOBAL GC, and throw OOMError if we cannot allocate even after GLOBAL GC has finished.
-    //       There is no "perfect" solution here:
-    //
-    //        1. As currently implemented, there may be a race between multiple allocating threads, both attempting
-    //           to allocate very large objects.  The first thread to retry its allocation might succeed and the second
-    //           thread to retry its allocation might fail (because the first thread consumed the newly available memory).
-    //           So the second thread experiences OOMError even through another GC would have reclaimed the memory it wanted
-    //           to allocate.
-    //        2. A GLOBAL GC won't necessarily reclaim all garbage.  Following a concurrent Generational GLOBAL GC, we may
-    //           need to perform multiple concurrent mixed evacuations in order to reclaim all of the dead memory identified
-    //           by the GLOBAL GC mark.  However, the first evacuation performed by the GLOBAL GC will normally reclaim
-    //           a significant amount of garbage (as guided by garbage first heuristic).  If this is not enough memory
-    //           to satisfy the pending allocation request, we are in "dire straits", and a fail-fast OOMError is probably
-    //           the better remediation than repeated attempts to allocate following repeated GC cycles.
-
     if (result == nullptr) {
+      // Block until control thread reacted, then retry allocation.
+      //
+      // It might happen that one of the threads requesting allocation would unblock
+      // way later after GC happened, only to fail the second allocation, because
+      // other threads have already depleted the free storage. In this case, a better
+      // strategy is to try again, until at least one full GC has completed.
+      //
+      // Stop retrying and return nullptr to cause OOMError exception if our allocation failed even after:
+      //   a) We experienced a GC that had good progress, or
+      //   b) We experienced at least one Full GC (whether or not it had good progress)
+      //
+      // TODO: Consider GLOBAL GC rather than Full GC to remediate OOM condition: https://bugs.openjdk.org/browse/JDK-8335910
+
+      size_t original_count = shenandoah_policy()->full_gc_count();
       while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
         control_thread()->handle_alloc_failure(req, true);
         result = allocate_memory_under_lock(req, in_new_region);
       }
-      if ((result != nullptr) && mode()->is_generational()) {
+      if (result != nullptr) {
+        // If our allocation request has been satisifed after it initially failed, we count this as good gc progress
         notify_gc_progress();
       }
-    }
-    if (log_is_enabled(Debug, gc, alloc)) {
-      ResourceMark rm;
-      log_debug(gc, alloc)("Thread: %s, Result: " PTR_FORMAT ", Request: %s, Size: " SIZE_FORMAT ", Original: " SIZE_FORMAT ", Latest: " SIZE_FORMAT,
-                           Thread::current()->name(), p2i(result), req.type_string(), req.size(), original_count, get_gc_no_progress_count());
+      if (log_is_enabled(Debug, gc, alloc)) {
+        ResourceMark rm;
+        log_debug(gc, alloc)("Thread: %s, Result: " PTR_FORMAT ", Request: %s, Size: " SIZE_FORMAT
+                             ", Original: " SIZE_FORMAT ", Latest: " SIZE_FORMAT,
+                             Thread::current()->name(), p2i(result), req.type_string(), req.size(),
+                             original_count, get_gc_no_progress_count());
+      }
     }
   } else {
     assert(req.is_gc_alloc(), "Can only accept GC allocs here");
@@ -1305,14 +1289,12 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   _evac_tracker->begin_evacuation(thread, size * HeapWordSize);
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
-  oop copy_val = cast_to_oop(copy);
-
   // Try to install the new forwarding pointer.
-  ContinuationGCSupport::relativize_stack_chunk(copy_val);
-
+  oop copy_val = cast_to_oop(copy);
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
+    ContinuationGCSupport::relativize_stack_chunk(copy_val);
     _evac_tracker->end_evacuation(thread, size * HeapWordSize);
     shenandoah_assert_correct(nullptr, copy_val);
     return copy_val;
@@ -1891,19 +1873,20 @@ class ShenandoahParallelHeapRegionTask : public WorkerTask {
 private:
   ShenandoahHeap* const _heap;
   ShenandoahHeapRegionClosure* const _blk;
+  size_t const _stride;
 
   shenandoah_padding(0);
   volatile size_t _index;
   shenandoah_padding(1);
 
 public:
-  ShenandoahParallelHeapRegionTask(ShenandoahHeapRegionClosure* blk) :
+  ShenandoahParallelHeapRegionTask(ShenandoahHeapRegionClosure* blk, size_t stride) :
           WorkerTask("Shenandoah Parallel Region Operation"),
-          _heap(ShenandoahHeap::heap()), _blk(blk), _index(0) {}
+          _heap(ShenandoahHeap::heap()), _blk(blk), _stride(stride), _index(0) {}
 
   void work(uint worker_id) {
     ShenandoahParallelWorkerSession worker_session(worker_id);
-    size_t stride = ShenandoahParallelRegionStride;
+    size_t stride = _stride;
 
     size_t max = _heap->num_regions();
     while (Atomic::load(&_index) < max) {
@@ -1922,8 +1905,20 @@ public:
 
 void ShenandoahHeap::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* blk) const {
   assert(blk->is_thread_safe(), "Only thread-safe closures here");
-  if (num_regions() > ShenandoahParallelRegionStride) {
-    ShenandoahParallelHeapRegionTask task(blk);
+  const uint active_workers = workers()->active_workers();
+  const size_t n_regions = num_regions();
+  size_t stride = ShenandoahParallelRegionStride;
+  if (stride == 0 && active_workers > 1) {
+    // Automatically derive the stride to balance the work between threads
+    // evenly. Do not try to split work if below the reasonable threshold.
+    constexpr size_t threshold = 4096;
+    stride = n_regions <= threshold ?
+            threshold :
+            (n_regions + active_workers - 1) / active_workers;
+  }
+
+  if (n_regions > stride && active_workers > 1) {
+    ShenandoahParallelHeapRegionTask task(blk, stride);
     workers()->run_task(&task);
   } else {
     heap_region_iterate(blk);
