@@ -223,7 +223,10 @@ public:
   size_t total_cards() const;
   size_t card_index_for_addr(HeapWord *p) const;
   HeapWord *addr_for_card_index(size_t card_index) const;
-  const CardValue* get_card_table_byte_map(bool write_table) const;
+  inline const CardValue* get_card_table_byte_map(bool use_write_table) const {
+    return use_write_table ? _card_table->write_byte_map() : _card_table->read_byte_map();
+  }
+
   inline bool is_card_dirty(size_t card_index) const;
   inline bool is_write_card_dirty(size_t card_index) const;
   inline void mark_card_as_dirty(size_t card_index);

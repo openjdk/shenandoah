@@ -48,12 +48,6 @@ HeapWord* ShenandoahDirectCardMarkRememberedSet::addr_for_card_index(size_t card
   return _whole_heap_base + CardTable::card_size_in_words() * card_index;
 }
 
-const CardValue* ShenandoahDirectCardMarkRememberedSet::get_card_table_byte_map(bool use_write_table) const {
-  return use_write_table ?
-           _card_table->write_byte_map()
-           : _card_table->read_byte_map();
-}
-
 bool ShenandoahDirectCardMarkRememberedSet::is_write_card_dirty(size_t card_index) const {
   CardValue* bp = &(_card_table->write_byte_map())[card_index];
   return (bp[0] == CardTable::dirty_card_val());
