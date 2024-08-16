@@ -574,49 +574,6 @@ void ShenandoahScanRemembered::merge_worker_card_stats_cumulative(
 }
 #endif
 
-bool ShenandoahRegionChunkIterator::has_next() const {
-  return _index < _total_chunks;
-}
-
-bool ShenandoahRegionChunkIterator::next(struct ShenandoahRegionChunk *assignment) {
-  if (_index >= _total_chunks) {
-    return false;
-  }
-  size_t new_index = Atomic::add(&_index, (size_t) 1, memory_order_relaxed);
-  if (new_index > _total_chunks) {
-    // First worker that hits new_index == _total_chunks continues, other
-    // contending workers return false.
-    return false;
-  }
-  // convert to zero-based indexing
-  new_index--;
-  assert(new_index < _total_chunks, "Error");
-
-  // Find the group number for the assigned chunk index
-  size_t group_no;
-  for (group_no = 0; new_index >= _group_entries[group_no]; group_no++)
-    ;
-  assert(group_no < _num_groups, "Cannot have group no greater or equal to _num_groups");
-
-  // All size computations measured in HeapWord
-  size_t region_size_words = ShenandoahHeapRegion::region_size_words();
-  size_t group_region_index = _region_index[group_no];
-  size_t group_region_offset = _group_offset[group_no];
-
-  size_t index_within_group = (group_no == 0)? new_index: new_index - _group_entries[group_no - 1];
-  size_t group_chunk_size = _group_chunk_size[group_no];
-  size_t offset_of_this_chunk = group_region_offset + index_within_group * group_chunk_size;
-  size_t regions_spanned_by_chunk_offset = offset_of_this_chunk / region_size_words;
-  size_t offset_within_region = offset_of_this_chunk % region_size_words;
-
-  size_t region_index = group_region_index + regions_spanned_by_chunk_offset;
-
-  assignment->_r = _heap->get_region(region_index);
-  assignment->_chunk_offset = offset_within_region;
-  assignment->_chunk_size = group_chunk_size;
-  return true;
-}
-
 // A closure that takes an oop in the old generation and, if it's pointing
 // into the young generation, dirties the corresponding remembered set entry.
 // This is only used to rebuild the remembered set after a full GC.
