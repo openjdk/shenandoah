@@ -224,18 +224,18 @@ public:
   size_t card_index_for_addr(HeapWord *p) const;
   HeapWord *addr_for_card_index(size_t card_index) const;
   const CardValue* get_card_table_byte_map(bool write_table) const;
-  bool is_card_dirty(size_t card_index) const;
-  bool is_write_card_dirty(size_t card_index) const;
-  void mark_card_as_dirty(size_t card_index);
-  void mark_range_as_dirty(size_t card_index, size_t num_cards);
-  void mark_card_as_clean(size_t card_index);
-  void mark_range_as_clean(size_t card_index, size_t num_cards);
-  bool is_card_dirty(HeapWord *p) const;
-  void mark_card_as_dirty(HeapWord *p);
-  void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
-  void mark_card_as_clean(HeapWord *p);
-  void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  size_t cluster_count() const;
+  inline bool is_card_dirty(size_t card_index) const;
+  inline bool is_write_card_dirty(size_t card_index) const;
+  inline void mark_card_as_dirty(size_t card_index);
+  inline void mark_range_as_dirty(size_t card_index, size_t num_cards);
+  inline void mark_card_as_clean(size_t card_index);
+  inline void mark_range_as_clean(size_t card_index, size_t num_cards);
+  inline bool is_card_dirty(HeapWord *p) const;
+  inline void mark_card_as_dirty(HeapWord *p);
+  inline void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
+  inline void mark_card_as_clean(HeapWord *p);
+  inline void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
+  inline size_t cluster_count() const;
 
   // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
   // Not currently used because mutator write barrier does not honor changes to the location of card table.
