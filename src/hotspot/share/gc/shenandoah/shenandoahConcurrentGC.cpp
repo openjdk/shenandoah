@@ -152,23 +152,22 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     return false;
   }
 
-  // Concurrent stack processing
-  if (heap->is_evacuation_in_progress()) {
-    entry_thread_roots();
-  }
-
-  // Process weak roots that might still point to regions that would be broken by cleanup
+  // Process weak roots that might still point to regions that would be broken by cleanup.  This must precede cleanup.
   if (heap->is_concurrent_weak_root_in_progress()) {
     entry_weak_refs();
     entry_weak_roots();
   }
 
-  // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim
-  // the space. This would be the last action if there is nothing to evacuate.  Note that
-  // we will not age young-gen objects in the case that we skip evacuation.
+  // Final mark might have reclaimed some immediate garbage, kick cleanup to reclaim the space.  We do this before
+  // concurrent roots and concurrent class unloading so as to expedite recycling of immediate garbage.  Note that
+  // we will not age young-gen objects in the case that we skip evacuation for abbreviated cycles.
   entry_cleanup_early();
-
   heap->free_set()->log_status_under_lock();
+
+  // Concurrent stack processing
+  if (heap->is_evacuation_in_progress()) {
+    entry_thread_roots();
+  }
 
   // Perform concurrent class unloading
   if (heap->unload_classes() &&
