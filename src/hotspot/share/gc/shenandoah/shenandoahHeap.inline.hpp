@@ -424,7 +424,7 @@ inline void ShenandoahHeap::assert_lock_for_affiliation(ShenandoahAffiliation or
   // Note: during full GC, all transitions between states are possible.  During Full GC, we should be in a safepoint.
 
   if ((orig_affiliation == ShenandoahAffiliation::FREE) || (new_affiliation == ShenandoahAffiliation::FREE)) {
-    shenandoah_assert_heaplocked_or_fullgc_safepoint();
+    shenandoah_assert_heaplocked_or_safepoint();
   }
 }
 
@@ -453,7 +453,6 @@ inline bool ShenandoahHeap::in_collection_set_loc(void* p) const {
   assert(collection_set() != nullptr, "Sanity");
   return collection_set()->is_in_loc(p);
 }
-
 
 inline bool ShenandoahHeap::is_stable() const {
   return _gc_state.is_clear();

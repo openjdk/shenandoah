@@ -1,5 +1,5 @@
 /*
- * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
+ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,23 +19,31 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ */
+
+/**
+ * @test
+ * @bug 8324345
+ * @summary Ensure that ConnectionGraph::find_inst_mem does not cause a stack
+ *          overflow.
+ *
+ * @run main/othervm -Xcomp -XX:CompileThreshold=10 -XX:-TieredCompilation
+ *                   -XX:CompileCommand=CompileOnly,javax.swing.plaf.basic.BasicLookAndFeel::initComponentDefaults
+ *                   -XX:CompileCommand=MemLimit,*.*,0
+ *                   compiler.escapeAnalysis.TestFindInstMemRecursion
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
-#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
+package compiler.escapeAnalysis;
 
-#include "utilities/globalDefinitions.hpp"
+import javax.swing.*;
+import javax.swing.plaf.metal.*;
 
-class ShenandoahHeapStats {
-public:
-  virtual const char* name() const = 0;
-  virtual size_t soft_max_capacity() const = 0;
-  virtual size_t max_capacity() const = 0;
-  virtual size_t used() const = 0;
-  virtual size_t available() const = 0;
-  virtual size_t soft_available() const = 0;
-  virtual size_t bytes_allocated_since_gc_start() const = 0;
-};
-
-#endif //SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
+public class TestFindInstMemRecursion {
+    public static void main(String[] args) throws Exception {
+        LookAndFeel lookAndFeel = new MetalLookAndFeel();
+        for (int i = 0; i < 20; ++i) {
+            UIManager.setLookAndFeel(lookAndFeel);
+        }
+    }
+}
