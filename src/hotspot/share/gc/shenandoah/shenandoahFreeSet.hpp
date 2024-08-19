@@ -330,7 +330,9 @@ private:
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
   void clear_internal();
-  void try_recycle_trashed(ShenandoahHeapRegion *r);
+
+  // If region r is a trash region, recycle it, returning true iff r was recycled.
+  bool try_recycle_trashed(ShenandoahHeapRegion *r);
 
   // Returns true iff this region is entirely available, either because it is empty() or because it has been found to represent
   // immediate trash and we'll be able to immediately recycle it.  Note that we cannot recycle immediate trash if
@@ -410,7 +412,8 @@ public:
   // for evacuation, invoke this to make regions available for mutator allocations.
   void move_regions_from_collector_to_mutator(size_t cset_regions);
 
-  void recycle_trash();
+  // Recycle any trash that is known to the freeset, returning true if any trash was recycled.
+  bool recycle_trash();
 
   // Acquire heap lock and log status, assuming heap lock is not acquired by the caller.
   void log_status_under_lock();

@@ -1230,13 +1230,17 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   return _heap->get_region(beg)->bottom();
 }
 
-void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion* r) {
+bool ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion* r) {
+  bool result = false;
   if (r->is_trash()) {
     r->recycle();
+    result = true;
   }
+  return true;
 }
 
-void ShenandoahFreeSet::recycle_trash() {
+bool ShenandoahFreeSet::recycle_trash() {
+  bool result = false;
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
 
@@ -1256,9 +1260,12 @@ void ShenandoahFreeSet::recycle_trash() {
     ShenandoahHeapLocker locker(_heap->lock());
     const jlong deadline = os::javaTimeNanos() + deadline_ns;
     while (idx < count && os::javaTimeNanos() < deadline) {
-      try_recycle_trashed(_trash_regions[idx++]);
+      if (try_recycle_trashed(_trash_regions[idx++])) {
+        result = true;
+      }
     }
   }
+  return result;
 }
 
 void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
