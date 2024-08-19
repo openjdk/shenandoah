@@ -843,7 +843,7 @@ private:
   void update_references_in_remembered_set(uint worker_id, T &cl, const ShenandoahMarkingContext* ctx, bool is_mixed) {
 
     struct ShenandoahRegionChunk assignment;
-    RememberedScanner* scanner = _heap->old_generation()->card_scan();
+    ShenandoahScanRemembered* scanner = _heap->old_generation()->card_scan();
 
     while (!_heap->check_cancelled_gc_and_yield(CONCURRENT) && _work_chunks->next(&assignment)) {
       // Keep grabbing next work chunk to process until finished, or asked to yield
@@ -871,12 +871,9 @@ private:
           }
         } else {
           // This is a young evacuation
-          size_t cluster_size =
-                  CardTable::card_size_in_words() *
-                  ShenandoahCardCluster<ShenandoahDirectCardMarkRememberedSet>::CardsPerCluster;
+          size_t cluster_size = CardTable::card_size_in_words() * ShenandoahCardCluster::CardsPerCluster;
           size_t clusters = assignment._chunk_size / cluster_size;
-          assert(clusters * cluster_size == assignment._chunk_size,
-                 "Chunk assignment must align on cluster boundaries");
+          assert(clusters * cluster_size == assignment._chunk_size, "Chunk assignment must align on cluster boundaries");
           scanner->process_region_slice(r, assignment._chunk_offset, clusters, end_of_range, &cl, true, worker_id);
         }
 
@@ -888,7 +885,7 @@ private:
   }
 
   template<class T>
-  void update_references_in_old_region(T &cl, const ShenandoahMarkingContext* ctx, RememberedScanner* scanner,
+  void update_references_in_old_region(T &cl, const ShenandoahMarkingContext* ctx, ShenandoahScanRemembered* scanner,
                                     const ShenandoahHeapRegion* r, HeapWord* start_of_range,
                                     HeapWord* end_of_range) const {
     // In case last object in my range spans boundary of my chunk, I may need to scan all the way to top()
@@ -918,7 +915,7 @@ private:
     }
   }
 
-  HeapWord* get_first_object_start_word(const ShenandoahMarkingContext* ctx, RememberedScanner* scanner, HeapWord* tams,
+  HeapWord* get_first_object_start_word(const ShenandoahMarkingContext* ctx, ShenandoahScanRemembered* scanner, HeapWord* tams,
                                         HeapWord* start_of_range, HeapWord* end_of_range) const {
     HeapWord* p = start_of_range;
 
@@ -963,7 +960,7 @@ void ShenandoahGenerationalHeap::update_heap_references(bool concurrent) {
 
   if (ShenandoahEnableCardStats) {
     // Only do this if we are collecting card stats
-    RememberedScanner* card_scan = old_generation()->card_scan();
+    ShenandoahScanRemembered* card_scan = old_generation()->card_scan();
     assert(card_scan != nullptr, "Card table must exist when card stats are enabled");
     card_scan->log_card_stats(nworkers, CARD_STAT_UPDATE_REFS);
   }

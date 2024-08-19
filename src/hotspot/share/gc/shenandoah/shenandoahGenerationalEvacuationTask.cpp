@@ -123,7 +123,7 @@ void ShenandoahGenerationalEvacuationTask::do_work() {
 
 // When we promote a region in place, we can continue to use the established marking context to guide subsequent remembered
 // set scans of this region's content.  The region will be coalesced and filled prior to the next old-gen marking effort.
-// We identify the entirety of the region as DIRTY to force the next remembered set scan to identify the "interesting poitners"
+// We identify the entirety of the region as DIRTY to force the next remembered set scan to identify the "interesting pointers"
 // contained herein.
 void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion* region) {
   ShenandoahMarkingContext* const marking_context = _heap->complete_marking_context();
@@ -150,7 +150,7 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
   //
   // Rebuilding the remembered set consists of clearing all object registrations (reset_object_range()) here,
   // then registering every live object and every coalesced range of free objects in the loop that follows.
-  RememberedScanner* const scanner = old_gen->card_scan();
+  ShenandoahScanRemembered* const scanner = old_gen->card_scan();
   scanner->reset_object_range(region->bottom(), region->end());
   scanner->mark_range_as_dirty(region->bottom(), region->get_top_before_promote() - region->bottom());
 
@@ -270,7 +270,7 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
 
   // Since this region may have served previously as OLD, it may hold obsolete object range info.
   HeapWord* const humongous_bottom = region->bottom();
-  RememberedScanner* const scanner = old_gen->card_scan();
+  ShenandoahScanRemembered* const scanner = old_gen->card_scan();
   scanner->reset_object_range(humongous_bottom, humongous_bottom + spanned_regions * ShenandoahHeapRegion::region_size_words());
   // Since the humongous region holds only one object, no lock is necessary for this register_object() invocation.
   scanner->register_object_without_lock(humongous_bottom);
