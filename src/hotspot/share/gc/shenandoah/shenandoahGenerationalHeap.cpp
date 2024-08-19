@@ -307,9 +307,9 @@ oop ShenandoahGenerationalHeap::try_evacuate_object(oop p, Thread* thread, Shena
   // Copy the object:
   evac_tracker()->begin_evacuation(thread, size * HeapWordSize);
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
-
   oop copy_val = cast_to_oop(copy);
 
+  // Update the age of the evacuated object
   if (target_gen == YOUNG_GENERATION && is_aging_cycle()) {
     ShenandoahHeap::increase_object_age(copy_val, from_region->age() + 1);
   }
@@ -318,9 +318,17 @@ oop ShenandoahGenerationalHeap::try_evacuate_object(oop p, Thread* thread, Shena
   oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
+
+    // This is necessary for virtual thread support. This uses the mark word without
+    // considering that it may now be a forwarding pointer (and could therefore crash).
+    // Secondarily, we do not want to spend cycles relativizing stack chunks for oops
+    // that lost the evacuation race (and will therefore not become visible). It is
+    // safe to do this on the public copy (this is also done during concurrent mark).
     ContinuationGCSupport::relativize_stack_chunk(copy_val);
 
+    // Record that the evacuation succeeded
     evac_tracker()->end_evacuation(thread, size * HeapWordSize);
+
     if (target_gen == OLD_GENERATION) {
       old_generation()->handle_evacuation(copy, size, from_region->is_young());
     } else {
