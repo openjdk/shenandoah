@@ -751,7 +751,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
 
       // Arm nmethods/stack for concurrent processing
       if (!heap->collection_set()->is_empty()) {
-        // Iff objects will be evaluated, arm the nmethod barriers. These will be disarmed
+        // Iff objects will be evacuated, arm the nmethod barriers. These will be disarmed
         // under the same condition (established in prepare_concurrent_roots) after strong
         // root evacuation has completed (see op_strong_roots).
         ShenandoahCodeRoots::arm_nmethods_for_evac();

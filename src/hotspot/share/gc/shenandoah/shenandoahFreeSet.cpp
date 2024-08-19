@@ -111,6 +111,9 @@ ShenandoahRegionPartitions::ShenandoahRegionPartitions(size_t max_regions, Shena
 }
 
 inline bool ShenandoahFreeSet::can_allocate_from(ShenandoahHeapRegion *r) const {
+  // This test for trash regions is conservative.  Strictly, we only need to assure that concurrent weak reference processing
+  // is not under way.  That finishes long before concurrent weak root processing.  It is ok to be conservative.  At the
+  // end of weak reference processing, we recycle trashed regions en masse.
   return r->is_empty() || (r->is_trash() && !_heap->is_concurrent_weak_root_in_progress());
 }
 
