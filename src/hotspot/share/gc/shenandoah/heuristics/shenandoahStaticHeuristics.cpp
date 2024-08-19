@@ -61,12 +61,12 @@ bool ShenandoahStaticHeuristics::should_start_gc() {
 }
 
 void ShenandoahStaticHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                       RegionData* data, size_t size,
+                                                                       RegionData data[], size_t size,
                                                                        size_t free) {
   size_t threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
 
   for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
+    ShenandoahHeapRegion* r = get_RegionData_region(data[idx]);
     if (r->garbage() > threshold) {
       cset->add_region(r);
     }

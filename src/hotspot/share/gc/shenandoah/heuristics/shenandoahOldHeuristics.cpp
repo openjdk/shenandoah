@@ -37,18 +37,20 @@ uint ShenandoahOldHeuristics::NOT_FOUND = -1U;
 
 // sort by increasing live (so least live comes first)
 int ShenandoahOldHeuristics::compare_by_live(RegionData a, RegionData b) {
-  if (a._u._live_data < b._u._live_data)
+  if (get_RegionData_livedata(a) < get_RegionData_livedata(b)) {
     return -1;
-  else if (a._u._live_data > b._u._live_data)
+  } else if (get_RegionData_livedata(a) > get_RegionData_livedata(b)) {
     return 1;
-  else return 0;
+  } else {
+    return 0;
+  }
 }
 
 // sort by increasing index
 int ShenandoahOldHeuristics::compare_by_index(RegionData a, RegionData b) {
-  if (a._region->index() < b._region->index()) {
+  if (get_RegionData_region(a)->index() < get_RegionData_region(b)->index()) {
     return -1;
-  } else if (a._region->index() > b._region->index()) {
+  } else if (get_RegionData_region(a)->index() > get_RegionData_region(b)->index()) {
     return 1;
   } else {
     // quicksort may compare to self during search for pivot
@@ -295,8 +297,7 @@ void ShenandoahOldHeuristics::slide_pinned_regions_to_front() {
     RegionData& skipped = _region_data[search];
     if (skipped._region->is_pinned()) {
       RegionData& available_slot = _region_data[write_index];
-      available_slot._region = skipped._region;
-      available_slot._u._live_data = skipped._u._live_data;
+      set_RegionData_region_and_livedata(available_slot, get_RegionData_region(skipped), get_RegionData_livedata(skipped));
       --write_index;
     }
   }
@@ -339,8 +340,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         immediate_garbage += garbage;
       } else {
         region->begin_preemptible_coalesce_and_fill();
-        candidates[cand_idx]._region = region;
-        candidates[cand_idx]._u._live_data = live_bytes;
+        set_RegionData_region_and_livedata(candidates[cand_idx], region, live_bytes);
         cand_idx++;
       }
     } else if (region->is_humongous_start()) {
@@ -390,14 +390,15 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   size_t candidates_garbage = 0;
 
   for (size_t i = 0; i < cand_idx; i++) {
-    size_t live = candidates[i]._u._live_data;
+    size_t live = get_RegionData_livedata(candidates[i]);
     if (live > live_threshold) {
       // Candidates are sorted in increasing order of live data, so no regions after this will be below the threshold.
       _last_old_collection_candidate = (uint)i;
       break;
     }
-    size_t region_garbage = candidates[i]._region->garbage();
-    size_t region_free = candidates[i]._region->free();
+    ShenandoahHeapRegion* r = get_RegionData_region(candidates[i]);
+    size_t region_garbage = r->garbage();
+    size_t region_free = r->free();
     candidates_garbage += region_garbage;
     unfragmented += region_free;
   }
@@ -424,7 +425,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
                                 compare_by_index);
 
     const size_t first_unselected_old_region = candidates[_last_old_collection_candidate]._region->index();
-    const size_t last_unselected_old_region = candidates[cand_idx - 1]._region->index();
+    const size_t last_unselected_old_region = get_RegionData_region(candidates[cand_idx - 1])->index();
     size_t span_of_uncollected_regions = 1 + last_unselected_old_region - first_unselected_old_region;
 
     // Add no more than 1/8 of the existing old-gen regions to the set of mixed evacuation candidates.
@@ -438,7 +439,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate]._region;
       assert(r->is_regular() || r->is_regular_pinned(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
              r->index(), ShenandoahHeapRegion::region_state_to_string(r->state()));
-      const size_t region_garbage = candidates[_last_old_collection_candidate]._region->garbage();
+      const size_t region_garbage = get_RegionData_region(candidates[_last_old_collection_candidate])->garbage();
       const size_t region_free = r->free();
       candidates_garbage += region_garbage;
       unfragmented += region_free;
@@ -447,7 +448,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
       // We now have one fewer uncollected regions, and our uncollected span shrinks because we have removed its first region.
       total_uncollected_old_regions--;
-      span_of_uncollected_regions = 1 + last_unselected_old_region - candidates[_last_old_collection_candidate]._region->index();
+      span_of_uncollected_regions = 1 + last_unselected_old_region - get_RegionData_region(candidates[_last_old_collection_candidate])->index();
     }
   }
 
@@ -707,7 +708,7 @@ bool ShenandoahOldHeuristics::is_experimental() {
 }
 
 void ShenandoahOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
-                                                                    ShenandoahHeuristics::RegionData* data,
+                                                                    ShenandoahHeuristics::RegionData data[],
                                                                     size_t data_size, size_t free) {
   ShouldNotReachHere();
 }

@@ -76,7 +76,7 @@ bool ShenandoahCompactHeuristics::should_start_gc() {
 }
 
 void ShenandoahCompactHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                        RegionData* data, size_t size,
+                                                                        RegionData data[], size_t size,
                                                                         size_t actual_free) {
   // Do not select too large CSet that would overflow the available free space
   size_t max_cset = actual_free * 3 / 4;
@@ -89,7 +89,7 @@ void ShenandoahCompactHeuristics::choose_collection_set_from_regiondata(Shenando
 
   size_t live_cset = 0;
   for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
+    ShenandoahHeapRegion* r = get_RegionData_region(data[idx]);
     size_t new_cset = live_cset + r->get_live_data_bytes();
     if (new_cset < max_cset && r->garbage() > threshold) {
       live_cset = new_cset;

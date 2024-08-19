@@ -41,10 +41,10 @@ ShenandoahAggressiveHeuristics::ShenandoahAggressiveHeuristics(ShenandoahSpaceIn
 }
 
 void ShenandoahAggressiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                           RegionData* data, size_t size,
+                                                                           RegionData data[], size_t size,
                                                                            size_t free) {
   for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
+    ShenandoahHeapRegion* r = get_RegionData_region(data[idx]);
     if (r->garbage() > 0) {
       cset->add_region(r);
     }

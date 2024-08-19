@@ -38,7 +38,7 @@ ShenandoahGlobalHeuristics::ShenandoahGlobalHeuristics(ShenandoahGlobalGeneratio
 
 
 void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                       RegionData* data, size_t size,
+                                                                       RegionData data[], size_t size,
                                                                        size_t actual_free) {
   // The logic for cset selection in adaptive is as follows:
   //
@@ -76,7 +76,7 @@ void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(Shenandoa
 
 
 void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollectionSet* cset,
-                                                              const ShenandoahHeuristics::RegionData* data,
+                                                              const ShenandoahHeuristics::RegionData data[],
                                                               size_t size, size_t actual_free,
                                                               size_t cur_young_garbage) const {
   auto heap = ShenandoahGenerationalHeap::heap();
@@ -125,7 +125,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
                      byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
   for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
+    ShenandoahHeapRegion* r = get_RegionData_region(data[idx]);
     if (cset->is_preselected(r->index())) {
       fatal("There should be no preselected regions during GLOBAL GC");
       continue;

@@ -70,7 +70,7 @@ ShenandoahAdaptiveHeuristics::ShenandoahAdaptiveHeuristics(ShenandoahSpaceInfo* 
 ShenandoahAdaptiveHeuristics::~ShenandoahAdaptiveHeuristics() {}
 
 void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                         RegionData* data, size_t size,
+                                                                         RegionData data[], size_t size,
                                                                          size_t actual_free) {
   size_t garbage_threshold = ShenandoahHeapRegion::region_size_bytes() * ShenandoahGarbageThreshold / 100;
 
@@ -110,7 +110,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   size_t cur_garbage = 0;
 
   for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
+    ShenandoahHeapRegion* r = get_RegionData_region(data[idx]);
 
     size_t new_cset    = cur_cset + r->get_live_data_bytes();
     size_t new_garbage = cur_garbage + r->garbage();

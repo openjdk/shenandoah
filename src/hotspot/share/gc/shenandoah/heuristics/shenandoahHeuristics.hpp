@@ -69,6 +69,12 @@ class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Degenerated_Penalty = 10; // how much to penalize average GC duration history on Degenerated GC
   static const intx Full_Penalty        = 20; // how much to penalize average GC duration history on Full GC
 
+#ifdef ASSERT
+  enum UnionTag {
+    is_garbage, is_live_data, is_uninitialized
+  };
+#endif
+
 protected:
   static const uint Moving_Average_Samples = 10; // Number of samples to store in moving averages
 
@@ -77,8 +83,54 @@ protected:
     union {
       size_t _garbage;          // Not used by old-gen heuristics.
       size_t _live_data;        // Only used for old-gen heuristics, which prioritizes retention of _live_data over garbage reclaim
-    } _u;
+    } _region_union;
+#ifdef ASSERT
+    UnionTag _union_tag;
+#endif
   } RegionData;
+
+  static inline void set_RegionData_region_and_garbage(RegionData& region_data, ShenandoahHeapRegion* region, size_t garbage) {
+    region_data._region = region;
+    region_data._region_union._garbage = garbage;
+#ifdef ASSERT
+    region_data._union_tag = is_garbage;
+#endif
+  }
+
+  static inline void set_RegionData_region_and_livedata(RegionData& region_data, ShenandoahHeapRegion* region, size_t live) {
+    region_data._region = region;
+    region_data._region_union._live_data = live;
+#ifdef ASSERT
+    region_data._union_tag = is_live_data;
+#endif
+  }
+
+  static inline ShenandoahHeapRegion* get_RegionData_region(const RegionData& region_data) {
+#ifdef ASSERT
+    assert(region_data._union_tag != is_uninitialized, "Invalid union fetch");
+#endif
+    return region_data._region;
+  }
+
+  static inline size_t get_RegionData_garbage(const RegionData& region_data) {
+#ifdef ASSERT
+    assert(region_data._union_tag == is_garbage, "Invalid union fetch");
+#endif
+    return region_data._region_union._garbage;
+  }
+
+  static inline size_t get_RegionData_livedata(const RegionData& region_data) {
+#ifdef ASSERT
+    assert(region_data._union_tag == is_live_data, "Invalid union fetch");
+#endif
+    return region_data._region_union._live_data;
+  }
+
+#ifdef ASSERT
+  static inline void initialize_RegionData(RegionData& region_data) {
+    region_data._union_tag = is_uninitialized;
+  }
+#endif
 
   // Source of information about the memory space managed by this heuristic
   ShenandoahSpaceInfo* _space_info;
@@ -112,7 +164,7 @@ protected:
   static int compare_by_garbage(RegionData a, RegionData b);
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
-                                                     RegionData* data, size_t data_size,
+                                                     RegionData data[], size_t data_size,
                                                      size_t free) = 0;
 
   void adjust_penalty(intx step);

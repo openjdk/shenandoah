@@ -40,7 +40,7 @@ ShenandoahYoungHeuristics::ShenandoahYoungHeuristics(ShenandoahYoungGeneration* 
 
 
 void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                      RegionData* data, size_t size,
+                                                                      RegionData data[], size_t size,
                                                                       size_t actual_free) {
   // The logic for cset selection in adaptive is as follows:
   //
@@ -75,7 +75,7 @@ void ShenandoahYoungHeuristics::choose_collection_set_from_regiondata(Shenandoah
 }
 
 void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollectionSet* cset,
-                                                            const RegionData* data,
+                                                            const RegionData data[],
                                                             size_t size, size_t actual_free,
                                                             size_t cur_young_garbage) const {
 
@@ -100,7 +100,7 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
           byte_size_in_proper_unit(actual_free), proper_unit_for_byte_size(actual_free));
 
   for (size_t idx = 0; idx < size; idx++) {
-    ShenandoahHeapRegion* r = data[idx]._region;
+    ShenandoahHeapRegion* r = get_RegionData_region(data[idx]);
     if (cset->is_preselected(r->index())) {
       continue;
     }
