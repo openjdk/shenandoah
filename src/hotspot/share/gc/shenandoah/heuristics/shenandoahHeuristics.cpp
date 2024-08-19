@@ -62,7 +62,7 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahSpaceInfo* space_info) :
   _region_data = NEW_C_HEAP_ARRAY(RegionData, num_regions, mtGC);
 #ifdef ASSERT
   for (size_t i = 0; i < num_regions; i++) {
-    initialize_RegionData(_region_data[i]);
+    zero_RegionData(_region_data[i]);
   }
 #endif
 }

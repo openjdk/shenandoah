@@ -71,7 +71,7 @@ class ShenandoahHeuristics : public CHeapObj<mtGC> {
 
 #ifdef ASSERT
   enum UnionTag {
-    is_garbage, is_live_data, is_uninitialized
+    is_uninitialized, is_garbage, is_live_data
   };
 #endif
 
@@ -127,7 +127,7 @@ protected:
   }
 
 #ifdef ASSERT
-  static inline void initialize_RegionData(RegionData& region_data) {
+  static inline void zero_RegionData(RegionData& region_data) {
     region_data._union_tag = is_uninitialized;
   }
 #endif
