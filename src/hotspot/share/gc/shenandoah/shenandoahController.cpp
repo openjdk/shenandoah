@@ -92,9 +92,11 @@ void ShenandoahController::handle_alloc_failure_evac(size_t words) {
   heap->cancel_gc(GCCause::_shenandoah_allocation_failure_evac);
 }
 
-void ShenandoahController::notify_alloc_failure_waiters() {
-  _alloc_failure_gc.unset();
-  _humongous_alloc_failure_gc.unset();
+void ShenandoahController::notify_alloc_failure_waiters(bool clear_alloc_failure) {
+  if (clear_alloc_failure) {
+    _alloc_failure_gc.unset();
+    _humongous_alloc_failure_gc.unset();
+  }
   MonitorLocker ml(&_alloc_failure_waiters_lock);
   ml.notify_all();
 }

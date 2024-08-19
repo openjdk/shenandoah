@@ -1068,7 +1068,7 @@ void ShenandoahConcurrentGC::op_strong_roots() {
 void ShenandoahConcurrentGC::op_cleanup_early() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (heap->free_set()->recycle_trash()) {
-    heap->control_thread()->notify_alloc_failure_waiters();
+    heap->control_thread()->notify_alloc_failure_waiters(false);
   }
 }
 

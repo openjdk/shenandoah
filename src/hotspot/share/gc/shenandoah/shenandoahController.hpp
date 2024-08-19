@@ -79,7 +79,7 @@ public:
   bool try_set_alloc_failure_gc(bool is_humongous);
 
   // Notify threads waiting for GC to complete.
-  void notify_alloc_failure_waiters();
+  void notify_alloc_failure_waiters(bool clear_alloc_failure = true);
 
   // True if allocation failure flag has been set.
   bool is_alloc_failure_gc();
