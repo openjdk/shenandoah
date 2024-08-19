@@ -162,7 +162,13 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   // concurrent roots and concurrent class unloading so as to expedite recycling of immediate garbage.  Note that
   // we will not age young-gen objects in the case that we skip evacuation for abbreviated cycles.
   entry_cleanup_early();
+
+#ifdef KELVIN_DEPRECATE
+  // We just dumped the free set after rebuilding free set in final_mark.   Let's not dump it again.
+  // There may be some contention with mutator and GC worker threads who are trying to begin their evacuation
+  // efforts, and would prefer not to grab the heap lock right here.
   heap->free_set()->log_status_under_lock();
+#endif
 
   // Concurrent stack processing
   if (heap->is_evacuation_in_progress()) {
