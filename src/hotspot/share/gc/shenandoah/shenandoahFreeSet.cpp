@@ -1268,6 +1268,7 @@ bool ShenandoahFreeSet::recycle_trash() {
       }
     }
   }
+  _heap->control_thread()->anticipate_immediate_garbage((size_t) 0);
   return result;
 }
 

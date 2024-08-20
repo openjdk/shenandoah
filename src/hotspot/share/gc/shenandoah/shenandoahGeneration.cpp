@@ -753,6 +753,9 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     // We are preparing for evacuation.  At this time, we ignore cset region tallies.
     size_t first_old, last_old, num_old;
     heap->free_set()->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old, last_old, num_old);
+    size_t anticipated_immediate_garbage = (old_cset_regions + young_cset_regions) * ShenandoahHeapRegion::region_size_words();
+    heap->control_thread()->anticipate_immediate_garbage(anticipated_immediate_garbage);
+
     // Free set construction uses reserve quantities, because they are known to be valid here
     heap->free_set()->finish_rebuild(young_cset_regions, old_cset_regions, num_old, true);
   }

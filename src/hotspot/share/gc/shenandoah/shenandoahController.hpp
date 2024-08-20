@@ -43,6 +43,8 @@ private:
   shenandoah_padding(1);
   volatile size_t _gc_id;
   shenandoah_padding(2);
+  volatile size_t _anticipated_immediate_garbage;
+  shenandoah_padding(3);
 
 protected:
   ShenandoahSharedFlag _alloc_failure_gc;
@@ -70,6 +72,8 @@ public:
   // This cancels the collection cycle and has an option to block
   // until another cycle runs and clears the alloc failure gc flag.
   void handle_alloc_failure(ShenandoahAllocRequest& req, bool block);
+
+  void anticipate_immediate_garbage(size_t anticipated_immediate_garbage_words);
 
   // Invoked for allocation failures during evacuation. This cancels
   // the collection cycle without blocking.
