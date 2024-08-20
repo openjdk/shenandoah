@@ -51,11 +51,12 @@ GCName GCConfiguration::young_collector() const {
   }
 
   if (UseShenandoahGC) {
+#if INCLUDE_SHENANDOAHGC
     if (ShenandoahCardBarrier) {
       return ShenandoahYoung;
-    } else {
-      return NA;
     }
+#endif
+    return NA;
   }
 
   return DefNew;
@@ -79,11 +80,12 @@ GCName GCConfiguration::old_collector() const {
   }
 
   if (UseShenandoahGC) {
+#if INCLUDE_SHENANDOAHGC
     if (ShenandoahCardBarrier) {
       return ShenandoahOld;
-    } else {
-      return Shenandoah;
     }
+#endif
+    return Shenandoah;
   }
 
   return SerialOld;
