@@ -542,10 +542,9 @@ void ShenandoahHeapRegion::oop_iterate_humongous_slice_all(OopIterateClosure* cl
 
   ShenandoahHeapRegion* r = humongous_start_region();
   oop obj = cast_to_oop(r->bottom());
-  size_t num_cards = get_card_count(words);
 
   // Scan all data, regardless of whether cards are dirty
-  obj->oop_iterate(cl, MemRegion(start, start + num_cards * CardTable::card_size_in_words()));
+  obj->oop_iterate(cl, MemRegion(start, start + words));
 }
 
 ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
