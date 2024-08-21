@@ -458,7 +458,6 @@ void ShenandoahAsserts::assert_generational(const char* file, int line) {
 }
 
 void ShenandoahAsserts::assert_control_or_vm_thread_at_safepoint(bool at_safepoint, const char* file, int line) {
-  bool fail;
   Thread* thr = Thread::current();
   if (thr == ShenandoahHeap::heap()->control_thread()) {
     return;
