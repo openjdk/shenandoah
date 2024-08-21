@@ -36,7 +36,7 @@ class ShenandoahCollectionSet : public CHeapObj<mtGC> {
   friend class ShenandoahHeap;
   friend class ShenandoahCollectionSetPreselector;
 
-  void establish_preselected(bool preselected[]) {
+  void establish_preselected(bool *preselected) {
    assert(_preselected_regions == nullptr, "Over-writing");
    _preselected_regions = preselected;
   }
