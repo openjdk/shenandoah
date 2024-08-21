@@ -261,10 +261,10 @@ void ShenandoahScanRemembered::process_clusters(size_t first_cluster, size_t cou
           const MemRegion last_mr(right, p);
           assert(p == last_p + last_obj->size(), "Would miss portion of last_obj");
           last_obj->oop_iterate(cl, last_mr);
-          log_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+          log_develop_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(last_mr.start()), p2i(last_mr.end()));
         } else {
-          log_debug(gc, remset)("Skipped suffix scan of objArray in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+          log_develop_debug(gc, remset)("Skipped suffix scan of objArray in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
                                 p2i(right), p2i(p));
         }
       }
