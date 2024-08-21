@@ -36,9 +36,9 @@
 
 // sort by decreasing garbage (so most garbage comes first)
 int ShenandoahHeuristics::compare_by_garbage(RegionData a, RegionData b) {
-  if (get_RegionData_garbage(a) > get_RegionData_garbage(b)) {
+  if (a.get_garbage() > b.get_garbage()) {
     return -1;
-  } else if (get_RegionData_garbage(a) < get_RegionData_garbage(b)) {
+  } else if (a.get_garbage() < b.get_garbage()) {
     return 1;
   } else {
     return 0;
@@ -62,7 +62,7 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahSpaceInfo* space_info) :
   _region_data = NEW_C_HEAP_ARRAY(RegionData, num_regions, mtGC);
 #ifdef ASSERT
   for (size_t i = 0; i < num_regions; i++) {
-    zero_RegionData(_region_data[i]);
+    _region_data[i].clear();
   }
 #endif
 }
@@ -114,7 +114,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
         region->make_trash_immediate();
       } else {
         // This is our candidate for later consideration.
-        set_RegionData_region_and_garbage(candidates[cand_idx], region, garbage);
+        candidates[cand_idx].set_region_and_garbage(region, garbage);
         cand_idx++;
       }
     } else if (region->is_humongous_start()) {

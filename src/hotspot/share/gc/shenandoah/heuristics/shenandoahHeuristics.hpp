@@ -78,7 +78,8 @@ class ShenandoahHeuristics : public CHeapObj<mtGC> {
 protected:
   static const uint Moving_Average_Samples = 10; // Number of samples to store in moving averages
 
-  typedef struct {
+  class RegionData {
+    private:
     ShenandoahHeapRegion* _region;
     union {
       size_t _garbage;          // Not used by old-gen heuristics.
@@ -87,8 +88,52 @@ protected:
 #ifdef ASSERT
     UnionTag _union_tag;
 #endif
-  } RegionData;
+    public:
 
+#ifdef ASSERT
+    inline void clear() {
+      _union_tag = is_uninitialized;
+    }
+#endif
+
+    inline void set_region_and_garbage(ShenandoahHeapRegion* region, size_t garbage) {
+      _region = region;
+      _region_union._garbage = garbage;
+#ifdef ASSERT
+      _union_tag = is_garbage;
+#endif
+    }
+
+    inline void set_region_and_livedata(ShenandoahHeapRegion* region, size_t live) {
+      _region = region;
+      _region_union._live_data = live;
+#ifdef ASSERT
+      _union_tag = is_live_data;
+#endif
+    }
+
+    inline ShenandoahHeapRegion* get_region() const {
+#ifdef ASSERT
+      assert(_union_tag != is_uninitialized, "Cannot fetch region from uninialized RegionData");
+#endif
+      return _region;
+    }
+
+    inline size_t get_garbage() const {
+#ifdef ASSERT
+      assert(_union_tag == is_garbage, "Invalid union fetch");
+#endif
+      return _region_union._garbage;
+    }
+
+    inline size_t get_livedata() const {
+#ifdef ASSERT
+      assert(_union_tag == is_live_data, "Invalid union fetch");
+#endif
+      return _region_union._live_data;
+    }
+  };
+#ifdef KELVIN_DEPRECATE
   static inline void set_RegionData_region_and_garbage(RegionData& region_data, ShenandoahHeapRegion* region, size_t garbage) {
     region_data._region = region;
     region_data._region_union._garbage = garbage;
@@ -131,7 +176,8 @@ protected:
     region_data._union_tag = is_uninitialized;
   }
 #endif
-
+#endif
+  
   // Source of information about the memory space managed by this heuristic
   ShenandoahSpaceInfo* _space_info;
 
