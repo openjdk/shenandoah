@@ -45,13 +45,13 @@ public class TestSimpleGenerational {
     private static WhiteBox WB = WhiteBox.getWhiteBox();
     private static final int RANDOM_SEED = 46;
     // Sequence of random numbers should end with same value
-    private static final int EXPECTED_LAST_RANDOM = 272454100;
+    private static final int EXPECTED_LAST_RANDOM = 136227050;
 
 
     public static class Node {
         private static final int NEIGHBOR_COUNT = 5;
         private static final int INT_ARRAY_SIZE = 8;
-        private static Random RANDOM = new Random(RANDOM_SEED);
+        private static final Random RANDOM = new Random(RANDOM_SEED);
 
         private int val;
         private Object objectField;
@@ -87,15 +87,16 @@ public class TestSimpleGenerational {
         // Then overwrite arbitrarily selected neighbor with newly allocated
         // leaf node.
         public static Node upheaval(Node n) {
-            int firstValue = random.nextInt(NEIGHBOR_COUNT);
+            int firstValue = RANDOM.nextInt(Integer.MAX_VALUE);
             Node result = new Node(firstValue);
             if (n != null) {
                 for (int i = 0; i < NEIGHBOR_COUNT; i++) {
                     result.neighbors[i] = n.neighbors[i];
                 }
             }
-            int secondValue = random.nextInt(NEIGHBOR_COUNT);
-            result.neighbors[firstValue] = new Node(secondValue);
+            int secondValue = RANDOM.nextInt(Integer.MAX_VALUE);
+            int overwriteIndex = firstValue % NEIGHBOR_COUNT;
+            result.neighbors[overwriteIndex] = new Node(secondValue);
             return result;
         }
     }
@@ -111,6 +112,7 @@ public class TestSimpleGenerational {
             n = Node.upheaval(n);
         }
 
+        System.out.println("Expected Last Random: [" + n.value() + "]");
         if (n.value() != EXPECTED_LAST_RANDOM) {
             throw new IllegalStateException("Random number sequence ended badly!");
         }
