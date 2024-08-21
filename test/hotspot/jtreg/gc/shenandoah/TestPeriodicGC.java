@@ -66,8 +66,8 @@ public class TestPeriodicGC {
             output.shouldContain("Trigger (YOUNG): Time since last GC");
             output.shouldContain("Trigger (OLD): Time since last GC");
         } else {
-            output.shouldNotContain("Trigger (YOUNG): Time since last GC"));
-            output.shouldNotContain("Trigger (OLD): Time since last GC"));
+            output.shouldNotContain("Trigger (YOUNG): Time since last GC");
+            output.shouldNotContain("Trigger (OLD): Time since last GC");
         }
     }
 

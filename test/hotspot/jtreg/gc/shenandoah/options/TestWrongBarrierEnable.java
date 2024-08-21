@@ -47,7 +47,7 @@ public class TestWrongBarrierEnable {
         shouldPassAll("-XX:ShenandoahGCHeuristics=aggressive", concurrent);
         shouldPassAll("-XX:ShenandoahGCMode=passive",          concurrent);
         shouldPassAll("-XX:ShenandoahGCMode=generational",     all);
-        shouldFailAll("-XX:ShenandoahGCMode=satb",             generational)
+        shouldFailAll("-XX:ShenandoahGCMode=satb",             generational);
         shouldFailAll("-XX:ShenandoahGCMode=passive",          generational);
     }
 
@@ -82,5 +82,4 @@ public class TestWrongBarrierEnable {
             output.shouldHaveExitValue(0);
         }
     }
-
 }
