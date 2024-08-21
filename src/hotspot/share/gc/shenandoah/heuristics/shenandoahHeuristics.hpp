@@ -133,7 +133,7 @@ protected:
       return _region_union._live_data;
     }
   };
-  
+
   // Source of information about the memory space managed by this heuristic
   ShenandoahSpaceInfo* _space_info;
 
