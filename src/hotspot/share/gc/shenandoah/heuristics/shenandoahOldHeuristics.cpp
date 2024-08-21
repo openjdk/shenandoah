@@ -709,7 +709,7 @@ bool ShenandoahOldHeuristics::is_experimental() {
 }
 
 void ShenandoahOldHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
-                                                                    ShenandoahHeuristics::RegionData data[],
+                                                                    ShenandoahHeuristics::RegionData* data,
                                                                     size_t data_size, size_t free) {
   ShouldNotReachHere();
 }

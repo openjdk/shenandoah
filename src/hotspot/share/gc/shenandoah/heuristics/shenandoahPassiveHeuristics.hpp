@@ -47,7 +47,7 @@ public:
   virtual bool should_degenerate_cycle();
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
-                                                     RegionData data[], size_t data_size,
+                                                     RegionData* data, size_t data_size,
                                                      size_t free);
 
   virtual const char* name()     { return "Passive"; }

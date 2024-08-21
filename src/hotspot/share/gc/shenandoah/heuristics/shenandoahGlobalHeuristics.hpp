@@ -40,12 +40,12 @@ public:
   ShenandoahGlobalHeuristics(ShenandoahGlobalGeneration* generation);
 
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                             RegionData data[], size_t size,
+                                             RegionData* data, size_t size,
                                              size_t actual_free) override;
 
 private:
   void choose_global_collection_set(ShenandoahCollectionSet* cset,
-                                    const ShenandoahHeuristics::RegionData data[],
+                                    const ShenandoahHeuristics::RegionData* data,
                                     size_t size, size_t actual_free,
                                     size_t cur_young_garbage) const;
 };

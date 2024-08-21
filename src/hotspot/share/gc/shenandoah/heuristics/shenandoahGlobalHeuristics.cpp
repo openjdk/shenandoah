@@ -38,7 +38,7 @@ ShenandoahGlobalHeuristics::ShenandoahGlobalHeuristics(ShenandoahGlobalGeneratio
 
 
 void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                                       RegionData data[], size_t size,
+                                                                       RegionData* data, size_t size,
                                                                        size_t actual_free) {
   // The logic for cset selection in adaptive is as follows:
   //
@@ -76,7 +76,7 @@ void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(Shenandoa
 
 
 void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollectionSet* cset,
-                                                              const ShenandoahHeuristics::RegionData data[],
+                                                              const ShenandoahHeuristics::RegionData* data,
                                                               size_t size, size_t actual_free,
                                                               size_t cur_young_garbage) const {
   auto heap = ShenandoahGenerationalHeap::heap();

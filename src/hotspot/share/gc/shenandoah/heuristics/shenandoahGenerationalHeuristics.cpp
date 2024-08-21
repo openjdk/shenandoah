@@ -221,7 +221,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
 
 
 size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_set(ShenandoahCollectionSet* cset,
-                                                                                   const RegionData data[],
+                                                                                   const RegionData* data,
                                                                                    size_t size) const {
 #ifdef ASSERT
   const uint tenuring_threshold = ShenandoahGenerationalHeap::heap()->age_census()->tenuring_threshold();

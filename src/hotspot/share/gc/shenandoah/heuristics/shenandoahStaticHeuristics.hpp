@@ -41,7 +41,7 @@ public:
   virtual bool should_start_gc();
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
-                                                     RegionData data[], size_t size,
+                                                     RegionData* data, size_t size,
                                                      size_t free);
 
   virtual const char* name()     { return "Static"; }

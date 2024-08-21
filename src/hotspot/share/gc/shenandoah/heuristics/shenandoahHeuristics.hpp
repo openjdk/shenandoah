@@ -210,7 +210,7 @@ protected:
   static int compare_by_garbage(RegionData a, RegionData b);
 
   virtual void choose_collection_set_from_regiondata(ShenandoahCollectionSet* set,
-                                                     RegionData data[], size_t data_size,
+                                                     RegionData* data, size_t data_size,
                                                      size_t free) = 0;
 
   void adjust_penalty(intx step);
