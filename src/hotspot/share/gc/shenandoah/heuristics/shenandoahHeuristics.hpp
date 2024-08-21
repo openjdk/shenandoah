@@ -133,50 +133,6 @@ protected:
       return _region_union._live_data;
     }
   };
-#ifdef KELVIN_DEPRECATE
-  static inline void set_RegionData_region_and_garbage(RegionData& region_data, ShenandoahHeapRegion* region, size_t garbage) {
-    region_data._region = region;
-    region_data._region_union._garbage = garbage;
-#ifdef ASSERT
-    region_data._union_tag = is_garbage;
-#endif
-  }
-
-  static inline void set_RegionData_region_and_livedata(RegionData& region_data, ShenandoahHeapRegion* region, size_t live) {
-    region_data._region = region;
-    region_data._region_union._live_data = live;
-#ifdef ASSERT
-    region_data._union_tag = is_live_data;
-#endif
-  }
-
-  static inline ShenandoahHeapRegion* get_RegionData_region(const RegionData& region_data) {
-#ifdef ASSERT
-    assert(region_data._union_tag != is_uninitialized, "Invalid union fetch");
-#endif
-    return region_data._region;
-  }
-
-  static inline size_t get_RegionData_garbage(const RegionData& region_data) {
-#ifdef ASSERT
-    assert(region_data._union_tag == is_garbage, "Invalid union fetch");
-#endif
-    return region_data._region_union._garbage;
-  }
-
-  static inline size_t get_RegionData_livedata(const RegionData& region_data) {
-#ifdef ASSERT
-    assert(region_data._union_tag == is_live_data, "Invalid union fetch");
-#endif
-    return region_data._region_union._live_data;
-  }
-
-#ifdef ASSERT
-  static inline void zero_RegionData(RegionData& region_data) {
-    region_data._union_tag = is_uninitialized;
-  }
-#endif
-#endif
   
   // Source of information about the memory space managed by this heuristic
   ShenandoahSpaceInfo* _space_info;
