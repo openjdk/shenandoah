@@ -242,7 +242,7 @@ public:
   }
 };
 
-// Proper units routines try to maintain at least three significant digits.  These variant assume
+// Proper units routines try to maintain at least three significant digits.  These variants assume
 // size is expressed in words, but the formatted output is to be expressed in bytes.
 inline const char* proper_unit_for_word_size(size_t words) {
   return proper_unit_for_byte_size(words * HeapWordSize);
