@@ -443,7 +443,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
     st->print("|P " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
   }
   st->print("|S " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_shared_allocs()),   proper_unit_for_byte_size(get_shared_allocs()));
-  st->print("|L " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_live_data_words() * HeapWordSize), proper_unit_for_byte_size(get_live_data_words() * HeapWordSize));
+  st->print("|L " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_live_data_words()), proper_unit_for_word_size(get_live_data_words()));
   st->print("|CP " SIZE_FORMAT_W(3), pin_count());
   st->cr();
 

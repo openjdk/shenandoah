@@ -242,4 +242,15 @@ public:
   }
 };
 
+// Proper units routines try to maintain at least three significant digits.  These variant assume
+// size is expressed in words, but the formatted output is to be expressed in bytes.
+inline const char* preoper_unt_for_word_size(size_t words) {
+  return proper_unit_for_byte_size(words * HeapWordSize);
+}
+
+template <class T>
+inline T word_size_in_proper_unit(T words) {
+  return byte_size_in_proper_unit(words * HeapWordSize);
+}
+
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHUTILS_HPP

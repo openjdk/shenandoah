@@ -41,7 +41,7 @@
  *  My plan:  Order(0)
  *
  *  To remove:
- *    [ ] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
+ *    [ok] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
  *    [ ] region_size_bytes_shift() - maybe
  *    [ ] region_size_bytes_mask() - maybe
  *    [ ] region_size_bytes_jint() - maybe
