@@ -42,13 +42,15 @@
  *
  *  To remove:
  *    [ok] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
- *    [ ] region_size_bytes_shift() - maybe
+ *    [ok] region_size_bytes_jint() - maybe
  *    [ ] region_size_bytes_mask() - maybe
- *    [ ] region_size_bytes_jint() - maybe
- *    [ ] region_size_byte_shift_jint() - maybe
  *    [ ] humongous_threshold_bytes() - maybe
  *    [ ] max_tlab_size_bytes() - maybe
  *    [ ] get_live_data_bytes() - maybe
+ *
+ * Do not remove:
+ *    [ok] region_size_bytes_shift()
+ *    [ok] region_size_byte_shift_jint()
  *
  *  To modify:
  *    [ ] garbage(): used to return bytes, but now returns words
@@ -332,11 +334,13 @@ public:
     return ShenandoahHeapRegion::RegionSizeWordsMask;
   }
 
+#ifdef KELVIN_DEPRECATE
   // Convert to jint with sanity checking
   inline static jint region_size_bytes_jint() {
     assert (ShenandoahHeapRegion::RegionSizeBytes <= (size_t)max_jint, "sanity");
     return (jint)ShenandoahHeapRegion::RegionSizeBytes;
   }
+#endif
 
   // Convert to jint with sanity checking
   inline static jint region_size_words_jint() {
