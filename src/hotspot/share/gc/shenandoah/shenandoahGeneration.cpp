@@ -545,7 +545,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       continue;
     }
     if (r->age() >= tenuring_threshold) {
-      if ((r->garbage() < old_garbage_threshold)) {
+      if ((r->garbage() * HeapWordSize < old_garbage_threshold)) {
         // This tenure-worthy region has too little garbage, so we do not want to expend the copying effort to
         // reclaim the garbage; instead this region may be eligible for promotion-in-place to the
         // old generation.
@@ -605,7 +605,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
       //   the tenure age can be increased.
       if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
-        if (r->garbage() >= old_garbage_threshold) {
+        if (r->garbage() * HeapWordSize >= old_garbage_threshold) {
           promo_potential += r->get_live_data_words() * HeapWordSize;
         }
       }

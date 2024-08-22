@@ -79,7 +79,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     if (!_generation->contains(region)) {
       continue;
     }
-    size_t garbage = region->garbage();
+    size_t garbage = region->garbage() * HeapWordSize;
     total_garbage += garbage;
     if (region->is_empty()) {
       free_regions++;
@@ -238,13 +238,13 @@ size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_s
       // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
       // This region has been pre-selected and its impact on promotion reserve is already accounted for.
 
-      // r->used() is r->garbage() + r->get_live_data_words() * HeapWordSize
+      // r->used() is r->garbage() * HeapWordSize + r->get_live_data_words() * HeapWordSize
       // Since all live data in this region is being evacuated from young-gen, it is as if this memory
       // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
       // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
       // within young-gen memory.
 
-      cur_young_garbage += r->garbage();
+      cur_young_garbage += r->garbage() * HeapWordSize;
       cset->add_region(r);
     }
   }

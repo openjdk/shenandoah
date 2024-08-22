@@ -374,7 +374,7 @@ public:
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
     _used += r->used();
-    _garbage += r->garbage();
+    _garbage += r->garbage() * HeapWordSize;
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
     if (r->is_humongous()) {
       _humongous_waste += r->free();
@@ -526,7 +526,7 @@ public:
     verify(r, r->get_live_data_words() * HeapWordSize <= r->capacity(),
            "Live data cannot be larger than capacity");
 
-    verify(r, r->garbage() <= r->capacity(),
+    verify(r, r->garbage() * HeapWordSize <= r->capacity(),
            "Garbage cannot be larger than capacity");
 
     verify(r, r->used() <= r->capacity(),

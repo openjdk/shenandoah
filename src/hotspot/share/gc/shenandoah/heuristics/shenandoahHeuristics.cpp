@@ -100,7 +100,7 @@ void ShenandoahHeuristics::choose_collection_set(ShenandoahCollectionSet* collec
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
 
-    size_t garbage = region->garbage();
+    size_t garbage = region->garbage() * HeapWordSize;
     total_garbage += garbage;
 
     if (region->is_empty()) {

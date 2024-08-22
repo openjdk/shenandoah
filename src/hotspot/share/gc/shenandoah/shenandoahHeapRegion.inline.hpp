@@ -165,8 +165,9 @@ inline size_t ShenandoahHeapRegion::garbage() const {
          "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT,
          get_live_data_words() * HeapWordSize, used());
 
-  size_t result = used() - (get_live_data_words() * HeapWordSize);
-  return result;
+  // KELVIN TODO: remove assert after used() returns words
+  assert(used() % HeapWordSize == 0, "used() should be a multiple of HeapWordSize");
+  return (used() / HeapWordSize) - get_live_data_words();
 }
 
 inline size_t ShenandoahHeapRegion::garbage_before_padded_for_promote() const {

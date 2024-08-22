@@ -191,7 +191,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     collection_set->add_region(r);
     included_old_regions++;
     evacuated_old_bytes += live_data_for_evacuation;
-    collected_old_bytes += r->garbage();
+    collected_old_bytes += r->garbage() * HeapWordSize;
     consume_old_collection_candidate();
   }
 
@@ -324,7 +324,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       continue;
     }
 
-    size_t garbage = region->garbage();
+    size_t garbage = region->garbage() * HeapWordSize;
     size_t live_bytes = region->get_live_data_words() * HeapWordSize;
     live_data += live_bytes;
 
@@ -397,7 +397,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       break;
     }
     ShenandoahHeapRegion* r = candidates[i].get_region();
-    size_t region_garbage = r->garbage();
+    size_t region_garbage = r->garbage() * HeapWordSize;
     size_t region_free = r->free();
     candidates_garbage += region_garbage;
     unfragmented += region_free;
@@ -439,7 +439,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate].get_region();
       assert(r->is_regular() || r->is_regular_pinned(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
              r->index(), ShenandoahHeapRegion::region_state_to_string(r->state()));
-      const size_t region_garbage = r->garbage();
+      const size_t region_garbage = r->garbage() * HeapWordSize;
       const size_t region_free = r->free();
       candidates_garbage += region_garbage;
       unfragmented += region_free;

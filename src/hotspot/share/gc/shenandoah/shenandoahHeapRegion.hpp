@@ -53,7 +53,7 @@
  *    [ok] region_size_bytes_mask()
  *
  *  To modify:
- *    [ ] garbage(): used to return bytes, but now returns words
+ *    [ok] garbage(): used to return bytes, but now returns words
  *    [ ] free():    used to return bytes, but now returns words
  *    [ ] required_regions(arg): arg was in bytes, but change arg to words
  *    [ ] capacity(): used to return bytes, but now returns words
@@ -417,6 +417,7 @@ public:
 #endif
   inline size_t get_live_data_words() const;
 
+  // Returns words of garbage within this region
   inline size_t garbage() const;
 
   void print_on(outputStream* st) const;
