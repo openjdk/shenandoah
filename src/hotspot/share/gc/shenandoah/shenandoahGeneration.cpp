@@ -581,7 +581,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
         // happens, we will consider this region as part of the anticipated promotion potential for the next GC
         // pass; see further below.
         sorted_regions[candidates]._region = r;
-        sorted_regions[candidates++]._live_data = r->get_live_data_bytes();
+        sorted_regions[candidates++]._live_data = r->get_live_data_words() * HeapWordSize;
       }
     } else {
       // We only evacuate & promote objects from regular regions whose garbage() is above old-garbage-threshold.
@@ -606,7 +606,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       //   the tenure age can be increased.
       if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
         if (r->garbage() >= old_garbage_threshold) {
-          promo_potential += r->get_live_data_bytes();
+          promo_potential += r->get_live_data_words() * HeapWordSize;
         }
       }
     }

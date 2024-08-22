@@ -150,30 +150,32 @@ inline size_t ShenandoahHeapRegion::get_live_data_words() const {
   return Atomic::load(&_live_data);
 }
 
+#ifdef KELVIN_DEPRECATE
 inline size_t ShenandoahHeapRegion::get_live_data_bytes() const {
   return get_live_data_words() * HeapWordSize;
 }
+#endif
 
 inline bool ShenandoahHeapRegion::has_live() const {
   return get_live_data_words() != 0;
 }
 
 inline size_t ShenandoahHeapRegion::garbage() const {
-  assert(used() >= get_live_data_bytes(),
+  assert(used() >= get_live_data_words() * HeapWordSize,
          "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT,
-         get_live_data_bytes(), used());
+         get_live_data_words() * HeapWordSize, used());
 
-  size_t result = used() - get_live_data_bytes();
+  size_t result = used() - (get_live_data_words() * HeapWordSize);
   return result;
 }
 
 inline size_t ShenandoahHeapRegion::garbage_before_padded_for_promote() const {
   assert(get_top_before_promote() != nullptr, "top before promote should not equal null");
   size_t used_before_promote = byte_size(bottom(), get_top_before_promote());
-  assert(used_before_promote >= get_live_data_bytes(),
+  assert(used_before_promote >= get_live_data_words() * HeapWordSize,
          "Live Data must be a subset of used before promotion live: " SIZE_FORMAT " used: " SIZE_FORMAT,
-         get_live_data_bytes(), used_before_promote);
-  size_t result = used_before_promote - get_live_data_bytes();
+         get_live_data_words() * HeapWordSize, used_before_promote);
+  size_t result = used_before_promote - (get_live_data_words() * HeapWordSize);
   return result;
 
 }

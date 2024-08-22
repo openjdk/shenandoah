@@ -133,7 +133,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // If region r is evacuated to fragmented memory (to free memory within a partially used region), then we need
     // to decrease the capacity of the fragmented memory by the scaled loss.
 
-    size_t live_data_for_evacuation = r->get_live_data_bytes();
+    size_t live_data_for_evacuation = r->get_live_data_words() * HeapWordSize;
     size_t lost_available = r->free();
 
     if ((lost_available > 0) && (excess_fragmented_available > 0)) {
@@ -324,7 +324,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
 
     size_t garbage = region->garbage();
-    size_t live_bytes = region->get_live_data_bytes();
+    size_t live_bytes = region->get_live_data_words() * HeapWordSize;
     live_data += live_bytes;
 
     if (region->is_regular() || region->is_regular_pinned()) {

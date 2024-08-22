@@ -112,7 +112,7 @@ void ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata(Shenand
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx]._region;
 
-    size_t new_cset    = cur_cset + r->get_live_data_bytes();
+    size_t new_cset    = cur_cset + r->get_live_data_words() * HeapWordSize;
     size_t new_garbage = cur_garbage + r->garbage();
 
     if (new_cset > max_cset) {

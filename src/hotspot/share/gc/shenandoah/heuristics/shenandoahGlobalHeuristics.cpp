@@ -132,7 +132,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
     }
     bool add_region = false;
     if (r->is_old() || (r->age() >= tenuring_threshold)) {
-      size_t new_cset = old_cur_cset + r->get_live_data_bytes();
+      size_t new_cset = old_cur_cset + r->get_live_data_words() * HeapWordSize;
       if ((r->garbage() > garbage_threshold)) {
         while ((new_cset > max_old_cset) && (unaffiliated_young_regions > 0)) {
           unaffiliated_young_regions--;
@@ -146,7 +146,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
       }
     } else {
       assert(r->is_young() && (r->age() < tenuring_threshold), "DeMorgan's law (assuming r->is_affiliated)");
-      size_t new_cset = young_cur_cset + r->get_live_data_bytes();
+      size_t new_cset = young_cur_cset + r->get_live_data_words() * HeapWordSize;
       size_t region_garbage = r->garbage();
       size_t new_garbage = cur_young_garbage + region_garbage;
       bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);

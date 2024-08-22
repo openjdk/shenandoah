@@ -139,7 +139,7 @@ void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {
     for (size_t i = 0; i < heap->num_regions(); i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       if (r->is_old()) {
-        live_bytes_in_old += r->get_live_data_bytes();
+        live_bytes_in_old += r->get_live_data_words() * HeapWordSize;
       }
     }
     log_info(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));

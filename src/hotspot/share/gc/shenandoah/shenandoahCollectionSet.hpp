@@ -32,6 +32,31 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 
+#ifdef KELVIN_NOTES
+/**
+ * My plan:  Order(1)
+ *
+ * To remove:
+ *
+ * To replace:
+ *   [ ] _young_bytes_to_evacuate -> _young_words_to_evacuate
+ *   [ ] _young_available_bytes_collected -> _young_available_words_collected
+ *   [ ] _young_bytes_to_evacuate -> _young_words_to_evacuate
+ *   [ ] _young_available_bytes_collected -> _young_available_words_collected
+ *   [ ] _young_bytes_to_promote -> _young_words_to_promote
+ *   [ ] _old_bytes_to_evacuate -> _old_words_to_evacuate
+ *
+ * To modify:
+ *   [ ] _old_garbage was bytes, change to words
+ *   [ ] _garbage was bytes, change to words
+ *   [ ] garbage(): used to return bytes, but now returns words
+ *   [ ] get_old_garbage(): used to return bytes, but now returns words
+ *   [ ] _live: was bytes, change to words
+ *   [ ] _used: was bytes, change to words
+ */
+
+#endif
+
 class ShenandoahCollectionSet : public CHeapObj<mtGC> {
   friend class ShenandoahHeap;
   friend class ShenandoahCollectionSetPreselector;
@@ -53,9 +78,9 @@ private:
   ShenandoahHeap* const _heap;
 
   bool                  _has_old_regions;
-  size_t                _garbage;
-  size_t                _used;
-  size_t                _live;
+  size_t                _garbage;            // bytes of total _garbage to be reclaimed from cset
+  size_t                _used;               // total used bytes within cset
+  size_t                _live;               // total live bytes within cset
   size_t                _region_count;
 
   size_t                _young_bytes_to_evacuate;

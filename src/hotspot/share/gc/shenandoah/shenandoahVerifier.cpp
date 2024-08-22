@@ -523,7 +523,7 @@ public:
     verify(r, _heap->marking_context()->top_at_mark_start(r) <= r->top(),
            "Complete TAMS should not be larger than top");
 
-    verify(r, r->get_live_data_bytes() <= r->capacity(),
+    verify(r, r->get_live_data_words() * HeapWordSize <= r->capacity(),
            "Live data cannot be larger than capacity");
 
     verify(r, r->garbage() <= r->capacity(),

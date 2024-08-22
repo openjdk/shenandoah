@@ -36,6 +36,31 @@
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "utilities/sizes.hpp"
 
+#ifdef KELVIN_NOTES
+/**
+ *  My plan:  Order(0)
+ *
+ *  To remove:
+ *    [ ] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
+ *    [ ] region_size_bytes_shift() - maybe
+ *    [ ] region_size_bytes_mask() - maybe
+ *    [ ] region_size_bytes_jint() - maybe
+ *    [ ] region_size_byte_shift_jint() - maybe
+ *    [ ] humongous_threshold_bytes() - maybe
+ *    [ ] max_tlab_size_bytes() - maybe
+ *    [ ] get_live_data_bytes() - maybe
+ *
+ *  To modify:
+ *    [ ] garbage(): used to return bytes, but now returns words
+ *    [ ] free():    used to return bytes, but now returns words
+ *    [ ] required_regions(arg): arg was in bytes, but change arg to words
+ *    [ ] capacity(): used to return bytes, but now returns words
+ *    [ ] used():     used to return bytes, but now returns words
+ *    [ ] used_before_promote(): used to return bytes, but now returns words
+ *    [ ] garbage_before_padded_for_promote(): used to return bytes, but now returns words
+ */
+#endif
+
 class VMStructs;
 class ShenandoahHeapRegionStateConstant;
 
@@ -375,7 +400,9 @@ public:
   inline void increase_live_data_gc_words(size_t s);
 
   inline bool has_live() const;
+#ifdef KELVIN_DEPRECATE
   inline size_t get_live_data_bytes() const;
+#endif
   inline size_t get_live_data_words() const;
 
   inline size_t garbage() const;

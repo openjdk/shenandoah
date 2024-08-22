@@ -105,7 +105,7 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
       continue;
     }
     if (r->age() < tenuring_threshold) {
-      size_t new_cset = cur_cset + r->get_live_data_bytes();
+      size_t new_cset = cur_cset + r->get_live_data_words() * HeapWordSize;
       size_t region_garbage = r->garbage();
       size_t new_garbage = cur_young_garbage + region_garbage;
       bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);

@@ -92,7 +92,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
   _cset_map[r->index()] = 1;
-  size_t live    = r->get_live_data_bytes();
+  size_t live    = r->get_live_data_words() * HeapWordSize;
   size_t garbage = r->garbage();
   size_t free    = r->free();
   if (r->is_young()) {
