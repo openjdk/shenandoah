@@ -261,11 +261,11 @@ void ShenandoahScanRemembered::process_clusters(size_t first_cluster, size_t cou
           const MemRegion last_mr(right, p);
           assert(p == last_p + last_obj->size(), "Would miss portion of last_obj");
           last_obj->oop_iterate(cl, last_mr);
-          log_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
-                                p2i(last_mr.start()), p2i(last_mr.end()));
+          log_develop_debug(gc, remset)("Fixed up non-objArray suffix scan in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+                                        p2i(last_mr.start()), p2i(last_mr.end()));
         } else {
-          log_debug(gc, remset)("Skipped suffix scan of objArray in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
-                                p2i(right), p2i(p));
+          log_develop_debug(gc, remset)("Skipped suffix scan of objArray in [" INTPTR_FORMAT ", " INTPTR_FORMAT ")",
+                                        p2i(right), p2i(p));
         }
       }
       NOT_PRODUCT(stats.record_scan_obj_cnt(i);)
@@ -308,7 +308,7 @@ ShenandoahScanRemembered::process_humongous_clusters(ShenandoahHeapRegion* r, si
   size_t first_card_index = first_cluster * ShenandoahCardCluster::CardsPerCluster;
   HeapWord* first_cluster_addr = _rs->addr_for_card_index(first_card_index);
   size_t spanned_words = count * ShenandoahCardCluster::CardsPerCluster * CardTable::card_size_in_words();
-  start_region->oop_iterate_humongous_slice(cl, true, first_cluster_addr, spanned_words, use_write_table);
+  start_region->oop_iterate_humongous_slice_dirty(cl, first_cluster_addr, spanned_words, use_write_table);
 }
 
 

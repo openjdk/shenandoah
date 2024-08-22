@@ -546,6 +546,7 @@ void ShenandoahGenerationalHeap::retire_plab(PLAB* plab, Thread* thread) {
     // safely walk the region backing the plab.
     log_debug(gc)("retire_plab() is registering remnant of size " SIZE_FORMAT " at " PTR_FORMAT,
                   plab->waste() - original_waste, p2i(top));
+    // No lock is necessary because the PLAB memory is aligned on card boundaries.
     old_generation()->card_scan()->register_object_without_lock(top);
   }
 }
@@ -871,7 +872,7 @@ private:
         if (is_mixed) {
           if (r->is_humongous()) {
             // Need to examine both dirty and clean cards during mixed evac.
-            r->oop_iterate_humongous_slice(&cl, false, start_of_range, assignment._chunk_size, true);
+            r->oop_iterate_humongous_slice_all(&cl,start_of_range, assignment._chunk_size);
           } else {
             // Since this is mixed evacuation, old regions that are candidates for collection have not been coalesced
             // and filled.  This will use mark bits to find objects that need to be updated.
