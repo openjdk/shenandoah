@@ -53,6 +53,9 @@ void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(Shenandoa
   QuickSort::sort<RegionData>(data, (int) size, compare_by_garbage);
 
   size_t cur_young_garbage = add_preselected_regions_to_collection_set(cset, data, size);
+  // TODO: If the following assert triggers, then we'll want to check if there are no preselected regions
+  // and may be go back and look at `add_preselected` logic and whether this is needed.
+  assert(cur_young_garbage > 0, "Error: was there any point in executing the above?");
 
   choose_global_collection_set(cset, data, size, actual_free, cur_young_garbage);
 
