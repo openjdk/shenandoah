@@ -44,8 +44,8 @@
  *    [ok] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
  *    [ok] region_size_bytes_jint() - maybe
  *    [ok] humongous_threshold_bytes() - maybe
- *    [ ] max_tlab_size_bytes() - maybe
- *    [ ] get_live_data_bytes() - maybe
+ *    [ok] max_tlab_size_bytes() - maybe
+ *    [ok] get_live_data_bytes() - maybe
  *
  * Do not remove:
  *    [ok] region_size_bytes_shift()
@@ -374,11 +374,11 @@ public:
   inline static size_t humongous_threshold_bytes() {
     return ShenandoahHeapRegion::HumongousThresholdBytes;
   }
-#endif
 
   inline static size_t max_tlab_size_bytes() {
     return ShenandoahHeapRegion::MaxTLABSizeBytes;
   }
+#endif
 
   inline static size_t max_tlab_size_words() {
     return ShenandoahHeapRegion::MaxTLABSizeWords;

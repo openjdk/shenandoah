@@ -42,7 +42,8 @@ void ShenandoahInitLogger::print_heap() {
 
   log_info(gc, init)("Heap Region Count: " SIZE_FORMAT, ShenandoahHeapRegion::region_count());
   log_info(gc, init)("Heap Region Size: " EXACTFMT, EXACTFMTARGS(ShenandoahHeapRegion::region_size_bytes()));
-  log_info(gc, init)("TLAB Size Max: " EXACTFMT, EXACTFMTARGS(ShenandoahHeapRegion::max_tlab_size_bytes()));
+  log_info(gc, init)("TLAB Size Max: " EXACTFMT,
+                     EXACTFMTARGS(ShenandoahHeapRegion::max_tlab_size_words() * HeapWordSize));
   log_info(gc, init)("Humongous Object Threshold: " EXACTFMT,
                      EXACTFMTARGS(ShenandoahHeapRegion::humongous_threshold_words() * HeapWordSize));
 }

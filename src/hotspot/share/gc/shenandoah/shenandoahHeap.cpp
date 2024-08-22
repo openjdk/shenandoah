@@ -1453,10 +1453,11 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
 }
 
 // Returns size in bytes
+// KELVIN TODO: change this to return words
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
   // Return the max allowed size, and let the allocation path
   // figure out the safe size for current allocation.
-  return ShenandoahHeapRegion::max_tlab_size_bytes();
+  return ShenandoahHeapRegion::max_tlab_size_words() * HeapWordSize;
 }
 
 size_t ShenandoahHeap::max_tlab_size() const {
