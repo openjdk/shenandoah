@@ -61,7 +61,9 @@ size_t ShenandoahHeapRegion::RegionSizeBytesShift = 0;
 size_t ShenandoahHeapRegion::RegionSizeWordsShift = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytesMask = 0;
 size_t ShenandoahHeapRegion::RegionSizeWordsMask = 0;
+#ifdef KELVIN_DEPRECATE
 size_t ShenandoahHeapRegion::HumongousThresholdBytes = 0;
+#endif
 size_t ShenandoahHeapRegion::HumongousThresholdWords = 0;
 size_t ShenandoahHeapRegion::MaxTLABSizeBytes = 0;
 size_t ShenandoahHeapRegion::MaxTLABSizeWords = 0;
@@ -753,9 +755,11 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
   HumongousThresholdWords = align_down(HumongousThresholdWords, MinObjAlignment);
   assert (HumongousThresholdWords <= RegionSizeWords, "sanity");
 
+#ifdef KELVIN_DEPRECATE
   guarantee(HumongousThresholdBytes == 0, "we should only set it once");
   HumongousThresholdBytes = HumongousThresholdWords * HeapWordSize;
   assert (HumongousThresholdBytes <= RegionSizeBytes, "sanity");
+#endif
 
   guarantee(MaxTLABSizeWords == 0, "we should only set it once");
   MaxTLABSizeWords = MIN2(RegionSizeWords, HumongousThresholdWords);

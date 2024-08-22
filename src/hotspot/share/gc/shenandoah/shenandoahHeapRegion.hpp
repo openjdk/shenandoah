@@ -43,14 +43,14 @@
  *  To remove:
  *    [ok] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
  *    [ok] region_size_bytes_jint() - maybe
- *    [ ] region_size_bytes_mask() - maybe
- *    [ ] humongous_threshold_bytes() - maybe
+ *    [ok] humongous_threshold_bytes() - maybe
  *    [ ] max_tlab_size_bytes() - maybe
  *    [ ] get_live_data_bytes() - maybe
  *
  * Do not remove:
  *    [ok] region_size_bytes_shift()
  *    [ok] region_size_byte_shift_jint()
+ *    [ok] region_size_bytes_mask()
  *
  *  To modify:
  *    [ ] garbage(): used to return bytes, but now returns words
@@ -60,6 +60,10 @@
  *    [ ] used():     used to return bytes, but now returns words
  *    [ ] used_before_promote(): used to return bytes, but now returns words
  *    [ ] garbage_before_padded_for_promote(): used to return bytes, but now returns words
+ *
+ *  To add/replace:
+ *    [ok] humongous_threshold_words() replaces humongous_threshold_bytes
+
  */
 #endif
 
@@ -255,7 +259,9 @@ private:
   static size_t RegionSizeWordsShift;
   static size_t RegionSizeBytesMask;
   static size_t RegionSizeWordsMask;
+#ifdef KELVIN_DEPRECATE
   static size_t HumongousThresholdBytes;
+#endif
   static size_t HumongousThresholdWords;
   static size_t MaxTLABSizeBytes;
   static size_t MaxTLABSizeWords;
@@ -360,13 +366,15 @@ public:
     return (jint)ShenandoahHeapRegion::RegionSizeWordsShift;
   }
 
-  inline static size_t humongous_threshold_bytes() {
-    return ShenandoahHeapRegion::HumongousThresholdBytes;
-  }
-
   inline static size_t humongous_threshold_words() {
     return ShenandoahHeapRegion::HumongousThresholdWords;
   }
+
+#ifdef KELVIN_DEPRECATE
+  inline static size_t humongous_threshold_bytes() {
+    return ShenandoahHeapRegion::HumongousThresholdBytes;
+  }
+#endif
 
   inline static size_t max_tlab_size_bytes() {
     return ShenandoahHeapRegion::MaxTLABSizeBytes;
