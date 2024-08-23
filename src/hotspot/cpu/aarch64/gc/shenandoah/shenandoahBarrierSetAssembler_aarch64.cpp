@@ -419,7 +419,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
   BarrierSetAssembler::store_at(masm, decorators, type, Address(tmp3, 0), val, noreg, noreg, noreg);
 
   bool in_heap = (decorators & IN_HEAP) != 0;
-  bool needs_post_barrier = val != noreg && in_heap && ShenandoahCardBarrier;
+  bool needs_post_barrier = (val != noreg) && in_heap && ShenandoahCardBarrier;
   if (needs_post_barrier) {
     store_check(masm, tmp3);
   }
