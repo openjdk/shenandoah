@@ -136,7 +136,7 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // to decrease the capacity of the fragmented memory by the scaled loss.
 
     size_t live_data_for_evacuation = r->get_live_data_words() * HeapWordSize;
-    size_t lost_available = r->free();
+    size_t lost_available = r->free() * HeapWordSize;
 
     if ((lost_available > 0) && (excess_fragmented_available > 0)) {
       if (lost_available < excess_fragmented_available) {
@@ -398,7 +398,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
     ShenandoahHeapRegion* r = candidates[i].get_region();
     size_t region_garbage = r->garbage() * HeapWordSize;
-    size_t region_free = r->free();
+    size_t region_free = r->free() * HeapWordSize;
     candidates_garbage += region_garbage;
     unfragmented += region_free;
   }
@@ -440,7 +440,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       assert(r->is_regular() || r->is_regular_pinned(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
              r->index(), ShenandoahHeapRegion::region_state_to_string(r->state()));
       const size_t region_garbage = r->garbage() * HeapWordSize;
-      const size_t region_free = r->free();
+      const size_t region_free = r->free() * HeapWordSize;
       candidates_garbage += region_garbage;
       unfragmented += region_free;
       defrag_count++;

@@ -124,7 +124,7 @@ inline size_t ShenandoahFreeSet::alloc_capacity(ShenandoahHeapRegion *r) const {
     // This would be recycled on allocation path
     return ShenandoahHeapRegion::region_size_bytes();
   } else {
-    return r->free();
+    return r->free() * HeapWordSize;
   }
 }
 
@@ -1009,10 +1009,10 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     }
   }
 
-  // req.size() is in words, r->free() is in bytes.
+  // req.size() is in words, r->free() is in words.
   if (req.is_lab_alloc()) {
     size_t adjusted_size = req.size();
-    size_t free = r->free();    // free represents bytes available within region r
+    size_t free = r->free() * HeapWordSize;    // free represents words available within region r
     if (req.type() == ShenandoahAllocRequest::_alloc_plab) {
       // This is a PLAB allocation
       assert(_heap->mode()->is_generational(), "PLABs are only for generational mode");
@@ -1738,13 +1738,13 @@ void ShenandoahFreeSet::establish_old_collector_alloc_bias() {
   for (idx_t index = left_idx; index < middle; index++) {
     if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, index)) {
       ShenandoahHeapRegion* r = heap->get_region((size_t) index);
-      available_in_first_half += r->free();
+      available_in_first_half += r->free() * HeapWordSize;
     }
   }
   for (idx_t index = middle; index <= right_idx; index++) {
     if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, index)) {
       ShenandoahHeapRegion* r = heap->get_region(index);
-      available_in_second_half += r->free();
+      available_in_second_half += r->free() * HeapWordSize;
     }
   }
 

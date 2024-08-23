@@ -879,7 +879,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
 
 void ShenandoahHeapRegion::decrement_humongous_waste() const {
   assert(is_humongous(), "Should only use this for humongous regions");
-  size_t waste_bytes = free();
+  size_t waste_bytes = free() * HeapWordSize;
   if (waste_bytes > 0) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahGeneration* generation = heap->generation_for(affiliation());

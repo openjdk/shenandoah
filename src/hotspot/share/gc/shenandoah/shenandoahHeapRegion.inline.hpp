@@ -33,6 +33,10 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
+static inline size_t word_size(void *from, void* to) {
+  return pointer_delta(to, from, sizeof(HeapWord));
+}
+
 HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest &req, size_t alignment_in_bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(req.is_lab_alloc(), "allocate_aligned() only applies to LAB allocations");
@@ -226,7 +230,10 @@ inline void ShenandoahHeapRegion::save_top_before_promote() {
 inline void ShenandoahHeapRegion::restore_top_before_promote() {
   _top = _top_before_promoted;
   _top_before_promoted = nullptr;
- }
+}
 
+inline size_t ShenandoahHeapRegion::free() const {
+  return word_size(top(), end());
+}
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP

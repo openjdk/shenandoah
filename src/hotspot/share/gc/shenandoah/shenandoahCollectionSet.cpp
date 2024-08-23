@@ -94,7 +94,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _cset_map[r->index()] = 1;
   size_t live    = r->get_live_data_words() * HeapWordSize;
   size_t garbage = r->garbage() * HeapWordSize;
-  size_t free    = r->free();
+  size_t free    = r->free() * HeapWordSize;
   if (r->is_young()) {
     _young_bytes_to_evacuate += live;
     _young_available_bytes_collected += free;

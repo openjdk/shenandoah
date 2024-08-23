@@ -558,7 +558,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
           // phase.
           r->save_top_before_promote();
 
-          size_t remnant_size = r->free() / HeapWordSize;
+          size_t remnant_size = r->free();
           if (remnant_size > ShenandoahHeap::min_fill_size()) {
             ShenandoahHeap::fill_with_object(original_top, remnant_size);
             // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,

@@ -54,7 +54,7 @@
  *
  *  To modify:
  *    [ok] garbage(): used to return bytes, but now returns words
- *    [ ] free():    used to return bytes, but now returns words
+ *    [ok] free():    used to return bytes, but now returns words
  *    [ ] required_regions(arg): arg was in bytes, but change arg to words
  *    [ ] capacity(): used to return bytes, but now returns words
  *    [ ] used():     used to return bytes, but now returns words
@@ -471,10 +471,10 @@ public:
   HeapWord* bottom() const      { return _bottom;  }
   HeapWord* end() const         { return _end;     }
 
-  size_t capacity() const       { return byte_size(bottom(), end()); }
-  size_t used() const           { return byte_size(bottom(), top()); }
-  size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
-  size_t free() const           { return byte_size(top(),    end()); }
+  inline size_t capacity() const       { return byte_size(bottom(), end()); }
+  inline size_t used() const           { return byte_size(bottom(), top()); }
+  inline size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
+  inline size_t free() const;
 
   // Does this region contain this address?
   bool contains(HeapWord* p) const {

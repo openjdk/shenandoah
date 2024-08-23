@@ -377,7 +377,7 @@ public:
     _garbage += r->garbage() * HeapWordSize;
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
     if (r->is_humongous()) {
-      _humongous_waste += r->free();
+      _humongous_waste += r->free() * HeapWordSize;
     }
     if (r->is_trash()) {
       _trashed_regions++;
