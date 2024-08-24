@@ -511,7 +511,7 @@ public:
         ShouldNotReachHere();
     }
 
-    verify(r, r->capacity() == ShenandoahHeapRegion::region_size_bytes(),
+    verify(r, r->capacity() == ShenandoahHeapRegion::region_size_words(),
            "Capacity should match region size");
 
     verify(r, r->bottom() <= r->top(),
@@ -523,25 +523,25 @@ public:
     verify(r, _heap->marking_context()->top_at_mark_start(r) <= r->top(),
            "Complete TAMS should not be larger than top");
 
-    verify(r, r->get_live_data_words() * HeapWordSize <= r->capacity(),
+    verify(r, r->get_live_data_words() <= r->capacity(),
            "Live data cannot be larger than capacity");
 
-    verify(r, r->garbage() * HeapWordSize <= r->capacity(),
+    verify(r, r->garbage() <= r->capacity(),
            "Garbage cannot be larger than capacity");
 
-    verify(r, r->used() <= r->capacity(),
+    verify(r, r->used() <= r->capacity() * HeapWordSize,
            "Used cannot be larger than capacity");
 
-    verify(r, r->get_shared_allocs() <= r->capacity(),
+    verify(r, r->get_shared_allocs() <= r->capacity() * HeapWordSize,
            "Shared alloc count should not be larger than capacity");
 
-    verify(r, r->get_tlab_allocs() <= r->capacity(),
+    verify(r, r->get_tlab_allocs() <= r->capacity() * HeapWordSize,
            "TLAB alloc count should not be larger than capacity");
 
-    verify(r, r->get_gclab_allocs() <= r->capacity(),
+    verify(r, r->get_gclab_allocs() <= r->capacity() * HeapWordSize,
            "GCLAB alloc count should not be larger than capacity");
 
-    verify(r, r->get_plab_allocs() <= r->capacity(),
+    verify(r, r->get_plab_allocs() <= r->capacity() * HeapWordSize,
            "PLAB alloc count should not be larger than capacity");
 
     verify(r, r->get_shared_allocs() + r->get_tlab_allocs() + r->get_gclab_allocs() + r->get_plab_allocs() == r->used(),

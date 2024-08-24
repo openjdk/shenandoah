@@ -236,4 +236,8 @@ inline size_t ShenandoahHeapRegion::free() const {
   return word_size(top(), end());
 }
 
+inline size_t ShenandoahHeapRegion::capacity() const {
+  return word_size(bottom(), end());
+}
+
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP
