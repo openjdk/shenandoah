@@ -1209,7 +1209,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
     r->set_affiliation(req.affiliation());
     r->set_update_watermark(r->bottom());
-    r->set_top(r->bottom() + used_words;
+    r->set_top(r->bottom() + used_words);
   }
   generation->increase_affiliated_region_count(num);
   if (remainder != 0) {
