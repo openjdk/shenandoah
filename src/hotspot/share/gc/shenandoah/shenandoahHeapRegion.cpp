@@ -371,7 +371,7 @@ void ShenandoahHeapRegion::reset_alloc_metadata() {
 }
 
 size_t ShenandoahHeapRegion::get_shared_allocs() const {
-  return used() - (_tlab_allocs + _gclab_allocs + _plab_allocs) * HeapWordSize;
+  return used() * HeapWordSize - (_tlab_allocs + _gclab_allocs + _plab_allocs) * HeapWordSize;
 }
 
 size_t ShenandoahHeapRegion::get_tlab_allocs() const {
@@ -440,7 +440,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
             p2i(ShenandoahHeap::heap()->marking_context()->top_at_mark_start(const_cast<ShenandoahHeapRegion*>(this))));
   st->print("|UWM " SHR_PTR_FORMAT,
             p2i(_update_watermark));
-  st->print("|U " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(used()),                proper_unit_for_byte_size(used()));
+  st->print("|U " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(used()),                proper_unit_for_word_size(used()));
   st->print("|T " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_byte_size(get_tlab_allocs()));
   st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_byte_size(get_gclab_allocs()));
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
@@ -570,7 +570,7 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahGeneration* generation = heap->generation_for(affiliation());
 
-  heap->decrease_used(generation, used());
+  heap->decrease_used(generation, used() * HeapWordSize);
   generation->decrement_affiliated_region_count();
 
   set_top(bottom());
@@ -802,7 +802,7 @@ void ShenandoahHeapRegion::set_state(RegionState to) {
   if (evt.should_commit()){
     evt.set_index((unsigned) index());
     evt.set_start((uintptr_t)bottom());
-    evt.set_used(used());
+    evt.set_used(used() * HeapWordSize);
     evt.set_from(_state);
     evt.set_to(to);
     evt.commit();

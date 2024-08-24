@@ -122,7 +122,7 @@ void ShenandoahHeapRegionCounters::update() {
         for (uint i = 0; i < num_regions; i++) {
           ShenandoahHeapRegion* r = heap->get_region(i);
           jlong data = 0;
-          data |= ((100 * r->used() / rs)                & PERCENT_MASK) << USED_SHIFT;
+          data |= ((100 * (r->used() * HeapWordSize) / rs)                & PERCENT_MASK) << USED_SHIFT;
           data |= ((100 * (r->get_live_data_words() * HeapWordSize) / rs) & PERCENT_MASK) << LIVE_SHIFT;
           data |= ((100 * r->get_tlab_allocs() / rs)     & PERCENT_MASK) << TLAB_SHIFT;
           data |= ((100 * r->get_gclab_allocs() / rs)    & PERCENT_MASK) << GCLAB_SHIFT;

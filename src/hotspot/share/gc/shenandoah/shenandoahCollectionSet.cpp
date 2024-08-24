@@ -109,7 +109,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _region_count++;
   _has_old_regions |= r->is_old();
   _garbage += garbage;
-  _used += r->used();
+  _used += r->used() * HeapWordSize;
   _live += live;
   // Update the region status too. State transition would be checked internally.
   r->make_cset();

@@ -373,7 +373,7 @@ public:
       _used(0), _committed(0), _garbage(0), _regions(0), _humongous_waste(0), _trashed_regions(0) {};
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
-    _used += r->used();
+    _used += r->used() * HeapWordSize;
     _garbage += r->garbage() * HeapWordSize;
     _committed += r->is_committed() ? ShenandoahHeapRegion::region_size_bytes() : 0;
     if (r->is_humongous()) {
@@ -384,7 +384,7 @@ public:
     }
     _regions++;
     log_debug(gc)("ShenandoahCalculateRegionStatsClosure: adding " SIZE_FORMAT " for %s Region " SIZE_FORMAT ", yielding: " SIZE_FORMAT,
-            r->used(), (r->is_humongous() ? "humongous" : "regular"), r->index(), _used);
+            r->used() * HeapWordSize, (r->is_humongous() ? "humongous" : "regular"), r->index(), _used);
   }
 
   size_t used() const { return _used; }
@@ -529,7 +529,7 @@ public:
     verify(r, r->garbage() <= r->capacity(),
            "Garbage cannot be larger than capacity");
 
-    verify(r, r->used() <= r->capacity() * HeapWordSize,
+    verify(r, r->used() <= r->capacity(),
            "Used cannot be larger than capacity");
 
     verify(r, r->get_shared_allocs() <= r->capacity() * HeapWordSize,
@@ -544,7 +544,7 @@ public:
     verify(r, r->get_plab_allocs() <= r->capacity() * HeapWordSize,
            "PLAB alloc count should not be larger than capacity");
 
-    verify(r, r->get_shared_allocs() + r->get_tlab_allocs() + r->get_gclab_allocs() + r->get_plab_allocs() == r->used(),
+    verify(r, r->get_shared_allocs() + r->get_tlab_allocs() + r->get_gclab_allocs() + r->get_plab_allocs() == r->used() * HeapWordSize,
            "Accurate accounting: shared + TLAB + GCLAB + PLAB = used");
 
     verify(r, !r->is_empty() || !r->has_live(),
@@ -1027,7 +1027,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
         // all humongous regions in that chain have live data equal to their "used".
         juint start_live = Atomic::load(&ld[r->humongous_start_region()->index()]);
         if (start_live > 0) {
-          verf_live = (juint)(r->used() / HeapWordSize);
+          verf_live = (juint)(r->used());
         }
       } else {
         verf_live = Atomic::load(&ld[r->index()]);

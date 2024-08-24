@@ -165,13 +165,10 @@ inline bool ShenandoahHeapRegion::has_live() const {
 }
 
 inline size_t ShenandoahHeapRegion::garbage() const {
-  assert(used() >= get_live_data_words() * HeapWordSize,
-         "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT,
-         get_live_data_words() * HeapWordSize, used());
+  assert(used() >= get_live_data_words(),
+         "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT, get_live_data_words(), used());
 
-  // KELVIN TODO: remove assert after used() returns words
-  assert(used() % HeapWordSize == 0, "used() should be a multiple of HeapWordSize");
-  return (used() / HeapWordSize) - get_live_data_words();
+  return used() - get_live_data_words();
 }
 
 inline size_t ShenandoahHeapRegion::garbage_before_padded_for_promote() const {
@@ -230,6 +227,10 @@ inline void ShenandoahHeapRegion::save_top_before_promote() {
 inline void ShenandoahHeapRegion::restore_top_before_promote() {
   _top = _top_before_promoted;
   _top_before_promoted = nullptr;
+}
+
+inline size_t ShenandoahHeapRegion::used() const {
+  return word_size(bottom(), top());
 }
 
 inline size_t ShenandoahHeapRegion::free() const {

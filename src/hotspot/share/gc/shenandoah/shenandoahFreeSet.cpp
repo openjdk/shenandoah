@@ -344,9 +344,9 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   assert (available <= _region_size_bytes, "Available cannot exceed region size");
   assert (_membership[int(orig_partition)].is_set(idx), "Cannot move from partition unless in partition");
   assert ((r != nullptr) && ((r->is_trash() && (available == _region_size_bytes)) ||
-                             (r->used() + available == _region_size_bytes)),
+                             (r->used() * HeapWordSize + available == _region_size_bytes)),
           "Used: " SIZE_FORMAT " + available: " SIZE_FORMAT " should equal region size: " SIZE_FORMAT,
-          ShenandoahHeap::heap()->get_region(idx)->used(), available, _region_size_bytes);
+          ShenandoahHeap::heap()->get_region(idx)->used() * HeapWordSize, available, _region_size_bytes);
 
   // Expected transitions:
   //  During rebuild:         Mutator => Collector
@@ -1112,7 +1112,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         orig_partition = ShenandoahFreeSetPartitionId::Collector;
       }
     }
-    _partitions.retire_from_partition(orig_partition, idx, r->used());
+    _partitions.retire_from_partition(orig_partition, idx, r->used() * HeapWordSize);
     _partitions.assert_bounds();
   }
   return result;
@@ -1209,7 +1209,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 
     r->set_affiliation(req.affiliation());
     r->set_update_watermark(r->bottom());
-    r->set_top(r->bottom() + used_words);
+    r->set_top(r->bottom() + used_words;
   }
   generation->increase_affiliated_region_count(num);
   if (remainder != 0) {
@@ -1896,7 +1896,7 @@ void ShenandoahFreeSet::log_status() {
           } else {
             empty_contig = 0;
           }
-          total_used += r->used();
+          total_used += r->used() * HeapWordSize;
           total_free += free;
           max_contig = MAX2(max_contig, empty_contig);
           last_idx = idx;
@@ -1950,7 +1950,7 @@ void ShenandoahFreeSet::log_status() {
           size_t free = alloc_capacity(r);
           max = MAX2(max, free);
           total_free += free;
-          total_used += r->used();
+          total_used += r->used() * HeapWordSize;
         }
       }
       ls.print(" Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; Used: " SIZE_FORMAT "%s",
@@ -1971,7 +1971,7 @@ void ShenandoahFreeSet::log_status() {
           size_t free = alloc_capacity(r);
           max = MAX2(max, free);
           total_free += free;
-          total_used += r->used();
+          total_used += r->used() * HeapWordSize;
         }
       }
       ls.print_cr(" Old Collector Reserve: " SIZE_FORMAT "%s, Max: " SIZE_FORMAT "%s; Used: " SIZE_FORMAT "%s",
@@ -2043,7 +2043,7 @@ double ShenandoahFreeSet::internal_fragmentation() {
     assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, index),
            "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, index);
     ShenandoahHeapRegion* r = _heap->get_region(index);
-    size_t used = r->used();
+    size_t used = r->used() * HeapWordSize;
     squared += used * used;
     linear += used;
     index = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Mutator, index + 1);

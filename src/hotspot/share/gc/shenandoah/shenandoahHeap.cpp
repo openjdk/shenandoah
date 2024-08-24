@@ -1185,7 +1185,7 @@ private:
       _sh->marked_object_iterate(r, &cl);
 
       if (ShenandoahPacing) {
-        _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
+        _sh->pacer()->report_evac(r->used());
       }
 
       if (_sh->check_cancelled_gc_and_yield(_concurrent)) {

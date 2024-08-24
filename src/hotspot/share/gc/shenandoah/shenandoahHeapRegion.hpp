@@ -55,8 +55,8 @@
  *  To modify:
  *    [ok] garbage(): used to return bytes, but now returns words
  *    [ok] free():    used to return bytes, but now returns words
- *    [ ] capacity(): used to return bytes, but now returns words
- *    [ ] used():     used to return bytes, but now returns words
+ *    [ok] capacity(): used to return bytes, but now returns words
+ *    [ok] used():     used to return bytes, but now returns words
  *    [ ] used_before_promote(): used to return bytes, but now returns words
  *    [ ] garbage_before_padded_for_promote(): used to return bytes, but now returns words
  *    [ ] required_regions(arg): arg was in bytes, but change arg to words
@@ -476,7 +476,7 @@ public:
   HeapWord* end() const         { return _end;     }
 
   inline size_t capacity() const;
-  inline size_t used() const           { return byte_size(bottom(), top()); }
+  inline size_t used() const;
   inline size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
   inline size_t free() const;
 

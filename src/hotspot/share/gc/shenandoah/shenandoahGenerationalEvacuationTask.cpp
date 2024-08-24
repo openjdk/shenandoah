@@ -92,7 +92,7 @@ void ShenandoahGenerationalEvacuationTask::do_work() {
       assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
       _heap->marked_object_iterate(r, &cl);
       if (ShenandoahPacing) {
-        _heap->pacer()->report_evac(r->used() >> LogHeapWordSize);
+        _heap->pacer()->report_evac(r->used());
       }
     } else if (r->is_young() && r->is_active() && (r->age() >= _tenuring_threshold)) {
       if (r->is_humongous_start()) {
@@ -186,7 +186,7 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     // is_collector_free range.
     region->restore_top_before_promote();
 
-    size_t region_used = region->used();
+    size_t region_used = region->used() * HeapWordSize;
 
     // The update_watermark was likely established while we had the artificially high value of top.  Make it sane now.
     assert(update_watermark >= region->top(), "original top cannot exceed preserved update_watermark");

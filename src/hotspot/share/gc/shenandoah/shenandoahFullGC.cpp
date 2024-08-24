@@ -972,7 +972,7 @@ public:
       _heap->complete_marking_context()->reset_top_at_mark_start(r);
     }
 
-    size_t live = r->used();
+    size_t live = r->used() * HeapWordSize;
 
     // Make empty regions that have been allocated into regular
     if (r->is_empty() && live > 0) {
