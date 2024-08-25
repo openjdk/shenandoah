@@ -40,25 +40,10 @@ ShenandoahGlobalHeuristics::ShenandoahGlobalHeuristics(ShenandoahGlobalGeneratio
 void ShenandoahGlobalHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                                        RegionData* data, size_t size,
                                                                        size_t actual_free) {
-  // See comments in ShenandoahAdaptiveHeuristics::choose_collection_set_from_regiondata():
-  // we do the same here, but with the following adjustments for generational mode:
-  //
-  // In generational mode, the sort order within the data array is not strictly descending amounts
-  // of garbage. In particular, regions that have reached tenure age will be sorted into this
-  // array before younger regions that typically contain more garbage. This is one reason why,
-  // for example, we continue examining regions even after rejecting a region that has
-  // more live data than we can evacuate.
-
   // Better select garbage-first regions
   QuickSort::sort<RegionData>(data, (int) size, compare_by_garbage);
 
-  size_t cur_young_garbage = add_preselected_regions_to_collection_set(cset, data, size);
-  // TODO: If the following assert triggers, then we'll want to check if there are
-  // situations where `add_preselected` would be needed. Otherwise, we'll assert there are
-  // never any preslected regions at this point. (Why aren't there?)
-  assert(cur_young_garbage == 0, "Error: we sometimes do add preselected regions here?");
-
-  choose_global_collection_set(cset, data, size, actual_free, cur_young_garbage);
+  choose_global_collection_set(cset, data, size, actual_free, 0 /* cur_young_garbage */);
 
   log_cset_composition(cset);
 }
@@ -115,11 +100,7 @@ void ShenandoahGlobalHeuristics::choose_global_collection_set(ShenandoahCollecti
 
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx].get_region();
-    if (cset->is_preselected(r->index())) {
-      assert(false, "There should be no preselected regions during GLOBAL GC");
-      // It isn't fatal, we just ignore it.
-      continue;
-    }
+    assert(!cset->is_preselected(r->index()), "There should be no preselected regions during GLOBAL GC");
     bool add_region = false;
     if (r->is_old() || (r->age() >= tenuring_threshold)) {
       size_t new_cset = old_cur_cset + r->get_live_data_bytes();
