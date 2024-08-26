@@ -171,16 +171,13 @@ inline size_t ShenandoahHeapRegion::garbage() const {
   return used() - get_live_data_words();
 }
 
-// KELVIN TODO: return words
 inline size_t ShenandoahHeapRegion::garbage_before_padded_for_promote() const {
   assert(get_top_before_promote() != nullptr, "top before promote should not equal null");
   size_t used_before_promote = word_size(bottom(), get_top_before_promote());
   assert(used_before_promote >= get_live_data_words(),
          "Live Data must be a subset of used before promotion live: " SIZE_FORMAT " used: " SIZE_FORMAT,
          get_live_data_words(), used_before_promote);
-  size_t result = (used_before_promote - get_live_data_words()) * HeapWordSize;
-  return result;
-
+  return used_before_promote - get_live_data_words();
 }
 
 inline HeapWord* ShenandoahHeapRegion::get_update_watermark() const {

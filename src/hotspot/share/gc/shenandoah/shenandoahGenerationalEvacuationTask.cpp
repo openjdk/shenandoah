@@ -129,16 +129,19 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
   ShenandoahMarkingContext* const marking_context = _heap->complete_marking_context();
   HeapWord* const tams = marking_context->top_at_mark_start(region);
 
+#ifdef ASSERT
   {
-    const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
+    const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_words() * ShenandoahOldGarbageThreshold) / 100;
     shenandoah_assert_generations_reconciled();
     assert(!_heap->is_concurrent_old_mark_in_progress(), "Cannot promote in place during old marking");
-    assert(region->garbage_before_padded_for_promote() < old_garbage_threshold, "Region " SIZE_FORMAT " has too much garbage for promotion", region->index());
+    assert(region->garbage_before_padded_for_promote() < old_garbage_threshold,
+           "Region " SIZE_FORMAT " has too much garbage for promotion", region->index());
     assert(region->is_young(), "Only young regions can be promoted");
     assert(region->is_regular(), "Use different service to promote humongous regions");
     assert(region->age() >= _tenuring_threshold, "Only promote regions that are sufficiently aged");
     assert(region->get_top_before_promote() == tams, "Region " SIZE_FORMAT " has been used for allocations before promotion", region->index());
   }
+#endif
 
   ShenandoahOldGeneration* const old_gen = _heap->old_generation();
   ShenandoahYoungGeneration* const young_gen = _heap->young_generation();

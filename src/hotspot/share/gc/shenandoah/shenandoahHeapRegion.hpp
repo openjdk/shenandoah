@@ -58,7 +58,7 @@
  *    [ok] capacity(): used to return bytes, but now returns words
  *    [ok] used():     used to return bytes, but now returns words
  *    [ok] used_before_promote(): used to return bytes, but now returns words
- *    [ ] garbage_before_padded_for_promote(): used to return bytes, but now returns words
+ *    [ok] garbage_before_padded_for_promote(): used to return bytes, but now returns words
  *    [ ] required_regions(arg): arg was in bytes, but change arg to words
  *    [ ] get_shared_alloc() change to words
  *    [ ] get_tlab_allocs() change to words
@@ -395,6 +395,8 @@ public:
   inline void save_top_before_promote();
   inline HeapWord* get_top_before_promote() const { return _top_before_promoted; }
   inline void restore_top_before_promote();
+
+  // Return words of garbage within region before we padded the region for promotion in place.
   inline size_t garbage_before_padded_for_promote() const;
 
   // If next available memory is not aligned on address that is multiple of alignment, fill the empty space
