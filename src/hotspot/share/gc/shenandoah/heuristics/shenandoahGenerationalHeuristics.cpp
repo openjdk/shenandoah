@@ -109,7 +109,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
           if (region->get_top_before_promote() != nullptr) {
             // Region was included for promotion-in-place
             regular_regions_promoted_in_place++;
-            regular_regions_promoted_usage += region->used_before_promote();
+            regular_regions_promoted_usage += region->used_before_promote() * HeapWordSize;
           }
           is_candidate = false;
         } else {

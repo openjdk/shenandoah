@@ -57,7 +57,7 @@
  *    [ok] free():    used to return bytes, but now returns words
  *    [ok] capacity(): used to return bytes, but now returns words
  *    [ok] used():     used to return bytes, but now returns words
- *    [ ] used_before_promote(): used to return bytes, but now returns words
+ *    [ok] used_before_promote(): used to return bytes, but now returns words
  *    [ ] garbage_before_padded_for_promote(): used to return bytes, but now returns words
  *    [ ] required_regions(arg): arg was in bytes, but change arg to words
  *    [ ] get_shared_alloc() change to words
@@ -475,9 +475,16 @@ public:
   HeapWord* bottom() const      { return _bottom;  }
   HeapWord* end() const         { return _end;     }
 
+  // Return the size of this region, measured in words.
   inline size_t capacity() const;
+
+  // Return used within this region, measured in words.
   inline size_t used() const;
-  inline size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
+
+  // Return used within this region at time the region was selected for promotion, measured in words.
+  inline size_t used_before_promote() const;
+
+  // Return free memory within region (unused, available), measured in words.
   inline size_t free() const;
 
   // Does this region contain this address?
