@@ -348,7 +348,7 @@ uint ShenandoahHeap::get_object_age(oop obj) {
 inline bool ShenandoahHeap::is_in_active_generation(oop obj) const {
   if (!mode()->is_generational()) {
     // everything is the same single generation
-    assert(is_in(obj), "Otherwise shouldn't return true below");
+    assert(is_in_reserved(obj), "Otherwise shouldn't return true below");
     return true;
   }
 

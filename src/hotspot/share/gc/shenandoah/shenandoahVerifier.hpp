@@ -170,9 +170,6 @@ public:
     // Nothing is in progress, some objects are forwarded
     _verify_gcstate_forwarded,
 
-    // Evacuation is in progress, some objects are forwarded
-    _verify_gcstate_evacuation,
-
     // Evacuation is done, some objects are forwarded, updating is in progress
     _verify_gcstate_updating
   } VerifyGCState;
@@ -215,7 +212,6 @@ public:
   void verify_before_concmark();
   void verify_after_concmark();
   void verify_before_evacuation();
-  void verify_during_evacuation();
   void verify_before_updaterefs();
   void verify_after_updaterefs();
   void verify_before_fullgc();

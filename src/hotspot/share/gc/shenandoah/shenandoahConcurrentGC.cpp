@@ -733,12 +733,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
       // TODO: Do we need to set this if we are only promoting regions in place? We don't need the barriers on for that.
       heap->set_evacuation_in_progress(true);
 
-      // Verify before arming for concurrent processing.
-      // Otherwise, verification can trigger stack processing.
-      if (ShenandoahVerify) {
-        heap->verifier()->verify_during_evacuation();
-      }
-
       // Generational mode may promote objects in place during the evacuation phase.
       // If that is the only reason we are evacuating, we don't need to update references
       // and there will be no forwarded objects on the heap.

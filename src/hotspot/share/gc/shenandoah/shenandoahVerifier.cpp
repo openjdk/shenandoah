@@ -826,14 +826,6 @@ void ShenandoahVerifier::verify_at_safepoint(const char* label,
         enabled = true;
         expected = ShenandoahHeap::HAS_FORWARDED;
         break;
-      case _verify_gcstate_evacuation:
-        enabled = true;
-        expected = ShenandoahHeap::EVACUATION;
-        if (!_heap->is_stw_gc_in_progress()) {
-          // Only concurrent GC sets this.
-          expected |= ShenandoahHeap::WEAK_ROOTS;
-        }
-        break;
       case _verify_gcstate_updating:
         enabled = true;
         expected = ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::UPDATEREFS;
@@ -1115,20 +1107,6 @@ void ShenandoahVerifier::verify_before_evacuation() {
           _verify_size_adjusted_for_padding,         // expect generation and heap sizes to match after adjustments
                                                      //  for promote in place padding
           _verify_gcstate_stable_weakroots           // heap is still stable, weakroots are in progress
-  );
-}
-
-void ShenandoahVerifier::verify_during_evacuation() {
-  verify_at_safepoint(
-          "During Evacuation",
-          _verify_remembered_disable, // do not verify remembered set
-          _verify_forwarded_allow,    // some forwarded references are allowed
-          _verify_marked_disable,     // walk only roots
-          _verify_cset_disable,       // some cset references are not forwarded yet
-          _verify_liveness_disable,   // liveness data might be already stale after pre-evacs
-          _verify_regions_disable,    // trash regions not yet recycled
-          _verify_size_disable,       // we don't know how much of promote-in-place work has been completed
-          _verify_gcstate_evacuation  // evacuation is in progress
   );
 }
 
