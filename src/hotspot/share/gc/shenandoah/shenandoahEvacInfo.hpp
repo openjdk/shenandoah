@@ -75,7 +75,7 @@ public:
   void set_regions_immediate(size_t immediate) {
     _regions_immediate = immediate;
   }
-  
+
   void set_immediate_size(size_t size) {
     _immediate_size = size;
   }

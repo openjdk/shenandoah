@@ -1239,7 +1239,7 @@ const char* ShenandoahConcurrentGC::conc_reset_event_message() const {
   }
 }
 
-const char* ShenandoahConcurrentGC::final_roots_event_message() const { 
+const char* ShenandoahConcurrentGC::final_roots_event_message() const {
   if (ShenandoahHeap::heap()->unload_classes()) {
     SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Final Roots", " (unload classes)");
   } else {
