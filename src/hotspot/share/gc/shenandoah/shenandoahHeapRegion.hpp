@@ -62,7 +62,7 @@
  *    [ok] required_regions(arg): arg was in bytes, but change arg to words
  *    [ok] get_shared_allocs() change to words
  *    [0k] get_tlab_allocs() change to words
- *    [ ] get_gclab_allocs() change to words
+ *    [ok] get_gclab_allocs() change to words
  *    [ ] get_plab_allocs() change to words
  *
  *  To add/replace:
@@ -502,6 +502,8 @@ public:
 
   // Return words of tlab allocations performed within this region
   size_t get_tlab_allocs() const;
+
+  // Return words of gclab allocations performed within this region
   size_t get_gclab_allocs() const;
   size_t get_plab_allocs() const;
 

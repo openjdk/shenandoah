@@ -538,13 +538,13 @@ public:
     verify(r, r->get_tlab_allocs() <= r->capacity(),
            "TLAB alloc count should not be larger than capacity");
 
-    verify(r, r->get_gclab_allocs() <= r->capacity() * HeapWordSize,
+    verify(r, r->get_gclab_allocs() <= r->capacity(),
            "GCLAB alloc count should not be larger than capacity");
 
     verify(r, r->get_plab_allocs() <= r->capacity() * HeapWordSize,
            "PLAB alloc count should not be larger than capacity");
 
-    verify(r, r->get_shared_allocs() * HeapWordSize + r->get_tlab_allocs() * HeapWordSize + r->get_gclab_allocs() + r->get_plab_allocs() == r->used() * HeapWordSize,
+    verify(r, r->get_shared_allocs() * HeapWordSize + r->get_tlab_allocs() * HeapWordSize + r->get_gclab_allocs() * HeapWordSize + r->get_plab_allocs() == r->used() * HeapWordSize,
            "Accurate accounting: shared + TLAB + GCLAB + PLAB = used");
 
     verify(r, !r->is_empty() || !r->has_live(),
