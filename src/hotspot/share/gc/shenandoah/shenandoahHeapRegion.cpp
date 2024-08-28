@@ -375,7 +375,7 @@ size_t ShenandoahHeapRegion::get_shared_allocs() const {
 }
 
 size_t ShenandoahHeapRegion::get_tlab_allocs() const {
-  return _tlab_allocs * HeapWordSize;
+  return _tlab_allocs;
 }
 
 size_t ShenandoahHeapRegion::get_gclab_allocs() const {
@@ -441,7 +441,7 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
   st->print("|UWM " SHR_PTR_FORMAT,
             p2i(_update_watermark));
   st->print("|U " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(used()),                proper_unit_for_word_size(used()));
-  st->print("|T " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_byte_size(get_tlab_allocs()));
+  st->print("|T " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_word_size(get_tlab_allocs()));
   st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_byte_size(get_gclab_allocs()));
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
     st->print("|P " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
