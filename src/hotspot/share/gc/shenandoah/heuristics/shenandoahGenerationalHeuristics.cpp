@@ -31,6 +31,8 @@
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahEvacInfo.hpp"
+#include "gc/shenandoah/shenandoahTrace.hpp"
 
 #include "logging/log.hpp"
 
@@ -216,6 +218,19 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
                        byte_size_in_proper_unit(promote_evac_bytes), proper_unit_for_byte_size(promote_evac_bytes),
                        byte_size_in_proper_unit(old_evac_bytes), proper_unit_for_byte_size(old_evac_bytes),
                        byte_size_in_proper_unit(total_evac_bytes), proper_unit_for_byte_size(total_evac_bytes));
+  
+    ShenandoahEvacInfo evacInfo;
+    evacInfo.set_collection_set_regions(collection_set->count());
+    evacInfo.set_collection_set_used_before(collection_set->used());
+    evacInfo.set_collection_set_used_after(collection_set->live()); // Confirm this is sum of old + young + promoted
+    evacInfo.set_collected_old(old_evac_bytes);
+    evacInfo.set_collected_promoted(promote_evac_bytes);
+    evacInfo.set_collected_young(young_evac_bytes);
+    evacInfo.set_regions_immediate(immediate_regions);
+    evacInfo.set_immediate_size(immediate_garbage);
+    evacInfo.set_regions_freed(free_regions);
+
+    ShenandoahTracer().report_evacuation_info(&evacInfo);
   }
 }
 
