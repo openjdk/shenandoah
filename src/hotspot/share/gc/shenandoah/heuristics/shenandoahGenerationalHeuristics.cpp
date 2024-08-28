@@ -222,7 +222,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     ShenandoahEvacInfo evacInfo;
     evacInfo.set_collection_set_regions(collection_set->count());
     evacInfo.set_collection_set_used_before(collection_set->used());
-    evacInfo.set_collection_set_used_after(collection_set->live()); // Confirm this is sum of old + young + promoted
+    evacInfo.set_collection_set_used_after(collection_set->live());
     evacInfo.set_collected_old(old_evac_bytes);
     evacInfo.set_collected_promoted(promote_evac_bytes);
     evacInfo.set_collected_young(young_evac_bytes);
