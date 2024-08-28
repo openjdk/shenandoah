@@ -326,7 +326,7 @@ void ShenandoahConcurrentGC::entry_final_updaterefs() {
 }
 
 void ShenandoahConcurrentGC::entry_final_roots() {
-  static const char* msg = "Pause Final Roots";
+  static const char* msg = final_roots_event_message();
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
 
@@ -339,7 +339,7 @@ void ShenandoahConcurrentGC::entry_reset() {
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
   {
-    static const char* msg = "Concurrent reset";
+    static const char* msg = conc_reset_event_message();
     ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_reset);
     EventMark em("%s", msg);
 
@@ -1228,5 +1228,21 @@ const char* ShenandoahConcurrentGC::conc_mark_event_message() const {
     SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent marking", " (unload classes)");
   } else {
     SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent marking", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::conc_reset_event_message() const {
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent reset", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent reset", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::final_roots_event_message() const { 
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Final Roots", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Final Roots", "");
   }
 }
