@@ -60,7 +60,7 @@
  *    [ok] used_before_promote(): used to return bytes, but now returns words
  *    [ok] garbage_before_padded_for_promote(): used to return bytes, but now returns words
  *    [ok] required_regions(arg): arg was in bytes, but change arg to words
- *    [ ] get_shared_alloc() change to words
+ *    [ok] get_shared_allocs() change to words
  *    [ ] get_tlab_allocs() change to words
  *    [ ] get_gclab_allocs() change to words
  *    [ ] get_plab_allocs() change to words
@@ -496,6 +496,8 @@ public:
 
   inline void adjust_alloc_metadata(ShenandoahAllocRequest::Type type, size_t);
   void reset_alloc_metadata();
+
+  // Return words of shared allocations performed within this region
   size_t get_shared_allocs() const;
   size_t get_tlab_allocs() const;
   size_t get_gclab_allocs() const;
