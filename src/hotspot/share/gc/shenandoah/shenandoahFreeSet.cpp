@@ -1123,7 +1123,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   shenandoah_assert_heaplocked();
 
   size_t words_size = req.size();
-  idx_t num = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+  idx_t num = ShenandoahHeapRegion::required_regions(words_size);
 
   assert(req.is_young(), "Humongous regions always allocated in YOUNG");
   ShenandoahGeneration* generation = _heap->generation_for(req.affiliation());

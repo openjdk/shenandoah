@@ -59,7 +59,7 @@
  *    [ok] used():     used to return bytes, but now returns words
  *    [ok] used_before_promote(): used to return bytes, but now returns words
  *    [ok] garbage_before_padded_for_promote(): used to return bytes, but now returns words
- *    [ ] required_regions(arg): arg was in bytes, but change arg to words
+ *    [ok] required_regions(arg): arg was in bytes, but change arg to words
  *    [ ] get_shared_alloc() change to words
  *    [ ] get_tlab_allocs() change to words
  *    [ ] get_gclab_allocs() change to words
@@ -312,8 +312,8 @@ public:
     return _empty_time;
   }
 
-  inline static size_t required_regions(size_t bytes) {
-    return (bytes + ShenandoahHeapRegion::region_size_bytes() - 1) >> ShenandoahHeapRegion::region_size_bytes_shift();
+  inline static size_t required_regions(size_t words) {
+    return (words + ShenandoahHeapRegion::region_size_words() - 1) >> ShenandoahHeapRegion::region_size_words_shift();
   }
 
   inline static size_t region_count() {

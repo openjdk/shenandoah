@@ -145,7 +145,7 @@ inline void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop ob
     }
   } else {
     shenandoah_assert_in_correct_region(nullptr, obj);
-    size_t num_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
+    size_t num_regions = ShenandoahHeapRegion::required_regions(size);
 
     assert(region->is_affiliated(), "Do not count live data within FREE Humongous Start Region " SIZE_FORMAT, region_idx);
     for (size_t i = region_idx; i < region_idx + num_regions; i++) {

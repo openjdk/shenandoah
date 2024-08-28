@@ -966,7 +966,7 @@ void ShenandoahReconstructRememberedSetTask::work(uint worker_id) {
         size_t size = obj->size();
 
         // First, clear the remembered set for all spanned humongous regions
-        size_t num_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
+        size_t num_regions = ShenandoahHeapRegion::required_regions(size);
         size_t region_span = num_regions * ShenandoahHeapRegion::region_size_words();
         scanner->reset_remset(r->bottom(), region_span);
         size_t region_index = r->index();

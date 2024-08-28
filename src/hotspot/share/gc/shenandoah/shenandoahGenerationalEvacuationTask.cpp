@@ -232,9 +232,10 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
   // it becomes garbage.  Better to not make this change until sizes of young-gen and old-gen are completely
   // adaptive, as leaving primitive arrays in young-gen might be perceived as an "astonishing result" by someone
   // has carefully analyzed the required sizes of an application's young-gen and old-gen.
-  const size_t used_bytes = obj->size() * HeapWordSize;
-  const size_t spanned_regions = ShenandoahHeapRegion::required_regions(used_bytes);
-  const size_t humongous_waste = spanned_regions * ShenandoahHeapRegion::region_size_bytes() - obj->size() * HeapWordSize;
+  const size_t used_words = obj->size();
+  const size_t used_bytes = used_words * HeapWordSize;
+  const size_t spanned_regions = ShenandoahHeapRegion::required_regions(used_words);
+  const size_t humongous_waste = spanned_regions * ShenandoahHeapRegion::region_size_bytes() - used_bytes;
   const size_t index_limit = region->index() + spanned_regions;
 
   ShenandoahOldGeneration* const old_gen = _heap->old_generation();

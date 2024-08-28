@@ -1336,7 +1336,7 @@ size_t ShenandoahHeap::trash_humongous_region_at(ShenandoahHeapRegion* start) {
 
   oop humongous_obj = cast_to_oop(start->bottom());
   size_t size = humongous_obj->size();
-  size_t required_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
+  size_t required_regions = ShenandoahHeapRegion::required_regions(size);
   size_t index = start->index() + required_regions - 1;
 
   assert(!start->has_live(), "liveness must be zero");
