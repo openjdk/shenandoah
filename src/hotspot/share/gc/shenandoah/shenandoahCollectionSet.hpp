@@ -53,11 +53,13 @@
  *
  * To modify:
 
- *   [ ] _old_garbage was bytes, change to words
- *   [ ] _garbage was bytes, change to words
- *   [ ] garbage(): used to return bytes, but now returns words
- *   [ ] get_old_garbage(): used to return bytes, but now returns words
- *   [ ] _used: was bytes, change to words
+ *   [ok] _used: was bytes, change to words
+ *   [ok] used() returns words
+
+ *   [ok] _old_garbage was bytes, change to words
+ *   [ok] _garbage was bytes, change to words
+ *   [ok] garbage(): used to return bytes, but now returns words
+ *   [ok] get_old_garbage(): used to return bytes, but now returns words
  */
 
 #endif
@@ -83,7 +85,9 @@ private:
   ShenandoahHeap* const _heap;
 
   bool                  _has_old_regions;
-  size_t                _garbage;            // bytes of total _garbage to be reclaimed from cset
+  size_t                _garbage;            // words of total _garbage to be reclaimed from cset
+  size_t                _old_garbage;        // words of old garbage to be reclaimed from cset
+
   size_t                _used;               // total used words within cset
   size_t                _live;               // total live words within cset
   size_t                _region_count;
@@ -92,8 +96,6 @@ private:
   size_t                _young_words_to_promote;
   size_t                _old_words_to_evacuate;
 
-  // How many bytes of old garbage are present in a mixed collection set?
-  size_t                _old_garbage;
 
   // Points to array identifying which tenure-age regions have been preselected
   // for inclusion in collection set. This field is only valid during brief
@@ -134,7 +136,7 @@ public:
 
   void print_on(outputStream* out) const;
 
-  // It is not known how many of these bytes will be promoted.
+  // It is not known how many of these words will be promoted.
   inline size_t get_young_words_reserved_for_evacuation();
   inline size_t get_old_words_reserved_for_evacuation();
 
@@ -142,6 +144,7 @@ public:
 
   size_t get_young_available_bytes_collected() { return _young_available_bytes_collected; }
 
+  // Return words of old garbage to be reclaimed from the collection set
   inline size_t get_old_garbage();
 
   bool is_preselected(size_t region_idx) {
@@ -161,6 +164,8 @@ public:
 
   // Return words of live data within the collection set
   size_t live()          const { return _live; }
+
+  // Return words of total garbage to be reclaimed from the collection set
   size_t garbage()       const { return _garbage; }
 
   void clear();

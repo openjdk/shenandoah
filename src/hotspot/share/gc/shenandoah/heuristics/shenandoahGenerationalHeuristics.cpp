@@ -31,6 +31,7 @@
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 
 #include "logging/log.hpp"
 
@@ -181,8 +182,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     heap->shenandoah_policy()->record_mixed_cycle();
   }
 
-  size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
-  size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
+  size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * HeapWordSize * 100 / total_garbage);
+  size_t collectable_garbage = collection_set->garbage() * HeapWordSize + immediate_garbage;
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
 
   log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
@@ -198,8 +199,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
                      immediate_percent,
                      immediate_regions,
 
-                     byte_size_in_proper_unit(collection_set->garbage()),
-                     proper_unit_for_byte_size(collection_set->garbage()),
+                     word_size_in_proper_unit(collection_set->garbage()),
+                     proper_unit_for_word_size(collection_set->garbage()),
                      cset_percent,
                      collection_set->count());
 
@@ -253,7 +254,7 @@ size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_s
 
 void ShenandoahGenerationalHeuristics::log_cset_composition(ShenandoahCollectionSet* cset) const {
   size_t collected_old = cset->get_old_words_reserved_for_evacuation();
-  size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
+  size_t collected_promoted = cset->get_young_words_to_be_promoted();
   size_t collected_young = cset->get_young_words_reserved_for_evacuation();
 
   log_info(gc, ergo)(

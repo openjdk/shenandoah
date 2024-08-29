@@ -44,10 +44,10 @@ ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedS
   _heap(heap),
   _has_old_regions(false),
   _garbage(0),
+  _old_garbage(0),
   _used(0),
   _live(0),
   _region_count(0),
-  _old_garbage(0),
   _preselected_regions(nullptr),
   _current_index(0) {
 
@@ -93,7 +93,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
 
   _cset_map[r->index()] = 1;
   size_t live    = r->get_live_data_words();
-  size_t garbage = r->garbage() * HeapWordSize;
+  size_t garbage = r->garbage();
   size_t free    = r->free() * HeapWordSize;
   if (r->is_young()) {
     _young_words_to_evacuate += live;
@@ -186,7 +186,7 @@ ShenandoahHeapRegion* ShenandoahCollectionSet::next() {
 void ShenandoahCollectionSet::print_on(outputStream* out) const {
   out->print_cr("Collection Set: Regions: "
                 SIZE_FORMAT ", Garbage: " SIZE_FORMAT "%s, Live: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s", count(),
-                byte_size_in_proper_unit(garbage()), proper_unit_for_byte_size(garbage()),
+                word_size_in_proper_unit(garbage()), proper_unit_for_word_size(garbage()),
                 word_size_in_proper_unit(live()),    proper_unit_for_word_size(live()),
                 word_size_in_proper_unit(used()),    proper_unit_for_word_size(used()));
 
