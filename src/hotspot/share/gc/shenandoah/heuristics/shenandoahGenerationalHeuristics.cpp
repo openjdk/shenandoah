@@ -204,18 +204,18 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
                      collection_set->count());
 
   if (collection_set->garbage() > 0) {
-    size_t young_evac_bytes = collection_set->get_young_bytes_reserved_for_evacuation();
-    size_t promote_evac_bytes = collection_set->get_young_bytes_to_be_promoted();
-    size_t old_evac_bytes = collection_set->get_old_bytes_reserved_for_evacuation();
-    size_t total_evac_bytes = young_evac_bytes + promote_evac_bytes + old_evac_bytes;
+    size_t young_evac_words = collection_set->get_young_words_reserved_for_evacuation();
+    size_t promote_evac_words = collection_set->get_young_words_to_be_promoted();
+    size_t old_evac_words = collection_set->get_old_words_reserved_for_evacuation();
+    size_t total_evac_words = young_evac_words + promote_evac_words + old_evac_words;
     log_info(gc, ergo)("Evacuation Targets: YOUNG: " SIZE_FORMAT "%s, "
                        "PROMOTE: " SIZE_FORMAT "%s, "
                        "OLD: " SIZE_FORMAT "%s, "
                        "TOTAL: " SIZE_FORMAT "%s",
-                       byte_size_in_proper_unit(young_evac_bytes), proper_unit_for_byte_size(young_evac_bytes),
-                       byte_size_in_proper_unit(promote_evac_bytes), proper_unit_for_byte_size(promote_evac_bytes),
-                       byte_size_in_proper_unit(old_evac_bytes), proper_unit_for_byte_size(old_evac_bytes),
-                       byte_size_in_proper_unit(total_evac_bytes), proper_unit_for_byte_size(total_evac_bytes));
+                       word_size_in_proper_unit(young_evac_words), proper_unit_for_word_size(young_evac_words),
+                       word_size_in_proper_unit(promote_evac_words), proper_unit_for_word_size(promote_evac_words),
+                       word_size_in_proper_unit(old_evac_words), proper_unit_for_word_size(old_evac_words),
+                       word_size_in_proper_unit(total_evac_words), proper_unit_for_word_size(total_evac_words));
   }
 }
 
@@ -252,14 +252,14 @@ size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_s
 }
 
 void ShenandoahGenerationalHeuristics::log_cset_composition(ShenandoahCollectionSet* cset) const {
-  size_t collected_old = cset->get_old_bytes_reserved_for_evacuation();
+  size_t collected_old = cset->get_old_words_reserved_for_evacuation();
   size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
-  size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
+  size_t collected_young = cset->get_young_words_reserved_for_evacuation();
 
   log_info(gc, ergo)(
           "Chosen CSet evacuates young: " SIZE_FORMAT "%s (of which at least: " SIZE_FORMAT "%s are to be promoted), "
           "old: " SIZE_FORMAT "%s",
-          byte_size_in_proper_unit(collected_young), proper_unit_for_byte_size(collected_young),
-          byte_size_in_proper_unit(collected_promoted), proper_unit_for_byte_size(collected_promoted),
-          byte_size_in_proper_unit(collected_old), proper_unit_for_byte_size(collected_old));
+          word_size_in_proper_unit(collected_young), proper_unit_for_word_size(collected_young),
+          word_size_in_proper_unit(collected_promoted), proper_unit_for_word_size(collected_promoted),
+          word_size_in_proper_unit(collected_old), proper_unit_for_word_size(collected_old));
 }

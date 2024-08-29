@@ -39,19 +39,24 @@
  * To remove:
  *
  * To replace:
- *   [ ] _young_bytes_to_evacuate -> _young_words_to_evacuate
+ *   [ok] _young_bytes_to_evacuate -> _young_words_to_evacuate
+ *   [ok] _young_bytes_to_promote -> _young_words_to_promote
+ *   [ok] _old_bytes_to_evacuate -> _old_words_to_evacuate
+ *   [ok] _live: was bytes, change to words
+ *   [ok] live() returns words
+ *   [ok] get_old_bytes_reserved_for_evacuation -> get_old_words_reserved_for_evacuation
+ *   [ok] get_young_bytes_reserved_for_evacuation -> get_young_words_reserved_for_evacuation
+ *   [ok] get_young_bytes_to_be_promoted -> get_young_words_to_be_promoted
+
  *   [ ] _young_available_bytes_collected -> _young_available_words_collected
- *   [ ] _young_bytes_to_evacuate -> _young_words_to_evacuate
- *   [ ] _young_available_bytes_collected -> _young_available_words_collected
- *   [ ] _young_bytes_to_promote -> _young_words_to_promote
- *   [ ] _old_bytes_to_evacuate -> _old_words_to_evacuate
+
  *
  * To modify:
+
  *   [ ] _old_garbage was bytes, change to words
  *   [ ] _garbage was bytes, change to words
  *   [ ] garbage(): used to return bytes, but now returns words
  *   [ ] get_old_garbage(): used to return bytes, but now returns words
- *   [ ] _live: was bytes, change to words
  *   [ ] _used: was bytes, change to words
  */
 
@@ -80,12 +85,12 @@ private:
   bool                  _has_old_regions;
   size_t                _garbage;            // bytes of total _garbage to be reclaimed from cset
   size_t                _used;               // total used bytes within cset
-  size_t                _live;               // total live bytes within cset
+  size_t                _live;               // total live words within cset
   size_t                _region_count;
 
-  size_t                _young_bytes_to_evacuate;
-  size_t                _young_bytes_to_promote;
-  size_t                _old_bytes_to_evacuate;
+  size_t                _young_words_to_evacuate;
+  size_t                _young_words_to_promote;
+  size_t                _old_words_to_evacuate;
 
   // How many bytes of old garbage are present in a mixed collection set?
   size_t                _old_garbage;
@@ -130,10 +135,10 @@ public:
   void print_on(outputStream* out) const;
 
   // It is not known how many of these bytes will be promoted.
-  inline size_t get_young_bytes_reserved_for_evacuation();
-  inline size_t get_old_bytes_reserved_for_evacuation();
+  inline size_t get_young_words_reserved_for_evacuation();
+  inline size_t get_old_words_reserved_for_evacuation();
 
-  inline size_t get_young_bytes_to_be_promoted();
+  inline size_t get_young_words_to_be_promoted();
 
   size_t get_young_available_bytes_collected() { return _young_available_bytes_collected; }
 
@@ -151,6 +156,8 @@ public:
 
   bool has_old_regions() const { return _has_old_regions; }
   size_t used()          const { return _used; }
+
+  // Return words of live data within the collection set
   size_t live()          const { return _live; }
   size_t garbage()       const { return _garbage; }
 

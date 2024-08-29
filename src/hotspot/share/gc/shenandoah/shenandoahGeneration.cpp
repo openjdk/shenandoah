@@ -375,7 +375,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   ShenandoahOldGeneration* const old_generation = heap->old_generation();
   ShenandoahYoungGeneration* const young_generation = heap->young_generation();
 
-  size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
+  size_t old_evacuated = collection_set->get_old_words_reserved_for_evacuation() * HeapWordSize;
   size_t old_evacuated_committed = (size_t) (ShenandoahOldEvacWaste * old_evacuated);
   size_t old_evacuation_reserve = old_generation->get_evacuation_reserve();
 
@@ -392,10 +392,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
     old_generation->set_evacuation_reserve(old_evacuation_reserve);
   }
 
-  size_t young_advance_promoted = collection_set->get_young_bytes_to_be_promoted();
+  size_t young_advance_promoted = collection_set->get_young_words_to_be_promoted() * HeapWordSize;
   size_t young_advance_promoted_reserve_used = (size_t) (ShenandoahPromoEvacWaste * young_advance_promoted);
 
-  size_t young_evacuated = collection_set->get_young_bytes_reserved_for_evacuation();
+  size_t young_evacuated = collection_set->get_young_words_reserved_for_evacuation() * HeapWordSize;
   size_t young_evacuated_reserve_used = (size_t) (ShenandoahEvacWaste * young_evacuated);
 
   size_t total_young_available = young_generation->available_with_reserve();
