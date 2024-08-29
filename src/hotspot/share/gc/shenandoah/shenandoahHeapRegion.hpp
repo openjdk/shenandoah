@@ -36,41 +36,6 @@
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "utilities/sizes.hpp"
 
-#ifdef KELVIN_NOTES
-/**
- *  My plan:  Order(0)
- *
- *  To remove:
- *    [ok] region_size_bytes() - maybe  (do a grep to see how this is  used...  any more
- *    [ok] region_size_bytes_jint() - maybe
- *    [ok] humongous_threshold_bytes() - maybe
- *    [ok] max_tlab_size_bytes() - maybe
- *    [ok] get_live_data_bytes() - maybe
- *
- * Do not remove:
- *    [ok] region_size_bytes_shift()
- *    [ok] region_size_byte_shift_jint()
- *    [ok] region_size_bytes_mask()
- *
- *  To modify:
- *    [ok] garbage(): used to return bytes, but now returns words
- *    [ok] free():    used to return bytes, but now returns words
- *    [ok] capacity(): used to return bytes, but now returns words
- *    [ok] used():     used to return bytes, but now returns words
- *    [ok] used_before_promote(): used to return bytes, but now returns words
- *    [ok] garbage_before_padded_for_promote(): used to return bytes, but now returns words
- *    [ok] required_regions(arg): arg was in bytes, but change arg to words
- *    [ok] get_shared_allocs() change to words
- *    [0k] get_tlab_allocs() change to words
- *    [ok] get_gclab_allocs() change to words
- *    [ok] get_plab_allocs() change to words
- *
- *  To add/replace:
- *    [ok] humongous_threshold_words() replaces humongous_threshold_bytes
-
- */
-#endif
-
 class VMStructs;
 class ShenandoahHeapRegionStateConstant;
 
@@ -263,9 +228,6 @@ private:
   static size_t RegionSizeWordsShift;
   static size_t RegionSizeBytesMask;
   static size_t RegionSizeWordsMask;
-#ifdef KELVIN_DEPRECATE
-  static size_t HumongousThresholdBytes;
-#endif
   static size_t HumongousThresholdWords;
   static size_t MaxTLABSizeBytes;
   static size_t MaxTLABSizeWords;
@@ -344,14 +306,6 @@ public:
     return ShenandoahHeapRegion::RegionSizeWordsMask;
   }
 
-#ifdef KELVIN_DEPRECATE
-  // Convert to jint with sanity checking
-  inline static jint region_size_bytes_jint() {
-    assert (ShenandoahHeapRegion::RegionSizeBytes <= (size_t)max_jint, "sanity");
-    return (jint)ShenandoahHeapRegion::RegionSizeBytes;
-  }
-#endif
-
   // Convert to jint with sanity checking
   inline static jint region_size_words_jint() {
     assert (ShenandoahHeapRegion::RegionSizeWords <= (size_t)max_jint, "sanity");
@@ -373,16 +327,6 @@ public:
   inline static size_t humongous_threshold_words() {
     return ShenandoahHeapRegion::HumongousThresholdWords;
   }
-
-#ifdef KELVIN_DEPRECATE
-  inline static size_t humongous_threshold_bytes() {
-    return ShenandoahHeapRegion::HumongousThresholdBytes;
-  }
-
-  inline static size_t max_tlab_size_bytes() {
-    return ShenandoahHeapRegion::MaxTLABSizeBytes;
-  }
-#endif
 
   inline static size_t max_tlab_size_words() {
     return ShenandoahHeapRegion::MaxTLABSizeWords;
@@ -418,9 +362,6 @@ public:
   inline void increase_live_data_gc_words(size_t s);
 
   inline bool has_live() const;
-#ifdef KELVIN_DEPRECATE
-  inline size_t get_live_data_bytes() const;
-#endif
   inline size_t get_live_data_words() const;
 
   // Returns words of garbage within this region
