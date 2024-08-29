@@ -117,17 +117,17 @@ void ShenandoahHeapRegionCounters::update() {
 
       {
         ShenandoahHeapLocker locker(heap->lock());
-        size_t rs = ShenandoahHeapRegion::region_size_bytes();
+        size_t rs = ShenandoahHeapRegion::region_size_words();
         size_t num_regions = heap->num_regions();
         for (uint i = 0; i < num_regions; i++) {
           ShenandoahHeapRegion* r = heap->get_region(i);
           jlong data = 0;
-          data |= ((100 * (r->used() * HeapWordSize) / rs)                & PERCENT_MASK) << USED_SHIFT;
-          data |= ((100 * (r->get_live_data_words() * HeapWordSize) / rs) & PERCENT_MASK) << LIVE_SHIFT;
-          data |= ((100 * (r->get_tlab_allocs() * HeapWordSize)/ rs)     & PERCENT_MASK) << TLAB_SHIFT;
-          data |= ((100 * (r->get_gclab_allocs() * HeapWordSize) / rs)    & PERCENT_MASK) << GCLAB_SHIFT;
+          data |= ((100 * r->used() / rs)                & PERCENT_MASK) << USED_SHIFT;
+          data |= ((100 * r->get_live_data_words() / rs) & PERCENT_MASK) << LIVE_SHIFT;
+          data |= ((100 * r->get_tlab_allocs() / rs)     & PERCENT_MASK) << TLAB_SHIFT;
+          data |= ((100 * r->get_gclab_allocs() / rs)    & PERCENT_MASK) << GCLAB_SHIFT;
           data |= ((100 * r->get_plab_allocs() / rs)     & PERCENT_MASK) << PLAB_SHIFT;
-          data |= ((100 * (r->get_shared_allocs() * HeapWordSize) / rs)   & PERCENT_MASK) << SHARED_SHIFT;
+          data |= ((100 * r->get_shared_allocs() / rs)   & PERCENT_MASK) << SHARED_SHIFT;
 
           data |= (r->age() & AGE_MASK) << AGE_SHIFT;
           data |= (r->affiliation() & AFFILIATION_MASK) << AFFILIATION_SHIFT;

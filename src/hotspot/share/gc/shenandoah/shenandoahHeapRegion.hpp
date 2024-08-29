@@ -63,7 +63,7 @@
  *    [ok] get_shared_allocs() change to words
  *    [0k] get_tlab_allocs() change to words
  *    [ok] get_gclab_allocs() change to words
- *    [ ] get_plab_allocs() change to words
+ *    [ok] get_plab_allocs() change to words
  *
  *  To add/replace:
  *    [ok] humongous_threshold_words() replaces humongous_threshold_bytes
@@ -505,6 +505,8 @@ public:
 
   // Return words of gclab allocations performed within this region
   size_t get_gclab_allocs() const;
+
+  // Return words of plab allocations performed within this region
   size_t get_plab_allocs() const;
 
   inline HeapWord* get_update_watermark() const;
