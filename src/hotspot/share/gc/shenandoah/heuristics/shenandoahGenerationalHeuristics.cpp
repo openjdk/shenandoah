@@ -233,9 +233,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     evacInfo.set_collected_promoted(promote_evac_bytes);
     evacInfo.set_collected_young(young_evac_bytes);
     evacInfo.set_regions_promoted_humongous(humongous_regions_promoted);
-    evacInfo.set_humongous_promoted_used(humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes());
     evacInfo.set_regions_promoted_regular(regular_regions_promoted_in_place);
-    evacInfo.set_regular_promoted_used(regular_regions_promoted_usage);
     evacInfo.set_regular_promoted_garbage(regular_regions_promoted_garbage);
     evacInfo.set_regular_promoted_free(regular_regions_promoted_free);
     evacInfo.set_regions_immediate(immediate_regions);

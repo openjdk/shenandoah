@@ -28,31 +28,28 @@
 #include "memory/allocation.hpp"
 
 class ShenandoahEvacInfo : public StackObj {
-  uint   _collection_set_regions;
+  size_t _collection_set_regions;
   size_t _collection_set_used_before;
   size_t _collection_set_used_after;
   size_t _collected_old;
   size_t _collected_promoted;
   size_t _collected_young;
-  uint   _regions_promoted_humongous;
-  size_t _humongous_promoted_used;
-  uint   _regions_promoted_regular;
-  size_t _regular_promoted_used;
+  size_t _regions_promoted_humongous;
+  size_t _regions_promoted_regular;
   size_t _regular_promoted_garbage;
   size_t _regular_promoted_free;
-  uint   _regions_freed;
-  uint   _regions_immediate;
+  size_t _regions_freed;
+  size_t _regions_immediate;
   size_t _immediate_size;
 
 public:
   ShenandoahEvacInfo() :
     _collection_set_regions(0), _collection_set_used_before(0), _collection_set_used_after(0),
-    _collected_old(0), _collected_promoted(0), _collected_young(0),
-    _regions_promoted_humongous(0), _humongous_promoted_used(0), _regions_promoted_regular(0),
-    _regular_promoted_used(0), _regular_promoted_garbage(0), _regular_promoted_free(0),
+    _collected_old(0), _collected_promoted(0), _collected_young(0), _regions_promoted_humongous(0),
+    _regions_promoted_regular(0), _regular_promoted_garbage(0), _regular_promoted_free(0),
     _regions_freed(0), _regions_immediate(0), _immediate_size(0) { }
 
-  void set_collection_set_regions(uint collection_set_regions) {
+  void set_collection_set_regions(size_t collection_set_regions) {
     _collection_set_regions = collection_set_regions;
   }
 
@@ -76,24 +73,16 @@ public:
     _collected_young = collected;
   }
 
-  void set_regions_freed(uint freed) {
+  void set_regions_freed(size_t freed) {
     _regions_freed = freed;
   }
 
-  void set_regions_promoted_humongous(uint humongous) {
+  void set_regions_promoted_humongous(size_t humongous) {
     _regions_promoted_humongous = humongous;
   }
 
-  void set_humongous_promoted_used(size_t used) {
-    _humongous_promoted_used = used;
-  }
-
-  void set_regions_promoted_regular(uint regular) {
+  void set_regions_promoted_regular(size_t regular) {
     _regions_promoted_regular = regular;
-  }
-
-  void set_regular_promoted_used(size_t used) {
-    _regular_promoted_used = used;
   }
 
   void set_regular_promoted_garbage(size_t garbage) {
@@ -104,7 +93,7 @@ public:
     _regular_promoted_free = free;
   }
 
-  void set_regions_immediate(uint immediate) {
+  void set_regions_immediate(size_t immediate) {
     _regions_immediate = immediate;
   }
 
@@ -112,20 +101,18 @@ public:
     _immediate_size = size;
   }
 
-  uint   collection_set_regions()     { return _collection_set_regions; }
+  size_t collection_set_regions()     { return _collection_set_regions; }
   size_t collection_set_used_before() { return _collection_set_used_before; }
   size_t collection_set_used_after()  { return _collection_set_used_after; }
   size_t collected_old()              { return _collected_old; }
   size_t collected_promoted()         { return _collected_promoted; }
   size_t collected_young()            { return _collected_young; }
-  uint   regions_promoted_humongous() { return _regions_promoted_humongous; }
-  size_t humongous_promoted_used()    { return _humongous_promoted_used; }
-  uint   regions_promoted_regular()   { return _regions_promoted_regular; }
-  size_t regular_promoted_used()      { return _regular_promoted_used; }
+  size_t regions_promoted_humongous() { return _regions_promoted_humongous; }
+  size_t regions_promoted_regular()   { return _regions_promoted_regular; }
   size_t regular_promoted_garbage()   { return _regular_promoted_garbage; }
   size_t regular_promoted_free()      { return _regular_promoted_free; }
-  uint   regions_freed()              { return _regions_freed; }
-  uint   regions_immediate()          { return _regions_immediate; }
+  size_t regions_freed()              { return _regions_freed; }
+  size_t regions_immediate()          { return _regions_immediate; }
   size_t immediate_size()             { return _immediate_size; }
 };
 

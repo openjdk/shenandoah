@@ -29,7 +29,6 @@
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shenandoah/shenandoahGC.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
-#include "gc/shenandoah/shenandoahEvacInfo.hpp"
 #include "gc/shenandoah/shenandoahTrace.hpp"
 #include "memory/allocation.hpp"
 #include "utilities/ostream.hpp"
