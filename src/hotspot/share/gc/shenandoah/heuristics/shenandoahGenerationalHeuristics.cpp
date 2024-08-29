@@ -75,6 +75,10 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   size_t regular_regions_promoted_in_place = 0;
   // This counts bytes of memory used by regular regions to be promoted in place.
   size_t regular_regions_promoted_usage = 0;
+  // This counts bytes of memory free in regular regions to be promoted in place.
+  size_t regular_regions_promoted_free = 0;
+  // This counts bytes of garbage memory in regular regions to be promoted in place.
+  size_t regular_regions_promoted_garbage = 0;
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
@@ -112,6 +116,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
             // Region was included for promotion-in-place
             regular_regions_promoted_in_place++;
             regular_regions_promoted_usage += region->used_before_promote();
+            regular_regions_promoted_free += region->free();
+            regular_regions_promoted_garbage += region->garbage();
           }
           is_candidate = false;
         } else {
@@ -226,6 +232,12 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     evacInfo.set_collected_old(old_evac_bytes);
     evacInfo.set_collected_promoted(promote_evac_bytes);
     evacInfo.set_collected_young(young_evac_bytes);
+    evacInfo.set_regions_promoted_humongous(humongous_regions_promoted);
+    evacInfo.set_humongous_promoted_used(humongous_regions_promoted * ShenandoahHeapRegion::region_size_bytes());
+    evacInfo.set_regions_promoted_regular(regular_regions_promoted_in_place);
+    evacInfo.set_regular_promoted_used(regular_regions_promoted_usage);
+    evacInfo.set_regular_promoted_garbage(regular_regions_promoted_garbage);
+    evacInfo.set_regular_promoted_free(regular_regions_promoted_free);
     evacInfo.set_regions_immediate(immediate_regions);
     evacInfo.set_immediate_size(immediate_garbage);
     evacInfo.set_regions_freed(free_regions);

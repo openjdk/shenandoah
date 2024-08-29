@@ -1210,9 +1210,15 @@
     <Field type="ulong" contentType="bytes" name="collectedOld" label="Collected Old" description="Memory collected from old generation" />
     <Field type="ulong" contentType="bytes" name="collectedPromoted" label="Collected Promoted" description="Memory collected from generation promotion" />
     <Field type="ulong" contentType="bytes" name="collectedYoung" label="Collection Young" description="Memory collected from young generation" />
+    <Field type="uint" name="regionsPromotedHumongous" label="Regions Promoted Humongous" />
+    <Field type="ulong" contentType="bytes" name="humongousPromotedUsed" label="Humongous Promoted used" description="Memory used by in place promoted humongous regions" />
+    <Field type="uint" name="regionsPromotedRegular" label="Regions Promoted Regular" />
+    <Field type="ulong" contentType="bytes" name="regularPromotedUsed" label="Regular Promoted Used" description="Memory used by in place promoted regular regions" />
+    <Field type="ulong" contentType="bytes" name="regularPromotedGarbage" label="Regular Promoted Garbage" description="Garbage memory of in place promoted regular regions" />
+    <Field type="ulong" contentType="bytes" name="regularPromotedFree" label="Regular Promoted Free" description="Free memory of in place promoted regular regions" />
     <Field type="uint" name="regionsFreed" label="Regions Freed" description="Free regions prior to determining collection set" />
     <Field type="uint" name="regionsImmediate" label="Regions Immediate" />
-    <Field type="ulong" contentType="bytes" name="immediateBytes" label="Immediate Bytes Young" />
+    <Field type="ulong" contentType="bytes" name="immediateBytes" label="Immediate Bytes" />
   </Event>
   
   <Event name="Flush" category="Flight Recorder" label="Flush" thread="false" experimental="true">

@@ -41,6 +41,12 @@ void ShenandoahTracer::send_evacuation_info_event(ShenandoahEvacInfo* info) {
     e.set_collectedOld(info->collected_old());
     e.set_collectedPromoted(info->collected_promoted());
     e.set_collectedYoung(info->collected_young());
+    e.set_regionsPromotedHumongous(info->regions_promoted_humongous());
+    e.set_humongousPromotedUsed(info->humongous_promoted_used());
+    e.set_regionsPromotedRegular(info->regions_promoted_regular());
+    e.set_regularPromotedUsed(info->regular_promoted_used());
+    e.set_regularPromotedGarbage(info->regular_promoted_garbage());
+    e.set_regularPromotedFree(info->regular_promoted_free());
     e.set_regionsFreed(info->regions_freed());
     e.set_regionsImmediate(info->regions_immediate());
     e.set_immediateBytes(info->immediate_size());
