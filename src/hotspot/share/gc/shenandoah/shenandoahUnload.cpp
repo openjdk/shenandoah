@@ -51,8 +51,7 @@ private:
 
 public:
   ShenandoahIsUnloadingOopClosure() :
-    // TODO: In non-generational mode, this should still be complete_marking_context()
-    _marking_context(ShenandoahHeap::heap()->marking_context()),
+    _marking_context(ShenandoahHeap::heap()->complete_marking_context()),
     _is_unloading(false) {
   }
 
@@ -169,7 +168,7 @@ void ShenandoahUnload::unload() {
   // Make sure stale metadata and nmethods are no longer observable
   {
     ShenandoahTimingsTracker t(ShenandoahPhaseTimings::conc_class_unload_rendezvous);
-    heap->rendezvous_threads();
+    heap->rendezvous_threads("Shenandoah Class Unloading");
   }
 
   // Purge stale metadata and nmethods that were unlinked

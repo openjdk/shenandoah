@@ -1,5 +1,5 @@
 /*
- * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
+ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,23 +19,10 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
-#define SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
+// key: compiler.err.statement.not.expected
 
-#include "utilities/globalDefinitions.hpp"
-
-class ShenandoahHeapStats {
-public:
-  virtual const char* name() const = 0;
-  virtual size_t soft_max_capacity() const = 0;
-  virtual size_t max_capacity() const = 0;
-  virtual size_t used() const = 0;
-  virtual size_t available() const = 0;
-  virtual size_t soft_available() const = 0;
-  virtual size_t bytes_allocated_since_gc_start() const = 0;
-};
-
-#endif //SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHHEAPCHARACTERISTICS_HPP
+class StatementNotExpected {
+    return null;
+}

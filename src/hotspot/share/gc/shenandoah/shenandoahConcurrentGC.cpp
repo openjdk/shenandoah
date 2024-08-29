@@ -598,11 +598,8 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
 
   if (heap->mode()->is_generational()) {
-    if (_generation->is_young() || (_generation->is_global() && ShenandoahVerify)) {
-      // The current implementation of swap_remembered_set() copies the write-card-table
-      // to the read-card-table. The remembered sets are also swapped for GLOBAL collections
-      // so that the verifier works with the correct copy of the card table when verifying.
-      // TODO: This path should not really depend on ShenandoahVerify.
+    if (_generation->is_young()) {
+      // The current implementation of swap_remembered_set() copies the write-card-table to the read-card-table.
       ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_swap_rset);
       _generation->swap_remembered_set();
     }
@@ -972,7 +969,7 @@ void ShenandoahConcurrentGC::op_weak_roots() {
   // Perform handshake to flush out dead oops
   {
     ShenandoahTimingsTracker t(ShenandoahPhaseTimings::conc_weak_roots_rendezvous);
-    heap->rendezvous_threads();
+    heap->rendezvous_threads("Shenandoah Concurrent Weak Roots");
   }
   // We can only toggle concurrent_weak_root_in_progress flag
   // at a safepoint, so that mutators see a consistent
