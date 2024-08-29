@@ -30,6 +30,7 @@
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 #include "logging/log.hpp"
 #include "utilities/quickSort.hpp"
 
@@ -324,9 +325,9 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       continue;
     }
 
-    size_t garbage = region->garbage() * HeapWordSize;
-    size_t live_bytes = region->get_live_data_words() * HeapWordSize;
-    live_data += live_bytes;
+    size_t garbage = region->garbage();
+    size_t live_words = region->get_live_data_words();
+    live_data += live_words;
 
     if (region->is_regular() || region->is_regular_pinned()) {
         // Only place regular or pinned regions with live data into the candidate set.
@@ -340,7 +341,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
         immediate_garbage += garbage;
       } else {
         region->begin_preemptible_coalesce_and_fill();
-        candidates[cand_idx].set_region_and_livedata(region, live_bytes);
+        candidates[cand_idx].set_region_and_livedata(region, live_words * HeapWordSize);
         cand_idx++;
       }
     } else if (region->is_humongous_start()) {
@@ -365,7 +366,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     }
   }
 
-  _old_generation->set_live_bytes_after_last_mark(live_data);
+  _old_generation->set_live_bytes_after_last_mark(live_data * HeapWordSize);
 
   // Unlike young, we are more interested in efficiently packing OLD-gen than in reclaiming garbage first.  We sort by live-data.
   // Some regular regions may have been promoted in place with no garbage but also with very little live data.  When we "compact"
@@ -374,13 +375,13 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
   QuickSort::sort<RegionData>(candidates, cand_idx, compare_by_live);
 
-  const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  const size_t region_size_words = ShenandoahHeapRegion::region_size_words();
 
   // The convention is to collect regions that have more than this amount of garbage.
-  const size_t garbage_threshold = region_size_bytes * ShenandoahOldGarbageThreshold / 100;
+  const size_t garbage_threshold = region_size_words * ShenandoahOldGarbageThreshold / 100;
 
   // Enlightened interpretation: collect regions that have less than this amount of live.
-  const size_t live_threshold = region_size_bytes - garbage_threshold;
+  const size_t live_threshold = region_size_words - garbage_threshold;
 
   _last_old_region = (uint)cand_idx;
   _last_old_collection_candidate = (uint)cand_idx;
@@ -391,14 +392,14 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
 
   for (size_t i = 0; i < cand_idx; i++) {
     size_t live = candidates[i].get_livedata();
-    if (live > live_threshold) {
+    if (live > live_threshold * HeapWordSize) {
       // Candidates are sorted in increasing order of live data, so no regions after this will be below the threshold.
       _last_old_collection_candidate = (uint)i;
       break;
     }
     ShenandoahHeapRegion* r = candidates[i].get_region();
-    size_t region_garbage = r->garbage() * HeapWordSize;
-    size_t region_free = r->free() * HeapWordSize;
+    size_t region_garbage = r->garbage();
+    size_t region_free = r->free();
     candidates_garbage += region_garbage;
     unfragmented += region_free;
   }
@@ -439,8 +440,8 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
       ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate].get_region();
       assert(r->is_regular() || r->is_regular_pinned(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
              r->index(), ShenandoahHeapRegion::region_state_to_string(r->state()));
-      const size_t region_garbage = r->garbage() * HeapWordSize;
-      const size_t region_free = r->free() * HeapWordSize;
+      const size_t region_garbage = r->garbage();
+      const size_t region_free = r->free();
       candidates_garbage += region_garbage;
       unfragmented += region_free;
       defrag_count++;
@@ -457,13 +458,13 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   const size_t collectable_garbage = immediate_garbage + candidates_garbage;
   const size_t old_candidates = _last_old_collection_candidate;
-  const size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
+  const size_t mixed_evac_live = old_candidates * region_size_words - (candidates_garbage + unfragmented);
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
 
   log_info(gc)("Old-Gen Collectable Garbage: " PROPERFMT " consolidated with free: " PROPERFMT ", over " SIZE_FORMAT " regions",
-               PROPERFMTARGS(collectable_garbage), PROPERFMTARGS(unfragmented), old_candidates);
+               PROPERFMTWORDSIZEARGS(collectable_garbage), PROPERFMTWORDSIZEARGS(unfragmented), old_candidates);
   log_info(gc)("Old-Gen Immediate Garbage: " PROPERFMT " over " SIZE_FORMAT " regions",
-              PROPERFMTARGS(immediate_garbage), immediate_regions);
+              PROPERFMTWORDSIZEARGS(immediate_garbage), immediate_regions);
   log_info(gc)("Old regions selected for defragmentation: " SIZE_FORMAT, defrag_count);
   log_info(gc)("Old regions not selected: " SIZE_FORMAT, total_uncollected_old_regions);
 

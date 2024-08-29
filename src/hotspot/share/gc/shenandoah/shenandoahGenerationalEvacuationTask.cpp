@@ -135,7 +135,8 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     shenandoah_assert_generations_reconciled();
     assert(!_heap->is_concurrent_old_mark_in_progress(), "Cannot promote in place during old marking");
     assert(region->garbage_before_padded_for_promote() < old_garbage_threshold,
-           "Region " SIZE_FORMAT " has too much garbage for promotion", region->index());
+           "Region " SIZE_FORMAT " has too much garbage (" SIZE_FORMAT ") for promotion (limit: " SIZE_FORMAT ")",
+           region->index(), region->garbage_before_padded_for_promote(), old_garbage_threshold);
     assert(region->is_young(), "Only young regions can be promoted");
     assert(region->is_regular(), "Use different service to promote humongous regions");
     assert(region->age() >= _tenuring_threshold, "Only promote regions that are sufficiently aged");
