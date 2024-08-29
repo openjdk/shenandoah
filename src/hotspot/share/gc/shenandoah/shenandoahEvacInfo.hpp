@@ -72,7 +72,7 @@ public:
     _regions_freed = freed;
   }
 
-  void set_regions_immediate(size_t immediate) {
+  void set_regions_immediate(uint immediate) {
     _regions_immediate = immediate;
   }
 
