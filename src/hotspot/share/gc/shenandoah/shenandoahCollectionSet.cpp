@@ -109,7 +109,7 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _region_count++;
   _has_old_regions |= r->is_old();
   _garbage += garbage;
-  _used += r->used() * HeapWordSize;
+  _used += r->used();
   _live += live;
   // Update the region status too. State transition would be checked internally.
   r->make_cset();
@@ -188,7 +188,7 @@ void ShenandoahCollectionSet::print_on(outputStream* out) const {
                 SIZE_FORMAT ", Garbage: " SIZE_FORMAT "%s, Live: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s", count(),
                 byte_size_in_proper_unit(garbage()), proper_unit_for_byte_size(garbage()),
                 word_size_in_proper_unit(live()),    proper_unit_for_word_size(live()),
-                byte_size_in_proper_unit(used()),    proper_unit_for_byte_size(used()));
+                word_size_in_proper_unit(used()),    proper_unit_for_word_size(used()));
 
   debug_only(size_t regions = 0;)
   for (size_t index = 0; index < _heap->num_regions(); index ++) {

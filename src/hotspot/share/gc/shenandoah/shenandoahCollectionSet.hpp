@@ -84,7 +84,7 @@ private:
 
   bool                  _has_old_regions;
   size_t                _garbage;            // bytes of total _garbage to be reclaimed from cset
-  size_t                _used;               // total used bytes within cset
+  size_t                _used;               // total used words within cset
   size_t                _live;               // total live words within cset
   size_t                _region_count;
 
@@ -155,6 +155,8 @@ public:
   }
 
   bool has_old_regions() const { return _has_old_regions; }
+
+  // Return words of used data represented by collection set
   size_t used()          const { return _used; }
 
   // Return words of live data within the collection set
