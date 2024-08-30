@@ -364,51 +364,51 @@ private:
   static const int MaxCardSize = NOT_LP64(512) LP64_ONLY(1024);
   STATIC_ASSERT((MaxCardSize / HeapWordSize) - 1 <= FirstStartBits);
 
-  crossing_info *object_starts;
+  crossing_info *_object_starts;
 
 public:
   // If we're setting first_start, assume the card has an object.
   inline void set_first_start(size_t card_index, uint8_t value) {
-    object_starts[card_index].offsets.first = ObjectStartsInCardRegion | value;
+    _object_starts[card_index].offsets.first = ObjectStartsInCardRegion | value;
   }
 
   inline void set_last_start(size_t card_index, uint8_t value) {
-    object_starts[card_index].offsets.last = value;
+    _object_starts[card_index].offsets.last = value;
   }
 
   inline void set_starts_object_bit(size_t card_index) {
-    object_starts[card_index].offsets.first |= ObjectStartsInCardRegion;
+    _object_starts[card_index].offsets.first |= ObjectStartsInCardRegion;
   }
 
   inline void clear_starts_object_bit(size_t card_index) {
-    object_starts[card_index].offsets.first &= ~ObjectStartsInCardRegion;
+    _object_starts[card_index].offsets.first &= ~ObjectStartsInCardRegion;
   }
 
   // Returns true iff an object is known to start within the card memory associated with card card_index.
   inline bool starts_object(size_t card_index) const {
-    return (object_starts[card_index].offsets.first & ObjectStartsInCardRegion) != 0;
+    return (_object_starts[card_index].offsets.first & ObjectStartsInCardRegion) != 0;
   }
 
   inline void clear_objects_in_range(HeapWord *addr, size_t num_words) {
     size_t card_index = _rs->card_index_for_addr(addr);
     size_t last_card_index = _rs->card_index_for_addr(addr + num_words - 1);
     while (card_index <= last_card_index)
-      object_starts[card_index++].short_word = 0;
+      _object_starts[card_index++].short_word = 0;
   }
 
   ShenandoahCardCluster(ShenandoahDirectCardMarkRememberedSet *rs) {
     _rs = rs;
     // TODO: We don't really need object_starts entries for every card entry.  We only need these for
     // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
-    object_starts = NEW_C_HEAP_ARRAY(crossing_info, rs->total_cards(), mtGC);
+    _object_starts = NEW_C_HEAP_ARRAY(crossing_info, rs->total_cards(), mtGC);
     for (size_t i = 0; i < rs->total_cards(); i++) {
-      object_starts[i].short_word = 0;
+      _object_starts[i].short_word = 0;
     }
   }
 
   ~ShenandoahCardCluster() {
-    FREE_C_HEAP_ARRAY(crossing_info, object_starts);
-    object_starts = nullptr;
+    FREE_C_HEAP_ARRAY(crossing_info, _object_starts);
+    _object_starts = nullptr;
   }
 
   // There is one entry within the object_starts array for each card entry.
@@ -417,7 +417,7 @@ public:
   //  into a single larger "free segment".  As each two objects are
   //  coalesced together, the start information pertaining to the second
   //  object must be removed from the objects_starts array.  If the
-  //  second object had been been the first object within card memory,
+  //  second object had been the first object within card memory,
   //  the new first object is the object that follows that object if
   //  that starts within the same card memory, or NoObject if the
   //  following object starts within the following cluster.  If the
@@ -592,7 +592,7 @@ public:
 
   // register_object_without_lock() does not require that the caller hold
   // the heap lock before calling it, under the assumption that the
-  // caller has assure no other thread will endeavor to concurrently
+  // caller has assured no other thread will endeavor to concurrently
   // register objects that start within the same card's memory region
   // as address.
   void register_object_without_lock(HeapWord* address);

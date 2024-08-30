@@ -133,7 +133,7 @@ void ShenandoahCardCluster::reset_object_range(HeapWord* from, HeapWord* to) {
   size_t num_cards = (to - from) / CardTable::card_size_in_words();
 
   for (size_t i = 0; i < num_cards; i++) {
-    object_starts[card_at_start + i].short_word = 0;
+    _object_starts[card_at_start + i].short_word = 0;
   }
 }
 
@@ -215,12 +215,12 @@ void ShenandoahCardCluster::coalesce_objects(HeapWord* address, size_t length_in
 
 size_t ShenandoahCardCluster::get_first_start(size_t card_index) const {
   assert(starts_object(card_index), "Can't get first start because no object starts here");
-  return object_starts[card_index].offsets.first & FirstStartBits;
+  return _object_starts[card_index].offsets.first & FirstStartBits;
 }
 
 size_t ShenandoahCardCluster::get_last_start(size_t card_index) const {
   assert(starts_object(card_index), "Can't get last start because no object starts here");
-  return object_starts[card_index].offsets.last;
+  return _object_starts[card_index].offsets.last;
 }
 
 // Given a card_index, return the starting address of the first block in the heap
