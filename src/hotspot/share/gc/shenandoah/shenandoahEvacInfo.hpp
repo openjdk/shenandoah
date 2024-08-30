@@ -28,6 +28,7 @@
 #include "memory/allocation.hpp"
 
 class ShenandoahEvacInfo : public StackObj {
+  // Values for ShenandoahEvacInfo jfr event, sizes stored as bytes
   size_t _collection_set_regions;
   size_t _collection_set_used_before;
   size_t _collection_set_used_after;
