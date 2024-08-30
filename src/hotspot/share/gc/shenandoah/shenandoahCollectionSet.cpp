@@ -94,10 +94,10 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   _cset_map[r->index()] = 1;
   size_t live    = r->get_live_data_words();
   size_t garbage = r->garbage();
-  size_t free    = r->free() * HeapWordSize;
+  size_t free    = r->free();
   if (r->is_young()) {
     _young_words_to_evacuate += live;
-    _young_available_bytes_collected += free;
+    _young_available_words_collected += free;
     if (ShenandoahHeap::heap()->mode()->is_generational() && r->age() >= ShenandoahGenerationalHeap::heap()->age_census()->tenuring_threshold()) {
       _young_words_to_promote += live;
     }
@@ -138,7 +138,7 @@ void ShenandoahCollectionSet::clear() {
   _young_words_to_promote = 0;
   _old_words_to_evacuate = 0;
 
-  _young_available_bytes_collected = 0;
+  _young_available_words_collected = 0;
 
   _has_old_regions = false;
 }

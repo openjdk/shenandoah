@@ -48,7 +48,7 @@
  *   [ok] get_young_bytes_reserved_for_evacuation -> get_young_words_reserved_for_evacuation
  *   [ok] get_young_bytes_to_be_promoted -> get_young_words_to_be_promoted
 
- *   [ ] _young_available_bytes_collected -> _young_available_words_collected
+ *   [ok] _young_available_bytes_collected -> _young_available_words_collected
 
  *
  * To modify:
@@ -104,7 +104,7 @@ private:
 
   // When a region having memory available to be allocated is added to the collection set, the region's available memory
   // should be subtracted from what's available.
-  size_t                _young_available_bytes_collected;
+  size_t                _young_available_words_collected;
 
   shenandoah_padding(0);
   volatile size_t       _current_index;
@@ -142,7 +142,7 @@ public:
 
   inline size_t get_young_words_to_be_promoted();
 
-  size_t get_young_available_bytes_collected() { return _young_available_bytes_collected; }
+  size_t get_young_available_words_collected() { return _young_available_words_collected; }
 
   // Return words of old garbage to be reclaimed from the collection set
   inline size_t get_old_garbage();
