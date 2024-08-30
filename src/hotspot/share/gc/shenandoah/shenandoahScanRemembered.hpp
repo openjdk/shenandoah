@@ -398,8 +398,6 @@ public:
 
   ShenandoahCardCluster(ShenandoahDirectCardMarkRememberedSet *rs) {
     _rs = rs;
-    // TODO: We don't really need object_starts entries for every card entry.  We only need these for
-    // the card entries that correspond to old-gen memory.  But for now, let's be quick and dirty.
     _object_starts = NEW_C_HEAP_ARRAY(crossing_info, rs->total_cards(), mtGC);
     for (size_t i = 0; i < rs->total_cards(); i++) {
       _object_starts[i].short_word = 0;
@@ -766,10 +764,6 @@ public:
   HeapWord *addr_for_card_index(size_t card_index);
   bool is_card_dirty(size_t card_index);
   bool is_write_card_dirty(size_t card_index);
-  void mark_card_as_dirty(size_t card_index);
-  void mark_range_as_dirty(size_t card_index, size_t num_cards);
-  void mark_card_as_clean(size_t card_index);
-  void mark_range_as_clean(size_t card_index, size_t num_cards);
   bool is_card_dirty(HeapWord *p);
   void mark_card_as_dirty(HeapWord *p);
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);

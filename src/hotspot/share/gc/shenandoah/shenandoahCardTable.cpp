@@ -40,7 +40,6 @@ void ShenandoahCardTable::initialize() {
   HeapWord* low_bound  = _whole_heap.start();
   HeapWord* high_bound = _whole_heap.end();
 
-  // TODO: Why rs_align is 0 on page_size == os::vm_page_size?
   // ReservedSpace constructor would assert rs_align >= os::vm_page_size().
   const size_t rs_align = _page_size == os::vm_page_size() ? 0 : MAX2(_page_size, granularity);
 

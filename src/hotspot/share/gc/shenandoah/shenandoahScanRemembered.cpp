@@ -227,9 +227,6 @@ size_t ShenandoahCardCluster::get_last_start(size_t card_index) const {
 // that straddles into this card. If this card is co-initial with an object, then
 // this would return the first address of the range that this card covers, which is
 // where the card's first object also begins.
-// TODO: collect some stats for the size of walks backward over cards.
-// For larger objects, a logarithmic BOT such as used by G1 might make the
-// backwards walk potentially faster.
 HeapWord* ShenandoahCardCluster::block_start(const size_t card_index) const {
 
   HeapWord* left = _rs->addr_for_card_index(card_index);
@@ -308,22 +305,6 @@ bool ShenandoahScanRemembered::is_card_dirty(size_t card_index) {
 
 bool ShenandoahScanRemembered::is_write_card_dirty(size_t card_index) {
   return _rs->is_write_card_dirty(card_index);
-}
-
-void ShenandoahScanRemembered::mark_card_as_dirty(size_t card_index) {
-  _rs->mark_card_as_dirty(card_index);
-}
-
-void ShenandoahScanRemembered::mark_range_as_dirty(size_t card_index, size_t num_cards) {
-  _rs->mark_range_as_dirty(card_index, num_cards);
-}
-
-void ShenandoahScanRemembered::mark_card_as_clean(size_t card_index) {
-  _rs->mark_card_as_clean(card_index);
-}
-
-void ShenandoahScanRemembered::mark_range_as_clean(size_t card_index, size_t num_cards) {
-  _rs->mark_range_as_clean(card_index, num_cards);
 }
 
 bool ShenandoahScanRemembered::is_card_dirty(HeapWord *p) {
