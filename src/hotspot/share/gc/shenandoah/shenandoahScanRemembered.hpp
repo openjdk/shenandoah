@@ -208,7 +208,6 @@ private:
   ShenandoahCardTable *_card_table;
   size_t _card_shift;
   size_t _total_card_count;
-  size_t _cluster_count;
   HeapWord *_whole_heap_base;   // Points to first HeapWord of data contained within heap memory
   CardValue* _byte_map;         // Points to first entry within the card table
   CardValue* _byte_map_base;    // Points to byte_map minus the bias computed from address of heap memory
@@ -238,13 +237,6 @@ public:
   inline void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   inline void mark_card_as_clean(HeapWord *p);
   inline void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  inline size_t cluster_count() const;
-
-  // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
-  // Not currently used because mutator write barrier does not honor changes to the location of card table.
-  // Instead of swap_remset, the current implementation of concurrent remembered set scanning does reset_remset
-  // in parallel threads, each invocation processing one entire HeapRegion at a time.
-  void swap_remset() {  _card_table->swap_card_tables(); }
 
   // Merge any dirty values from write table into the read table, while leaving
   // the write table unchanged.
@@ -252,9 +244,6 @@ public:
 
   // Destructively copy the write table to the read table, and clean the write table.
   void reset_remset(HeapWord* start, size_t word_count);
-
-  // Called by GC thread after scanning old remembered set in order to prepare for next GC pass
-  void clear_old_remset() {  _card_table->clear_read_table(); }
 };
 
 // A ShenandoahCardCluster represents the minimal unit of work
@@ -773,8 +762,6 @@ public:
 
 
   // Card index is zero-based relative to first spanned card region.
-  size_t last_valid_index();
-  size_t total_cards();
   size_t card_index_for_addr(HeapWord *p);
   HeapWord *addr_for_card_index(size_t card_index);
   bool is_card_dirty(size_t card_index);
@@ -788,17 +775,10 @@ public:
   void mark_range_as_dirty(HeapWord *p, size_t num_heap_words);
   void mark_card_as_clean(HeapWord *p);
   void mark_range_as_clean(HeapWord *p, size_t num_heap_words);
-  size_t cluster_count();
-
-  // Called by GC thread at start of concurrent mark to exchange roles of read and write remembered sets.
-  void swap_remset() { _rs->swap_remset(); }
 
   void reset_remset(HeapWord* start, size_t word_count) { _rs->reset_remset(start, word_count); }
 
   void merge_write_table(HeapWord* start, size_t word_count) { _rs->merge_write_table(start, word_count); }
-
-  // Called by GC thread after scanning old remembered set in order to prepare for next GC pass
-  void clear_old_remset() { _rs->clear_old_remset(); }
 
   size_t cluster_for_addr(HeapWord *addr);
   HeapWord* addr_for_cluster(size_t cluster_no);

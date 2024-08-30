@@ -124,10 +124,6 @@ void ShenandoahDirectCardMarkRememberedSet::mark_range_as_clean(HeapWord *p, siz
   }
 }
 
-size_t ShenandoahDirectCardMarkRememberedSet::cluster_count() const {
-  return _cluster_count;
-}
-
 // No lock required because arguments align with card boundaries.
 void ShenandoahCardCluster::reset_object_range(HeapWord* from, HeapWord* to) {
   assert(((((unsigned long long) from) & (CardTable::card_size() - 1)) == 0) &&
@@ -298,14 +294,6 @@ HeapWord* ShenandoahCardCluster::block_start(const size_t card_index) const {
   return p;
 }
 
-size_t ShenandoahScanRemembered::last_valid_index() {
-  return _rs->last_valid_index();
-}
-
-size_t ShenandoahScanRemembered::total_cards() {
-  return _rs->total_cards();
-}
-
 size_t ShenandoahScanRemembered::card_index_for_addr(HeapWord *p) {
   return _rs->card_index_for_addr(p);
 }
@@ -356,10 +344,6 @@ void ShenandoahScanRemembered::mark_card_as_clean(HeapWord *p) {
 
 void ShenandoahScanRemembered:: mark_range_as_clean(HeapWord *p, size_t num_heap_words) {
   _rs->mark_range_as_clean(p, num_heap_words);
-}
-
-size_t ShenandoahScanRemembered::cluster_count() {
-  return _rs->cluster_count();
 }
 
 void ShenandoahScanRemembered::reset_object_range(HeapWord *from, HeapWord *to) {
@@ -614,7 +598,6 @@ ShenandoahDirectCardMarkRememberedSet::ShenandoahDirectCardMarkRememberedSet(She
   _heap = ShenandoahHeap::heap();
   _card_table = card_table;
   _total_card_count = total_card_count;
-  _cluster_count = total_card_count / ShenandoahCardCluster::CardsPerCluster;
   _card_shift = CardTable::card_shift();
 
   _byte_map = _card_table->byte_for_index(0);
