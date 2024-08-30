@@ -2464,7 +2464,7 @@ void ShenandoahHeap::rebuild_free_set(bool concurrent) {
   _free_set->prepare_to_rebuild(young_cset_regions, old_cset_regions, first_old_region, last_old_region, old_region_count);
   size_t anticipated_immediate_garbage = (old_cset_regions + young_cset_regions) * ShenandoahHeapRegion::region_size_words();
   control_thread()->anticipate_immediate_garbage(anticipated_immediate_garbage);
-  
+
   // If there are no old regions, first_old_region will be greater than last_old_region
   assert((first_old_region > last_old_region) ||
          ((last_old_region + 1 - first_old_region >= old_region_count) &&
