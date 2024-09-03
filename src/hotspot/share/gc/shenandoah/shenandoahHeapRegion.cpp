@@ -383,7 +383,7 @@ size_t ShenandoahHeapRegion::get_gclab_allocs() const {
 }
 
 size_t ShenandoahHeapRegion::get_plab_allocs() const {
-  return _plab_allocs * HeapWordSize;
+  return _plab_allocs;
 }
 
 void ShenandoahHeapRegion::set_live_data(size_t s) {

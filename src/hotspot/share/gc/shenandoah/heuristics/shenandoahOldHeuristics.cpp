@@ -458,7 +458,7 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   // HR: humongous regions, RR: regular regions, CF: coalesce and fill regions
   const size_t collectable_garbage = immediate_garbage + candidates_garbage;
   const size_t old_candidates = _last_old_collection_candidate;
-  const size_t mixed_evac_live = old_candidates * region_size_words - (candidates_garbage + unfragmented);
+  const size_t mixed_evac_live = (old_candidates - (candidates_garbage + unfragmented)) * region_size_words;
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
 
   log_info(gc)("Old-Gen Collectable Garbage: " PROPERFMT " consolidated with free: " PROPERFMT ", over " SIZE_FORMAT " regions",
