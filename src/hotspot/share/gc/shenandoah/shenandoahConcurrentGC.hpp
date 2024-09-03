@@ -142,6 +142,9 @@ private:
   const char* final_roots_event_message() const;
   const char* conc_mark_event_message() const;
   const char* conc_reset_event_message() const;
+  const char* conc_weak_refs_event_message() const;
+  const char* conc_weak_roots_event_message() const;
+  const char* conc_cleanup_event_message() const;
 
 protected:
   // Check GC cancellation and abort concurrent GC
