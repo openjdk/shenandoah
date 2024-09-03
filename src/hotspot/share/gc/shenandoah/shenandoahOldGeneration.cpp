@@ -728,7 +728,6 @@ void ShenandoahOldGeneration::set_parseable(bool parseable) {
         // When the heuristic put the old generation in this state, it didn't know
         // that we would unload classes and make everything parseable. But, we know
         // that now so we can override this state.
-        // TODO: It would be nicer if we didn't have to 'correct' this situation.
         abandon_collection_candidates();
         transition_to(ShenandoahOldGeneration::WAITING_FOR_BOOTSTRAP);
         break;
