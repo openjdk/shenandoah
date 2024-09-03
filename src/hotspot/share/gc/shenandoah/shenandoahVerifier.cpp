@@ -1210,8 +1210,7 @@ void ShenandoahVerifier::verify_after_fullgc() {
   );
 }
 
-// TODO: Why this closure does not visit metadata?
-class ShenandoahVerifyNoForwared : public BasicOopIterateClosure {
+class ShenandoahVerifyNoForwarded : public BasicOopIterateClosure {
 private:
   template <class T>
   void do_oop_work(T* p) {
@@ -1231,7 +1230,6 @@ public:
   void do_oop(oop* p)       { do_oop_work(p); }
 };
 
-// TODO: Why this closure does not visit metadata?
 class ShenandoahVerifyInToSpaceClosure : public BasicOopIterateClosure {
 private:
   template <class T>
@@ -1270,7 +1268,7 @@ void ShenandoahVerifier::verify_roots_in_to_space() {
 }
 
 void ShenandoahVerifier::verify_roots_no_forwarded() {
-  ShenandoahVerifyNoForwared cl;
+  ShenandoahVerifyNoForwarded cl;
   ShenandoahRootVerifier::roots_do(&cl);
 }
 
