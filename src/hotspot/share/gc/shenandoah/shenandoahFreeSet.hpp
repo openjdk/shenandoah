@@ -460,7 +460,7 @@ public:
   // Return words used by the Mutator partition.
   inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator);     }
 
-  // Return words available within the Mutator partition. 
+  // Return words available within the Mutator partition.
   inline size_t available() const {
     assert(used() <= capacity(), "must use less than capacity");
     return capacity() - used();
