@@ -52,10 +52,6 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
     _ctx(_heap->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
-    if (_heap->is_bitmap_slice_committed(r)) {
-      _ctx->clear_bitmap(r);
-    }
-
     if (r->is_active()) {
       // Reset live data and set TAMS optimistically. We would recheck these under the pause
       // anyway to capture any updates that happened since now.
@@ -227,8 +223,8 @@ void ShenandoahGeneration::merge_write_table() {
 }
 
 void ShenandoahGeneration::prepare_gc() {
-  // Invalidate the marking context
-  set_mark_incomplete();
+
+  reset_mark_bitmap();
 
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
