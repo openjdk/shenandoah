@@ -35,10 +35,10 @@
  * [ok] used_by(), returns words
  * [ok] set_used_byt(), value argument is words
  * [ok] establish_mutator_intervals(): mutator_used argument in words
+ * [ok] establish_old_collector_intervals(): old_collector_used argument in words
 
  * [  ] ShenandoahFreeSet::find_region_with_alloc_capacity() do internal computations in words
 
- * [  ] establish_old_collector_intervals(): old_collector_used argument in words
  * [  ] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
  * [  ] make_free(), region_capacity in words
  * [  ] move_from_partition_to_partition(), available in words
@@ -167,7 +167,7 @@ public:
   // rebuilt.
   void establish_old_collector_intervals(ssize_t old_collector_leftmost, ssize_t old_collector_rightmost,
                                          ssize_t old_collector_leftmost_empty, ssize_t old_collector_rightmost_empty,
-                                         size_t old_collector_region_count, size_t old_collector_used);
+                                         size_t old_collector_region_count, size_t old_collector_used_words);
 
   // Retire region idx from within partition, , leaving its capacity and used as part of the original free partition's totals.
   // Requires that region idx is in in the Mutator or Collector partitions.  Hereafter, identifies this region as NotFree.
