@@ -182,7 +182,7 @@ void ShenandoahRegionPartitions::establish_mutator_intervals(idx_t mutator_leftm
   _rightmosts_empty[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_rightmost_empty;
 
   _region_counts[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_region_count;
-  _used[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_used;
+  _used[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_used / HeapWordSize;
   _capacity[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_region_count * _region_size_words;
 
   _leftmosts[int(ShenandoahFreeSetPartitionId::Collector)] = _max;
@@ -205,16 +205,16 @@ void ShenandoahRegionPartitions::establish_old_collector_intervals(idx_t old_col
   _rightmosts_empty[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_rightmost_empty;
 
   _region_counts[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count;
-  _used[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_used;
+  _used[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_used / HeapWordSize;
   _capacity[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count * _region_size_words;
 }
 
-void ShenandoahRegionPartitions::increase_used(ShenandoahFreeSetPartitionId which_partition, size_t bytes) {
+void ShenandoahRegionPartitions::increase_used(ShenandoahFreeSetPartitionId which_partition, size_t words) {
   assert (which_partition < NumPartitions, "Partition must be valid");
-  _used[int(which_partition)] += bytes;
-  assert (_used[int(which_partition)] <= _capacity[int(which_partition)] * HeapWordSize,
+  _used[int(which_partition)] += words;
+  assert (_used[int(which_partition)] <= _capacity[int(which_partition)],
           "Must not use (" SIZE_FORMAT ") more than capacity (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
-          _used[int(which_partition)], _capacity[int(which_partition)] * HeapWordSize, bytes);
+          _used[int(which_partition)], _capacity[int(which_partition)], words);
 }
 
 inline void ShenandoahRegionPartitions::shrink_interval_if_range_modifies_either_boundary(
@@ -299,7 +299,7 @@ void ShenandoahRegionPartitions::retire_from_partition(ShenandoahFreeSetPartitio
 
   if (used_bytes < _region_size_bytes) {
     // Count the alignment pad remnant of memory as used when we retire this region
-    increase_used(partition, _region_size_bytes - used_bytes);
+    increase_used(partition, (_region_size_bytes - used_bytes) / HeapWordSize);
   }
   _membership[int(partition)].clear_bit(idx);
   shrink_interval_if_boundary_modified(partition, idx);
@@ -314,7 +314,7 @@ void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartition
 
   _membership[int(which_partition)].set_bit(idx);
   _capacity[int(which_partition)] += _region_size_words;
-  _used[int(which_partition)] += _region_size_bytes - available;
+  _used[int(which_partition)] += (_region_size_bytes - available) / HeapWordSize;
   expand_interval_if_boundary_modified(which_partition, idx, available);
   _region_counts[int(which_partition)]++;
 }
@@ -367,20 +367,20 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
           ", orig_partition: %s, new_partition: %s",
           available, _region_size_bytes, partition_name(orig_partition), partition_name(new_partition));
 
-  size_t used = _region_size_bytes - available;
-  assert (_used[int(orig_partition)] >= used,
+  size_t used_words = (_region_size_bytes - available) / HeapWordSize;
+  assert (_used[int(orig_partition)] >= used_words,
           "Orig partition used: " SIZE_FORMAT " must exceed moved used: " SIZE_FORMAT " within region " SSIZE_FORMAT,
-          _used[int(orig_partition)], used, idx);
+          _used[int(orig_partition)], used_words, idx);
 
   _membership[int(orig_partition)].clear_bit(idx);
   _membership[int(new_partition)].set_bit(idx);
 
   _capacity[int(orig_partition)] -= _region_size_words;
-  _used[int(orig_partition)] -= used;
+  _used[int(orig_partition)] -= used_words;
   shrink_interval_if_boundary_modified(orig_partition, idx);
 
   _capacity[int(new_partition)] += _region_size_words;
-  _used[int(new_partition)] += used;
+  _used[int(new_partition)] += used_words;
   expand_interval_if_boundary_modified(new_partition, idx, available);
 
   _region_counts[int(orig_partition)]--;
@@ -1065,7 +1065,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     // Allocation successful, bump stats:
     if (req.is_mutator_alloc()) {
       assert(req.is_young(), "Mutator allocations always come from young generation.");
-      _partitions.increase_used(ShenandoahFreeSetPartitionId::Mutator, req.actual_size() * HeapWordSize);
+      _partitions.increase_used(ShenandoahFreeSetPartitionId::Mutator, req.actual_size());
     } else {
       assert(req.is_gc_alloc(), "Should be gc_alloc since req wasn't mutator alloc");
 
@@ -1078,11 +1078,11 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
       // next evacuation pass.
       r->set_update_watermark(r->top());
       if (r->is_old()) {
-        _partitions.increase_used(ShenandoahFreeSetPartitionId::OldCollector, req.actual_size() * HeapWordSize);
+        _partitions.increase_used(ShenandoahFreeSetPartitionId::OldCollector, req.actual_size());
         assert(req.type() != ShenandoahAllocRequest::_alloc_gclab, "old-gen allocations use PLAB or shared allocation");
         // for plabs, we'll sort the difference between evac and promotion usage when we retire the plab
       } else {
-        _partitions.increase_used(ShenandoahFreeSetPartitionId::Collector, req.actual_size() * HeapWordSize);
+        _partitions.increase_used(ShenandoahFreeSetPartitionId::Collector, req.actual_size());
       }
     }
   }
@@ -1221,7 +1221,7 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
   // retire_range_from_partition() will adjust bounds on Mutator free set if appropriate
   _partitions.retire_range_from_partition(ShenandoahFreeSetPartitionId::Mutator, beg, end);
 
-  size_t total_humongous_size = ShenandoahHeapRegion::region_size_bytes() * num;
+  size_t total_humongous_size = ShenandoahHeapRegion::region_size_words() * num;
   _partitions.increase_used(ShenandoahFreeSetPartitionId::Mutator, total_humongous_size);
   _partitions.assert_bounds();
   req.set_actual_size(words_size);

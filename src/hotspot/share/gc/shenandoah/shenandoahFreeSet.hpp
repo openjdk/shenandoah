@@ -27,15 +27,13 @@
 /**
  * Changes planned for ShenandoahRegionPartitions:
  * [ok] add _region_size_words
- * [ok] set_capacity_of(): value argument is words
+ * [ok] set_capacity_of(): value argument is words  (not used!)
  * [ok] _capacity[] represents words
  * [ok] available_in(), returns words
-
-
- * [  ] _used[] represents words
- * [  ] increase_used(): replaced bytes with words
- * [  ] used_by(), returns words
- * [  ] set_used_byt(), value argument is words
+ * [ok] _used[] represents words
+ * [ok] increase_used(): replaced bytes with words
+ * [ok] used_by(), returns words
+ * [ok] set_used_byt(), value argument is words
 
  * [  ] establish_mutator_intervals(): mutator_used argument in words
  * [  ] establish_old_collector_intervals(): old_collector_used argument in words
@@ -252,6 +250,7 @@ public:
     return _capacity[int(which_partition)];
   }
 
+  // Return words used within which_partition.
   inline size_t used_by(ShenandoahFreeSetPartitionId which_partition) const {
     assert (which_partition < NumPartitions, "selected free set must be valid");
     return _used[int(which_partition)];
@@ -260,7 +259,7 @@ public:
   // Returns words of memory available in which_partition
   inline size_t available_in(ShenandoahFreeSetPartitionId which_partition) const {
     assert (which_partition < NumPartitions, "selected free set must be valid");
-    return _capacity[int(which_partition)] - _used[int(which_partition)] / HeapWordSize;
+    return _capacity[int(which_partition)] - _used[int(which_partition)];
   }
 
   inline void set_capacity_of(ShenandoahFreeSetPartitionId which_partition, size_t words) {
@@ -268,9 +267,10 @@ public:
     _capacity[int(which_partition)] = words;
   }
 
-  inline void set_used_by(ShenandoahFreeSetPartitionId which_partition, size_t value) {
+  // Set the words used by which_partition to words
+  inline void set_used_by(ShenandoahFreeSetPartitionId which_partition, size_t words) {
     assert (which_partition < NumPartitions, "selected free set must be valid");
-    _used[int(which_partition)] = value;
+    _used[int(which_partition)] = words;
   }
 
   inline size_t count(ShenandoahFreeSetPartitionId which_partition) const { return _region_counts[int(which_partition)]; }
@@ -454,8 +454,13 @@ public:
   // Acquire heap lock and log status, assuming heap lock is not acquired by the caller.
   void log_status_under_lock();
 
+  // Return original capacity, in words, of the Mutator partition.
   inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator); }
+
+  // Return words used by the Mutator partition.
   inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator);     }
+
+  // Return words available within the Mutator partition. 
   inline size_t available() const {
     assert(used() <= capacity(), "must use less than capacity");
     return capacity() - used();
