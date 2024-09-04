@@ -104,6 +104,7 @@ void ShenandoahRegionPartitions::dump_bitmap_row(idx_t region_idx) const {
 ShenandoahRegionPartitions::ShenandoahRegionPartitions(size_t max_regions, ShenandoahFreeSet* free_set) :
     _max(max_regions),
     _region_size_bytes(ShenandoahHeapRegion::region_size_bytes()),
+    _region_size_words(ShenandoahHeapRegion::region_size_words()),
     _free_set(free_set),
     _membership{ ShenandoahSimpleBitMap(max_regions), ShenandoahSimpleBitMap(max_regions) , ShenandoahSimpleBitMap(max_regions) }
 {
@@ -182,7 +183,7 @@ void ShenandoahRegionPartitions::establish_mutator_intervals(idx_t mutator_leftm
 
   _region_counts[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_region_count;
   _used[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_used;
-  _capacity[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_region_count * _region_size_bytes;
+  _capacity[int(ShenandoahFreeSetPartitionId::Mutator)] = mutator_region_count * _region_size_words;
 
   _leftmosts[int(ShenandoahFreeSetPartitionId::Collector)] = _max;
   _rightmosts[int(ShenandoahFreeSetPartitionId::Collector)] = -1;
@@ -205,15 +206,15 @@ void ShenandoahRegionPartitions::establish_old_collector_intervals(idx_t old_col
 
   _region_counts[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count;
   _used[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_used;
-  _capacity[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count * _region_size_bytes;
+  _capacity[int(ShenandoahFreeSetPartitionId::OldCollector)] = old_collector_region_count * _region_size_words;
 }
 
 void ShenandoahRegionPartitions::increase_used(ShenandoahFreeSetPartitionId which_partition, size_t bytes) {
   assert (which_partition < NumPartitions, "Partition must be valid");
   _used[int(which_partition)] += bytes;
-  assert (_used[int(which_partition)] <= _capacity[int(which_partition)],
+  assert (_used[int(which_partition)] <= _capacity[int(which_partition)] * HeapWordSize,
           "Must not use (" SIZE_FORMAT ") more than capacity (" SIZE_FORMAT ") after increase by " SIZE_FORMAT,
-          _used[int(which_partition)], _capacity[int(which_partition)], bytes);
+          _used[int(which_partition)], _capacity[int(which_partition)] * HeapWordSize, bytes);
 }
 
 inline void ShenandoahRegionPartitions::shrink_interval_if_range_modifies_either_boundary(
@@ -312,7 +313,7 @@ void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartition
   assert (available <= _region_size_bytes, "Available cannot exceed region size");
 
   _membership[int(which_partition)].set_bit(idx);
-  _capacity[int(which_partition)] += _region_size_bytes;
+  _capacity[int(which_partition)] += _region_size_words;
   _used[int(which_partition)] += _region_size_bytes - available;
   expand_interval_if_boundary_modified(which_partition, idx, available);
   _region_counts[int(which_partition)]++;
@@ -374,11 +375,11 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   _membership[int(orig_partition)].clear_bit(idx);
   _membership[int(new_partition)].set_bit(idx);
 
-  _capacity[int(orig_partition)] -= _region_size_bytes;
+  _capacity[int(orig_partition)] -= _region_size_words;
   _used[int(orig_partition)] -= used;
   shrink_interval_if_boundary_modified(orig_partition, idx);
 
-  _capacity[int(new_partition)] += _region_size_bytes;;
+  _capacity[int(new_partition)] += _region_size_words;
   _used[int(new_partition)] += used;
   expand_interval_if_boundary_modified(new_partition, idx, available);
 
@@ -1662,8 +1663,8 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     assert (ac > 0, "Membership in free set implies has capacity");
     assert (!r->is_old() || r->is_trash(), "Except for trash, mutator_is_free regions should not be affiliated OLD");
 
-    bool move_to_old_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector) < to_reserve_old;
-    bool move_to_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::Collector) < to_reserve;
+    bool move_to_old_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector) * HeapWordSize < to_reserve_old;
+    bool move_to_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::Collector) * HeapWordSize < to_reserve;
 
     if (!move_to_collector && !move_to_old_collector) {
       // We've satisfied both to_reserve and to_reserved_old
