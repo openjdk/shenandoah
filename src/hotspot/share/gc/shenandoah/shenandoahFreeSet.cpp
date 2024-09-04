@@ -1323,7 +1323,11 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
   old_cset_regions = 0;
   young_cset_regions = 0;
 
+#ifdef KELVIN_DEPRECATE
   size_t region_size_bytes = _partitions.region_size_bytes();
+#else
+  size_t region_size_words = _partitions.region_size_words();
+#endif
   size_t max_regions = _partitions.max_regions();
 
   size_t mutator_leftmost = max_regions;
@@ -1331,14 +1335,22 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
   size_t mutator_leftmost_empty = max_regions;
   size_t mutator_rightmost_empty = 0;
   size_t mutator_regions = 0;
+#ifdef KELVIN_DEPRECATE
   size_t mutator_used = 0;
+#else
+  size_t mutator_used_words = 0;
+#endif
 
   size_t old_collector_leftmost = max_regions;
   size_t old_collector_rightmost = 0;
   size_t old_collector_leftmost_empty = max_regions;
   size_t old_collector_rightmost_empty = 0;
   size_t old_collector_regions = 0;
+#ifdef KELVIN_DEPRECATE
   size_t old_collector_used = 0;
+#else
+  size_t old_collector_used_words = 0;
+#endif
 
   for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
@@ -1383,7 +1395,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
             }
           }
           mutator_regions++;
-          mutator_used += (region_size_bytes - ac);
+          mutator_used += (region_size_words - ac / HeapWordSize);
         } else {
           // !region->is_trash() && region is_old()
           _partitions.raw_assign_membership(idx, ShenandoahFreeSetPartitionId::OldCollector);
@@ -1402,7 +1414,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
             }
           }
           old_collector_regions++;
-          old_collector_used += (region_size_bytes - ac);
+          old_collector_used += (region_size_words - ac / HeapWordSize);
         }
       }
     }
@@ -1426,9 +1438,9 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
                 old_collector_regions, old_collector_used);
 
   _partitions.establish_mutator_intervals(mutator_leftmost, mutator_rightmost, mutator_leftmost_empty, mutator_rightmost_empty,
-                                          mutator_regions, mutator_used / HeapWordSize);
+                                          mutator_regions, mutator_used);
   _partitions.establish_old_collector_intervals(old_collector_leftmost, old_collector_rightmost, old_collector_leftmost_empty,
-                                                old_collector_rightmost_empty, old_collector_regions, old_collector_used / HeapWordSize);
+                                                old_collector_rightmost_empty, old_collector_regions, old_collector_used);
   log_debug(gc)("  After find_regions_with_alloc_capacity(), Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
                 "  Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
                 _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),

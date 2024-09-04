@@ -36,8 +36,7 @@
  * [ok] set_used_byt(), value argument is words
  * [ok] establish_mutator_intervals(): mutator_used argument in words
  * [ok] establish_old_collector_intervals(): old_collector_used argument in words
-
- * [  ] ShenandoahFreeSet::find_region_with_alloc_capacity() do internal computations in words
+ * [ok] ShenandoahFreeSet::find_regions_with_alloc_capacity() do internal computations in words
 
  * [  ] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
  * [  ] make_free(), region_capacity in words
