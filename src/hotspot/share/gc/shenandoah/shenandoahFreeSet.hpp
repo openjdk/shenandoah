@@ -220,6 +220,8 @@ public:
 
   inline size_t region_size_bytes() const { return _region_size_bytes; };
 
+  inline size_t region_size_words() const { return _region_size_words; };
+
   // The following four methods return the left-most and right-most bounds on ranges of regions representing
   // the requested set.  The _empty variants represent bounds on the range that holds completely empty
   // regions, which are required for humongous allocations and desired for "very large" allocations.
