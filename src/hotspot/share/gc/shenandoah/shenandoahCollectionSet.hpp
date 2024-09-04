@@ -32,38 +32,6 @@
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 
-#ifdef KELVIN_NOTES
-/**
- * My plan:  Order(1)
- *
- * To remove:
- *
- * To replace:
- *   [ok] _young_bytes_to_evacuate -> _young_words_to_evacuate
- *   [ok] _young_bytes_to_promote -> _young_words_to_promote
- *   [ok] _old_bytes_to_evacuate -> _old_words_to_evacuate
- *   [ok] _live: was bytes, change to words
- *   [ok] live() returns words
- *   [ok] get_old_bytes_reserved_for_evacuation -> get_old_words_reserved_for_evacuation
- *   [ok] get_young_bytes_reserved_for_evacuation -> get_young_words_reserved_for_evacuation
- *   [ok] get_young_bytes_to_be_promoted -> get_young_words_to_be_promoted
-
- *   [ok] _young_available_bytes_collected -> _young_available_words_collected
-
- *
- * To modify:
-
- *   [ok] _used: was bytes, change to words
- *   [ok] used() returns words
-
- *   [ok] _old_garbage was bytes, change to words
- *   [ok] _garbage was bytes, change to words
- *   [ok] garbage(): used to return bytes, but now returns words
- *   [ok] get_old_garbage(): used to return bytes, but now returns words
- */
-
-#endif
-
 class ShenandoahCollectionSet : public CHeapObj<mtGC> {
   friend class ShenandoahHeap;
   friend class ShenandoahCollectionSetPreselector;
