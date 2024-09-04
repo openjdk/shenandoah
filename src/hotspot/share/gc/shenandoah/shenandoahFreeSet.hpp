@@ -34,8 +34,10 @@
  * [ok] increase_used(): replaced bytes with words
  * [ok] used_by(), returns words
  * [ok] set_used_byt(), value argument is words
+ * [ok] establish_mutator_intervals(): mutator_used argument in words
 
- * [  ] establish_mutator_intervals(): mutator_used argument in words
+ * [  ] ShenandoahFreeSet::find_region_with_alloc_capacity() do internal computations in words
+
  * [  ] establish_old_collector_intervals(): old_collector_used argument in words
  * [  ] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
  * [  ] make_free(), region_capacity in words
@@ -158,7 +160,7 @@ public:
   // many redundant incremental adjustments to the mutator intervals as the free set is being rebuilt.
   void establish_mutator_intervals(ssize_t mutator_leftmost, ssize_t mutator_rightmost,
                                    ssize_t mutator_leftmost_empty, ssize_t mutator_rightmost_empty,
-                                   size_t mutator_region_count, size_t mutator_used);
+                                   size_t mutator_region_count, size_t mutator_used_words);
 
   // Set the OldCollector intervals, usage, and capacity according to arguments.  We use this at the end of rebuild_free_set()
   // to avoid the overhead of making many redundant incremental adjustments to the mutator intervals as the free set is being
