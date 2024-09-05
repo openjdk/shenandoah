@@ -432,10 +432,10 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
     const int MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS = 8;
     const size_t bound_on_additional_regions = cand_idx / MAX_FRACTION_OF_HUMONGOUS_DEFRAG_REGIONS;
 
-    // The heuristic old_is_fragmented trigger may be seeking to achieve up to 7/8 density.  Allow ourselves to overshoot
-    // that target (at 15/16) so we will not have to do another defragmenting old collection right away.
+    // The heuristic old_is_fragmented trigger may be seeking to achieve up to 75% density.  Allow ourselves to overshoot
+    // that target (at 7/8) so we will not have to do another defragmenting old collection right away.
     while ((defrag_count < bound_on_additional_regions) &&
-           (total_uncollected_old_regions < 15 * span_of_uncollected_regions / 16)) {
+           (total_uncollected_old_regions < 7 * span_of_uncollected_regions / 8)) {
       ShenandoahHeapRegion* r = candidates[_last_old_collection_candidate].get_region();
       assert(r->is_regular() || r->is_regular_pinned(), "Region " SIZE_FORMAT " has wrong state for collection: %s",
              r->index(), ShenandoahHeapRegion::region_state_to_string(r->state()));
@@ -546,41 +546,35 @@ void ShenandoahOldHeuristics::clear_triggers() {
   _growth_trigger = false;
 }
 
-void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region, size_t old_region_count, size_t num_regions) {
+void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region,
+                                                               size_t old_region_count, size_t num_regions) {
   if (ShenandoahGenerationalHumongousReserve > 0) {
     size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
     size_t allowed_old_gen_span = num_regions - (ShenandoahGenerationalHumongousReserve * num_regions) / 100;
 
-    // Tolerate lower density if total span is small.  Here's the implementation:
-    //   if old_gen spans more than 100% and density < 75%, trigger old-defrag
-    //   else if old_gen spans more than 87.5% and density < 62.5%, trigger old-defrag
-    //   else if old_gen spans more than 75% and density < 50%, trigger old-defrag
-    //   else if old_gen spans more than 62.5% and density < 37.5%, trigger old-defrag
-    //   else if old_gen spans more than 50% and density < 25%, trigger old-defrag
-    //
-    // A previous implementation was more aggressive in triggering, resulting in degraded throughput when
-    // humongous allocation was not required.
-
-    size_t old_available = _old_gen->available();
-    size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
-    size_t old_unaffiliated_available = _old_gen->free_unaffiliated_regions() * region_size_bytes;
+    size_t old_available = _old_gen->available() / HeapWordSize;
+    size_t region_size_words = ShenandoahHeapRegion::region_size_words();
+    size_t old_unaffiliated_available = _old_gen->free_unaffiliated_regions() * region_size_words;
     assert(old_available >= old_unaffiliated_available, "sanity");
     size_t old_fragmented_available = old_available - old_unaffiliated_available;
 
-    size_t old_bytes_consumed = old_region_count * region_size_bytes - old_fragmented_available;
-    size_t old_bytes_spanned = old_region_span * region_size_bytes;
-    double old_density = ((double) old_bytes_consumed) / old_bytes_spanned;
+    size_t old_words_consumed = old_region_count * region_size_words - old_fragmented_available;
+    size_t old_words_spanned = old_region_span * region_size_words;
+    double old_density = ((double) old_words_consumed) / old_words_spanned;
 
-    uint eighths = 8;
-    for (uint i = 0; i < 5; i++) {
-      size_t span_threshold = eighths * allowed_old_gen_span / 8;
-      double density_threshold = (eighths - 2) / 8.0;
-      if ((old_region_span >= span_threshold) && (old_density < density_threshold)) {
-        trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-        return;
-      }
-      eighths--;
-    }
+    double old_span_percent = ((double) old_region_span) / allowed_old_gen_span;
+    double old_span_percent_squared = old_span_percent * old_span_percent;
+
+    if (old_density / old_span_percent_squared < 0.75) {
+      // We trigger old defragmentation, for example, if:
+      //  old_span_percent is 100% and old_density is below 75.0%, or
+      //  old_span_percent is  90% and old_density is below 60.8%, or
+      //  old_span_percent is  80% and old_density is below 48.0%, or
+      //  old_span_percent is  70% and old_density is below 36.8%, or
+      //  old_span_percent is  60% and old_density is below 27.0%, or
+      //  old_span_percent is  50% and old_density is below 18.8%, or ...
+      trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
+    } 
   }
 }
 
