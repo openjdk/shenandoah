@@ -574,7 +574,7 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_
       //  old_span_percent is  60% and old_density is below 27.0%, or
       //  old_span_percent is  50% and old_density is below 18.8%, or ...
       trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
-    } 
+    }
   }
 }
 
