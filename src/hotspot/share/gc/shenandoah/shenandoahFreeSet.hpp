@@ -457,11 +457,11 @@ public:
   // Acquire heap lock and log status, assuming heap lock is not acquired by the caller.
   void log_status_under_lock();
 
-  // Return original capacity, in words, of the Mutator partition.
-  inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator); }
+  // Return original capacity, in bytes, of the Mutator partition.
+  inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator) * HeapWordSize; }
 
-  // Return words used by the Mutator partition.
-  inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator);     }
+  // Return bytes used by the Mutator partition.
+  inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator) * HeapWordSize;     }
 
   // Return words available within the Mutator partition.
   inline size_t available() const {
