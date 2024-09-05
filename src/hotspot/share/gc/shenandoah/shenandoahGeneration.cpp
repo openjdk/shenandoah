@@ -63,22 +63,26 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
   bool is_thread_safe() override { return true; }
 };
 
-class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
+class ShenandoahResetBitmapTask : public WorkerTask {
  private:
-  ShenandoahHeap* _heap;
-  ShenandoahMarkingContext* const _ctx;
- public:
-  ShenandoahResetBitmapTask() :
-    _heap(ShenandoahHeap::heap()),
-    _ctx(_heap->marking_context()) {}
+    ShenandoahRegionIterator _regions;
+    ShenandoahGeneration* _generation;
 
-  void heap_region_do(ShenandoahHeapRegion* region) {
-    if (_heap->is_bitmap_slice_committed(region)) {
-      _ctx->clear_bitmap(region);
+ public:
+  ShenandoahResetBitmapTask(ShenandoahGeneration* generation) :
+    WorkerTask("Shenandoah Reset Bitmap"), _generation(generation) {}
+
+  void work(uint worker_id) {
+    ShenandoahHeapRegion* region = _regions.next();
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahMarkingContext* const ctx = heap->marking_context();
+    while (region != nullptr) {
+      if (_generation->contains(region) && heap->is_bitmap_slice_committed(region)) {
+        ctx->clear_bitmap(region);
+      }
+      region = _regions.next();
     }
   }
-
-  bool is_thread_safe() { return true; }
 };
 
 // Copy the write-version of the card-table into the read-version, clearing the
@@ -189,8 +193,8 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
   set_mark_incomplete();
 
-  ShenandoahResetBitmapTask task;
-  parallel_heap_region_iterate(&task);
+  ShenandoahResetBitmapTask task(this);
+  heap->workers()->run_task(&task);
 }
 
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
