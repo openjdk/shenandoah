@@ -306,16 +306,16 @@ void ShenandoahRegionPartitions::retire_from_partition(ShenandoahFreeSetPartitio
   _region_counts[int(partition)]--;
 }
 
-void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartitionId which_partition, size_t available) {
+void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartitionId which_partition, size_t available_words) {
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert (membership(idx) == ShenandoahFreeSetPartitionId::NotFree, "Cannot make free if already free");
   assert (which_partition < NumPartitions, "selected free partition must be valid");
-  assert (available <= _region_size_bytes, "Available cannot exceed region size");
+  assert (available_words <= _region_size_words, "Available cannot exceed region size");
 
   _membership[int(which_partition)].set_bit(idx);
   _capacity[int(which_partition)] += _region_size_words;
-  _used[int(which_partition)] += (_region_size_bytes - available) / HeapWordSize;
-  expand_interval_if_boundary_modified(which_partition, idx, available);
+  _used[int(which_partition)] += _region_size_words - available_words;
+  expand_interval_if_boundary_modified(which_partition, idx, available_words * HeapWordSize);
   _region_counts[int(which_partition)]++;
 }
 
@@ -678,14 +678,14 @@ ShenandoahFreeSet::ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions) :
 
 void ShenandoahFreeSet::add_promoted_in_place_region_to_old_collector(ShenandoahHeapRegion* region) {
   shenandoah_assert_heaplocked();
-  size_t plab_min_size_in_bytes = ShenandoahGenerationalHeap::heap()->plab_min_size() * HeapWordSize;
+  size_t plab_min_size_in_words = ShenandoahGenerationalHeap::heap()->plab_min_size();
   size_t idx = region->index();
-  size_t capacity = alloc_capacity(region);
+  size_t word_capacity = alloc_capacity(region) / HeapWordSize;
   assert(_partitions.membership(idx) == ShenandoahFreeSetPartitionId::NotFree,
          "Regions promoted in place should have been excluded from Mutator partition");
-  if (capacity >= plab_min_size_in_bytes) {
-    _partitions.make_free(idx, ShenandoahFreeSetPartitionId::OldCollector, capacity);
-    _heap->old_generation()->augment_promoted_reserve(capacity);
+  if (word_capacity >= plab_min_size_in_words) {
+    _partitions.make_free(idx, ShenandoahFreeSetPartitionId::OldCollector, word_capacity);
+    _heap->old_generation()->augment_promoted_reserve(word_capacity * HeapWordSize);
   }
 }
 

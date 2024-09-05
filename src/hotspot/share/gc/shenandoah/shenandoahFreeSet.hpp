@@ -38,8 +38,8 @@
  * [ok] establish_old_collector_intervals(): old_collector_used argument in words
  * [ok] ShenandoahFreeSet::find_regions_with_alloc_capacity() do internal computations in words
  * [ok] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
+ * [ok] make_free(), region_capacity in words
 
- * [  ] make_free(), region_capacity in words
  * [  ] move_from_partition_to_partition(), available in words
  * [  ] remove _region_size_bytes
  *
@@ -179,7 +179,7 @@ public:
   void retire_range_from_partition(ShenandoahFreeSetPartitionId partition, ssize_t low_idx, ssize_t high_idx);
 
   // Place region idx into free set which_partition.  Requires that idx is currently NotFree.
-  void make_free(ssize_t idx, ShenandoahFreeSetPartitionId which_partition, size_t region_capacity);
+  void make_free(ssize_t idx, ShenandoahFreeSetPartitionId which_partition, size_t available_words);
 
   // Place region idx into free partition new_partition, adjusting used and capacity totals for the original and new partition
   // given that available bytes can still be allocated within this region.  Requires that idx is currently not NotFree.
