@@ -290,16 +290,16 @@ void ShenandoahRegionPartitions::retire_range_from_partition(
   shrink_interval_if_range_modifies_either_boundary(partition, low_idx, high_idx);
 }
 
-void ShenandoahRegionPartitions::retire_from_partition(ShenandoahFreeSetPartitionId partition, idx_t idx, size_t used_bytes) {
+void ShenandoahRegionPartitions::retire_from_partition(ShenandoahFreeSetPartitionId partition, idx_t idx, size_t used_words) {
 
   // Note: we may remove from free partition even if region is not entirely full, such as when available < PLAB::min_size()
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert (partition < NumPartitions, "Cannot remove from free partitions if not already free");
   assert (in_free_set(partition, idx), "Must be in partition to remove from partition");
 
-  if (used_bytes < _region_size_bytes) {
+  if (used_words < _region_size_words) {
     // Count the alignment pad remnant of memory as used when we retire this region
-    increase_used(partition, (_region_size_bytes - used_bytes) / HeapWordSize);
+    increase_used(partition, _region_size_words - used_words);
   }
   _membership[int(partition)].clear_bit(idx);
   shrink_interval_if_boundary_modified(partition, idx);
@@ -1113,7 +1113,7 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
         orig_partition = ShenandoahFreeSetPartitionId::Collector;
       }
     }
-    _partitions.retire_from_partition(orig_partition, idx, r->used() * HeapWordSize);
+    _partitions.retire_from_partition(orig_partition, idx, r->used());
     _partitions.assert_bounds();
   }
   return result;

@@ -37,8 +37,8 @@
  * [ok] establish_mutator_intervals(): mutator_used argument in words
  * [ok] establish_old_collector_intervals(): old_collector_used argument in words
  * [ok] ShenandoahFreeSet::find_regions_with_alloc_capacity() do internal computations in words
+ * [ok] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
 
- * [  ] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
  * [  ] make_free(), region_capacity in words
  * [  ] move_from_partition_to_partition(), available in words
  * [  ] remove _region_size_bytes
@@ -170,8 +170,8 @@ public:
 
   // Retire region idx from within partition, , leaving its capacity and used as part of the original free partition's totals.
   // Requires that region idx is in in the Mutator or Collector partitions.  Hereafter, identifies this region as NotFree.
-  // Any remnant of available memory at the time of retirement is added to the original partition's total of used bytes.
-  void retire_from_partition(ShenandoahFreeSetPartitionId p, ssize_t idx, size_t used_bytes);
+  // Any remnant of available memory at the time of retirement is added to the original partition's total used words.
+  void retire_from_partition(ShenandoahFreeSetPartitionId p, ssize_t idx, size_t used_words);
 
   // Retire all regions between low_idx and high_idx inclusive from within partition.  Requires that each region idx is
   // in the same Mutator or Collector partition.  Hereafter, identifies each region as NotFree.   Assumes that each region
