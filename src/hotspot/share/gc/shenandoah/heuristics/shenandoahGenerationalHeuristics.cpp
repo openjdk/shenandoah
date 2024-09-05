@@ -32,6 +32,8 @@
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
+#include "gc/shenandoah/shenandoahEvacInfo.hpp"
+#include "gc/shenandoah/shenandoahTrace.hpp"
 
 #include "logging/log.hpp"
 
@@ -74,6 +76,10 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
   size_t regular_regions_promoted_in_place = 0;
   // This counts bytes of memory used by regular regions to be promoted in place.
   size_t regular_regions_promoted_usage = 0;
+  // This counts bytes of memory free in regular regions to be promoted in place.
+  size_t regular_regions_promoted_free = 0;
+  // This counts bytes of garbage memory in regular regions to be promoted in place.
+  size_t regular_regions_promoted_garbage = 0;
 
   for (size_t i = 0; i < num_regions; i++) {
     ShenandoahHeapRegion* region = heap->get_region(i);
@@ -111,6 +117,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
             // Region was included for promotion-in-place
             regular_regions_promoted_in_place++;
             regular_regions_promoted_usage += region->used_before_promote() * HeapWordSize;
+            regular_regions_promoted_free += region->free() * HeapWordSize;
+            regular_regions_promoted_garbage += region->garbage() * HeapWordSize;
           }
           is_candidate = false;
         } else {
@@ -217,6 +225,23 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
                        word_size_in_proper_unit(promote_evac_words), proper_unit_for_word_size(promote_evac_words),
                        word_size_in_proper_unit(old_evac_words), proper_unit_for_word_size(old_evac_words),
                        word_size_in_proper_unit(total_evac_words), proper_unit_for_word_size(total_evac_words));
+
+    ShenandoahEvacInfo evacInfo;
+    evacInfo.set_collection_set_regions(collection_set->count());
+    evacInfo.set_collection_set_used_before(collection_set->used() * HeapWordSize);
+    evacInfo.set_collection_set_used_after(collection_set->live() * HeapWordSize);
+    evacInfo.set_collected_old(old_evac_words * HeapWordSize);
+    evacInfo.set_collected_promoted(promote_evac_words * HeapWordSize);
+    evacInfo.set_collected_young(young_evac_words * HeapWordSize);
+    evacInfo.set_regions_promoted_humongous(humongous_regions_promoted);
+    evacInfo.set_regions_promoted_regular(regular_regions_promoted_in_place);
+    evacInfo.set_regular_promoted_garbage(regular_regions_promoted_garbage);
+    evacInfo.set_regular_promoted_free(regular_regions_promoted_free);
+    evacInfo.set_regions_immediate(immediate_regions);
+    evacInfo.set_immediate_size(immediate_garbage);
+    evacInfo.set_regions_freed(free_regions);
+
+    ShenandoahTracer().report_evacuation_info(&evacInfo);
   }
 }
 
