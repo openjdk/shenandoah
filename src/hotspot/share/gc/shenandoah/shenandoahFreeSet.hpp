@@ -39,8 +39,10 @@
  * [ok] ShenandoahFreeSet::find_regions_with_alloc_capacity() do internal computations in words
  * [ok] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
  * [ok] make_free(), region_capacity in words
+ * [ok] move_from_partition_to_partition(), available arg in words
 
- * [  ] move_from_partition_to_partition(), available in words
+ * [  ] available_implies_empty(): takes words argument
+ * [  ] expand_interval_if_boundary_modified(): 3rd argument in words
  * [  ] remove _region_size_bytes
  *
  * Changes planned for ShenandoahFreeSet:
@@ -182,9 +184,9 @@ public:
   void make_free(ssize_t idx, ShenandoahFreeSetPartitionId which_partition, size_t available_words);
 
   // Place region idx into free partition new_partition, adjusting used and capacity totals for the original and new partition
-  // given that available bytes can still be allocated within this region.  Requires that idx is currently not NotFree.
+  // given that available_words can still be allocated within this region.  Requires that idx is currently not NotFree.
   void move_from_partition_to_partition(ssize_t idx, ShenandoahFreeSetPartitionId orig_partition,
-                                        ShenandoahFreeSetPartitionId new_partition, size_t available);
+                                        ShenandoahFreeSetPartitionId new_partition, size_t available_words);
 
   const char* partition_membership_name(ssize_t idx) const;
 

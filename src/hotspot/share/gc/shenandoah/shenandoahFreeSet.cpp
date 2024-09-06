@@ -337,17 +337,18 @@ bool ShenandoahRegionPartitions::available_implies_empty(size_t available_in_reg
 
 
 void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, ShenandoahFreeSetPartitionId orig_partition,
-                                                                  ShenandoahFreeSetPartitionId new_partition, size_t available) {
+                                                                  ShenandoahFreeSetPartitionId new_partition,
+                                                                  size_t available_words) {
   ShenandoahHeapRegion* r = ShenandoahHeap::heap()->get_region(idx);
   assert (idx < _max, "index is sane: " SIZE_FORMAT " < " SIZE_FORMAT, idx, _max);
   assert (orig_partition < NumPartitions, "Original partition must be valid");
   assert (new_partition < NumPartitions, "New partition must be valid");
-  assert (available <= _region_size_bytes, "Available cannot exceed region size");
+  assert (available_words <= _region_size_words, "Available cannot exceed region size");
   assert (_membership[int(orig_partition)].is_set(idx), "Cannot move from partition unless in partition");
-  assert ((r != nullptr) && ((r->is_trash() && (available == _region_size_bytes)) ||
-                             (r->used() * HeapWordSize + available == _region_size_bytes)),
+  assert ((r != nullptr) && ((r->is_trash() && (available_words == _region_size_words)) ||
+                             (r->used() + available_words == _region_size_words)),
           "Used: " SIZE_FORMAT " + available: " SIZE_FORMAT " should equal region size: " SIZE_FORMAT,
-          ShenandoahHeap::heap()->get_region(idx)->used() * HeapWordSize, available, _region_size_bytes);
+          ShenandoahHeap::heap()->get_region(idx)->used(), available_words, _region_size_words);
 
   // Expected transitions:
   //  During rebuild:         Mutator => Collector
@@ -359,15 +360,15 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   //                          OldCollector Empty => Mutator
   assert ((is_mutator_partition(orig_partition) && is_young_collector_partition(new_partition)) ||
           (is_mutator_partition(orig_partition) &&
-           available_implies_empty(available) && is_old_collector_partition(new_partition)) ||
+           available_implies_empty(available_words * HeapWordSize) && is_old_collector_partition(new_partition)) ||
           (is_young_collector_partition(orig_partition) && is_mutator_partition(new_partition)) ||
           (is_old_collector_partition(orig_partition)
-           && available_implies_empty(available) && is_mutator_partition(new_partition)),
-          "Unexpected movement between partitions, available: " SIZE_FORMAT ", _region_size_bytes: " SIZE_FORMAT
+           && available_implies_empty(available_words * HeapWordSize) && is_mutator_partition(new_partition)),
+          "Unexpected movement between partitions, available: " SIZE_FORMAT ", _region_size_words: " SIZE_FORMAT
           ", orig_partition: %s, new_partition: %s",
-          available, _region_size_bytes, partition_name(orig_partition), partition_name(new_partition));
+          available_words, _region_size_words, partition_name(orig_partition), partition_name(new_partition));
 
-  size_t used_words = (_region_size_bytes - available) / HeapWordSize;
+  size_t used_words = _region_size_words - available_words;
   assert (_used[int(orig_partition)] >= used_words,
           "Orig partition used: " SIZE_FORMAT " must exceed moved used: " SIZE_FORMAT " within region " SSIZE_FORMAT,
           _used[int(orig_partition)], used_words, idx);
@@ -381,7 +382,7 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
 
   _capacity[int(new_partition)] += _region_size_words;
   _used[int(new_partition)] += used_words;
-  expand_interval_if_boundary_modified(new_partition, idx, available);
+  expand_interval_if_boundary_modified(new_partition, idx, available_words * HeapWordSize);
 
   _region_counts[int(orig_partition)]--;
   _region_counts[int(new_partition)]++;
@@ -1271,7 +1272,7 @@ void ShenandoahFreeSet::flip_to_old_gc(ShenandoahHeapRegion* r) {
   ShenandoahGenerationalHeap* gen_heap = ShenandoahGenerationalHeap::heap();
   size_t region_capacity = alloc_capacity(r);
   _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
-                                               ShenandoahFreeSetPartitionId::OldCollector, region_capacity);
+                                               ShenandoahFreeSetPartitionId::OldCollector, region_capacity / HeapWordSize);
   _partitions.assert_bounds();
   _heap->old_generation()->augment_evacuation_reserve(region_capacity);
   bool transferred = gen_heap->generation_sizer()->transfer_to_old(1);
@@ -1291,7 +1292,7 @@ void ShenandoahFreeSet::flip_to_gc(ShenandoahHeapRegion* r) {
 
   size_t ac = alloc_capacity(r);
   _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
-                                               ShenandoahFreeSetPartitionId::Collector, ac);
+                                               ShenandoahFreeSetPartitionId::Collector, ac / HeapWordSize);
   _partitions.assert_bounds();
 
   // We do not ensure that the region is no longer trash, relying on try_allocate_in(), which always comes next,
@@ -1443,13 +1444,14 @@ size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_s
                                                                                    size_t& bytes_transferred) {
   shenandoah_assert_heaplocked();
   size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  size_t region_size_words = ShenandoahHeapRegion::region_size_words();
   size_t transferred_regions = 0;
   idx_t rightmost = _partitions.rightmost_empty(which_collector);
   for (idx_t idx = _partitions.leftmost_empty(which_collector); (transferred_regions < max_xfer_regions) && (idx <= rightmost); ) {
     assert(_partitions.in_free_set(which_collector, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
     // Note: can_allocate_from() denotes that region is entirely empty
     if (can_allocate_from(idx)) {
-      _partitions.move_from_partition_to_partition(idx, which_collector, ShenandoahFreeSetPartitionId::Mutator, region_size_bytes);
+      _partitions.move_from_partition_to_partition(idx, which_collector, ShenandoahFreeSetPartitionId::Mutator, region_size_words);
       transferred_regions++;
       bytes_transferred += region_size_bytes;
     }
@@ -1469,7 +1471,7 @@ size_t ShenandoahFreeSet::transfer_non_empty_regions_from_collector_set_to_mutat
     assert(_partitions.in_free_set(collector_id, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
     size_t ac = alloc_capacity(idx);
     if (ac > 0) {
-      _partitions.move_from_partition_to_partition(idx, collector_id, ShenandoahFreeSetPartitionId::Mutator, ac);
+      _partitions.move_from_partition_to_partition(idx, collector_id, ShenandoahFreeSetPartitionId::Mutator, ac / HeapWordSize);
       transferred_regions++;
       bytes_transferred += ac;
     }
@@ -1678,7 +1680,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
       if (r->is_trash() || !r->is_affiliated()) {
         // OLD regions that have available memory are already in the old_collector free set.
         _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
-                                                     ShenandoahFreeSetPartitionId::OldCollector, ac);
+                                                     ShenandoahFreeSetPartitionId::OldCollector, ac / HeapWordSize);
         log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to old_collector_free", idx);
         log_debug(gc)("  Shifted Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
                       "  Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
@@ -1701,7 +1703,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
       // occupy regions comprised entirely of ephemeral objects.  These regions are highly likely to be included in the next
       // collection set, and they are easily evacuated because they have low density of live objects.
       _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
-                                                   ShenandoahFreeSetPartitionId::Collector, ac);
+                                                   ShenandoahFreeSetPartitionId::Collector, ac / HeapWordSize);
       log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to collector_free", idx);
       log_debug(gc)("  Shifted Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
                     "  Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
