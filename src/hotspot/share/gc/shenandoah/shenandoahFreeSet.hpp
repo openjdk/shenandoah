@@ -40,8 +40,8 @@
  * [ok] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
  * [ok] make_free(), region_capacity in words
  * [ok] move_from_partition_to_partition(), available arg in words
+ * [ok] available_implies_empty(): takes words argument
 
- * [  ] available_implies_empty(): takes words argument
  * [  ] expand_interval_if_boundary_modified(): 3rd argument in words
  * [  ] remove _region_size_bytes
  *
@@ -137,7 +137,9 @@ private:
   inline bool is_mutator_partition(ShenandoahFreeSetPartitionId p);
   inline bool is_young_collector_partition(ShenandoahFreeSetPartitionId p);
   inline bool is_old_collector_partition(ShenandoahFreeSetPartitionId p);
-  inline bool available_implies_empty(size_t available);
+
+  // Return true iff available_words equals _region_size_words
+  inline bool available_implies_empty(size_t available_words);
 
 #ifndef PRODUCT
   void dump_bitmap_row(ssize_t region_idx) const;

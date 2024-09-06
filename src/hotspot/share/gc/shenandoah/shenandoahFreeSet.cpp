@@ -331,8 +331,8 @@ bool ShenandoahRegionPartitions::is_old_collector_partition(ShenandoahFreeSetPar
   return (p == ShenandoahFreeSetPartitionId::OldCollector);
 }
 
-bool ShenandoahRegionPartitions::available_implies_empty(size_t available_in_region) {
-  return (available_in_region == _region_size_bytes);
+bool ShenandoahRegionPartitions::available_implies_empty(size_t available_words_in_region) {
+  return (available_words_in_region == _region_size_words);
 }
 
 
@@ -360,10 +360,10 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
   //                          OldCollector Empty => Mutator
   assert ((is_mutator_partition(orig_partition) && is_young_collector_partition(new_partition)) ||
           (is_mutator_partition(orig_partition) &&
-           available_implies_empty(available_words * HeapWordSize) && is_old_collector_partition(new_partition)) ||
+           available_implies_empty(available_words) && is_old_collector_partition(new_partition)) ||
           (is_young_collector_partition(orig_partition) && is_mutator_partition(new_partition)) ||
           (is_old_collector_partition(orig_partition)
-           && available_implies_empty(available_words * HeapWordSize) && is_mutator_partition(new_partition)),
+           && available_implies_empty(available_words) && is_mutator_partition(new_partition)),
           "Unexpected movement between partitions, available: " SIZE_FORMAT ", _region_size_words: " SIZE_FORMAT
           ", orig_partition: %s, new_partition: %s",
           available_words, _region_size_words, partition_name(orig_partition), partition_name(new_partition));
