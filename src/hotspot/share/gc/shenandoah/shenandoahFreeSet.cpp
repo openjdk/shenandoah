@@ -103,7 +103,6 @@ void ShenandoahRegionPartitions::dump_bitmap_row(idx_t region_idx) const {
 
 ShenandoahRegionPartitions::ShenandoahRegionPartitions(size_t max_regions, ShenandoahFreeSet* free_set) :
     _max(max_regions),
-    _region_size_bytes(ShenandoahHeapRegion::region_size_bytes()),
     _region_size_words(ShenandoahHeapRegion::region_size_words()),
     _free_set(free_set),
     _membership{ ShenandoahSimpleBitMap(max_regions), ShenandoahSimpleBitMap(max_regions) , ShenandoahSimpleBitMap(max_regions) }
@@ -486,7 +485,7 @@ idx_t ShenandoahRegionPartitions::leftmost_empty(ShenandoahFreeSetPartitionId wh
   for (idx_t idx = find_index_of_next_available_region(which_partition, _leftmosts_empty[int(which_partition)]);
        idx < max_regions; ) {
     assert(in_free_set(which_partition, idx), "Boundaries or find_last_set_bit failed: " SSIZE_FORMAT, idx);
-    if (_free_set->alloc_capacity(idx) == _region_size_bytes) {
+    if (_free_set->alloc_capacity(idx) == _region_size_words * HeapWordSize) {
       _leftmosts_empty[int(which_partition)] = idx;
       return idx;
     }
@@ -505,7 +504,7 @@ idx_t ShenandoahRegionPartitions::rightmost_empty(ShenandoahFreeSetPartitionId w
   for (idx_t idx = find_index_of_previous_available_region(which_partition, _rightmosts_empty[int(which_partition)]);
        idx >= 0; ) {
     assert(in_free_set(which_partition, idx), "Boundaries or find_last_set_bit failed: " SSIZE_FORMAT, idx);
-    if (_free_set->alloc_capacity(idx) == _region_size_bytes) {
+    if (_free_set->alloc_capacity(idx) == _region_size_words * HeapWordSize) {
       _rightmosts_empty[int(which_partition)] = idx;
       return idx;
     }
@@ -543,7 +542,7 @@ void ShenandoahRegionPartitions::assert_bounds() {
       case ShenandoahFreeSetPartitionId::OldCollector:
       {
         size_t capacity = _free_set->alloc_capacity(i);
-        bool is_empty = (capacity == _region_size_bytes);
+        bool is_empty = (capacity == _region_size_words * HeapWordSize);
         assert(capacity > 0, "free regions must have allocation capacity");
         if (i < leftmosts[int(partition)]) {
           leftmosts[int(partition)] = i;

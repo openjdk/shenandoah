@@ -42,8 +42,7 @@
  * [ok] move_from_partition_to_partition(), available arg in words
  * [ok] available_implies_empty(): takes words argument
  * [ok] expand_interval_if_boundary_modified(): 3rd argument in words
-
- * [  ] remove _region_size_bytes
+ * [ok] remove _region_size_bytes
  *
  * Changes planned for ShenandoahFreeSet:
  * [  ] transfer_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
@@ -92,7 +91,6 @@ class ShenandoahRegionPartitions {
 
 private:
   const ssize_t _max;           // The maximum number of heap regions
-  const size_t _region_size_bytes;
   const size_t _region_size_words;
   const ShenandoahFreeSet* _free_set;
   // For each partition, we maintain a bitmap of which regions are affiliated with his partition.
@@ -223,8 +221,6 @@ public:
 #endif
 
   inline size_t max_regions() const { return _max; }
-
-  inline size_t region_size_bytes() const { return _region_size_bytes; };
 
   inline size_t region_size_words() const { return _region_size_words; };
 
