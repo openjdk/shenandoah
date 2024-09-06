@@ -1554,19 +1554,19 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
 void ShenandoahFreeSet::finish_rebuild(size_t young_cset_regions, size_t old_cset_regions, size_t old_region_count,
                                        bool have_evacuation_reserves) {
   shenandoah_assert_heaplocked();
-  size_t young_reserve(0), old_reserve(0);
+  size_t young_reserve_words(0), old_reserve_words(0);
 
   if (_heap->mode()->is_generational()) {
     compute_young_and_old_reserves(young_cset_regions, old_cset_regions, have_evacuation_reserves,
-                                   young_reserve, old_reserve);
+                                   young_reserve_words, old_reserve_words);
   } else {
-    young_reserve = (_heap->max_capacity() / 100) * ShenandoahEvacReserve;
-    old_reserve = 0;
+    young_reserve_words = (_heap->max_capacity() / (HeapWordSize * 100)) * ShenandoahEvacReserve;
+    old_reserve_words = 0;
   }
 
   // Move some of the mutator regions in the Collector and OldCollector partitions in order to satisfy
   // young_reserve and old_reserve.
-  reserve_regions(young_reserve, old_reserve, old_region_count);
+  reserve_regions(young_reserve_words, old_reserve_words, old_region_count);
   size_t young_region_count = _heap->num_regions() - old_region_count;
   establish_generation_sizes(young_region_count, old_region_count);
   establish_old_collector_alloc_bias();
@@ -1578,13 +1578,13 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
                                                        bool have_evacuation_reserves,
                                                        size_t& young_reserve_result, size_t& old_reserve_result) const {
   shenandoah_assert_generational();
-  const size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
+  const size_t region_size_words = ShenandoahHeapRegion::region_size_words();
 
   ShenandoahOldGeneration* const old_generation = _heap->old_generation();
-  size_t old_available = old_generation->available();
+  size_t old_available = old_generation->available() / HeapWordSize;
   size_t old_unaffiliated_regions = old_generation->free_unaffiliated_regions();
   ShenandoahYoungGeneration* const young_generation = _heap->young_generation();
-  size_t young_capacity = young_generation->max_capacity();
+  size_t young_capacity = young_generation->max_capacity() / HeapWordSize;
   size_t young_unaffiliated_regions = young_generation->free_unaffiliated_regions();
 
   // Add in the regions we anticipate to be freed by evacuation of the collection set
@@ -1603,10 +1603,10 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
     }
 #endif
 
-    ssize_t xfer_bytes = old_region_balance * checked_cast<ssize_t>(region_size_bytes);
-    old_available -= xfer_bytes;
+    ssize_t xfer_words = old_region_balance * checked_cast<ssize_t>(region_size_words);
+    old_available -= xfer_words;
     old_unaffiliated_regions -= old_region_balance;
-    young_capacity += xfer_bytes;
+    young_capacity += xfer_words;
     young_unaffiliated_regions += old_region_balance;
   }
 
@@ -1616,9 +1616,9 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   // each PLAB's available memory.
   if (have_evacuation_reserves) {
     // We are rebuilding at the end of final mark, having already established evacuation budgets for this GC pass.
-    const size_t promoted_reserve = old_generation->get_promoted_reserve();
-    const size_t old_evac_reserve = old_generation->get_evacuation_reserve();
-    young_reserve_result = young_generation->get_evacuation_reserve();
+    const size_t promoted_reserve = old_generation->get_promoted_reserve() / HeapWordSize;
+    const size_t old_evac_reserve = old_generation->get_evacuation_reserve() / HeapWordSize;
+    young_reserve_result = young_generation->get_evacuation_reserve() / HeapWordSize;
     old_reserve_result = promoted_reserve + old_evac_reserve;
     assert(old_reserve_result <= old_available,
            "Cannot reserve (" SIZE_FORMAT " + " SIZE_FORMAT") more OLD than is available: " SIZE_FORMAT,
@@ -1637,13 +1637,13 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
   // the reserve downward to account for this possibility. This loss is part of the reason why the original budget
   // was adjusted with ShenandoahOldEvacWaste and ShenandoahOldPromoWaste multipliers.
   if (old_reserve_result >
-      _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes) {
+      _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_words) {
     old_reserve_result =
-      _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_bytes;
+      _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector) + old_unaffiliated_regions * region_size_words;
   }
 
-  if (young_reserve_result > young_unaffiliated_regions * region_size_bytes) {
-    young_reserve_result = young_unaffiliated_regions * region_size_bytes;
+  if (young_reserve_result > young_unaffiliated_regions * region_size_words) {
+    young_reserve_result = young_unaffiliated_regions * region_size_words;
   }
 }
 
@@ -1652,7 +1652,7 @@ void ShenandoahFreeSet::compute_young_and_old_reserves(size_t young_cset_regions
 // into the collector set or old collector set in order to assure that the memory available for allocations within
 // the collector set is at least to_reserve and the memory available for allocations within the old collector set
 // is at least to_reserve_old.
-void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old, size_t &old_region_count) {
+void ShenandoahFreeSet::reserve_regions(size_t to_reserve_words, size_t to_reserve_old_words, size_t &old_region_count) {
   for (size_t i = _heap->num_regions(); i > 0; i--) {
     size_t idx = i - 1;
     ShenandoahHeapRegion* r = _heap->get_region(idx);
@@ -1664,11 +1664,11 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
     assert (ac > 0, "Membership in free set implies has capacity");
     assert (!r->is_old() || r->is_trash(), "Except for trash, mutator_is_free regions should not be affiliated OLD");
 
-    bool move_to_old_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector) * HeapWordSize < to_reserve_old;
-    bool move_to_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::Collector) * HeapWordSize < to_reserve;
+    bool move_to_old_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector) < to_reserve_old_words;
+    bool move_to_collector = _partitions.available_in(ShenandoahFreeSetPartitionId::Collector) < to_reserve_words;
 
     if (!move_to_collector && !move_to_old_collector) {
-      // We've satisfied both to_reserve and to_reserved_old
+      // We've satisfied both to_reserve_words and to_reserve_old_words
       break;
     }
 
@@ -1702,7 +1702,7 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
       // occupy regions comprised entirely of ephemeral objects.  These regions are highly likely to be included in the next
       // collection set, and they are easily evacuated because they have low density of live objects.
       _partitions.move_from_partition_to_partition(idx, ShenandoahFreeSetPartitionId::Mutator,
-                                                   ShenandoahFreeSetPartitionId::Collector, ac / HeapWordSize);
+                                                   ShenandoahFreeSetPartitionId::Collector, ac);
       log_debug(gc)("  Shifting region " SIZE_FORMAT " from mutator_free to collector_free", idx);
       log_debug(gc)("  Shifted Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
                     "  Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
@@ -1715,14 +1715,14 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
 
   if (LogTarget(Info, gc, free)::is_enabled()) {
     size_t old_reserve = _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector);
-    if (old_reserve < to_reserve_old) {
+    if (old_reserve < to_reserve_old_words) {
       log_info(gc, free)("Wanted " PROPERFMT " for old reserve, but only reserved: " PROPERFMT,
-                         PROPERFMTARGS(to_reserve_old), PROPERFMTARGS(old_reserve));
+                         PROPERFMTARGS(to_reserve_old_words * HeapWordSize), PROPERFMTARGS(old_reserve * HeapWordSize));
     }
     size_t reserve = _partitions.capacity_of(ShenandoahFreeSetPartitionId::Collector);
-    if (reserve < to_reserve) {
+    if (reserve < to_reserve_words) {
       log_debug(gc)("Wanted " PROPERFMT " for young reserve, but only reserved: " PROPERFMT,
-                    PROPERFMTARGS(to_reserve), PROPERFMTARGS(reserve));
+                    PROPERFMTARGS(to_reserve_words * HeapWordSize), PROPERFMTARGS(reserve * HeapWordSize));
     }
   }
 }

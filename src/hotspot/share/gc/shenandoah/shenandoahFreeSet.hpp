@@ -49,8 +49,8 @@
  * [ok] transfer_non_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
  * [ok] alloc_capacity(r): return words rather than bytes
  * [ok] alloc_capacity(idx): return words rather than bytes
+ * [  ] compute_young_and_old_reserves(): young_reserve_result and old_reserve_result are words
 
- * [  ] prepare_to_rebuild(): used words for all internal computations
  * [  ] finish_rebuild(): used words for all internal computations
  * [  ] capacity(): words rather than bytes
  * [  ] used(): words rather than bytes
@@ -58,7 +58,6 @@
  * [  ] allocate(): used words for all internal computations
  * [  ] unsafe_peek_free(): we don't need this any more
  * [  ] reserve_regions(to_reserve, old_reserve, size_t * &old_region_count): to_reserve and old_reserve are words
- * [  ] compute_young_and_old_reserves(): young_reserve_result and old_reserve_result are words
  * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
  */
 
@@ -408,7 +407,7 @@ public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
   // Return words of available memory within region.
-  // Public because ShenandoahRegionPartitions assertions require access.  
+  // Public because ShenandoahRegionPartitions assertions require access.
   inline size_t alloc_capacity(ShenandoahHeapRegion *r) const;
   inline size_t alloc_capacity(size_t idx) const;
 
@@ -529,13 +528,13 @@ public:
   void find_regions_with_alloc_capacity(size_t &young_cset_regions, size_t &old_cset_regions,
                                         size_t &first_old_region, size_t &last_old_region, size_t &old_region_count);
 
-  // Ensure that Collector has at least to_reserve bytes of available memory, and OldCollector has at least old_reserve
-  // bytes of available memory.  On input, old_region_count holds the number of regions already present in the
+  // Ensure that Collector has at least to_reserve_words of available memory, and OldCollector has at least old_reserve_words
+  // of available memory.  On input, old_region_count holds the number of regions already present in the
   // OldCollector partition.  Upon return, old_region_count holds the updated number of regions in the OldCollector partition.
-  void reserve_regions(size_t to_reserve, size_t old_reserve, size_t &old_region_count);
+  void reserve_regions(size_t to_reserve_words, size_t old_reserve_words, size_t &old_region_count);
 
-  // Reserve space for evacuations, with regions reserved for old evacuations placed to the right
-  // of regions reserved of young evacuations.
+  // Compute how much space to reserve for evacuations, returning results, expressed in words, in young_reserve_result
+  // and old_reserve_result.
   void compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
                                       size_t &young_reserve_result, size_t &old_reserve_result) const;
 };
