@@ -41,8 +41,8 @@
  * [ok] make_free(), region_capacity in words
  * [ok] move_from_partition_to_partition(), available arg in words
  * [ok] available_implies_empty(): takes words argument
+ * [ok] expand_interval_if_boundary_modified(): 3rd argument in words
 
- * [  ] expand_interval_if_boundary_modified(): 3rd argument in words
  * [  ] remove _region_size_bytes
  *
  * Changes planned for ShenandoahFreeSet:
@@ -132,7 +132,9 @@ private:
   // Shrink the intervals associated with partition when regions low_idx through high_idx inclusive are removed from this free set
   inline void shrink_interval_if_range_modifies_either_boundary(ShenandoahFreeSetPartitionId partition,
                                                                 ssize_t low_idx, ssize_t high_idx);
-  inline void expand_interval_if_boundary_modified(ShenandoahFreeSetPartitionId partition, ssize_t idx, size_t capacity);
+
+  // Expand the interval for partition when region idx, with available_words, is added to the partition
+  inline void expand_interval_if_boundary_modified(ShenandoahFreeSetPartitionId partition, ssize_t idx, size_t available_words);
 
   inline bool is_mutator_partition(ShenandoahFreeSetPartitionId p);
   inline bool is_young_collector_partition(ShenandoahFreeSetPartitionId p);

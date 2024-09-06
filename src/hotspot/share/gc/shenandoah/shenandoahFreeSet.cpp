@@ -257,14 +257,14 @@ inline void ShenandoahRegionPartitions::shrink_interval_if_boundary_modified(She
 }
 
 inline void ShenandoahRegionPartitions::expand_interval_if_boundary_modified(ShenandoahFreeSetPartitionId partition,
-                                                                             idx_t idx, size_t region_available) {
+                                                                             idx_t idx, size_t available_words) {
   if (_leftmosts[int(partition)] > idx) {
     _leftmosts[int(partition)] = idx;
   }
   if (_rightmosts[int(partition)] < idx) {
     _rightmosts[int(partition)] = idx;
   }
-  if (region_available == _region_size_bytes) {
+  if (available_words == _region_size_words) {
     if (_leftmosts_empty[int(partition)] > idx) {
       _leftmosts_empty[int(partition)] = idx;
     }
@@ -315,7 +315,7 @@ void ShenandoahRegionPartitions::make_free(idx_t idx, ShenandoahFreeSetPartition
   _membership[int(which_partition)].set_bit(idx);
   _capacity[int(which_partition)] += _region_size_words;
   _used[int(which_partition)] += _region_size_words - available_words;
-  expand_interval_if_boundary_modified(which_partition, idx, available_words * HeapWordSize);
+  expand_interval_if_boundary_modified(which_partition, idx, available_words);
   _region_counts[int(which_partition)]++;
 }
 
@@ -382,7 +382,7 @@ void ShenandoahRegionPartitions::move_from_partition_to_partition(idx_t idx, She
 
   _capacity[int(new_partition)] += _region_size_words;
   _used[int(new_partition)] += used_words;
-  expand_interval_if_boundary_modified(new_partition, idx, available_words * HeapWordSize);
+  expand_interval_if_boundary_modified(new_partition, idx, available_words);
 
   _region_counts[int(orig_partition)]--;
   _region_counts[int(new_partition)]++;
