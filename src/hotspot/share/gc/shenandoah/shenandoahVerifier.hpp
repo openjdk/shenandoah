@@ -72,8 +72,8 @@ public:
     _verify_remembered_before_updating_references,
 
     // Old objects should be registered and RS cards within *read-write* RS are dirty for all
-    // inter-generational pointers.
-    // TODO: This differs from the previous mode by update-watermark() vs top() end range?
+    // inter-generational pointers. Differs from previous verification modes by using top instead
+    // of update watermark and not using the marking context.
     _verify_remembered_after_full_gc
   } VerifyRememberedSet;
 

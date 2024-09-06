@@ -120,9 +120,6 @@ private:
       //
       // For performance reasons, only fully verify non-marked field values.
       // We are here when the host object for *p is already marked.
-
-      // TODO: We should consider specializing this closure by generation ==/!= null,
-      // to avoid in_generation check on fast path here for non-generational mode.
       if (in_generation(obj) && _map->par_mark(obj)) {
         verify_oop_at(p, obj);
         _stack->push(ShenandoahVerifierTask(obj));
@@ -1401,10 +1398,10 @@ void ShenandoahVerifier::verify_rem_set_after_full_gc() {
   shenandoah_assert_safepoint();
   shenandoah_assert_generational();
 
+  ShenandoahWriteTableScanner scanner(ShenandoahGenerationalHeap::heap()->old_generation()->card_scan());
   for (size_t i = 0, n = _heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_old() && !r->is_cset()) {
-      ShenandoahWriteTableScanner scanner(ShenandoahGenerationalHeap::heap()->old_generation()->card_scan());
       help_verify_region_rem_set(&scanner, r, nullptr, r->top(), "Remembered set violation at end of Full GC");
     }
   }
@@ -1419,11 +1416,10 @@ void ShenandoahVerifier::verify_rem_set_before_update_ref() {
   shenandoah_assert_generational();
 
   ShenandoahMarkingContext* ctx = get_marking_context_for_old();
-
+  ShenandoahWriteTableScanner scanner(_heap->old_generation()->card_scan());
   for (size_t i = 0, n = _heap->num_regions(); i < n; ++i) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_old() && !r->is_cset()) {
-      ShenandoahWriteTableScanner scanner(_heap->old_generation()->card_scan());
       help_verify_region_rem_set(&scanner, r, ctx, r->get_update_watermark(), "Remembered set violation at init-update-references");
     }
   }

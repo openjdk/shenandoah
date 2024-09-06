@@ -682,13 +682,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
     JvmtiTagMap::set_needs_cleaning();
 
     // The collection set is chosen by prepare_regions_and_collection_set().
-    //
-    // TODO: Under severe memory overload conditions that can be checked here, we may want to limit
-    // the inclusion of old-gen candidates within the collection set.  This would allow us to prioritize efforts on
-    // evacuating young-gen,  This remediation is most appropriate when old-gen availability is very high (so there
-    // are negligible negative impacts from delaying completion of old-gen evacuation) and when young-gen collections
-    // are "under duress" (as signalled by very low availability of memory within young-gen, indicating that/ young-gen
-    // collections are not triggering frequently enough).
     _generation->prepare_regions_and_collection_set(true /*concurrent*/);
 
     // Upon return from prepare_regions_and_collection_set(), certain parameters have been established to govern the
