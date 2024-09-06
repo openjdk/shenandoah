@@ -242,7 +242,7 @@ public:
 
   inline bool is_empty(ShenandoahFreeSetPartitionId which_partition) const;
 
-  inline void increase_used(ShenandoahFreeSetPartitionId which_partition, size_t bytes);
+  inline void increase_used(ShenandoahFreeSetPartitionId which_partition, size_t words);
 
   inline void set_bias_from_left_to_right(ShenandoahFreeSetPartitionId which_partition, bool value) {
     assert (which_partition < NumPartitions, "selected free set must be valid");
@@ -254,6 +254,7 @@ public:
     return _left_to_right_bias[int(which_partition)];
   }
 
+  // Return capacity, measured in words, of which_partition
   inline size_t capacity_of(ShenandoahFreeSetPartitionId which_partition) const {
     assert (which_partition < NumPartitions, "selected free set must be valid");
     return _capacity[int(which_partition)];
