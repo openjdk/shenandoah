@@ -47,9 +47,9 @@
  * Changes planned for ShenandoahFreeSet:
  * [ok] transfer_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
  * [ok] transfer_non_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
- * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
- * [  ] alloc_capacity(r): return words rather than bytes
- * [  ] alloc_capacity(idx): return words rather than bytes
+ * [ok] alloc_capacity(r): return words rather than bytes
+ * [ok] alloc_capacity(idx): return words rather than bytes
+
  * [  ] prepare_to_rebuild(): used words for all internal computations
  * [  ] finish_rebuild(): used words for all internal computations
  * [  ] capacity(): words rather than bytes
@@ -59,6 +59,7 @@
  * [  ] unsafe_peek_free(): we don't need this any more
  * [  ] reserve_regions(to_reserve, old_reserve, size_t * &old_region_count): to_reserve and old_reserve are words
  * [  ] compute_young_and_old_reserves(): young_reserve_result and old_reserve_result are words
+ * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
  */
 
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
@@ -406,7 +407,8 @@ private:
 public:
   ShenandoahFreeSet(ShenandoahHeap* heap, size_t max_regions);
 
-  // Public because ShenandoahRegionPartitions assertions require access.
+  // Return words of available memory within region.
+  // Public because ShenandoahRegionPartitions assertions require access.  
   inline size_t alloc_capacity(ShenandoahHeapRegion *r) const;
   inline size_t alloc_capacity(size_t idx) const;
 
