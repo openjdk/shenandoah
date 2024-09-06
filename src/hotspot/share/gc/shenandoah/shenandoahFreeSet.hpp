@@ -45,7 +45,7 @@
  * [ok] remove _region_size_bytes
  *
  * Changes planned for ShenandoahFreeSet:
- * [  ] transfer_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
+ * [ok] transfer_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
  * [  ] transfer_non_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
  * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
  * [  ] alloc_capacity(r): return words rather than bytes
@@ -387,7 +387,7 @@ private:
 
   size_t transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId which_collector,
                                                                   size_t max_xfer_regions,
-                                                                  size_t& bytes_transferred);
+                                                                  size_t& words_transferred);
   size_t transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId collector_id,
                                                                       size_t max_xfer_regions,
                                                                       size_t& bytes_transferred);

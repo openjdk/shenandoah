@@ -1440,9 +1440,8 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
 // Returns number of regions transferred, adds transferred bytes to var argument bytes_transferred
 size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId which_collector,
                                                                                    size_t max_xfer_regions,
-                                                                                   size_t& bytes_transferred) {
+                                                                                   size_t& words_transferred) {
   shenandoah_assert_heaplocked();
-  size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
   size_t region_size_words = ShenandoahHeapRegion::region_size_words();
   size_t transferred_regions = 0;
   idx_t rightmost = _partitions.rightmost_empty(which_collector);
@@ -1452,7 +1451,7 @@ size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_s
     if (can_allocate_from(idx)) {
       _partitions.move_from_partition_to_partition(idx, which_collector, ShenandoahFreeSetPartitionId::Mutator, region_size_words);
       transferred_regions++;
-      bytes_transferred += region_size_bytes;
+      words_transferred += region_size_words;
     }
     idx = _partitions.find_index_of_next_available_region(which_collector, idx + 1);
   }
@@ -1491,6 +1490,7 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
     max_xfer_regions -=
       transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::Collector, max_xfer_regions,
                                                                collector_xfer);
+    collector_xfer *= HeapWordSize;
   }
 
   // Process empty regions within the OldCollector free partition
@@ -1501,6 +1501,7 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
     size_t old_collector_regions =
       transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::OldCollector, max_xfer_regions,
                                                                old_collector_xfer);
+    old_collector_xfer *= HeapWordSize;
     max_xfer_regions -= old_collector_regions;
     if (old_collector_regions > 0) {
       ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->transfer_to_young(old_collector_regions);
