@@ -36,6 +36,7 @@
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahSimpleBitMap.hpp"
 #include "gc/shenandoah/shenandoahSimpleBitMap.inline.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "runtime/orderAccess.hpp"
@@ -1437,7 +1438,7 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
                 _partitions.rightmost(ShenandoahFreeSetPartitionId::OldCollector));
 }
 
-// Returns number of regions transferred, adds transferred bytes to var argument bytes_transferred
+// Returns number of regions transferred, adds transferred bytes to var argument words_transferred
 size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId which_collector,
                                                                                    size_t max_xfer_regions,
                                                                                    size_t& words_transferred) {
@@ -1458,20 +1459,20 @@ size_t ShenandoahFreeSet::transfer_empty_regions_from_collector_set_to_mutator_s
   return transferred_regions;
 }
 
-// Returns number of regions transferred, adds transferred bytes to var argument bytes_transferred
+// Returns number of regions transferred, adds transferred bytes to var argument words_transferred
 size_t ShenandoahFreeSet::transfer_non_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId collector_id,
                                                                                        size_t max_xfer_regions,
-                                                                                       size_t& bytes_transferred) {
+                                                                                       size_t& words_transferred) {
   shenandoah_assert_heaplocked();
   size_t transferred_regions = 0;
   idx_t rightmost = _partitions.rightmost(collector_id);
   for (idx_t idx = _partitions.leftmost(collector_id); (transferred_regions < max_xfer_regions) && (idx <= rightmost); ) {
     assert(_partitions.in_free_set(collector_id, idx), "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, idx);
-    size_t ac = alloc_capacity(idx);
+    size_t ac = alloc_capacity(idx) / HeapWordSize;
     if (ac > 0) {
-      _partitions.move_from_partition_to_partition(idx, collector_id, ShenandoahFreeSetPartitionId::Mutator, ac / HeapWordSize);
+      _partitions.move_from_partition_to_partition(idx, collector_id, ShenandoahFreeSetPartitionId::Mutator, ac);
       transferred_regions++;
-      bytes_transferred += ac;
+      words_transferred += ac;
     }
     idx = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Collector, idx + 1);
   }
@@ -1490,7 +1491,6 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
     max_xfer_regions -=
       transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::Collector, max_xfer_regions,
                                                                collector_xfer);
-    collector_xfer *= HeapWordSize;
   }
 
   // Process empty regions within the OldCollector free partition
@@ -1501,7 +1501,6 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
     size_t old_collector_regions =
       transfer_empty_regions_from_collector_set_to_mutator_set(ShenandoahFreeSetPartitionId::OldCollector, max_xfer_regions,
                                                                old_collector_xfer);
-    old_collector_xfer *= HeapWordSize;
     max_xfer_regions -= old_collector_regions;
     if (old_collector_regions > 0) {
       ShenandoahGenerationalHeap::cast(_heap)->generation_sizer()->transfer_to_young(old_collector_regions);
@@ -1520,9 +1519,9 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
   size_t total_xfer = collector_xfer + old_collector_xfer;
   log_info(gc, ergo)("At start of update refs, moving " SIZE_FORMAT "%s to Mutator free set from Collector Reserve ("
                      SIZE_FORMAT "%s) and from Old Collector Reserve (" SIZE_FORMAT "%s)",
-                     byte_size_in_proper_unit(total_xfer), proper_unit_for_byte_size(total_xfer),
-                     byte_size_in_proper_unit(collector_xfer), proper_unit_for_byte_size(collector_xfer),
-                     byte_size_in_proper_unit(old_collector_xfer), proper_unit_for_byte_size(old_collector_xfer));
+                     word_size_in_proper_unit(total_xfer), proper_unit_for_word_size(total_xfer),
+                     word_size_in_proper_unit(collector_xfer), proper_unit_for_word_size(collector_xfer),
+                     word_size_in_proper_unit(old_collector_xfer), proper_unit_for_word_size(old_collector_xfer));
 }
 
 
