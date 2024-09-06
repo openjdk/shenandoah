@@ -1272,33 +1272,28 @@ void ShenandoahVerifier::verify_roots_no_forwarded() {
   ShenandoahRootVerifier::roots_do(&cl);
 }
 
+template<typename Scanner>
 class ShenandoahVerifyRemSetClosure : public BasicOopIterateClosure {
 protected:
-  bool                        const _init_mark;
   ShenandoahGenerationalHeap* const _heap;
-  ShenandoahScanRemembered*   const _scanner;
+  Scanner*   const _scanner;
+  const char* _message;
 
 public:
   // Argument distinguishes between initial mark or start of update refs verification.
-  explicit ShenandoahVerifyRemSetClosure(bool init_mark) :
-            _init_mark(init_mark),
+  explicit ShenandoahVerifyRemSetClosure(Scanner* scanner, const char* message) :
             _heap(ShenandoahGenerationalHeap::heap()),
-            _scanner(_heap->old_generation()->card_scan()) {}
+            _scanner(scanner),
+            _message(message) {}
 
   template<class T>
   inline void work(T* p) {
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
       oop obj = CompressedOops::decode_not_null(o);
-      if (_heap->is_in_young(obj)) {
-        size_t card_index = _scanner->card_index_for_addr((HeapWord*) p);
-        if (_init_mark && !_scanner->is_card_dirty(card_index)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
-                                           "Verify init-mark remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
-        } else if (!_init_mark && !_scanner->is_write_card_dirty(card_index)) {
-          ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
-                                           "Verify init-update-refs remembered set violation", "clean card should be dirty", __FILE__, __LINE__);
-        }
+      if (_heap->is_in_young(obj) && !_scanner->is_card_dirty((HeapWord*) p)) {
+        ShenandoahAsserts::print_failure(ShenandoahAsserts::_safe_all, obj, p, nullptr,
+                                         _message, "clean card should be dirty", __FILE__, __LINE__);
       }
     }
   }
@@ -1316,8 +1311,9 @@ ShenandoahMarkingContext* ShenandoahVerifier::get_marking_context_for_old() {
 }
 
 template<typename Scanner>
-void ShenandoahVerifier::help_verify_region_rem_set(Scanner* scanner, ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx, HeapWord* registration_watermark, const char* message) {
-  ShenandoahVerifyRemSetClosure check_interesting_pointers(false);
+void ShenandoahVerifier::help_verify_region_rem_set(Scanner* scanner, ShenandoahHeapRegion* r, ShenandoahMarkingContext* ctx,
+                                                    HeapWord* registration_watermark, const char* message) {
+  ShenandoahVerifyRemSetClosure<Scanner> check_interesting_pointers(scanner, message);
   HeapWord* from = r->bottom();
   HeapWord* obj_addr = from;
   if (r->is_humongous_start()) {
@@ -1387,7 +1383,6 @@ void ShenandoahVerifier::verify_rem_set_before_mark() {
   shenandoah_assert_safepoint();
   shenandoah_assert_generational();
 
-  ShenandoahVerifyRemSetClosure check_interesting_pointers(true);
   ShenandoahMarkingContext* ctx = get_marking_context_for_old();
   ShenandoahOldGeneration* old_generation = _heap->old_generation();
 
