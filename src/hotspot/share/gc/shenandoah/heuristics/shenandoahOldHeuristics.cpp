@@ -565,14 +565,14 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_
     double old_span_percent = ((double) old_region_span) / allowed_old_gen_span;
     double old_span_percent_squared = old_span_percent * old_span_percent;
 
-    if (old_density / old_span_percent_squared < 0.75) {
+    if ((old_span_percent >= 0.50) && (old_density / old_span_percent_squared < 0.75)) {
       // We trigger old defragmentation, for example, if:
       //  old_span_percent is 100% and old_density is below 75.0%, or
       //  old_span_percent is  90% and old_density is below 60.8%, or
       //  old_span_percent is  80% and old_density is below 48.0%, or
       //  old_span_percent is  70% and old_density is below 36.8%, or
       //  old_span_percent is  60% and old_density is below 27.0%, or
-      //  old_span_percent is  50% and old_density is below 18.8%, or ...
+      //  old_span_percent is  50% and old_density is below 18.8%.
       trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
     }
   }
