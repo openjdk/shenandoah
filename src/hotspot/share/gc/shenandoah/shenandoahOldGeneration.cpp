@@ -316,8 +316,7 @@ size_t ShenandoahOldGeneration::usage_trigger_threshold() const {
 }
 
 bool ShenandoahOldGeneration::contains(ShenandoahHeapRegion* region) const {
-  // TODO: Should this be region->is_old() instead?
-  return !region->is_young();
+  return region->is_old();
 }
 
 void ShenandoahOldGeneration::parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) {
