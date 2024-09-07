@@ -1582,7 +1582,7 @@ void ShenandoahHeap::verify(VerifyOption vo) {
   }
 }
 size_t ShenandoahHeap::tlab_capacity(Thread *thr) const {
-  return _free_set->capacity();
+  return _free_set->capacity() * HeapWordSize;
 }
 
 class ObjectIterateScanRootClosure : public BasicOopIterateClosure {
@@ -2049,7 +2049,7 @@ GCTracer* ShenandoahHeap::tracer() {
 }
 
 size_t ShenandoahHeap::tlab_used(Thread* thread) const {
-  return _free_set->used();
+  return _free_set->used() * HeapWordSize;
 }
 
 bool ShenandoahHeap::try_cancel_gc() {

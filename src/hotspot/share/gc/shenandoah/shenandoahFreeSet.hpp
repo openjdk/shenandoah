@@ -49,15 +49,17 @@
  * [ok] transfer_non_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
  * [ok] alloc_capacity(r): return words rather than bytes
  * [ok] alloc_capacity(idx): return words rather than bytes
- * [  ] compute_young_and_old_reserves(): young_reserve_result and old_reserve_result are words
+ * [ok] compute_young_and_old_reserves(): young_reserve_result and old_reserve_result are words
+ * [ok] finish_rebuild(): used words for all internal computations
+ * [ok] reserve_regions(to_reserve, old_reserve, size_t * &old_region_count): to_reserve and old_reserve are words
 
- * [  ] finish_rebuild(): used words for all internal computations
- * [  ] capacity(): words rather than bytes
- * [  ] used(): words rather than bytes
- * [  ] available(): words rather than bytes
+ * [ok] capacity(): words rather than bytes
+ * [ok] used(): words rather than bytes
+ * [ok] available(): words rather than bytes
+
+
  * [  ] allocate(): used words for all internal computations
  * [  ] unsafe_peek_free(): we don't need this any more
- * [  ] reserve_regions(to_reserve, old_reserve, size_t * &old_region_count): to_reserve and old_reserve are words
  * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
  */
 
@@ -461,11 +463,11 @@ public:
   // Acquire heap lock and log status, assuming heap lock is not acquired by the caller.
   void log_status_under_lock();
 
-  // Return original capacity, in bytes, of the Mutator partition.
-  inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator) * HeapWordSize; }
+  // Return original capacity, in words, of the Mutator partition.
+  inline size_t capacity()  const { return _partitions.capacity_of(ShenandoahFreeSetPartitionId::Mutator); }
 
-  // Return bytes used by the Mutator partition.
-  inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator) * HeapWordSize;     }
+  // Return words used by the Mutator partition.
+  inline size_t used()      const { return _partitions.used_by(ShenandoahFreeSetPartitionId::Mutator); }
 
   // Return words available within the Mutator partition.
   inline size_t available() const {

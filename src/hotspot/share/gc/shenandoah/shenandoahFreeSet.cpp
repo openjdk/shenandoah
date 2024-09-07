@@ -1906,7 +1906,7 @@ void ShenandoahFreeSet::log_status() {
       }
 
       size_t max_humongous = max_contig * region_size_words;
-      size_t free = (capacity() - used()) / HeapWordSize;
+      size_t free = capacity() - used();
 
       // Since certain regions that belonged to the Mutator free partition at the time of most recent rebuild may have been
       // retired, the sum of used and capacities within regions that are still in the Mutator free partition may not match
