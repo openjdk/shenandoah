@@ -58,8 +58,6 @@
  * [ok] available(): words rather than bytes
 
 
- * [  ] allocate(): used words for all internal computations
- * [  ] unsafe_peek_free(): we don't need this any more
  * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
  */
 
@@ -476,7 +474,6 @@ public:
   }
 
   HeapWord* allocate(ShenandoahAllocRequest& req, bool& in_new_region);
-  size_t unsafe_peek_free() const;
 
   /*
    * Internal fragmentation metric: describes how fragmented the heap regions are.
