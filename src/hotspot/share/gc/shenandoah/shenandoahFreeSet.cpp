@@ -934,7 +934,6 @@ size_t ShenandoahFreeSet::get_plab_usable_free_words(size_t free_words) const {
   // Suppose, free_words is 81.  The usable_free is 64.
   //
   // Note that 64 is a multiple of card size, and 81-64 = 17, which is greater than min_fill_size;
-  
   size_t usable_free_words = (free_words / CardTable::card_size_in_words()) << (CardTable::card_shift() - LogHeapWordSize);
   assert(usable_free_words <= free_words, "Sanity check");
   if ((usable_free_words != free_words) && (free_words - usable_free_words < ShenandoahHeap::min_fill_size())) {
