@@ -2042,14 +2042,14 @@ double ShenandoahFreeSet::internal_fragmentation() {
     assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, index),
            "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, index);
     ShenandoahHeapRegion* r = _heap->get_region(index);
-    size_t used = r->used() * HeapWordSize;
+    size_t used = r->used();
     squared += used * used;
     linear += used;
     index = _partitions.find_index_of_next_available_region(ShenandoahFreeSetPartitionId::Mutator, index + 1);
   }
 
   if (linear > 0) {
-    double s = squared / (ShenandoahHeapRegion::region_size_bytes() * linear);
+    double s = squared / (ShenandoahHeapRegion::region_size_words() * linear);
     return 1 - s;
   } else {
     return 0;
@@ -2069,7 +2069,7 @@ double ShenandoahFreeSet::external_fragmentation() {
            "Boundaries or find_first_set_bit failed: " SSIZE_FORMAT, index);
     ShenandoahHeapRegion* r = _heap->get_region(index);
     if (r->is_empty()) {
-      free += ShenandoahHeapRegion::region_size_bytes();
+      free += ShenandoahHeapRegion::region_size_words();
       if (last_idx + 1 == index) {
         empty_contig++;
       } else {
@@ -2084,7 +2084,7 @@ double ShenandoahFreeSet::external_fragmentation() {
   }
 
   if (free > 0) {
-    return 1 - (1.0 * max_contig * ShenandoahHeapRegion::region_size_bytes() / free);
+    return 1 - (1.0 * max_contig * ShenandoahHeapRegion::region_size_words() / free);
   } else {
     return 0;
   }
