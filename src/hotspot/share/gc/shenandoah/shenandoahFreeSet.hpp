@@ -24,43 +24,6 @@
  *
  */
 
-/**
- * Changes planned for ShenandoahRegionPartitions:
- * [ok] add _region_size_words
- * [ok] set_capacity_of(): value argument is words  (not used!)
- * [ok] _capacity[] represents words
- * [ok] available_in(), returns words
- * [ok] _used[] represents words
- * [ok] increase_used(): replaced bytes with words
- * [ok] used_by(), returns words
- * [ok] set_used_byt(), value argument is words
- * [ok] establish_mutator_intervals(): mutator_used argument in words
- * [ok] establish_old_collector_intervals(): old_collector_used argument in words
- * [ok] ShenandoahFreeSet::find_regions_with_alloc_capacity() do internal computations in words
- * [ok] retire_from_partition(p, idx, sized_t used_bytes): replace 3rd arg with used_words
- * [ok] make_free(), region_capacity in words
- * [ok] move_from_partition_to_partition(), available arg in words
- * [ok] available_implies_empty(): takes words argument
- * [ok] expand_interval_if_boundary_modified(): 3rd argument in words
- * [ok] remove _region_size_bytes
- *
- * Changes planned for ShenandoahFreeSet:
- * [ok] transfer_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
- * [ok] transfer_non_empty_regions_from_collector_set_to_mutator_set(): bytes_transferred becomes words_transferred
- * [ok] alloc_capacity(r): return words rather than bytes
- * [ok] alloc_capacity(idx): return words rather than bytes
- * [ok] compute_young_and_old_reserves(): young_reserve_result and old_reserve_result are words
- * [ok] finish_rebuild(): used words for all internal computations
- * [ok] reserve_regions(to_reserve, old_reserve, size_t * &old_region_count): to_reserve and old_reserve are words
-
- * [ok] capacity(): words rather than bytes
- * [ok] used(): words rather than bytes
- * [ok] available(): words rather than bytes
-
-
- * [ok] get_usable_free_words(size_t free_bytes): change arg to free_words, change name to get_plab_usable_free_words
- */
-
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
 
