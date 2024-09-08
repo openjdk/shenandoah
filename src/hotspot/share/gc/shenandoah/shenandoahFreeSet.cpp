@@ -1738,13 +1738,13 @@ void ShenandoahFreeSet::establish_old_collector_alloc_bias() {
   for (idx_t index = left_idx; index < middle; index++) {
     if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, index)) {
       ShenandoahHeapRegion* r = heap->get_region((size_t) index);
-      available_in_first_half += r->free() * HeapWordSize;
+      available_in_first_half += r->free();
     }
   }
   for (idx_t index = middle; index <= right_idx; index++) {
     if (_partitions.in_free_set(ShenandoahFreeSetPartitionId::OldCollector, index)) {
       ShenandoahHeapRegion* r = heap->get_region(index);
-      available_in_second_half += r->free() * HeapWordSize;
+      available_in_second_half += r->free();
     }
   }
 
