@@ -58,7 +58,7 @@
  * [ok] available(): words rather than bytes
 
 
- * [  ] get_usable_free_words(size_t free_bytes) const: do I still need this?
+ * [ok] get_usable_free_words(size_t free_bytes): change arg to free_words, change name to get_plab_usable_free_words
  */
 
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
@@ -398,7 +398,8 @@ private:
 
   // Set max_capacity for young and old generations
   void establish_generation_sizes(size_t young_region_count, size_t old_region_count);
-  size_t get_usable_free_words(size_t free_bytes) const;
+
+  size_t get_plab_usable_free_words(size_t free_words) const;
 
   // log status, assuming lock has already been acquired by the caller.
   void log_status();
