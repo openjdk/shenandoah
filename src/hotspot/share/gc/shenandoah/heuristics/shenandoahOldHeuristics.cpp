@@ -546,10 +546,20 @@ void ShenandoahOldHeuristics::clear_triggers() {
   _growth_trigger = false;
 }
 
+// This triggers old-gen collection if the number of regions "dedicated" to old generation is much larger than
+// is required to represent the memory currently used within the old generation.  This trigger looks specifically
+// at density of the old-gen spanned region.  A different mechanism triggers old-gen GC if the total number of
+// old-gen regions (regardless of how close the regions are to one another) grows beyond an anticipated growth target.
 void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region,
                                                                size_t old_region_count, size_t num_regions) {
   if (ShenandoahGenerationalHumongousReserve > 0) {
-    size_t old_region_span = (first_old_region <= last_old_region)? (last_old_region + 1 - first_old_region): 0;
+    // Our intent is to pack old-gen memory into the highest-numbered regions of the heap.  Count all memory
+    // above first_old_region as the "span" of old generation.
+    size_t old_region_span = (first_old_region <= last_old_region)? (num_regions - first_old_region): 0;
+    // Given that memory at the bottom of the heap is reserved to represent humongous objects, the number of
+    // regions that old_gen is "allowed" to consume is less than the total heap size.  The restriction on allowed
+    // span is not strictly enforced.  This is a heuristic designed to reduce the likelihood that a humongous
+    // allocation request will require a STW full GC.
     size_t allowed_old_gen_span = num_regions - (ShenandoahGenerationalHumongousReserve * num_regions) / 100;
 
     size_t old_available = _old_gen->available() / HeapWordSize;
@@ -565,8 +575,12 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_
     double old_span_percent = ((double) old_region_span) / allowed_old_gen_span;
     double old_span_percent_squared = old_span_percent * old_span_percent;
 
+    // Squaring old_span_percent in the denominator below allows more aggressive triggering when we are
+    // above desired maximum span and less aggressive triggering when we are far below the desired
+    // maximum span.
     if ((old_span_percent >= 0.50) && (old_density / old_span_percent_squared < 0.75)) {
       // We trigger old defragmentation, for example, if:
+      //  old_span_percent is 110% and old_density is below 90.8%, or
       //  old_span_percent is 100% and old_density is below 75.0%, or
       //  old_span_percent is  90% and old_density is below 60.8%, or
       //  old_span_percent is  80% and old_density is below 48.0%, or
