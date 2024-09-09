@@ -252,29 +252,21 @@ private:
     }
 
     // ------------ obj and fwd are safe at this point --------------
-    // We allow for marked or old here for two reasons:
-    //  1. If this is a young collect, old objects wouldn't be marked. We've
-    //     recently change the verifier traversal to only follow young objects
-    //     during a young collect so this _shouldn't_ be necessary.
-    //  2. At present, we do not clear dead objects from the remembered set.
-    //     Everything in the remembered set is old (ipso facto), so allowing for
-    //     'marked_or_old' covers the case of stale objects in rset.
-    // TODO: Just use 'is_marked' here.
     switch (_options._verify_marked) {
       case ShenandoahVerifier::_verify_marked_disable:
         // skip
         break;
       case ShenandoahVerifier::_verify_marked_incomplete:
-        check(ShenandoahAsserts::_safe_all, obj, _heap->marking_context()->is_marked_or_old(obj),
+        check(ShenandoahAsserts::_safe_all, obj, _heap->marking_context()->is_marked(obj),
                "Must be marked in incomplete bitmap");
         break;
       case ShenandoahVerifier::_verify_marked_complete:
-        check(ShenandoahAsserts::_safe_all, obj, _heap->complete_marking_context()->is_marked_or_old(obj),
+        check(ShenandoahAsserts::_safe_all, obj, _heap->complete_marking_context()->is_marked(obj),
                "Must be marked in complete bitmap");
         break;
       case ShenandoahVerifier::_verify_marked_complete_except_references:
       case ShenandoahVerifier::_verify_marked_complete_satb_empty:
-        check(ShenandoahAsserts::_safe_all, obj, _heap->complete_marking_context()->is_marked_or_old(obj),
+        check(ShenandoahAsserts::_safe_all, obj, _heap->complete_marking_context()->is_marked(obj),
               "Must be marked in complete bitmap, except j.l.r.Reference referents");
         break;
       default:
