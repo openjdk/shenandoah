@@ -43,10 +43,10 @@
 
 
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
- private:
+private:
   ShenandoahHeap* _heap;
   ShenandoahMarkingContext* const _ctx;
- public:
+public:
   ShenandoahResetUpdateRegionStateClosure() :
     _heap(ShenandoahHeap::heap()),
     _ctx(_heap->marking_context()) {}
@@ -64,11 +64,11 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
 };
 
 class ShenandoahResetBitmapTask : public WorkerTask {
- private:
-    ShenandoahRegionIterator _regions;
-    ShenandoahGeneration* _generation;
+private:
+  ShenandoahRegionIterator _regions;
+  ShenandoahGeneration* _generation;
 
- public:
+public:
   ShenandoahResetBitmapTask(ShenandoahGeneration* generation) :
     WorkerTask("Shenandoah Reset Bitmap"), _generation(generation) {}
 
@@ -88,9 +88,9 @@ class ShenandoahResetBitmapTask : public WorkerTask {
 // Copy the write-version of the card-table into the read-version, clearing the
 // write-copy.
 class ShenandoahMergeWriteTable: public ShenandoahHeapRegionClosure {
- private:
+private:
   ShenandoahScanRemembered* _scanner;
- public:
+public:
   ShenandoahMergeWriteTable(ShenandoahScanRemembered* scanner) : _scanner(scanner) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
@@ -104,9 +104,9 @@ class ShenandoahMergeWriteTable: public ShenandoahHeapRegionClosure {
 };
 
 class ShenandoahCopyWriteCardTableToRead: public ShenandoahHeapRegionClosure {
- private:
+private:
   ShenandoahScanRemembered* _scanner;
- public:
+public:
   ShenandoahCopyWriteCardTableToRead(ShenandoahScanRemembered* scanner) : _scanner(scanner) {}
 
   void heap_region_do(ShenandoahHeapRegion* region) override {
