@@ -1326,16 +1326,16 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
   size_t max_regions = _partitions.max_regions();
 
   size_t mutator_leftmost = max_regions;
-  size_t mutator_rightmost = 0;
+  size_t mutator_rightmost = -1;
   size_t mutator_leftmost_empty = max_regions;
-  size_t mutator_rightmost_empty = 0;
+  size_t mutator_rightmost_empty = -1;
   size_t mutator_regions = 0;
   size_t mutator_used = 0;
 
   size_t old_collector_leftmost = max_regions;
-  size_t old_collector_rightmost = 0;
+  size_t old_collector_rightmost = -1;
   size_t old_collector_leftmost_empty = max_regions;
-  size_t old_collector_rightmost_empty = 0;
+  size_t old_collector_rightmost_empty = -1;
   size_t old_collector_regions = 0;
   size_t old_collector_used = 0;
 
