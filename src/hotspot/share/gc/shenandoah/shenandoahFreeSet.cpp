@@ -1326,20 +1326,21 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
   size_t max_regions = _partitions.max_regions();
 
   size_t mutator_leftmost = max_regions;
-  size_t mutator_rightmost = -1;
+  size_t mutator_rightmost = 0;
   size_t mutator_leftmost_empty = max_regions;
-  size_t mutator_rightmost_empty = -1;
+  size_t mutator_rightmost_empty = 0;
   size_t mutator_regions = 0;
   size_t mutator_used = 0;
 
   size_t old_collector_leftmost = max_regions;
-  size_t old_collector_rightmost = -1;
+  size_t old_collector_rightmost = 0;
   size_t old_collector_leftmost_empty = max_regions;
-  size_t old_collector_rightmost_empty = -1;
+  size_t old_collector_rightmost_empty = 0;
   size_t old_collector_regions = 0;
   size_t old_collector_used = 0;
 
-  for (size_t idx = 0; idx < _heap->num_regions(); idx++) {
+  size_t num_regions = _heap->num_regions();
+  for (size_t idx = 0; idx < num_regions; idx++) {
     ShenandoahHeapRegion* region = _heap->get_region(idx);
     if (region->is_trash()) {
       // Trashed regions represent regions that had been in the collection partition but have not yet been "cleaned up".
@@ -1424,10 +1425,14 @@ void ShenandoahFreeSet::find_regions_with_alloc_capacity(size_t &young_cset_regi
                 old_collector_leftmost, old_collector_rightmost, old_collector_leftmost_empty, old_collector_rightmost_empty,
                 old_collector_regions, old_collector_used);
 
-  _partitions.establish_mutator_intervals(mutator_leftmost, mutator_rightmost, mutator_leftmost_empty, mutator_rightmost_empty,
+  idx_t rightmost_idx = (mutator_leftmost == max_regions)? -1: (idx_t) mutator_rightmost;
+  idx_t rightmost_empty_idx = (mutator_leftmost_empty == max_regions)? -1: (idx_t) mutator_rightmost_empty;
+  _partitions.establish_mutator_intervals(mutator_leftmost, rightmost_idx, mutator_leftmost_empty, rightmost_empty_idx,
                                           mutator_regions, mutator_used);
-  _partitions.establish_old_collector_intervals(old_collector_leftmost, old_collector_rightmost, old_collector_leftmost_empty,
-                                                old_collector_rightmost_empty, old_collector_regions, old_collector_used);
+  rightmost_idx = (old_collector_leftmost == max_regions)? -1: (idx_t) old_collector_rightmost;
+  rightmost_empty_idx = (old_collector_leftmost_empty == max_regions)? -1: (idx_t) old_collector_rightmost_empty;
+  _partitions.establish_old_collector_intervals(old_collector_leftmost, rightmost_idx, old_collector_leftmost_empty,
+                                                rightmost_empty_idx, old_collector_regions, old_collector_used);
   log_debug(gc)("  After find_regions_with_alloc_capacity(), Mutator range [" SSIZE_FORMAT ", " SSIZE_FORMAT "],"
                 "  Old Collector range [" SSIZE_FORMAT ", " SSIZE_FORMAT "]",
                 _partitions.leftmost(ShenandoahFreeSetPartitionId::Mutator),
