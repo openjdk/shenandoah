@@ -1712,12 +1712,12 @@ void ShenandoahFreeSet::reserve_regions(size_t to_reserve, size_t to_reserve_old
   }
 
   if (LogTarget(Info, gc, free)::is_enabled()) {
-    size_t old_reserve = _partitions.capacity_of(ShenandoahFreeSetPartitionId::OldCollector);
+    size_t old_reserve = _partitions.available_in(ShenandoahFreeSetPartitionId::OldCollector);
     if (old_reserve < to_reserve_old) {
       log_info(gc, free)("Wanted " PROPERFMT " for old reserve, but only reserved: " PROPERFMT,
                          PROPERFMTARGS(to_reserve_old), PROPERFMTARGS(old_reserve));
     }
-    size_t reserve = _partitions.capacity_of(ShenandoahFreeSetPartitionId::Collector);
+    size_t reserve = _partitions.available_in(ShenandoahFreeSetPartitionId::Collector);
     if (reserve < to_reserve) {
       log_debug(gc)("Wanted " PROPERFMT " for young reserve, but only reserved: " PROPERFMT,
                     PROPERFMTARGS(to_reserve), PROPERFMTARGS(reserve));
