@@ -1544,8 +1544,23 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
     ShenandoahYoungGeneration* young_gen = heap->young_generation();
     size_t region_size_bytes = ShenandoahHeapRegion::region_size_bytes();
 
-    old_gen->set_capacity(old_region_count * region_size_bytes);
-    young_gen->set_capacity(young_region_count * region_size_bytes);
+    size_t original_old_capacity = old_gen->max_capacity();
+    size_t new_old_capacity = old_region_count * region_size_bytes;
+    size_t new_young_capacity = young_region_count * region_size_bytes;
+    old_gen->set_capacity(new_old_capacity);
+    young_gen->set_capacity(new_young_capacity);
+
+    if (new_old_capacity > original_old_capacity) {
+      size_t region_count = (new_old_capacity - original_old_capacity) / region_size_bytes;
+      log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " PROPERFMT,
+                   region_count, young_gen->name(), old_gen->name(), PROPERFMTARGS(new_old_capacity));
+    } else if (new_old_capacity < original_old_capacity) {
+      size_t region_count = (original_old_capacity - new_old_capacity) / region_size_bytes;
+      log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " PROPERFMT,
+                   region_count, old_gen->name(), young_gen->name(), PROPERFMTARGS(new_young_capacity));
+    }
+    // This balances generations, so clear any pending request to balance.
+    old_gen->set_region_balance(0);
   }
 }
 
