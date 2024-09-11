@@ -54,6 +54,8 @@ private:
 
   // Bytes reserved within old-gen to hold the results of promotion. This is separate from
   // and in addition to the evacuation reserve for intra-generation evacuations (ShenandoahGeneration::_evacuation_reserve).
+  // If there is more data ready to be promoted than can fit within this reserve, the promotion of some objects will be
+  // deferred until a subsequent evacuation pass.
   size_t _promoted_reserve;
 
   // Bytes of old-gen memory expended on promotions. This may be modified concurrently
