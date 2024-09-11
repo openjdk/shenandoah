@@ -877,7 +877,7 @@ struct ShenandoahRegionChunk {
 // function of the size of the range.  Some memory ranges hold only a small number of live objects.
 // Some ranges hold primarily primitive (non-pointer) data.  We start with larger chunk sizes because larger chunks
 // reduce coordination overhead.  We expect that the GC worker threads that receive more difficult assignments
-// will work longer on those chunks.  Meanwhile, other worker will threads repeatedly accept and complete multiple
+// will work longer on those chunks.  Meanwhile, other worker threads will repeatedly accept and complete multiple
 // easier chunks.  As the total amount of work remaining to be completed decreases, we decrease the size of chunks
 // given to individual threads.  This reduces the likelihood of significant imbalance between worker thread assignments
 // when there is less meaningful work to be performed by the remaining worker threads while they wait for
