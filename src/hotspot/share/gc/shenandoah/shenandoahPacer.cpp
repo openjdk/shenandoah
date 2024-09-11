@@ -61,7 +61,7 @@ void ShenandoahPacer::setup_for_mark() {
   assert(ShenandoahPacing, "Only be here when pacing is enabled");
 
   size_t live = update_and_get_progress_history();
-  size_t free = _heap->free_set()->available();
+  size_t free = _heap->free_set()->available() * HeapWordSize;
 
   size_t non_taxable = free * ShenandoahPacingCycleSlack / 100;
   size_t taxable = free - non_taxable;
@@ -84,7 +84,7 @@ void ShenandoahPacer::setup_for_evac() {
   assert(ShenandoahPacing, "Only be here when pacing is enabled");
 
   size_t used = _heap->collection_set()->used();
-  size_t free = _heap->free_set()->available();
+  size_t free = _heap->free_set()->available() * HeapWordSize;
 
   size_t non_taxable = free * ShenandoahPacingCycleSlack / 100;
   size_t taxable = free - non_taxable;
@@ -108,7 +108,7 @@ void ShenandoahPacer::setup_for_updaterefs() {
   assert(ShenandoahPacing, "Only be here when pacing is enabled");
 
   size_t used = _heap->used();
-  size_t free = _heap->free_set()->available();
+  size_t free = _heap->free_set()->available() * HeapWordSize;
 
   size_t non_taxable = free * ShenandoahPacingCycleSlack / 100;
   size_t taxable = free - non_taxable;

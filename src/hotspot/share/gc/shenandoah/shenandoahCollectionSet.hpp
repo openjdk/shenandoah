@@ -53,17 +53,17 @@ private:
   ShenandoahHeap* const _heap;
 
   bool                  _has_old_regions;
-  size_t                _garbage;
-  size_t                _used;
-  size_t                _live;
+  size_t                _garbage;            // words of total _garbage to be reclaimed from cset
+  size_t                _old_garbage;        // words of old garbage to be reclaimed from cset
+
+  size_t                _used;               // total used words within cset
+  size_t                _live;               // total live words within cset
   size_t                _region_count;
 
-  size_t                _young_bytes_to_evacuate;
-  size_t                _young_bytes_to_promote;
-  size_t                _old_bytes_to_evacuate;
+  size_t                _young_words_to_evacuate;
+  size_t                _young_words_to_promote;
+  size_t                _old_words_to_evacuate;
 
-  // How many bytes of old garbage are present in a mixed collection set?
-  size_t                _old_garbage;
 
   // Points to array identifying which tenure-age regions have been preselected
   // for inclusion in collection set. This field is only valid during brief
@@ -72,7 +72,7 @@ private:
 
   // When a region having memory available to be allocated is added to the collection set, the region's available memory
   // should be subtracted from what's available.
-  size_t                _young_available_bytes_collected;
+  size_t                _young_available_words_collected;
 
   shenandoah_padding(0);
   volatile size_t       _current_index;
@@ -104,14 +104,15 @@ public:
 
   void print_on(outputStream* out) const;
 
-  // It is not known how many of these bytes will be promoted.
-  inline size_t get_young_bytes_reserved_for_evacuation();
-  inline size_t get_old_bytes_reserved_for_evacuation();
+  // It is not known how many of these words will be promoted.
+  inline size_t get_young_words_reserved_for_evacuation();
+  inline size_t get_old_words_reserved_for_evacuation();
 
-  inline size_t get_young_bytes_to_be_promoted();
+  inline size_t get_young_words_to_be_promoted();
 
-  size_t get_young_available_bytes_collected() { return _young_available_bytes_collected; }
+  size_t get_young_available_words_collected() { return _young_available_words_collected; }
 
+  // Return words of old garbage to be reclaimed from the collection set
   inline size_t get_old_garbage();
 
   bool is_preselected(size_t region_idx) {
@@ -125,8 +126,14 @@ public:
   }
 
   bool has_old_regions() const { return _has_old_regions; }
+
+  // Return words of used data represented by collection set
   size_t used()          const { return _used; }
+
+  // Return words of live data within the collection set
   size_t live()          const { return _live; }
+
+  // Return words of total garbage to be reclaimed from the collection set
   size_t garbage()       const { return _garbage; }
 
   void clear();

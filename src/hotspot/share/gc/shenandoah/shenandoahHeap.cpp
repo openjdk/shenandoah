@@ -1183,7 +1183,7 @@ private:
       _sh->marked_object_iterate(r, &cl);
 
       if (ShenandoahPacing) {
-        _sh->pacer()->report_evac(r->used() >> LogHeapWordSize);
+        _sh->pacer()->report_evac(r->used());
       }
 
       if (_sh->check_cancelled_gc_and_yield(_concurrent)) {
@@ -1334,7 +1334,7 @@ size_t ShenandoahHeap::trash_humongous_region_at(ShenandoahHeapRegion* start) {
 
   oop humongous_obj = cast_to_oop(start->bottom());
   size_t size = humongous_obj->size();
-  size_t required_regions = ShenandoahHeapRegion::required_regions(size * HeapWordSize);
+  size_t required_regions = ShenandoahHeapRegion::required_regions(size);
   size_t index = start->index() + required_regions - 1;
 
   assert(!start->has_live(), "liveness must be zero");
@@ -1451,10 +1451,11 @@ void ShenandoahHeap::gclabs_retire(bool resize) {
 }
 
 // Returns size in bytes
+// KELVIN TODO: change this to return words
 size_t ShenandoahHeap::unsafe_max_tlab_alloc(Thread *thread) const {
   // Return the max allowed size, and let the allocation path
   // figure out the safe size for current allocation.
-  return ShenandoahHeapRegion::max_tlab_size_bytes();
+  return ShenandoahHeapRegion::max_tlab_size_words() * HeapWordSize;
 }
 
 size_t ShenandoahHeap::max_tlab_size() const {
@@ -1581,7 +1582,7 @@ void ShenandoahHeap::verify(VerifyOption vo) {
   }
 }
 size_t ShenandoahHeap::tlab_capacity(Thread *thr) const {
-  return _free_set->capacity();
+  return _free_set->capacity() * HeapWordSize;
 }
 
 class ObjectIterateScanRootClosure : public BasicOopIterateClosure {
@@ -2048,7 +2049,7 @@ GCTracer* ShenandoahHeap::tracer() {
 }
 
 size_t ShenandoahHeap::tlab_used(Thread* thread) const {
-  return _free_set->used();
+  return _free_set->used() * HeapWordSize;
 }
 
 bool ShenandoahHeap::try_cancel_gc() {

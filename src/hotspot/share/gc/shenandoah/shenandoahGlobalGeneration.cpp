@@ -56,7 +56,7 @@ size_t ShenandoahGlobalGeneration::soft_max_capacity() const {
 }
 
 size_t ShenandoahGlobalGeneration::available() const {
-  return ShenandoahHeap::heap()->free_set()->available();
+  return ShenandoahHeap::heap()->free_set()->available() * HeapWordSize;
 }
 
 size_t ShenandoahGlobalGeneration::soft_available() const {

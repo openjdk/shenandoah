@@ -33,6 +33,10 @@
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "runtime/atomic.hpp"
 
+static inline size_t word_size(void *from, void* to) {
+  return pointer_delta(to, from, sizeof(HeapWord));
+}
+
 HeapWord* ShenandoahHeapRegion::allocate_aligned(size_t size, ShenandoahAllocRequest &req, size_t alignment_in_bytes) {
   shenandoah_assert_heaplocked_or_safepoint();
   assert(req.is_lab_alloc(), "allocate_aligned() only applies to LAB allocations");
@@ -150,32 +154,30 @@ inline size_t ShenandoahHeapRegion::get_live_data_words() const {
   return Atomic::load(&_live_data);
 }
 
+#ifdef KELVIN_DEPRECATE
 inline size_t ShenandoahHeapRegion::get_live_data_bytes() const {
   return get_live_data_words() * HeapWordSize;
 }
+#endif
 
 inline bool ShenandoahHeapRegion::has_live() const {
   return get_live_data_words() != 0;
 }
 
 inline size_t ShenandoahHeapRegion::garbage() const {
-  assert(used() >= get_live_data_bytes(),
-         "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT,
-         get_live_data_bytes(), used());
+  assert(used() >= get_live_data_words(),
+         "Live Data must be a subset of used() live: " SIZE_FORMAT " used: " SIZE_FORMAT, get_live_data_words(), used());
 
-  size_t result = used() - get_live_data_bytes();
-  return result;
+  return used() - get_live_data_words();
 }
 
 inline size_t ShenandoahHeapRegion::garbage_before_padded_for_promote() const {
   assert(get_top_before_promote() != nullptr, "top before promote should not equal null");
-  size_t used_before_promote = byte_size(bottom(), get_top_before_promote());
-  assert(used_before_promote >= get_live_data_bytes(),
+  size_t used_before_promote = word_size(bottom(), get_top_before_promote());
+  assert(used_before_promote >= get_live_data_words(),
          "Live Data must be a subset of used before promotion live: " SIZE_FORMAT " used: " SIZE_FORMAT,
-         get_live_data_bytes(), used_before_promote);
-  size_t result = used_before_promote - get_live_data_bytes();
-  return result;
-
+         get_live_data_words(), used_before_promote);
+  return used_before_promote - get_live_data_words();
 }
 
 inline HeapWord* ShenandoahHeapRegion::get_update_watermark() const {
@@ -223,7 +225,22 @@ inline void ShenandoahHeapRegion::save_top_before_promote() {
 inline void ShenandoahHeapRegion::restore_top_before_promote() {
   _top = _top_before_promoted;
   _top_before_promoted = nullptr;
- }
+}
 
+inline size_t ShenandoahHeapRegion::used() const {
+  return word_size(bottom(), top());
+}
+
+inline size_t ShenandoahHeapRegion::used_before_promote() const {
+  return word_size(bottom(), get_top_before_promote());
+}
+
+inline size_t ShenandoahHeapRegion::free() const {
+  return word_size(top(), end());
+}
+
+inline size_t ShenandoahHeapRegion::capacity() const {
+  return word_size(bottom(), end());
+}
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHHEAPREGION_INLINE_HPP

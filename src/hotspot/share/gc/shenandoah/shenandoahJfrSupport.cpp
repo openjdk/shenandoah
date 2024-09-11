@@ -60,7 +60,7 @@ public:
     evt.set_index((unsigned) r->index());
     evt.set_state((u8)r->state());
     evt.set_start((uintptr_t)r->bottom());
-    evt.set_used(r->used());
+    evt.set_used(r->used() * HeapWordSize);
     evt.commit();
   }
 };

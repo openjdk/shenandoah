@@ -69,8 +69,8 @@ void ShenandoahPassiveHeuristics::choose_collection_set_from_regiondata(Shenando
   size_t live_cset = 0;
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx].get_region();
-    size_t new_cset = live_cset + r->get_live_data_bytes();
-    if (new_cset < max_cset && r->garbage() > threshold) {
+    size_t new_cset = live_cset + r->get_live_data_words() * HeapWordSize;
+    if (new_cset < max_cset && (r->garbage() * HeapWordSize > threshold)) {
       live_cset = new_cset;
       cset->add_region(r);
     }

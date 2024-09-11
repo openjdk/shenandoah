@@ -92,7 +92,7 @@ void ShenandoahGenerationalEvacuationTask::do_work() {
       assert(r->has_live(), "Region " SIZE_FORMAT " should have been reclaimed early", r->index());
       _heap->marked_object_iterate(r, &cl);
       if (ShenandoahPacing) {
-        _heap->pacer()->report_evac(r->used() >> LogHeapWordSize);
+        _heap->pacer()->report_evac(r->used());
       }
     } else if (r->is_young() && r->is_active() && (r->age() >= _tenuring_threshold)) {
       if (r->is_humongous_start()) {
@@ -129,16 +129,20 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
   ShenandoahMarkingContext* const marking_context = _heap->complete_marking_context();
   HeapWord* const tams = marking_context->top_at_mark_start(region);
 
+#ifdef ASSERT
   {
-    const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
+    const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_words() * ShenandoahOldGarbageThreshold) / 100;
     shenandoah_assert_generations_reconciled();
     assert(!_heap->is_concurrent_old_mark_in_progress(), "Cannot promote in place during old marking");
-    assert(region->garbage_before_padded_for_promote() < old_garbage_threshold, "Region " SIZE_FORMAT " has too much garbage for promotion", region->index());
+    assert(region->garbage_before_padded_for_promote() < old_garbage_threshold,
+           "Region " SIZE_FORMAT " has too much garbage (" SIZE_FORMAT ") for promotion (limit: " SIZE_FORMAT ")",
+           region->index(), region->garbage_before_padded_for_promote(), old_garbage_threshold);
     assert(region->is_young(), "Only young regions can be promoted");
     assert(region->is_regular(), "Use different service to promote humongous regions");
     assert(region->age() >= _tenuring_threshold, "Only promote regions that are sufficiently aged");
     assert(region->get_top_before_promote() == tams, "Region " SIZE_FORMAT " has been used for allocations before promotion", region->index());
   }
+#endif
 
   ShenandoahOldGeneration* const old_gen = _heap->old_generation();
   ShenandoahYoungGeneration* const young_gen = _heap->young_generation();
@@ -185,7 +189,7 @@ void ShenandoahGenerationalEvacuationTask::promote_in_place(ShenandoahHeapRegion
     // is_collector_free range.
     region->restore_top_before_promote();
 
-    size_t region_used = region->used();
+    size_t region_used = region->used() * HeapWordSize;
 
     // The update_watermark was likely established while we had the artificially high value of top.  Make it sane now.
     assert(update_watermark >= region->top(), "original top cannot exceed preserved update_watermark");
@@ -222,9 +226,10 @@ void ShenandoahGenerationalEvacuationTask::promote_humongous(ShenandoahHeapRegio
   assert(region->age() >= _tenuring_threshold, "Only promote regions that are sufficiently aged");
   assert(marking_context->is_marked(obj), "promoted humongous object should be alive");
 
-  const size_t used_bytes = obj->size() * HeapWordSize;
-  const size_t spanned_regions = ShenandoahHeapRegion::required_regions(used_bytes);
-  const size_t humongous_waste = spanned_regions * ShenandoahHeapRegion::region_size_bytes() - obj->size() * HeapWordSize;
+  const size_t used_words = obj->size();
+  const size_t used_bytes = used_words * HeapWordSize;
+  const size_t spanned_regions = ShenandoahHeapRegion::required_regions(used_words);
+  const size_t humongous_waste = spanned_regions * ShenandoahHeapRegion::region_size_bytes() - used_bytes;
   const size_t index_limit = region->index() + spanned_regions;
 
   ShenandoahOldGeneration* const old_gen = _heap->old_generation();

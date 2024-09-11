@@ -374,7 +374,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   ShenandoahOldGeneration* const old_generation = heap->old_generation();
   ShenandoahYoungGeneration* const young_generation = heap->young_generation();
 
-  size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
+  size_t old_evacuated = collection_set->get_old_words_reserved_for_evacuation() * HeapWordSize;
   size_t old_evacuated_committed = (size_t) (ShenandoahOldEvacWaste * old_evacuated);
   size_t old_evacuation_reserve = old_generation->get_evacuation_reserve();
 
@@ -391,10 +391,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
     old_generation->set_evacuation_reserve(old_evacuation_reserve);
   }
 
-  size_t young_advance_promoted = collection_set->get_young_bytes_to_be_promoted();
+  size_t young_advance_promoted = collection_set->get_young_words_to_be_promoted() * HeapWordSize;
   size_t young_advance_promoted_reserve_used = (size_t) (ShenandoahPromoEvacWaste * young_advance_promoted);
 
-  size_t young_evacuated = collection_set->get_young_bytes_reserved_for_evacuation();
+  size_t young_evacuated = collection_set->get_young_words_reserved_for_evacuation() * HeapWordSize;
   size_t young_evacuated_reserve_used = (size_t) (ShenandoahEvacWaste * young_evacuated);
 
   size_t total_young_available = young_generation->available_with_reserve();
@@ -520,7 +520,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
   ShenandoahMarkingContext* const ctx = heap->marking_context();
 
   const uint tenuring_threshold = heap->age_census()->tenuring_threshold();
-  const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_bytes() * ShenandoahOldGarbageThreshold) / 100;
+  const size_t old_garbage_threshold = (ShenandoahHeapRegion::region_size_words() * ShenandoahOldGarbageThreshold) / 100;
 
   size_t old_consumed = 0;
   size_t promo_potential = 0;
@@ -557,7 +557,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
           // phase.
           r->save_top_before_promote();
 
-          size_t remnant_size = r->free() / HeapWordSize;
+          size_t remnant_size = r->free();
           if (remnant_size > ShenandoahHeap::min_fill_size()) {
             ShenandoahHeap::fill_with_object(original_top, remnant_size);
             // Fill the remnant memory within this region to assure no allocations prior to promote in place.  Otherwise,
@@ -580,7 +580,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
         // happens, we will consider this region as part of the anticipated promotion potential for the next GC
         // pass; see further below.
         sorted_regions[candidates]._region = r;
-        sorted_regions[candidates++]._live_data = r->get_live_data_bytes();
+        sorted_regions[candidates++]._live_data = r->get_live_data_words() * HeapWordSize;
       }
     } else {
       // We only evacuate & promote objects from regular regions whose garbage() is above old-garbage-threshold.
@@ -600,7 +600,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       // us to reserve more old-gen memory so that these objects can be promoted in the subsequent cycle.
       if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
         if (r->garbage() >= old_garbage_threshold) {
-          promo_potential += r->get_live_data_bytes();
+          promo_potential += r->get_live_data_words() * HeapWordSize;
         }
       }
     }

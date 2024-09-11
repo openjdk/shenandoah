@@ -88,8 +88,9 @@ size_t ShenandoahGenerationalHeap::calculate_max_plab() {
 }
 
 // Returns size in bytes
+// KELVIN TODO: change this to return words
 size_t ShenandoahGenerationalHeap::unsafe_max_tlab_alloc(Thread *thread) const {
-  return MIN2(ShenandoahHeapRegion::max_tlab_size_bytes(), young_generation()->available());
+  return MIN2(ShenandoahHeapRegion::max_tlab_size_words() * HeapWordSize, young_generation()->available());
 }
 
 ShenandoahGenerationalHeap::ShenandoahGenerationalHeap(ShenandoahCollectorPolicy* policy) :

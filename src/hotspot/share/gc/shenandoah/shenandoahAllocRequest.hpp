@@ -59,7 +59,7 @@ public:
   }
 
 private:
-  // When ShenandoahElasticTLAB is enabled, the request cannot be made smaller than _min_size.
+  // When ShenandoahElasticTLAB is enabled, the request cannot be made smaller than _min_size, measured in words.
   size_t _min_size;
 
   // The size of the request in words.

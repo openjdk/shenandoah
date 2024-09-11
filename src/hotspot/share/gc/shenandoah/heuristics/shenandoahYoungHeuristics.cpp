@@ -92,8 +92,8 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
       continue;
     }
     if (r->age() < tenuring_threshold) {
-      size_t new_cset = cur_cset + r->get_live_data_bytes();
-      size_t region_garbage = r->garbage();
+      size_t new_cset = cur_cset + r->get_live_data_words() * HeapWordSize;
+      size_t region_garbage = r->garbage() * HeapWordSize;
       size_t new_garbage = cur_young_garbage + region_garbage;
       bool add_regardless = (region_garbage > ignore_threshold) && (new_garbage < min_garbage);
       assert(r->is_young(), "Only young candidates expected in the data array");
@@ -168,7 +168,7 @@ size_t ShenandoahYoungHeuristics::bytes_of_allocation_runway_before_gc_trigger(s
   size_t available = (capacity > usage)? capacity - usage: 0;
   size_t allocated = _space_info->bytes_allocated_since_gc_start();
 
-  size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_bytes_collected();
+  size_t available_young_collected = ShenandoahHeap::heap()->collection_set()->get_young_available_words_collected() * HeapWordSize;
   size_t anticipated_available =
           available + young_regions_to_be_reclaimed * ShenandoahHeapRegion::region_size_bytes() - available_young_collected;
   size_t spike_headroom = capacity * ShenandoahAllocSpikeFactor / 100;

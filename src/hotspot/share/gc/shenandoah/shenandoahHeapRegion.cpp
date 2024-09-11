@@ -38,6 +38,7 @@
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "memory/allocation.hpp"
 #include "memory/iterator.inline.hpp"
@@ -60,7 +61,9 @@ size_t ShenandoahHeapRegion::RegionSizeBytesShift = 0;
 size_t ShenandoahHeapRegion::RegionSizeWordsShift = 0;
 size_t ShenandoahHeapRegion::RegionSizeBytesMask = 0;
 size_t ShenandoahHeapRegion::RegionSizeWordsMask = 0;
+#ifdef KELVIN_DEPRECATE
 size_t ShenandoahHeapRegion::HumongousThresholdBytes = 0;
+#endif
 size_t ShenandoahHeapRegion::HumongousThresholdWords = 0;
 size_t ShenandoahHeapRegion::MaxTLABSizeBytes = 0;
 size_t ShenandoahHeapRegion::MaxTLABSizeWords = 0;
@@ -368,19 +371,19 @@ void ShenandoahHeapRegion::reset_alloc_metadata() {
 }
 
 size_t ShenandoahHeapRegion::get_shared_allocs() const {
-  return used() - (_tlab_allocs + _gclab_allocs + _plab_allocs) * HeapWordSize;
+  return used() - (_tlab_allocs + _gclab_allocs + _plab_allocs);
 }
 
 size_t ShenandoahHeapRegion::get_tlab_allocs() const {
-  return _tlab_allocs * HeapWordSize;
+  return _tlab_allocs;
 }
 
 size_t ShenandoahHeapRegion::get_gclab_allocs() const {
-  return _gclab_allocs * HeapWordSize;
+  return _gclab_allocs;
 }
 
 size_t ShenandoahHeapRegion::get_plab_allocs() const {
-  return _plab_allocs * HeapWordSize;
+  return _plab_allocs;
 }
 
 void ShenandoahHeapRegion::set_live_data(size_t s) {
@@ -437,14 +440,14 @@ void ShenandoahHeapRegion::print_on(outputStream* st) const {
             p2i(ShenandoahHeap::heap()->marking_context()->top_at_mark_start(const_cast<ShenandoahHeapRegion*>(this))));
   st->print("|UWM " SHR_PTR_FORMAT,
             p2i(_update_watermark));
-  st->print("|U " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(used()),                proper_unit_for_byte_size(used()));
-  st->print("|T " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_byte_size(get_tlab_allocs()));
-  st->print("|G " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_byte_size(get_gclab_allocs()));
+  st->print("|U " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(used()),                proper_unit_for_word_size(used()));
+  st->print("|T " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_tlab_allocs()),     proper_unit_for_word_size(get_tlab_allocs()));
+  st->print("|G " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_gclab_allocs()),    proper_unit_for_word_size(get_gclab_allocs()));
   if (ShenandoahHeap::heap()->mode()->is_generational()) {
-    st->print("|P " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_byte_size(get_plab_allocs()));
+    st->print("|P " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_plab_allocs()),   proper_unit_for_word_size(get_plab_allocs()));
   }
-  st->print("|S " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_shared_allocs()),   proper_unit_for_byte_size(get_shared_allocs()));
-  st->print("|L " SIZE_FORMAT_W(5) "%1s", byte_size_in_proper_unit(get_live_data_bytes()), proper_unit_for_byte_size(get_live_data_bytes()));
+  st->print("|S " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_shared_allocs()),   proper_unit_for_word_size(get_shared_allocs()));
+  st->print("|L " SIZE_FORMAT_W(5) "%1s", word_size_in_proper_unit(get_live_data_words()), proper_unit_for_word_size(get_live_data_words()));
   st->print("|CP " SIZE_FORMAT_W(3), pin_count());
   st->cr();
 
@@ -567,7 +570,7 @@ void ShenandoahHeapRegion::recycle() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahGeneration* generation = heap->generation_for(affiliation());
 
-  heap->decrease_used(generation, used());
+  heap->decrease_used(generation, used() * HeapWordSize);
   generation->decrement_affiliated_region_count();
 
   set_top(bottom());
@@ -752,9 +755,11 @@ size_t ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
   HumongousThresholdWords = align_down(HumongousThresholdWords, MinObjAlignment);
   assert (HumongousThresholdWords <= RegionSizeWords, "sanity");
 
+#ifdef KELVIN_DEPRECATE
   guarantee(HumongousThresholdBytes == 0, "we should only set it once");
   HumongousThresholdBytes = HumongousThresholdWords * HeapWordSize;
   assert (HumongousThresholdBytes <= RegionSizeBytes, "sanity");
+#endif
 
   guarantee(MaxTLABSizeWords == 0, "we should only set it once");
   MaxTLABSizeWords = MIN2(RegionSizeWords, HumongousThresholdWords);
@@ -797,7 +802,7 @@ void ShenandoahHeapRegion::set_state(RegionState to) {
   if (evt.should_commit()){
     evt.set_index((unsigned) index());
     evt.set_start((uintptr_t)bottom());
-    evt.set_used(used());
+    evt.set_used(used() * HeapWordSize);
     evt.set_from(_state);
     evt.set_to(to);
     evt.commit();
@@ -872,7 +877,7 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
 
 void ShenandoahHeapRegion::decrement_humongous_waste() const {
   assert(is_humongous(), "Should only use this for humongous regions");
-  size_t waste_bytes = free();
+  size_t waste_bytes = free() * HeapWordSize;
   if (waste_bytes > 0) {
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahGeneration* generation = heap->generation_for(affiliation());

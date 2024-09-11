@@ -513,7 +513,7 @@ void ShenandoahFullGC::calculate_target_humongous_objects() {
       // From-region candidate: movable humongous region
       oop old_obj = cast_to_oop(r->bottom());
       size_t words_size = old_obj->size();
-      size_t num_regions = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+      size_t num_regions = ShenandoahHeapRegion::required_regions(words_size);
 
       size_t start = to_end - num_regions;
 
@@ -967,7 +967,7 @@ public:
       _heap->complete_marking_context()->reset_top_at_mark_start(r);
     }
 
-    size_t live = r->used();
+    size_t live = r->used() * HeapWordSize;
 
     // Make empty regions that have been allocated into regular
     if (r->is_empty() && live > 0) {
@@ -1037,7 +1037,7 @@ void ShenandoahFullGC::compact_humongous_objects() {
         continue;
       }
       size_t words_size = old_obj->size();
-      size_t num_regions = ShenandoahHeapRegion::required_regions(words_size * HeapWordSize);
+      size_t num_regions = ShenandoahHeapRegion::required_regions(words_size);
 
       size_t old_start = r->index();
       size_t old_end   = old_start + num_regions - 1;

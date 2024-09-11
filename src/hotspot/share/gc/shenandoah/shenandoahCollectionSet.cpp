@@ -44,10 +44,10 @@ ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedS
   _heap(heap),
   _has_old_regions(false),
   _garbage(0),
+  _old_garbage(0),
   _used(0),
   _live(0),
   _region_count(0),
-  _old_garbage(0),
   _preselected_regions(nullptr),
   _current_index(0) {
 
@@ -92,17 +92,17 @@ void ShenandoahCollectionSet::add_region(ShenandoahHeapRegion* r) {
   assert(!r->is_humongous(), "Only add regular regions to the collection set");
 
   _cset_map[r->index()] = 1;
-  size_t live    = r->get_live_data_bytes();
+  size_t live    = r->get_live_data_words();
   size_t garbage = r->garbage();
   size_t free    = r->free();
   if (r->is_young()) {
-    _young_bytes_to_evacuate += live;
-    _young_available_bytes_collected += free;
+    _young_words_to_evacuate += live;
+    _young_available_words_collected += free;
     if (ShenandoahHeap::heap()->mode()->is_generational() && r->age() >= ShenandoahGenerationalHeap::heap()->age_census()->tenuring_threshold()) {
-      _young_bytes_to_promote += live;
+      _young_words_to_promote += live;
     }
   } else if (r->is_old()) {
-    _old_bytes_to_evacuate += live;
+    _old_words_to_evacuate += live;
     _old_garbage += garbage;
   }
 
@@ -134,11 +134,11 @@ void ShenandoahCollectionSet::clear() {
   _region_count = 0;
   _current_index = 0;
 
-  _young_bytes_to_evacuate = 0;
-  _young_bytes_to_promote = 0;
-  _old_bytes_to_evacuate = 0;
+  _young_words_to_evacuate = 0;
+  _young_words_to_promote = 0;
+  _old_words_to_evacuate = 0;
 
-  _young_available_bytes_collected = 0;
+  _young_available_words_collected = 0;
 
   _has_old_regions = false;
 }
@@ -186,9 +186,9 @@ ShenandoahHeapRegion* ShenandoahCollectionSet::next() {
 void ShenandoahCollectionSet::print_on(outputStream* out) const {
   out->print_cr("Collection Set: Regions: "
                 SIZE_FORMAT ", Garbage: " SIZE_FORMAT "%s, Live: " SIZE_FORMAT "%s, Used: " SIZE_FORMAT "%s", count(),
-                byte_size_in_proper_unit(garbage()), proper_unit_for_byte_size(garbage()),
-                byte_size_in_proper_unit(live()),    proper_unit_for_byte_size(live()),
-                byte_size_in_proper_unit(used()),    proper_unit_for_byte_size(used()));
+                word_size_in_proper_unit(garbage()), proper_unit_for_word_size(garbage()),
+                word_size_in_proper_unit(live()),    proper_unit_for_word_size(live()),
+                word_size_in_proper_unit(used()),    proper_unit_for_word_size(used()));
 
   debug_only(size_t regions = 0;)
   for (size_t index = 0; index < _heap->num_regions(); index ++) {

@@ -139,7 +139,7 @@ void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {
     for (size_t i = 0; i < heap->num_regions(); i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
       if (r->is_old()) {
-        live_bytes_in_old += r->get_live_data_bytes();
+        live_bytes_in_old += r->get_live_data_words() * HeapWordSize;
       }
     }
     log_info(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));
@@ -157,7 +157,7 @@ void ShenandoahGenerationalFullGC::restore_top_before_promote(ShenandoahHeap* he
 
 void ShenandoahGenerationalFullGC::account_for_region(ShenandoahHeapRegion* r, size_t &region_count, size_t &region_usage, size_t &humongous_waste) {
   region_count++;
-  region_usage += r->used();
+  region_usage += r->used() * HeapWordSize;
   if (r->is_humongous_start()) {
     // For each humongous object, we take this path once regardless of how many regions it spans.
     HeapWord* obj_addr = r->bottom();
@@ -219,7 +219,7 @@ ShenandoahPrepareForGenerationalCompactionObjectClosure::ShenandoahPrepareForGen
 void ShenandoahPrepareForGenerationalCompactionObjectClosure::set_from_region(ShenandoahHeapRegion* from_region) {
   log_debug(gc)("Worker %u compacting %s Region " SIZE_FORMAT " which had used " SIZE_FORMAT " and %s live",
                 _worker_id, from_region->affiliation_name(),
-                from_region->index(), from_region->used(), from_region->has_live()? "has": "does not have");
+                from_region->index(), from_region->used() * HeapWordSize, from_region->has_live()? "has": "does not have");
 
   _from_region = from_region;
   _from_affiliation = from_region->affiliation();

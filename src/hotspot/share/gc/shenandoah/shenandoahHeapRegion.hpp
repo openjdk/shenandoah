@@ -228,7 +228,6 @@ private:
   static size_t RegionSizeWordsShift;
   static size_t RegionSizeBytesMask;
   static size_t RegionSizeWordsMask;
-  static size_t HumongousThresholdBytes;
   static size_t HumongousThresholdWords;
   static size_t MaxTLABSizeBytes;
   static size_t MaxTLABSizeWords;
@@ -275,8 +274,8 @@ public:
     return _empty_time;
   }
 
-  inline static size_t required_regions(size_t bytes) {
-    return (bytes + ShenandoahHeapRegion::region_size_bytes() - 1) >> ShenandoahHeapRegion::region_size_bytes_shift();
+  inline static size_t required_regions(size_t words) {
+    return (words + ShenandoahHeapRegion::region_size_words() - 1) >> ShenandoahHeapRegion::region_size_words_shift();
   }
 
   inline static size_t region_count() {
@@ -308,12 +307,6 @@ public:
   }
 
   // Convert to jint with sanity checking
-  inline static jint region_size_bytes_jint() {
-    assert (ShenandoahHeapRegion::RegionSizeBytes <= (size_t)max_jint, "sanity");
-    return (jint)ShenandoahHeapRegion::RegionSizeBytes;
-  }
-
-  // Convert to jint with sanity checking
   inline static jint region_size_words_jint() {
     assert (ShenandoahHeapRegion::RegionSizeWords <= (size_t)max_jint, "sanity");
     return (jint)ShenandoahHeapRegion::RegionSizeWords;
@@ -331,16 +324,8 @@ public:
     return (jint)ShenandoahHeapRegion::RegionSizeWordsShift;
   }
 
-  inline static size_t humongous_threshold_bytes() {
-    return ShenandoahHeapRegion::HumongousThresholdBytes;
-  }
-
   inline static size_t humongous_threshold_words() {
     return ShenandoahHeapRegion::HumongousThresholdWords;
-  }
-
-  inline static size_t max_tlab_size_bytes() {
-    return ShenandoahHeapRegion::MaxTLABSizeBytes;
   }
 
   inline static size_t max_tlab_size_words() {
@@ -354,6 +339,8 @@ public:
   inline void save_top_before_promote();
   inline HeapWord* get_top_before_promote() const { return _top_before_promoted; }
   inline void restore_top_before_promote();
+
+  // Return words of garbage within region before we padded the region for promotion in place.
   inline size_t garbage_before_padded_for_promote() const;
 
   // If next available memory is not aligned on address that is multiple of alignment, fill the empty space
@@ -375,9 +362,9 @@ public:
   inline void increase_live_data_gc_words(size_t s);
 
   inline bool has_live() const;
-  inline size_t get_live_data_bytes() const;
   inline size_t get_live_data_words() const;
 
+  // Returns words of garbage within this region
   inline size_t garbage() const;
 
   void print_on(outputStream* st) const;
@@ -431,10 +418,17 @@ public:
   HeapWord* bottom() const      { return _bottom;  }
   HeapWord* end() const         { return _end;     }
 
-  size_t capacity() const       { return byte_size(bottom(), end()); }
-  size_t used() const           { return byte_size(bottom(), top()); }
-  size_t used_before_promote() const { return byte_size(bottom(), get_top_before_promote()); }
-  size_t free() const           { return byte_size(top(),    end()); }
+  // Return the size of this region, measured in words.
+  inline size_t capacity() const;
+
+  // Return used within this region, measured in words.
+  inline size_t used() const;
+
+  // Return used within this region at time the region was selected for promotion, measured in words.
+  inline size_t used_before_promote() const;
+
+  // Return free memory within region (unused, available), measured in words.
+  inline size_t free() const;
 
   // Does this region contain this address?
   bool contains(HeapWord* p) const {
@@ -443,9 +437,17 @@ public:
 
   inline void adjust_alloc_metadata(ShenandoahAllocRequest::Type type, size_t);
   void reset_alloc_metadata();
+
+  // Return words of shared allocations performed within this region
   size_t get_shared_allocs() const;
+
+  // Return words of tlab allocations performed within this region
   size_t get_tlab_allocs() const;
+
+  // Return words of gclab allocations performed within this region
   size_t get_gclab_allocs() const;
+
+  // Return words of plab allocations performed within this region
   size_t get_plab_allocs() const;
 
   inline HeapWord* get_update_watermark() const;

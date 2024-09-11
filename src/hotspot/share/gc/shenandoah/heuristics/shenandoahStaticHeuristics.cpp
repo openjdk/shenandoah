@@ -67,7 +67,7 @@ void ShenandoahStaticHeuristics::choose_collection_set_from_regiondata(Shenandoa
 
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx].get_region();
-    if (r->garbage() > threshold) {
+    if (r->garbage() * HeapWordSize > threshold) {
       cset->add_region(r);
     }
   }

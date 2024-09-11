@@ -31,6 +31,7 @@
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahEvacInfo.hpp"
 #include "gc/shenandoah/shenandoahTrace.hpp"
 
@@ -85,7 +86,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     if (!_generation->contains(region)) {
       continue;
     }
-    size_t garbage = region->garbage();
+    size_t garbage = region->garbage() * HeapWordSize;
     total_garbage += garbage;
     if (region->is_empty()) {
       free_regions++;
@@ -115,9 +116,9 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
           if (region->get_top_before_promote() != nullptr) {
             // Region was included for promotion-in-place
             regular_regions_promoted_in_place++;
-            regular_regions_promoted_usage += region->used_before_promote();
-            regular_regions_promoted_free += region->free();
-            regular_regions_promoted_garbage += region->garbage();
+            regular_regions_promoted_usage += region->used_before_promote() * HeapWordSize;
+            regular_regions_promoted_free += region->free() * HeapWordSize;
+            regular_regions_promoted_garbage += region->garbage() * HeapWordSize;
           }
           is_candidate = false;
         } else {
@@ -146,7 +147,7 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
       } else {
         if (region->is_young() && region->age() >= tenuring_threshold) {
           oop obj = cast_to_oop(region->bottom());
-          size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size() * HeapWordSize);
+          size_t humongous_regions = ShenandoahHeapRegion::required_regions(obj->size());
           humongous_regions_promoted += humongous_regions;
         }
       }
@@ -189,8 +190,8 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
     heap->shenandoah_policy()->record_mixed_cycle();
   }
 
-  size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * 100 / total_garbage);
-  size_t collectable_garbage = collection_set->garbage() + immediate_garbage;
+  size_t cset_percent = (total_garbage == 0) ? 0 : (collection_set->garbage() * HeapWordSize * 100 / total_garbage);
+  size_t collectable_garbage = collection_set->garbage() * HeapWordSize + immediate_garbage;
   size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
 
   log_info(gc, ergo)("Collectable Garbage: " SIZE_FORMAT "%s (" SIZE_FORMAT "%%), "
@@ -206,32 +207,32 @@ void ShenandoahGenerationalHeuristics::choose_collection_set(ShenandoahCollectio
                      immediate_percent,
                      immediate_regions,
 
-                     byte_size_in_proper_unit(collection_set->garbage()),
-                     proper_unit_for_byte_size(collection_set->garbage()),
+                     word_size_in_proper_unit(collection_set->garbage()),
+                     proper_unit_for_word_size(collection_set->garbage()),
                      cset_percent,
                      collection_set->count());
 
   if (collection_set->garbage() > 0) {
-    size_t young_evac_bytes = collection_set->get_young_bytes_reserved_for_evacuation();
-    size_t promote_evac_bytes = collection_set->get_young_bytes_to_be_promoted();
-    size_t old_evac_bytes = collection_set->get_old_bytes_reserved_for_evacuation();
-    size_t total_evac_bytes = young_evac_bytes + promote_evac_bytes + old_evac_bytes;
+    size_t young_evac_words = collection_set->get_young_words_reserved_for_evacuation();
+    size_t promote_evac_words = collection_set->get_young_words_to_be_promoted();
+    size_t old_evac_words = collection_set->get_old_words_reserved_for_evacuation();
+    size_t total_evac_words = young_evac_words + promote_evac_words + old_evac_words;
     log_info(gc, ergo)("Evacuation Targets: YOUNG: " SIZE_FORMAT "%s, "
                        "PROMOTE: " SIZE_FORMAT "%s, "
                        "OLD: " SIZE_FORMAT "%s, "
                        "TOTAL: " SIZE_FORMAT "%s",
-                       byte_size_in_proper_unit(young_evac_bytes), proper_unit_for_byte_size(young_evac_bytes),
-                       byte_size_in_proper_unit(promote_evac_bytes), proper_unit_for_byte_size(promote_evac_bytes),
-                       byte_size_in_proper_unit(old_evac_bytes), proper_unit_for_byte_size(old_evac_bytes),
-                       byte_size_in_proper_unit(total_evac_bytes), proper_unit_for_byte_size(total_evac_bytes));
+                       word_size_in_proper_unit(young_evac_words), proper_unit_for_word_size(young_evac_words),
+                       word_size_in_proper_unit(promote_evac_words), proper_unit_for_word_size(promote_evac_words),
+                       word_size_in_proper_unit(old_evac_words), proper_unit_for_word_size(old_evac_words),
+                       word_size_in_proper_unit(total_evac_words), proper_unit_for_word_size(total_evac_words));
 
     ShenandoahEvacInfo evacInfo;
     evacInfo.set_collection_set_regions(collection_set->count());
-    evacInfo.set_collection_set_used_before(collection_set->used());
-    evacInfo.set_collection_set_used_after(collection_set->live());
-    evacInfo.set_collected_old(old_evac_bytes);
-    evacInfo.set_collected_promoted(promote_evac_bytes);
-    evacInfo.set_collected_young(young_evac_bytes);
+    evacInfo.set_collection_set_used_before(collection_set->used() * HeapWordSize);
+    evacInfo.set_collection_set_used_after(collection_set->live() * HeapWordSize);
+    evacInfo.set_collected_old(old_evac_words * HeapWordSize);
+    evacInfo.set_collected_promoted(promote_evac_words * HeapWordSize);
+    evacInfo.set_collected_young(young_evac_words * HeapWordSize);
     evacInfo.set_regions_promoted_humongous(humongous_regions_promoted);
     evacInfo.set_regions_promoted_regular(regular_regions_promoted_in_place);
     evacInfo.set_regular_promoted_garbage(regular_regions_promoted_garbage);
@@ -263,13 +264,13 @@ size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_s
       // Entire region will be promoted, This region does not impact young-gen or old-gen evacuation reserve.
       // This region has been pre-selected and its impact on promotion reserve is already accounted for.
 
-      // r->used() is r->garbage() + r->get_live_data_bytes()
+      // r->used() is r->garbage() * HeapWordSize + r->get_live_data_words() * HeapWordSize
       // Since all live data in this region is being evacuated from young-gen, it is as if this memory
       // is garbage insofar as young-gen is concerned.  Counting this as garbage reduces the need to
       // reclaim highly utilized young-gen regions just for the sake of finding min_garbage to reclaim
       // within young-gen memory.
 
-      cur_young_garbage += r->garbage();
+      cur_young_garbage += r->garbage() * HeapWordSize;
       cset->add_region(r);
     }
   }
@@ -277,14 +278,14 @@ size_t ShenandoahGenerationalHeuristics::add_preselected_regions_to_collection_s
 }
 
 void ShenandoahGenerationalHeuristics::log_cset_composition(ShenandoahCollectionSet* cset) const {
-  size_t collected_old = cset->get_old_bytes_reserved_for_evacuation();
-  size_t collected_promoted = cset->get_young_bytes_to_be_promoted();
-  size_t collected_young = cset->get_young_bytes_reserved_for_evacuation();
+  size_t collected_old = cset->get_old_words_reserved_for_evacuation();
+  size_t collected_promoted = cset->get_young_words_to_be_promoted();
+  size_t collected_young = cset->get_young_words_reserved_for_evacuation();
 
   log_info(gc, ergo)(
           "Chosen CSet evacuates young: " SIZE_FORMAT "%s (of which at least: " SIZE_FORMAT "%s are to be promoted), "
           "old: " SIZE_FORMAT "%s",
-          byte_size_in_proper_unit(collected_young), proper_unit_for_byte_size(collected_young),
-          byte_size_in_proper_unit(collected_promoted), proper_unit_for_byte_size(collected_promoted),
-          byte_size_in_proper_unit(collected_old), proper_unit_for_byte_size(collected_old));
+          word_size_in_proper_unit(collected_young), proper_unit_for_word_size(collected_young),
+          word_size_in_proper_unit(collected_promoted), proper_unit_for_word_size(collected_promoted),
+          word_size_in_proper_unit(collected_old), proper_unit_for_word_size(collected_old));
 }
