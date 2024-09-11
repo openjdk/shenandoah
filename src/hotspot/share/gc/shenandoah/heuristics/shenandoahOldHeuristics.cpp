@@ -550,7 +550,7 @@ void ShenandoahOldHeuristics::clear_triggers() {
 // is required to represent the memory currently used within the old generation.  This trigger looks specifically
 // at density of the old-gen spanned region.  A different mechanism triggers old-gen GC if the total number of
 // old-gen regions (regardless of how close the regions are to one another) grows beyond an anticipated growth target.
-void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_region, size_t last_old_region,
+void ShenandoahOldHeuristics::set_trigger_if_old_is_fragmented(size_t first_old_region, size_t last_old_region,
                                                                size_t old_region_count, size_t num_regions) {
   if (ShenandoahGenerationalHumongousReserve > 0) {
     // Our intent is to pack old-gen memory into the highest-numbered regions of the heap.  Count all memory
@@ -573,26 +573,31 @@ void ShenandoahOldHeuristics::trigger_collection_if_fragmented(size_t first_old_
     double old_density = ((double) old_words_consumed) / old_words_spanned;
 
     double old_span_percent = ((double) old_region_span) / allowed_old_gen_span;
-    double old_span_percent_squared = old_span_percent * old_span_percent;
+    if (old_span_percent > 0.50) {
+      // Squaring old_span_percent in the denominator below allows more aggressive triggering when we are
+      // above desired maximum span and less aggressive triggering when we are far below the desired maximum span.
+      double old_span_percent_squared = old_span_percent * old_span_percent;
+      if (old_density / old_span_percent_squared < 0.75) {
+        // We trigger old defragmentation, for example, if:
+        //  old_span_percent is 110% and old_density is below 90.8%, or
+        //  old_span_percent is 100% and old_density is below 75.0%, or
+        //  old_span_percent is  90% and old_density is below 60.8%, or
+        //  old_span_percent is  80% and old_density is below 48.0%, or
+        //  old_span_percent is  70% and old_density is below 36.8%, or
+        //  old_span_percent is  60% and old_density is below 27.0%, or
+        //  old_span_percent is  50% and old_density is below 18.8%.
 
-    // Squaring old_span_percent in the denominator below allows more aggressive triggering when we are
-    // above desired maximum span and less aggressive triggering when we are far below the desired
-    // maximum span.
-    if ((old_span_percent >= 0.50) && (old_density / old_span_percent_squared < 0.75)) {
-      // We trigger old defragmentation, for example, if:
-      //  old_span_percent is 110% and old_density is below 90.8%, or
-      //  old_span_percent is 100% and old_density is below 75.0%, or
-      //  old_span_percent is  90% and old_density is below 60.8%, or
-      //  old_span_percent is  80% and old_density is below 48.0%, or
-      //  old_span_percent is  70% and old_density is below 36.8%, or
-      //  old_span_percent is  60% and old_density is below 27.0%, or
-      //  old_span_percent is  50% and old_density is below 18.8%.
-      trigger_old_is_fragmented(old_density, first_old_region, last_old_region);
+        // Set the fragmentation trigger and related attributes
+        _fragmentation_trigger = true;
+        _fragmentation_density = old_density;
+        _fragmentation_first_old_region = first_old_region;
+        _fragmentation_last_old_region = last_old_region;
+      }
     }
   }
 }
 
-void ShenandoahOldHeuristics::trigger_collection_if_overgrown() {
+void ShenandoahOldHeuristics::set_trigger_if_old_is_overgrown() {
   size_t old_used = _old_gen->used() + _old_gen->get_humongous_waste();
   size_t trigger_threshold = _old_gen->usage_trigger_threshold();
   // Detects unsigned arithmetic underflow
@@ -600,14 +605,14 @@ void ShenandoahOldHeuristics::trigger_collection_if_overgrown() {
          "Old used (" SIZE_FORMAT ", " SIZE_FORMAT") must not be more than heap capacity (" SIZE_FORMAT ")",
          _old_gen->used(), _old_gen->get_humongous_waste(), _heap->capacity());
   if (old_used > trigger_threshold) {
-    trigger_old_has_grown();
+    _growth_trigger = true;
   }
 }
 
-void ShenandoahOldHeuristics::trigger_maybe(size_t first_old_region, size_t last_old_region,
-                                            size_t old_region_count, size_t num_regions) {
-  trigger_collection_if_fragmented(first_old_region, last_old_region, old_region_count, num_regions);
-  trigger_collection_if_overgrown();
+void ShenandoahOldHeuristics::evaluate_triggers(size_t first_old_region, size_t last_old_region,
+                                                size_t old_region_count, size_t num_regions) {
+  set_trigger_if_old_is_fragmented(first_old_region, last_old_region, old_region_count, num_regions);
+  set_trigger_if_old_is_overgrown();
 }
 
 bool ShenandoahOldHeuristics::should_start_gc() {
