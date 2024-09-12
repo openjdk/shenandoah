@@ -66,8 +66,8 @@ public:
   inline bool is_marked_strong(oop obj) const;
   inline bool is_marked_strong(HeapWord* raw_obj) const;
   inline bool is_marked_weak(oop obj) const;
-  inline bool is_marked_or_old(const oop obj) const;
-  inline bool is_marked_strong_or_old(const oop obj) const;
+  inline bool is_marked_or_old(oop obj) const;
+  inline bool is_marked_strong_or_old(oop obj) const;
 
   inline HeapWord* get_next_marked_addr(const HeapWord* addr, const HeapWord* limit) const;
 

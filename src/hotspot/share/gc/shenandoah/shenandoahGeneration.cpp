@@ -43,19 +43,15 @@
 
 
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
- private:
+private:
   ShenandoahHeap* _heap;
   ShenandoahMarkingContext* const _ctx;
- public:
+public:
   ShenandoahResetUpdateRegionStateClosure() :
     _heap(ShenandoahHeap::heap()),
     _ctx(_heap->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
-    if (_heap->is_bitmap_slice_committed(r)) {
-      _ctx->clear_bitmap(r);
-    }
-
     if (r->is_active()) {
       // Reset live data and set TAMS optimistically. We would recheck these under the pause
       // anyway to capture any updates that happened since now.
@@ -67,30 +63,34 @@ class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosu
   bool is_thread_safe() override { return true; }
 };
 
-class ShenandoahResetBitmapTask : public ShenandoahHeapRegionClosure {
- private:
-  ShenandoahHeap* _heap;
-  ShenandoahMarkingContext* const _ctx;
- public:
-  ShenandoahResetBitmapTask() :
-    _heap(ShenandoahHeap::heap()),
-    _ctx(_heap->marking_context()) {}
+class ShenandoahResetBitmapTask : public WorkerTask {
+private:
+  ShenandoahRegionIterator _regions;
+  ShenandoahGeneration* _generation;
 
-  void heap_region_do(ShenandoahHeapRegion* region) {
-    if (_heap->is_bitmap_slice_committed(region)) {
-      _ctx->clear_bitmap(region);
+public:
+  ShenandoahResetBitmapTask(ShenandoahGeneration* generation) :
+    WorkerTask("Shenandoah Reset Bitmap"), _generation(generation) {}
+
+  void work(uint worker_id) {
+    ShenandoahHeapRegion* region = _regions.next();
+    ShenandoahHeap* heap = ShenandoahHeap::heap();
+    ShenandoahMarkingContext* const ctx = heap->marking_context();
+    while (region != nullptr) {
+      if (_generation->contains(region) && heap->is_bitmap_slice_committed(region)) {
+        ctx->clear_bitmap(region);
+      }
+      region = _regions.next();
     }
   }
-
-  bool is_thread_safe() { return true; }
 };
 
 // Copy the write-version of the card-table into the read-version, clearing the
 // write-copy.
 class ShenandoahMergeWriteTable: public ShenandoahHeapRegionClosure {
- private:
+private:
   ShenandoahScanRemembered* _scanner;
- public:
+public:
   ShenandoahMergeWriteTable(ShenandoahScanRemembered* scanner) : _scanner(scanner) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
@@ -104,9 +104,9 @@ class ShenandoahMergeWriteTable: public ShenandoahHeapRegionClosure {
 };
 
 class ShenandoahCopyWriteCardTableToRead: public ShenandoahHeapRegionClosure {
- private:
+private:
   ShenandoahScanRemembered* _scanner;
- public:
+public:
   ShenandoahCopyWriteCardTableToRead(ShenandoahScanRemembered* scanner) : _scanner(scanner) {}
 
   void heap_region_do(ShenandoahHeapRegion* region) override {
@@ -193,8 +193,8 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
   set_mark_incomplete();
 
-  ShenandoahResetBitmapTask task;
-  parallel_heap_region_iterate(&task);
+  ShenandoahResetBitmapTask task(this);
+  heap->workers()->run_task(&task);
 }
 
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
@@ -207,7 +207,6 @@ void ShenandoahGeneration::swap_remembered_set() {
   heap->assert_gc_workers(heap->workers()->active_workers());
   shenandoah_assert_safepoint();
 
-  // TODO: Eventually, we want to replace this with a constant-time exchange of pointers.
   ShenandoahOldGeneration* old_generation = heap->old_generation();
   ShenandoahCopyWriteCardTableToRead task(old_generation->card_scan());
   old_generation->parallel_heap_region_iterate(&task);
@@ -228,8 +227,8 @@ void ShenandoahGeneration::merge_write_table() {
 }
 
 void ShenandoahGeneration::prepare_gc() {
-  // Invalidate the marking context
-  set_mark_incomplete();
+
+  reset_mark_bitmap();
 
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
@@ -599,11 +598,6 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       // these regions.  The likely outcome is that these regions will not be selected for evacuation or promotion
       // in the current cycle and we will anticipate that they will be promoted in the next cycle.  This will cause
       // us to reserve more old-gen memory so that these objects can be promoted in the subsequent cycle.
-      //
-      // TODO:
-      //   If we are auto-tuning the tenure age and regions that were anticipated to be promoted in place end up
-      //   being promoted by evacuation, this event should feed into the tenure-age-selection heuristic so that
-      //   the tenure age can be increased.
       if (heap->is_aging_cycle() && (r->age() + 1 == tenuring_threshold)) {
         if (r->garbage() >= old_garbage_threshold) {
           promo_potential += r->get_live_data_bytes();
@@ -705,14 +699,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
       // preselected regions, which are removed when we exit this scope.
       ResourceMark rm;
       ShenandoahCollectionSetPreselector preselector(collection_set, heap->num_regions());
-
-      // TODO: young_available can include available (between top() and end()) within each young region that is not
-      // part of the collection set.  Making this memory available to the young_evacuation_reserve allows a larger
-      // young collection set to be chosen when available memory is under extreme pressure.  Implementing this "improvement"
-      // is tricky, because the incremental construction of the collection set actually changes the amount of memory
-      // available to hold evacuated young-gen objects.  As currently implemented, the memory that is available within
-      // non-empty regions that are not selected as part of the collection set can be allocated by the mutator while
-      // GC is evacuating and updating references.
 
       // Find the amount that will be promoted, regions that will be promoted in
       // place, and preselect older regions that will be promoted by evacuation.

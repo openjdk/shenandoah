@@ -1001,8 +1001,6 @@ HeapWord* ShenandoahHeap::allocate_memory(ShenandoahAllocRequest& req) {
       // Stop retrying and return nullptr to cause OOMError exception if our allocation failed even after:
       //   a) We experienced a GC that had good progress, or
       //   b) We experienced at least one Full GC (whether or not it had good progress)
-      //
-      // TODO: Consider GLOBAL GC rather than Full GC to remediate OOM condition: https://bugs.openjdk.org/browse/JDK-8335910
 
       size_t original_count = shenandoah_policy()->full_gc_count();
       while ((result == nullptr) && (original_count == shenandoah_policy()->full_gc_count())) {
@@ -1940,7 +1938,7 @@ void ShenandoahHeap::recycle_trash() {
 void ShenandoahHeap::do_class_unloading() {
   _unloader.unload();
   if (mode()->is_generational()) {
-    old_generation()->set_parseable(false);
+    old_generation()->set_parsable(false);
   }
 }
 

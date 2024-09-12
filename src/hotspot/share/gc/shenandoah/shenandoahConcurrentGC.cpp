@@ -124,7 +124,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
     // Concurrent remembered set scanning
     entry_scan_remembered_set();
-    // TODO: When RS scanning yields, we will need a check_cancellation_and_abort() degeneration point here.
 
     // Concurrent mark roots
     entry_mark_roots();
@@ -326,7 +325,7 @@ void ShenandoahConcurrentGC::entry_final_updaterefs() {
 }
 
 void ShenandoahConcurrentGC::entry_final_roots() {
-  static const char* msg = "Pause Final Roots";
+  const char* msg = final_roots_event_message();
   ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::final_roots);
   EventMark em("%s", msg);
 
@@ -339,7 +338,7 @@ void ShenandoahConcurrentGC::entry_reset() {
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
   {
-    static const char* msg = "Concurrent reset";
+    const char* msg = conc_reset_event_message();
     ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_reset);
     EventMark em("%s", msg);
 
@@ -424,7 +423,7 @@ void ShenandoahConcurrentGC::entry_thread_roots() {
 
 void ShenandoahConcurrentGC::entry_weak_refs() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  static const char* msg = "Concurrent weak references";
+  const char* msg = conc_weak_refs_event_message();
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_weak_refs);
   EventMark em("%s", msg);
 
@@ -439,7 +438,7 @@ void ShenandoahConcurrentGC::entry_weak_refs() {
 void ShenandoahConcurrentGC::entry_weak_roots() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  static const char* msg = "Concurrent weak roots";
+  const char* msg = conc_weak_roots_event_message();
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_weak_roots);
   EventMark em("%s", msg);
 
@@ -486,7 +485,7 @@ void ShenandoahConcurrentGC::entry_strong_roots() {
 void ShenandoahConcurrentGC::entry_cleanup_early() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  static const char* msg = "Concurrent cleanup";
+  const char* msg = conc_cleanup_event_message();
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_early, true /* log_heap_usage */);
   EventMark em("%s", msg);
 
@@ -542,7 +541,7 @@ void ShenandoahConcurrentGC::entry_updaterefs() {
 void ShenandoahConcurrentGC::entry_cleanup_complete() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  static const char* msg = "Concurrent cleanup";
+  const char* msg = conc_cleanup_event_message();
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete, true /* log_heap_usage */);
   EventMark em("%s", msg);
 
@@ -598,11 +597,8 @@ void ShenandoahConcurrentGC::op_init_mark() {
 
 
   if (heap->mode()->is_generational()) {
-    if (_generation->is_young() || (_generation->is_global() && ShenandoahVerify)) {
-      // The current implementation of swap_remembered_set() copies the write-card-table
-      // to the read-card-table. The remembered sets are also swapped for GLOBAL collections
-      // so that the verifier works with the correct copy of the card table when verifying.
-      // TODO: This path should not really depend on ShenandoahVerify.
+    if (_generation->is_young()) {
+      // The current implementation of swap_remembered_set() copies the write-card-table to the read-card-table.
       ShenandoahGCPhase phase(ShenandoahPhaseTimings::init_swap_rset);
       _generation->swap_remembered_set();
     }
@@ -685,32 +681,10 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Notify JVMTI that the tagmap table will need cleaning.
     JvmtiTagMap::set_needs_cleaning();
 
-    // The collection set is chosen by prepare_regions_and_collection_set().
-    //
-    // TODO: Under severe memory overload conditions that can be checked here, we may want to limit
-    // the inclusion of old-gen candidates within the collection set.  This would allow us to prioritize efforts on
-    // evacuating young-gen,  This remediation is most appropriate when old-gen availability is very high (so there
-    // are negligible negative impacts from delaying completion of old-gen evacuation) and when young-gen collections
-    // are "under duress" (as signalled by very low availability of memory within young-gen, indicating that/ young-gen
-    // collections are not triggering frequently enough).
+    // The collection set is chosen by prepare_regions_and_collection_set(). Additionally, certain parameters have been
+    // established to govern the evacuation efforts that are about to begin.  Refer to comments on reserve members in
+    // ShenandoahGeneration and ShenandoahOldGeneration for more detail.
     _generation->prepare_regions_and_collection_set(true /*concurrent*/);
-
-    // Upon return from prepare_regions_and_collection_set(), certain parameters have been established to govern the
-    // evacuation efforts that are about to begin.  In particular:
-    //
-    // heap->get_promoted_reserve() represents the amount of memory within old-gen's available memory that has
-    //   been set aside to hold objects promoted from young-gen memory.  This represents an estimated percentage
-    //   of the live young-gen memory within the collection set.  If there is more data ready to be promoted than
-    //   can fit within this reserve, the promotion of some objects will be deferred until a subsequent evacuation
-    //   pass.
-    //
-    // heap->get_old_evac_reserve() represents the amount of memory within old-gen's available memory that has been
-    //  set aside to hold objects evacuated from the old-gen collection set.
-    //
-    // heap->get_young_evac_reserve() represents the amount of memory within young-gen's available memory that has
-    //  been set aside to hold objects evacuated from the young-gen collection set.  Conservatively, this value
-    //  equals the entire amount of live young-gen memory within the collection set, even though some of this memory
-    //  will likely be promoted.
 
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();
@@ -730,7 +704,6 @@ void ShenandoahConcurrentGC::op_final_mark() {
         heap->verifier()->verify_before_evacuation();
       }
 
-      // TODO: Do we need to set this if we are only promoting regions in place? We don't need the barriers on for that.
       heap->set_evacuation_in_progress(true);
 
       // Generational mode may promote objects in place during the evacuation phase.
@@ -1222,5 +1195,45 @@ const char* ShenandoahConcurrentGC::conc_mark_event_message() const {
     SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent marking", " (unload classes)");
   } else {
     SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent marking", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::conc_reset_event_message() const {
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent reset", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent reset", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::final_roots_event_message() const {
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Final Roots", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Final Roots", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::conc_weak_refs_event_message() const {
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent weak references", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent weak references", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::conc_weak_roots_event_message() const {
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent weak roots", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent weak roots", "");
+  }
+}
+
+const char* ShenandoahConcurrentGC::conc_cleanup_event_message() const {
+  if (ShenandoahHeap::heap()->unload_classes()) {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent cleanup", " (unload classes)");
+  } else {
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent cleanup", "");
   }
 }

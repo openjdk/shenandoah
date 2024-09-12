@@ -859,8 +859,6 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
       reset_age();
       break;
     case OLD_GENERATION:
-      // TODO: should we reset_age() for OLD as well?  Examine invocations of set_affiliation(). Some contexts redundantly
-      //       invoke reset_age().
       break;
     default:
       ShouldNotReachHere();
