@@ -397,18 +397,16 @@ void ShenandoahBarrierSetAssembler::store_check(MacroAssembler* masm, Register o
 
   assert(CardTable::dirty_card_val() == 0, "must be");
 
-  __ load_byte_map_base(t0);
+  __ load_byte_map_base(t1);
+  __ add(t1, obj, t1);
 
   if (UseCondCardMark) {
     Label L_already_dirty;
-    __ add(t1, obj, t0);
-    __ lbu(t1, Address(t1));
-    __ beqz(t1, L_already_dirty);
-    __ add(t1, obj, t0);
+    __ lbu(t0, Address(t1));
+    __ beqz(t0, L_already_dirty);
     __ sb(zr, Address(t1));
     __ bind(L_already_dirty);
   } else {
-    __ add(t1, obj, t0);
     __ sb(zr, Address(t1));
   }
 }
