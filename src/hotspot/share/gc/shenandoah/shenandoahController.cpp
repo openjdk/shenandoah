@@ -53,6 +53,10 @@ size_t ShenandoahController::get_gc_id() {
   return Atomic::load(&_gc_id);
 }
 
+void ShenandoahController::anticipate_immediate_garbage(size_t anticipated_immediate_garbage) {
+  Atomic::store(&_anticipated_immediate_garbage, anticipated_immediate_garbage);
+}
+
 void ShenandoahController::handle_alloc_failure(ShenandoahAllocRequest& req, bool block) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
@@ -65,10 +69,11 @@ void ShenandoahController::handle_alloc_failure(ShenandoahAllocRequest& req, boo
                  req.type_string(),
                  byte_size_in_proper_unit(req.size() * HeapWordSize), proper_unit_for_byte_size(req.size() * HeapWordSize));
 
-    // Now that alloc failure GC is scheduled, we can abort everything else
-    heap->cancel_gc(GCCause::_allocation_failure);
+    if (Atomic::load(&_anticipated_immediate_garbage) < req.size()) {
+      // Now that alloc failure GC is scheduled, we can abort everything else
+      heap->cancel_gc(GCCause::_allocation_failure);
+    }
   }
-
 
   if (block) {
     MonitorLocker ml(&_alloc_failure_waiters_lock);
@@ -92,9 +97,11 @@ void ShenandoahController::handle_alloc_failure_evac(size_t words) {
   heap->cancel_gc(GCCause::_shenandoah_allocation_failure_evac);
 }
 
-void ShenandoahController::notify_alloc_failure_waiters() {
-  _alloc_failure_gc.unset();
-  _humongous_alloc_failure_gc.unset();
+void ShenandoahController::notify_alloc_failure_waiters(bool clear_alloc_failure) {
+  if (clear_alloc_failure) {
+    _alloc_failure_gc.unset();
+    _humongous_alloc_failure_gc.unset();
+  }
   MonitorLocker ml(&_alloc_failure_waiters_lock);
   ml.notify_all();
 }
