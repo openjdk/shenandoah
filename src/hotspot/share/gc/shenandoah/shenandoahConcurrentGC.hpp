@@ -107,6 +107,8 @@ private:
 
   void entry_cleanup_complete();
 
+  void entry_in_place_promotions();
+
   // Actual work for the phases
   void op_reset();
   void op_init_mark();

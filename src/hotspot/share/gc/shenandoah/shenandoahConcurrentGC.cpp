@@ -191,9 +191,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) {
       return false;
     }
-  }
 
-  if (heap->has_forwarded_objects()) {
     // Perform update-refs phase.
     vmop_entry_init_updaterefs();
     entry_updaterefs();
@@ -212,6 +210,10 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // Update references freed up collection set, kick the cleanup to reclaim the space.
     entry_cleanup_complete();
   } else {
+    if (has_in_place_promotions(heap)) {
+      entry_in_place_promotions();
+    }
+
     // We chose not to evacuate because we found sufficient immediate garbage. Note that we
     // do not check for cancellation here because, at this point, the cycle is effectively
     // complete. If the cycle has been cancelled here, the control thread will detect it
@@ -510,6 +512,22 @@ void ShenandoahConcurrentGC::entry_evacuate() {
   op_evacuate();
 }
 
+void ShenandoahConcurrentGC::entry_in_place_promotions() {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
+
+  static const char* msg = "Promote in place";
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::promote_in_place);
+  EventMark em("%s", msg);
+
+  ShenandoahWorkerScope scope(heap->workers(),
+                              ShenandoahWorkerPolicy::calc_workers_for_conc_evac(),
+                              "promote in place");
+
+  heap->try_inject_alloc_failure();
+  op_evacuate();
+}
+
 void ShenandoahConcurrentGC::entry_update_thread_roots() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
@@ -689,10 +707,7 @@ void ShenandoahConcurrentGC::op_final_mark() {
     // Has to be done after cset selection
     heap->prepare_concurrent_roots();
 
-    if (!heap->collection_set()->is_empty() || has_in_place_promotions(heap)) {
-      // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
-      // Concurrent evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
-
+    if (!heap->collection_set()->is_empty()) {
       LogTarget(Debug, gc, cset) lt;
       if (lt.is_enabled()) {
         ResourceMark rm;
@@ -705,20 +720,12 @@ void ShenandoahConcurrentGC::op_final_mark() {
       }
 
       heap->set_evacuation_in_progress(true);
-
-      // Generational mode may promote objects in place during the evacuation phase.
-      // If that is the only reason we are evacuating, we don't need to update references
-      // and there will be no forwarded objects on the heap.
-      heap->set_has_forwarded_objects(!heap->collection_set()->is_empty());
+      // From here on, we need to update references.
+      heap->set_has_forwarded_objects(true);
 
       // Arm nmethods/stack for concurrent processing
-      if (!heap->collection_set()->is_empty()) {
-        // Iff objects will be evaluated, arm the nmethod barriers. These will be disarmed
-        // under the same condition (established in prepare_concurrent_roots) after strong
-        // root evacuation has completed (see op_strong_roots).
-        ShenandoahCodeRoots::arm_nmethods_for_evac();
-        ShenandoahStackWatermark::change_epoch_id();
-      }
+      ShenandoahCodeRoots::arm_nmethods_for_evac();
+      ShenandoahStackWatermark::change_epoch_id();
 
       if (ShenandoahPacing) {
         heap->pacer()->setup_for_evac();
