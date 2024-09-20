@@ -210,14 +210,23 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     // Update references freed up collection set, kick the cleanup to reclaim the space.
     entry_cleanup_complete();
   } else {
+    // We chose not to evacuate because we found sufficient immediate garbage.
+    // However, there may still be regions to promote in place, so do that now.
     if (has_in_place_promotions(heap)) {
-      entry_in_place_promotions();
+      entry_promote_in_place();
+
+      // If the promote-in-place operation was cancelled, we can have the degenerated
+      // cycle complete the operation. It will see that no evacuations are in progress,
+      // and that there are regions wanting promotion. The risk with not handling the
+      // cancellation would be failing to restore top for these regions and leaving
+      // them unable to serve allocations for the old generation.
+      if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) {
+        return false;
+      }
     }
 
-    // We chose not to evacuate because we found sufficient immediate garbage. Note that we
-    // do not check for cancellation here because, at this point, the cycle is effectively
-    // complete. If the cycle has been cancelled here, the control thread will detect it
-    // on its next iteration and run a degenerated young cycle.
+    // At this point, the cycle is effectively complete. If the cycle has been cancelled here,
+    // the control thread will detect it on its next iteration and run a degenerated young cycle.
     vmop_entry_final_roots();
     _abbreviated = true;
   }
@@ -512,7 +521,7 @@ void ShenandoahConcurrentGC::entry_evacuate() {
   op_evacuate();
 }
 
-void ShenandoahConcurrentGC::entry_in_place_promotions() {
+void ShenandoahConcurrentGC::entry_promote_in_place() {
   shenandoah_assert_generational();
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
@@ -526,10 +535,9 @@ void ShenandoahConcurrentGC::entry_in_place_promotions() {
                               ShenandoahWorkerPolicy::calc_workers_for_conc_evac(),
                               "promote in place");
 
-  heap->try_inject_alloc_failure();
-
-  // Same closure handles in-place promotions for tenured regions. No objects will be moved.
-  log_info(gc)("Promoting " SIZE_FORMAT " regions in place.", heap->old_generation()->get_expected_in_place_promotions());
+  // Ultimately, the same closure handles in-place promotions for tenured regions. No objects will be moved.
+  // The threads will still participate in the oom-evac-protocol, although no memory will be allocated for
+  // in place promotions.
   op_evacuate();
 }
 

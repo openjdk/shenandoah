@@ -252,6 +252,7 @@ void ShenandoahDegenGC::op_degenerated() {
           return;
         }
       } else if (has_in_place_promotions(heap)) {
+        // We have nothing to evacuate, but there are still regions to promote in place.
         ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_promote_regions);
         ShenandoahHeap::heap()->evacuate_collection_set(false /* concurrent*/);
       }
@@ -353,9 +354,6 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
   }
 
   if (!heap->collection_set()->is_empty()) {
-    // Even if the collection set is empty, we need to do evacuation if there are regions to be promoted in place.
-    // Degenerated evacuation takes responsibility for registering objects and setting the remembered set cards to dirty.
-
     if (ShenandoahVerify) {
       heap->verifier()->verify_before_evacuation();
     }
