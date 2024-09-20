@@ -513,6 +513,8 @@ void ShenandoahConcurrentGC::entry_evacuate() {
 }
 
 void ShenandoahConcurrentGC::entry_in_place_promotions() {
+  shenandoah_assert_generational();
+
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
 
@@ -525,6 +527,9 @@ void ShenandoahConcurrentGC::entry_in_place_promotions() {
                               "promote in place");
 
   heap->try_inject_alloc_failure();
+
+  // Same closure handles in-place promotions for tenured regions. No objects will be moved.
+  log_info(gc)("Promoting " SIZE_FORMAT " regions in place.", heap->old_generation()->get_expected_in_place_promotions());
   op_evacuate();
 }
 
@@ -732,7 +737,10 @@ void ShenandoahConcurrentGC::op_final_mark() {
       }
     } else {
       if (ShenandoahVerify) {
-        heap->verifier()->verify_after_concmark();
+        ShenandoahVerifier::VerifySize sizeness = has_in_place_promotions(heap)
+                                                ? ShenandoahVerifier::_verify_size_adjusted_for_padding
+                                                : ShenandoahVerifier::_verify_size_exact;
+        heap->verifier()->verify_after_concmark(sizeness);
       }
 
       if (VerifyAfterGC) {

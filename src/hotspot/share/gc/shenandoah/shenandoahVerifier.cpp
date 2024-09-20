@@ -1069,7 +1069,7 @@ void ShenandoahVerifier::verify_before_concmark() {
   );
 }
 
-void ShenandoahVerifier::verify_after_concmark() {
+void ShenandoahVerifier::verify_after_concmark(ShenandoahVerifier::VerifySize sizeness) {
   verify_at_safepoint(
           "After Mark",
           _verify_remembered_disable,  // do not verify remembered set
@@ -1079,7 +1079,7 @@ void ShenandoahVerifier::verify_after_concmark() {
           _verify_cset_none,           // no references to cset anymore
           _verify_liveness_complete,   // liveness data must be complete here
           _verify_regions_disable,     // trash regions not yet recycled
-          _verify_size_exact,          // expect generation and heap sizes to match exactly
+          sizeness,          // expect generation and heap sizes to match exactly
           _verify_gcstate_stable_weakroots  // heap is still stable, weakroots are in progress
   );
 }
