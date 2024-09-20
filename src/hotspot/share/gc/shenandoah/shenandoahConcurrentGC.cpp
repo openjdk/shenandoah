@@ -535,10 +535,7 @@ void ShenandoahConcurrentGC::entry_promote_in_place() {
                               ShenandoahWorkerPolicy::calc_workers_for_conc_evac(),
                               "promote in place");
 
-  // Ultimately, the same closure handles in-place promotions for tenured regions. No objects will be moved.
-  // The threads will still participate in the oom-evac-protocol, although no memory will be allocated for
-  // in place promotions.
-  op_evacuate();
+  ShenandoahGenerationalHeap::heap()->promote_regions_in_place(true);
 }
 
 void ShenandoahConcurrentGC::entry_update_thread_roots() {

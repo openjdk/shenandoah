@@ -53,11 +53,12 @@ public:
 
 ShenandoahGenerationalEvacuationTask::ShenandoahGenerationalEvacuationTask(ShenandoahGenerationalHeap* heap,
                                                                            ShenandoahRegionIterator* iterator,
-                                                                           bool concurrent) :
+                                                                           bool concurrent, bool only_promote_regions) :
   WorkerTask("Shenandoah Evacuation"),
   _heap(heap),
   _regions(iterator),
   _concurrent(concurrent),
+  _only_promote_regions(only_promote_regions),
   _tenuring_threshold(0)
 {
   shenandoah_assert_generational();
@@ -68,16 +69,24 @@ void ShenandoahGenerationalEvacuationTask::work(uint worker_id) {
   if (_concurrent) {
     ShenandoahConcurrentWorkerSession worker_session(worker_id);
     ShenandoahSuspendibleThreadSetJoiner stsj;
-    ShenandoahEvacOOMScope oom_evac_scope;
     do_work();
   } else {
     ShenandoahParallelWorkerSession worker_session(worker_id);
-    ShenandoahEvacOOMScope oom_evac_scope;
     do_work();
   }
 }
 
 void ShenandoahGenerationalEvacuationTask::do_work() {
+  if (_only_promote_regions) {
+    // No allocations will be made, do not enter oom-during-evac protocol.
+    do_evacuations();
+  } else {
+    ShenandoahEvacOOMScope oom_evac_scope;
+    do_evacuations();
+  }
+}
+
+void ShenandoahGenerationalEvacuationTask::do_evacuations() {
   ShenandoahConcurrentEvacuator cl(_heap);
   ShenandoahHeapRegion* r;
 

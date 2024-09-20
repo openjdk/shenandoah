@@ -254,7 +254,7 @@ void ShenandoahDegenGC::op_degenerated() {
       } else if (has_in_place_promotions(heap)) {
         // We have nothing to evacuate, but there are still regions to promote in place.
         ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_promote_regions);
-        ShenandoahHeap::heap()->evacuate_collection_set(false /* concurrent*/);
+        ShenandoahGenerationalHeap::heap()->promote_regions_in_place(false /* concurrent*/);
       }
 
       // Update collector state regardless of whether there are forwarded objects
