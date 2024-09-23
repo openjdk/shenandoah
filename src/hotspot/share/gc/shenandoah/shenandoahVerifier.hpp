@@ -211,7 +211,8 @@ public:
           _heap(heap), _verification_bit_map(verification_bitmap) {};
 
   void verify_before_concmark();
-  void verify_after_concmark(VerifySize sizeness);
+  void verify_after_concmark();
+  void verify_before_region_promotions();
   void verify_before_evacuation();
   void verify_before_updaterefs();
   void verify_after_updaterefs();

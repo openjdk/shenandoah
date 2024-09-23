@@ -742,10 +742,11 @@ void ShenandoahConcurrentGC::op_final_mark() {
       }
     } else {
       if (ShenandoahVerify) {
-        ShenandoahVerifier::VerifySize sizeness = has_in_place_promotions(heap)
-                                                ? ShenandoahVerifier::_verify_size_adjusted_for_padding
-                                                : ShenandoahVerifier::_verify_size_exact;
-        heap->verifier()->verify_after_concmark(sizeness);
+        if (has_in_place_promotions(heap)) {
+          heap->verifier()->verify_before_region_promotions();
+        } else {
+          heap->verifier()->verify_after_concmark();
+        }
       }
 
       if (VerifyAfterGC) {
