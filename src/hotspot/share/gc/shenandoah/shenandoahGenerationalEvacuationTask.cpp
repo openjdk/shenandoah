@@ -79,8 +79,10 @@ void ShenandoahGenerationalEvacuationTask::work(uint worker_id) {
 void ShenandoahGenerationalEvacuationTask::do_work() {
   if (_only_promote_regions) {
     // No allocations will be made, do not enter oom-during-evac protocol.
+    assert(ShenandoahHeap::heap()->collection_set()->is_empty(), "Should not have a collection set here");
     promote_regions();
   } else {
+    assert(!ShenandoahHeap::heap()->collection_set()->is_empty(), "Should have a collection set here");
     ShenandoahEvacOOMScope oom_evac_scope;
     evacuate_and_promote_regions();
   }
