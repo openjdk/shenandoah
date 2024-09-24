@@ -1083,7 +1083,7 @@ void ShenandoahVerifier::verify_after_concmark() {
   );
 }
 
-void ShenandoahVerifier::verify_before_region_promotions() {
+void ShenandoahVerifier::verify_after_concmark_with_promotions() {
   verify_at_safepoint(
           "After Mark",
           _verify_remembered_disable,         // do not verify remembered set

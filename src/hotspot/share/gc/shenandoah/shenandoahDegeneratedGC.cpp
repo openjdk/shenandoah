@@ -363,7 +363,7 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
   } else {
     if (ShenandoahVerify) {
       if (has_in_place_promotions(heap)) {
-        heap->verifier()->verify_before_region_promotions();
+        heap->verifier()->verify_after_concmark_with_promotions();
       } else {
         heap->verifier()->verify_after_concmark();
       }
