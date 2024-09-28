@@ -81,7 +81,7 @@ public:
   // Resets ages for regions that have been used for allocations.
   void update_region_ages(ShenandoahMarkingContext* ctx);
 
-  oop evacuate_object(oop p, Thread* thread) override;
+  oop evacuate_object(oop p, Thread* thread);
   oop try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
   void evacuate_collection_set(bool concurrent) override;
   void promote_regions_in_place(bool concurrent);
