@@ -1247,15 +1247,7 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
 #endif
     if (UseTLAB) {
       copy = allocate_from_gclab(thread, size);
-      if ((copy == nullptr) && (size < ShenandoahThreadLocalData::gclab_size(thread))) {
-        // GCLAB allocation failed because we are bumping up against the limit on young evacuation reserve.  Try resetting
-        // the desired GCLAB size and retry GCLAB allocation to avoid cascading of shared memory allocations.
-        ShenandoahThreadLocalData::set_gclab_size(thread, PLAB::min_size());
-        copy = allocate_from_gclab(thread, size);
-        // If we still get nullptr, we'll try a shared allocation below.
-      }
     }
-
     if (copy == nullptr) {
       // If we failed to allocate in LAB, we'll try a shared allocation.
       ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size, target_gen);
@@ -1275,7 +1267,7 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   }
 
   // Copy the object:
-  _evac_tracker->begin_evacuation(thread, size * HeapWordSize);
+  // _evac_tracker->begin_evacuation(thread, size * HeapWordSize);
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
   // Try to install the new forwarding pointer.
@@ -1284,7 +1276,7 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
     ContinuationGCSupport::relativize_stack_chunk(copy_val);
-    _evac_tracker->end_evacuation(thread, size * HeapWordSize);
+    // _evac_tracker->end_evacuation(thread, size * HeapWordSize);
     shenandoah_assert_correct(nullptr, copy_val);
     return copy_val;
   }  else {
