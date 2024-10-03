@@ -53,6 +53,8 @@ public:
   }
 
   void print_init_logger() const override;
+  void print_tracing_info() const override;
+
   size_t unsafe_max_tlab_alloc(Thread *thread) const override;
 
 private:
@@ -62,6 +64,8 @@ private:
   ShenandoahSharedFlag  _is_aging_cycle;
   // Age census used for adapting tenuring threshold
   ShenandoahAgeCensus* _age_census;
+  // Used primarily to look for failed evacuation attempts.
+  ShenandoahEvacuationTracker*  _evac_tracker;
 
 public:
   void set_aging_cycle(bool cond) {
@@ -77,11 +81,15 @@ public:
     return _age_census;
   }
 
+  ShenandoahEvacuationTracker* evac_tracker() const {
+    return _evac_tracker;
+  }
+
   // Ages regions that haven't been used for allocations in the current cycle.
   // Resets ages for regions that have been used for allocations.
   void update_region_ages(ShenandoahMarkingContext* ctx);
 
-  oop evacuate_object(oop p, Thread* thread);
+  oop evacuate_object(oop p, Thread* thread) override;
   oop try_evacuate_object(oop p, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
   void evacuate_collection_set(bool concurrent) override;
   void promote_regions_in_place(bool concurrent);

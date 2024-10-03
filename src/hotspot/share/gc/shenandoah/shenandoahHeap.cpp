@@ -501,7 +501,6 @@ void ShenandoahHeap::initialize_mode() {
 void ShenandoahHeap::initialize_heuristics() {
   _global_generation = new ShenandoahGlobalGeneration(mode()->is_generational(), max_workers(), max_capacity(), max_capacity());
   _global_generation->initialize_heuristics(mode());
-  _evac_tracker = new ShenandoahEvacuationTracker(mode()->is_generational());
 }
 
 #ifdef _MSC_VER
@@ -536,7 +535,6 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _pacer(nullptr),
   _verifier(nullptr),
   _phase_timings(nullptr),
-  _evac_tracker(nullptr),
   _mmu_tracker(),
   _monitoring_support(nullptr),
   _memory_pool(nullptr),
@@ -1267,7 +1265,6 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   }
 
   // Copy the object:
-  // _evac_tracker->begin_evacuation(thread, size * HeapWordSize);
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
   // Try to install the new forwarding pointer.
@@ -1276,7 +1273,6 @@ oop ShenandoahHeap::try_evacuate_object(oop p, Thread* thread, ShenandoahHeapReg
   if (result == copy_val) {
     // Successfully evacuated. Our copy is now the public one!
     ContinuationGCSupport::relativize_stack_chunk(copy_val);
-    // _evac_tracker->end_evacuation(thread, size * HeapWordSize);
     shenandoah_assert_correct(nullptr, copy_val);
     return copy_val;
   }  else {
@@ -1522,10 +1518,6 @@ void ShenandoahHeap::print_tracing_info() const {
     ls.cr();
 
     shenandoah_policy()->print_gc_stats(&ls);
-
-    ls.cr();
-
-    evac_tracker()->print_global_on(&ls);
 
     ls.cr();
     ls.cr();
