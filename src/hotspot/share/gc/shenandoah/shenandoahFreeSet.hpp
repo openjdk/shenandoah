@@ -328,12 +328,16 @@ private:
   void flip_to_gc(ShenandoahHeapRegion* r);
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
+  // Handle allocation from mutator
+  HeapWord* allocate_for_mutator(ShenandoahAllocRequest &req, bool &in_new_region);
+  void maybe_change_allocation_bias();
   HeapWord* allocate_from_right_to_left(ShenandoahAllocRequest& req, bool& in_new_region);
   HeapWord* allocate_from_left_to_right(ShenandoahAllocRequest& req, bool& in_new_region);
-  HeapWord* allocate_for_collector(ShenandoahAllocRequest& req, bool& in_new_region);
-  HeapWord* try_allocate_from_mutator(ShenandoahAllocRequest& req, bool& in_new_region);
 
+  // Handle allocation from collector (for evacuation)
+  HeapWord* allocate_for_collector(ShenandoahAllocRequest& req, bool& in_new_region);
   bool can_allocate_in_new_region(const ShenandoahAllocRequest& req);
+  HeapWord* try_allocate_from_mutator(ShenandoahAllocRequest& req, bool& in_new_region);
 
   void clear_internal();
   void try_recycle_trashed(ShenandoahHeapRegion *r);
@@ -492,10 +496,6 @@ public:
   // of regions reserved of young evacuations.
   void compute_young_and_old_reserves(size_t young_cset_regions, size_t old_cset_regions, bool have_evacuation_reserves,
                                       size_t &young_reserve_result, size_t &old_reserve_result) const;
-
-  void maybe_change_allocation_bias();
-
-  HeapWord* allocate_for_mutator(ShenandoahAllocRequest &req, bool &in_new_region);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHFREESET_HPP
