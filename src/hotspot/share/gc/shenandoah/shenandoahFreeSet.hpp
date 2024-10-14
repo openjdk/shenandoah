@@ -302,8 +302,10 @@ private:
   // from right-to-left or left-to-right, we reset the value of this counter to _InitialAllocBiasWeight.
   ssize_t _alloc_bias_weight;
 
-  const ssize_t _InitialAllocBiasWeight = 256;
+  const ssize_t INITIAL_ALLOC_BIAS_WEIGHT = 256;
 
+  // Increases used memory for the partition if the allocation is successful. `in_new_region` will be set
+  // if this is the first allocation in the region.
   HeapWord* try_allocate_in(ShenandoahHeapRegion* region, ShenandoahAllocRequest& req, bool& in_new_region);
 
   // While holding the heap lock, allocate memory for a single object or LAB  which is to be entirely contained
@@ -331,8 +333,8 @@ private:
   // Handle allocation for mutator.
   HeapWord* allocate_for_mutator(ShenandoahAllocRequest &req, bool &in_new_region);
 
-  // Chose whether to change the allocation bias from the left or right side of the heap.
-  void maybe_change_allocation_bias();
+  // Update allocation bias and decided whether to allocate from the left or right side of the heap.
+  void update_allocation_bias();
 
   // Search for regions to satisfy allocation request starting from the right, moving to the left.
   HeapWord* allocate_from_right_to_left(ShenandoahAllocRequest& req, bool& in_new_region);

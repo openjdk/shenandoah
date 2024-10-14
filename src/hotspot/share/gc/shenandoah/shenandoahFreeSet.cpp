@@ -759,7 +759,7 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 }
 
 HeapWord* ShenandoahFreeSet::allocate_for_mutator(ShenandoahAllocRequest &req, bool &in_new_region) {
-  maybe_change_allocation_bias();
+  update_allocation_bias();
 
   if (_partitions.is_empty(ShenandoahFreeSetPartitionId::Mutator)) {
     // There is no recovery. Mutator does not touch collector view at all.
@@ -774,7 +774,7 @@ HeapWord* ShenandoahFreeSet::allocate_for_mutator(ShenandoahAllocRequest &req, b
   return allocate_from_right_to_left(req, in_new_region);
 }
 
-void ShenandoahFreeSet::maybe_change_allocation_bias() {
+void ShenandoahFreeSet::update_allocation_bias() {
   if (_alloc_bias_weight-- <= 0) {
     // We have observed that regions not collected in previous GC cycle tend to congregate at one end or the other
     // of the heap.  Typically, these are the more recently engaged regions and the objects in these regions have not
@@ -796,7 +796,7 @@ void ShenandoahFreeSet::maybe_change_allocation_bias() {
     idx_t non_empty_on_right = (_partitions.rightmost(ShenandoahFreeSetPartitionId::Mutator)
                                 - _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator));
     _partitions.set_bias_from_left_to_right(ShenandoahFreeSetPartitionId::Mutator, (non_empty_on_right < non_empty_on_left));
-    _alloc_bias_weight = _InitialAllocBiasWeight;
+    _alloc_bias_weight = INITIAL_ALLOC_BIAS_WEIGHT;
   }
 }
 
@@ -810,7 +810,7 @@ HeapWord* ShenandoahFreeSet::allocate_from_left_to_right(ShenandoahAllocRequest 
     assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, idx),
            "Boundaries or find_last_set_bit failed: " SSIZE_FORMAT, idx);
     ShenandoahHeapRegion* r = _heap->get_region(idx);
-    // try_allocate_in() increases used if the allocation is successful.
+
     HeapWord* result;
     size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab) ? req.min_size() : req.size();
     if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
@@ -829,7 +829,6 @@ HeapWord* ShenandoahFreeSet::allocate_from_right_to_left(ShenandoahAllocRequest 
     assert(_partitions.in_free_set(ShenandoahFreeSetPartitionId::Mutator, idx),
            "Boundaries or find_last_set_bit failed: " SSIZE_FORMAT, idx);
     ShenandoahHeapRegion* r = _heap->get_region(idx);
-    // try_allocate_in() increases used if the allocation is successful.
     HeapWord* result;
     size_t min_size = (req.type() == ShenandoahAllocRequest::_alloc_tlab) ? req.min_size() : req.size();
     if ((alloc_capacity(r) >= min_size) && ((result = try_allocate_in(r, req, in_new_region)) != nullptr)) {
