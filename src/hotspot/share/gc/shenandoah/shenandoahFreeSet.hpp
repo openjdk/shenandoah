@@ -328,15 +328,25 @@ private:
   void flip_to_gc(ShenandoahHeapRegion* r);
   void flip_to_old_gc(ShenandoahHeapRegion* r);
 
-  // Handle allocation from mutator
+  // Handle allocation for mutator.
   HeapWord* allocate_for_mutator(ShenandoahAllocRequest &req, bool &in_new_region);
+
+  // Chose whether to change the allocation bias from the left or right side of the heap.
   void maybe_change_allocation_bias();
+
+  // Search for regions to satisfy allocation request starting from the right, moving to the left.
   HeapWord* allocate_from_right_to_left(ShenandoahAllocRequest& req, bool& in_new_region);
+
+  // Search for regions to satisfy allocation request starting from the left, moving to the right.
   HeapWord* allocate_from_left_to_right(ShenandoahAllocRequest& req, bool& in_new_region);
 
-  // Handle allocation from collector (for evacuation)
+  // Handle allocation for collector (for evacuation).
   HeapWord* allocate_for_collector(ShenandoahAllocRequest& req, bool& in_new_region);
+
+  // Return true if the respective generation for this request has free regions.
   bool can_allocate_in_new_region(const ShenandoahAllocRequest& req);
+
+  // Attempt to allocate memory for an evacuation from the mutator's partition.
   HeapWord* try_allocate_from_mutator(ShenandoahAllocRequest& req, bool& in_new_region);
 
   void clear_internal();
