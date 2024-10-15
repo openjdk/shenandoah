@@ -426,7 +426,6 @@ void ShenandoahDegenGC::op_update_roots() {
 void ShenandoahDegenGC::op_cleanup_complete() {
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_cleanup_complete);
   ShenandoahHeap::heap()->recycle_trash();
-  _generation->reset_mark_bitmap_after_collection();
 }
 
 void ShenandoahDegenGC::op_degenerated_fail() {
