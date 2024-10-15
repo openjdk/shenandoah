@@ -896,6 +896,8 @@ bool ShenandoahFreeSet::can_allocate_in_new_region(const ShenandoahAllocRequest&
 }
 
 HeapWord* ShenandoahFreeSet::try_allocate_from_mutator(ShenandoahAllocRequest& req, bool& in_new_region) {
+  // The collector prefers to keep longer lived regions toward the right side of the heap, so it always
+  // searches for regions from right to left here.
   idx_t rightmost_mutator = _partitions.rightmost_empty(ShenandoahFreeSetPartitionId::Mutator);
   idx_t leftmost_mutator =  _partitions.leftmost_empty(ShenandoahFreeSetPartitionId::Mutator);
   for (idx_t idx = rightmost_mutator; idx >= leftmost_mutator; ) {
