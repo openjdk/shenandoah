@@ -200,7 +200,7 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
 void ShenandoahGeneration::reset_mark_bitmap_after_collection() {
   assert(is_mark_complete(), "Mark must have completed after GC.");
-  assert(is_mark_bitmap_reset(), "Bitmap must have not been reset.");
+  assert(!is_mark_bitmap_reset(), "Bitmap must have not been reset.");
 
   reset_mark_bitmap();
   set_mark_bitmap_reset(true);
@@ -823,7 +823,7 @@ ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
   _heuristics(nullptr)
 {
   _is_marking_complete.set();
-  _is_mark_bitmap_reset.set();
+  _is_mark_bitmap_reset.unset();
   assert(max_workers > 0, "At least one queue");
   for (uint i = 0; i < max_workers; ++i) {
     ShenandoahObjToScanQueue* task_queue = new ShenandoahObjToScanQueue();

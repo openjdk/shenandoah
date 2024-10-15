@@ -1175,7 +1175,12 @@ void ShenandoahConcurrentGC::op_final_roots() {
 }
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {
-  ShenandoahHeap::heap()->free_set()->recycle_trash();
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  heap->free_set()->recycle_trash();
+
+  ShenandoahWorkerScope scope(heap()->workers(),
+                            ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
+                            "reset mark bitmap after collection.");
   _generation->reset_mark_bitmap_after_collection();
 }
 
