@@ -1176,6 +1176,7 @@ void ShenandoahConcurrentGC::op_final_roots() {
 
 void ShenandoahConcurrentGC::op_cleanup_complete() {
   ShenandoahHeap::heap()->free_set()->recycle_trash();
+  _generation->reset_mark_bitmap_after_collection();
 }
 
 bool ShenandoahConcurrentGC::check_cancellation_and_abort(ShenandoahDegenPoint point) {

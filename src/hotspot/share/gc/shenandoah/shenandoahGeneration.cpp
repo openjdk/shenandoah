@@ -198,6 +198,14 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   heap->workers()->run_task(&task);
 }
 
+void ShenandoahGeneration::reset_mark_bitmap_after_collection() {
+  assert(is_mark_complete(), "Mark must have completed after GC.");
+  assert(is_mark_bitmap_reset(), "Bitmap must have not been reset.");
+
+  reset_mark_bitmap();
+  set_mark_bitmap_reset(true);
+}
+
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
 // However, limitations in the implementation of the mutator write-barrier make it difficult to simply change the
 // location of the card table.  So the interim implementation of swap_remembered_set will copy the write-table
@@ -229,7 +237,9 @@ void ShenandoahGeneration::merge_write_table() {
 
 void ShenandoahGeneration::prepare_gc() {
 
-  reset_mark_bitmap();
+  if (!is_mark_bitmap_reset()) {
+    reset_mark_bitmap();
+  }
 
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
@@ -761,6 +771,18 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   return true;
 }
 
+bool ShenandoahGeneration::is_mark_bitmap_reset() {
+  return _is_mark_bitmap_reset.is_set();
+}
+
+void ShenandoahGeneration::set_mark_bitmap_reset(bool reset) {
+  if (reset) {
+    _is_mark_bitmap_reset.set();
+  } else {
+    _is_mark_bitmap_reset.unset();
+  }
+}
+
 bool ShenandoahGeneration::is_mark_complete() {
   return _is_marking_complete.is_set();
 }
@@ -801,6 +823,7 @@ ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
   _heuristics(nullptr)
 {
   _is_marking_complete.set();
+  _is_mark_bitmap_reset.set();
   assert(max_workers > 0, "At least one queue");
   for (uint i = 0; i < max_workers; ++i) {
     ShenandoahObjToScanQueue* task_queue = new ShenandoahObjToScanQueue();
