@@ -793,6 +793,10 @@ void ShenandoahGeneration::set_mark_bitmap_reset(bool reset) {
   } else {
     _is_mark_bitmap_reset.unset();
   }
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  if (heap->mode()->is_generational() && !this->is_global()) {
+    heap->global_generation()->set_mark_bitmap_reset(reset);
+  }
 }
 
 bool ShenandoahGeneration::is_mark_complete() {
