@@ -40,7 +40,6 @@ void ShenandoahMark::start_mark() {
   if (!CodeCache::is_gc_marking_cycle_active()) {
     CodeCache::on_gc_marking_cycle_start();
   }
-  _generation->set_mark_bitmap_reset(false);
 }
 
 void ShenandoahMark::end_mark() {

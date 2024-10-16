@@ -107,8 +107,6 @@ private:
 
   void entry_cleanup_complete();
 
-  void entry_reset_after_collect();
-
   // Called when the collection set is empty, but the generational mode has regions to promote in place
   void entry_promote_in_place();
 
@@ -135,6 +133,7 @@ private:
 
 protected:
   virtual void op_final_mark();
+  void entry_reset_after_collect();
 
 private:
   void start_mark();

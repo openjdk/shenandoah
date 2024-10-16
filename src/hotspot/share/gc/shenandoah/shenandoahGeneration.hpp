@@ -48,7 +48,7 @@ private:
   // Marking task queues and completeness
   ShenandoahObjToScanQueueSet* _task_queues;
   ShenandoahSharedFlag _is_marking_complete;
-  ShenandoahSharedFlag _is_mark_bitmap_reset;
+  ShenandoahSharedFlag _need_bitmap_reset;
 
   ShenandoahReferenceProcessor* const _ref_processor;
 
@@ -161,8 +161,6 @@ private:
   // Used directly by FullGC
   void reset_mark_bitmap();
 
-  void reset_mark_bitmap_after_collect();
-
   // Used by concurrent and degenerated GC to reset remembered set.
   void swap_remembered_set();
 
@@ -199,10 +197,10 @@ private:
   // Check the bitmap only for regions belong to this generation.
   bool is_bitmap_clear();
 
-  // Fast check if the mark bitmap has been reset,
-  // it uses the flag _is_mark_bitmap_reset inteast of scanning bitmap.
-  bool is_mark_bitmap_reset();
-  void set_mark_bitmap_reset(bool reset);
+  // Fast check if the mark bitmap need to be reset for next cycle.
+  bool need_bitmap_reset();
+  void set_need_bitmap_reset();
+  void unset_need_bitmap_reset();
 
   // We need to track the status of marking for different generations.
   bool is_mark_complete();

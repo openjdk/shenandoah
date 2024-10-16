@@ -1198,7 +1198,18 @@ void ShenandoahConcurrentGC::op_reset_after_collect() {
   ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
                           ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
                           "reset after collection.");
-  _generation->reset_mark_bitmap();
+
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+
+  if (heap->mode()->is_generational()) {
+    if (!_do_old_gc_bootstrap || _generation->is_old()) {
+      heap->global_generation()->reset_mark_bitmap();
+      heap->global_generation()->unset_need_bitmap_reset();
+    }
+  } else {
+    _generation->reset_mark_bitmap();
+    _generation->unset_need_bitmap_reset();
+  }
 }
 
 bool ShenandoahConcurrentGC::check_cancellation_and_abort(ShenandoahDegenPoint point) {

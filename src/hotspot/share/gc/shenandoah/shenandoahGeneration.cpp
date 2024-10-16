@@ -196,21 +196,6 @@ void ShenandoahGeneration::reset_mark_bitmap() {
 
   ShenandoahResetBitmapTask task(this);
   heap->workers()->run_task(&task);
-
-  set_mark_bitmap_reset(true);
-}
-
-void ShenandoahGeneration::reset_mark_bitmap_after_collect() {
-  assert(is_mark_complete(), "Mark must have completed after GC.");
-  assert(!is_mark_bitmap_reset(), "Bitmap must have not been reset.");
-
-  reset_mark_bitmap();
-  set_mark_bitmap_reset(true);
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  if (is_global() && heap->mode()->is_generational()) {
-    heap->young_generation()->set_mark_bitmap_reset(true);
-    heap->old_generation()->set_mark_bitmap_reset(true);
-  }
 }
 
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
@@ -244,10 +229,16 @@ void ShenandoahGeneration::merge_write_table() {
 
 void ShenandoahGeneration::prepare_gc() {
 
-  if (!is_mark_bitmap_reset()) {
+  if (need_bitmap_reset()) {
     reset_mark_bitmap();
+  } else {
+    //For next cycle
+    set_need_bitmap_reset();
   }
 
+  if (!is_global() && ShenandoahHeap::heap()->mode()->is_generational()) {
+    ShenandoahHeap::heap()->global_generation()->set_need_bitmap_reset();
+  }
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_region_iterate_free(&cl);
@@ -778,19 +769,19 @@ bool ShenandoahGeneration::is_bitmap_clear() {
   return true;
 }
 
-bool ShenandoahGeneration::is_mark_bitmap_reset() {
-  return _is_mark_bitmap_reset.is_set();
+bool ShenandoahGeneration::need_bitmap_reset() {
+  return _need_bitmap_reset.is_set();
 }
 
-void ShenandoahGeneration::set_mark_bitmap_reset(bool reset) {
-  if (reset) {
-    _is_mark_bitmap_reset.set();
-  } else {
-    _is_mark_bitmap_reset.unset();
-  }
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational() && !this->is_global()) {
-    heap->global_generation()->set_mark_bitmap_reset(reset);
+void ShenandoahGeneration::set_need_bitmap_reset() {
+  _need_bitmap_reset.set();
+}
+
+void ShenandoahGeneration::unset_need_bitmap_reset() {
+  _need_bitmap_reset.unset();
+  if (ShenandoahHeap::heap()->mode()->is_generational() && is_global()) {
+    _need_bitmap_reset.unset();
+    _need_bitmap_reset.unset();
   }
 }
 
@@ -834,7 +825,7 @@ ShenandoahGeneration::ShenandoahGeneration(ShenandoahGenerationType type,
   _heuristics(nullptr)
 {
   _is_marking_complete.set();
-  _is_mark_bitmap_reset.unset();
+  _need_bitmap_reset.set();
   assert(max_workers > 0, "At least one queue");
   for (uint i = 0; i < max_workers; ++i) {
     ShenandoahObjToScanQueue* task_queue = new ShenandoahObjToScanQueue();
