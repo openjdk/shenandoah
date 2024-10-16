@@ -204,6 +204,11 @@ void ShenandoahGeneration::reset_mark_bitmap_after_collection() {
 
   reset_mark_bitmap();
   set_mark_bitmap_reset(true);
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  if (is_global() && heap->mode()->is_generational()) {
+    heap->young_generation()->set_mark_bitmap_reset(true);
+    heap->old_generation()->set_mark_bitmap_reset(true);
+  }
 }
 
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.

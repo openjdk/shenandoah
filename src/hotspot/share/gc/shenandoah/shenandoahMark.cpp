@@ -35,6 +35,7 @@
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
+#include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 
 void ShenandoahMark::start_mark() {
   if (!CodeCache::is_gc_marking_cycle_active()) {
@@ -42,6 +43,11 @@ void ShenandoahMark::start_mark() {
   }
   // When start mark, alwasy set the flag _mark_bitmap_reset to false,
   _generation->set_mark_bitmap_reset(false);
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  if(_generation->is_global() && heap->mode()->is_generational()) {
+    heap->young_generation()->set_mark_bitmap_reset(false);
+    heap->old_generation()->set_mark_bitmap_reset(false);
+  }
 }
 
 void ShenandoahMark::end_mark() {
