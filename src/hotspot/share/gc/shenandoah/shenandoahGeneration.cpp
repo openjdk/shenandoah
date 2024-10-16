@@ -192,8 +192,6 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
 
-  set_mark_incomplete();
-
   ShenandoahResetBitmapTask task(this);
   heap->workers()->run_task(&task);
 }
@@ -245,6 +243,8 @@ void ShenandoahGeneration::prepare_gc() {
   if (!is_mark_bitmap_reset()) {
     reset_mark_bitmap();
   }
+
+  set_mark_incomplete();
 
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
