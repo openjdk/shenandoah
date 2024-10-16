@@ -192,17 +192,12 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
 
+  set_mark_incomplete();
+
   ShenandoahResetBitmapTask task(this);
   heap->workers()->run_task(&task);
 
-  set_mark_incomplete();
   set_mark_bitmap_reset(true);
-  if (is_global() && heap->mode()->is_generational()) {
-    heap->young_generation()->set_mark_incomplete();
-    heap->old_generation()->set_mark_incomplete();
-    heap->young_generation()->set_mark_bitmap_reset(true);
-    heap->old_generation()->set_mark_bitmap_reset(true);
-  }
 }
 
 void ShenandoahGeneration::reset_mark_bitmap_after_collect() {
