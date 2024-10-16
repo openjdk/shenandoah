@@ -1198,7 +1198,7 @@ void ShenandoahConcurrentGC::op_reset_after_collect() {
   ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
                           ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
                           "reset after collection.");
-  _generation->reset_mark_bitmap_after_collection();
+  _generation->reset_mark_bitmap();
 }
 
 bool ShenandoahConcurrentGC::check_cancellation_and_abort(ShenandoahDegenPoint point) {
