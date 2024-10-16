@@ -196,7 +196,7 @@ void ShenandoahGeneration::reset_mark_bitmap() {
   heap->workers()->run_task(&task);
 }
 
-void ShenandoahGeneration::reset_mark_bitmap_after_collection() {
+void ShenandoahGeneration::reset_mark_bitmap_after_collect() {
   assert(is_mark_complete(), "Mark must have completed after GC.");
   assert(!is_mark_bitmap_reset(), "Bitmap must have not been reset.");
 

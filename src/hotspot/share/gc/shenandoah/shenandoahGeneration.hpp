@@ -161,7 +161,7 @@ private:
   // Used directly by FullGC
   void reset_mark_bitmap();
 
-  void reset_mark_bitmap_after_collection();
+  void reset_mark_bitmap_after_collect();
 
   // Used by concurrent and degenerated GC to reset remembered set.
   void swap_remembered_set();
