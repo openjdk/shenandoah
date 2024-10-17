@@ -1200,10 +1200,15 @@ void ShenandoahConcurrentGC::op_reset_after_collect() {
                           "reset after collection.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  // Reset makr bitmap when no need to do old gc boostrap or in non-generational mode.
-  if (!heap->mode()->is_generational() || !_do_old_gc_bootstrap) {
+  // Only reset for young generation, bitmap for old generation must be retained,
+  // excpet there is collection(global/old/degen/full) trigged to collet regions in old gen.
+  if (heap->mode()->is_generational()) {
+    heap->young_generation()->reset_mark_bitmap();
+    heap->young_generation()->unset_need_bitmap_reset();
+  } else {
     _generation->reset_mark_bitmap();
     _generation->unset_need_bitmap_reset();
+
   }
 }
 
