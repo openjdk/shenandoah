@@ -1200,7 +1200,7 @@ void ShenandoahConcurrentGC::op_reset_after_collect() {
                           "reset after collection.");
 
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  if (heap->mode()->is_generational() && !_generation->is_global()) {
+  if (!heap->mode()->is_generational() || !_generation->is_global()) {
     _generation->reset_mark_bitmap();
     _generation->unset_need_bitmap_reset();
   }
