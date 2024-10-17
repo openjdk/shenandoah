@@ -129,7 +129,7 @@ private:
   void op_final_roots();
 
   void op_cleanup_complete();
-  void op_reset_after_collect();
+  virtual void op_reset_after_collect();
 
 protected:
   virtual void op_final_mark();
