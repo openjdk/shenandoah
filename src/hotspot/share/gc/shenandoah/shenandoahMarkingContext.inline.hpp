@@ -59,11 +59,11 @@ inline bool ShenandoahMarkingContext::is_marked_weak(oop obj) const {
 }
 
 inline bool ShenandoahMarkingContext::is_marked_or_old(oop obj) const {
-  return is_marked(obj) || ShenandoahHeap::heap()->is_old(obj);
+  return is_marked(obj) || ShenandoahHeap::heap()->is_not_in_active_young_collection(obj);
 }
 
 inline bool ShenandoahMarkingContext::is_marked_strong_or_old(oop obj) const {
-  return is_marked_strong(obj) || ShenandoahHeap::heap()->is_old(obj);
+  return is_marked_strong(obj) || ShenandoahHeap::heap()->is_not_in_active_young_collection(obj);
 }
 
 inline HeapWord* ShenandoahMarkingContext::get_next_marked_addr(const HeapWord* start, const HeapWord* limit) const {
