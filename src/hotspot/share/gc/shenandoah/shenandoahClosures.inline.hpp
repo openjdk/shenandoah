@@ -49,7 +49,7 @@ bool ShenandoahForwardedIsAliveClosure::do_object_b(oop obj) {
   }
   obj = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
   shenandoah_assert_not_forwarded_if(nullptr, obj, ShenandoahHeap::heap()->is_concurrent_mark_in_progress());
-  return _mark_context->is_marked(obj);
+  return _mark_context->is_marked_or_old(obj);
 }
 
 ShenandoahIsAliveClosure::ShenandoahIsAliveClosure() :
@@ -61,7 +61,7 @@ bool ShenandoahIsAliveClosure::do_object_b(oop obj) {
     return false;
   }
   shenandoah_assert_not_forwarded(nullptr, obj);
-  return _mark_context->is_marked(obj);
+  return _mark_context->is_marked_or_old(obj);
 }
 
 BoolObjectClosure* ShenandoahIsAliveSelector::is_alive_closure() {
