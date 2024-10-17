@@ -42,8 +42,6 @@ class ShenandoahOldGC : public ShenandoahConcurrentGC {
  private:
   ShenandoahOldGeneration* _old_generation;
   ShenandoahSharedFlag& _allow_preemption;
-
-  void op_reset_after_collect() override;
 };
 
 

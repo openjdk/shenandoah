@@ -106,6 +106,8 @@ private:
   void entry_updaterefs();
 
   void entry_cleanup_complete();
+  // Called when concurrent GC succeeds.
+  void entry_reset_after_collect();
 
   // Called when the collection set is empty, but the generational mode has regions to promote in place
   void entry_promote_in_place();
@@ -129,11 +131,10 @@ private:
   void op_final_roots();
 
   void op_cleanup_complete();
-  virtual void op_reset_after_collect();
+  void op_reset_after_collect();
 
 protected:
   virtual void op_final_mark();
-  void entry_reset_after_collect();
 
 private:
   void start_mark();

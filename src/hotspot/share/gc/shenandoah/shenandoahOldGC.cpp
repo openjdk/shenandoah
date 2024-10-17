@@ -33,7 +33,6 @@
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "prims/jvmtiTagMap.hpp"
 #include "utilities/events.hpp"
@@ -82,15 +81,6 @@ void ShenandoahOldGC::op_final_mark() {
       Universe::verify();
     }
   }
-}
-
-void ShenandoahOldGC::op_reset_after_collect() {
-  ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
-                          ShenandoahWorkerPolicy::calc_workers_for_conc_reset(),
-                          "reset after collection.");
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  heap->global_generation()->reset_mark_bitmap();
-  heap->global_generation()->unset_need_bitmap_reset();
 }
 
 bool ShenandoahOldGC::collect(GCCause::Cause cause) {
@@ -161,8 +151,6 @@ bool ShenandoahOldGC::collect(GCCause::Cause cause) {
     ShenandoahHeapLocker locker(heap->lock());
     result = heap->balance_generations();
   }
-
-  entry_reset_after_collect();
 
   LogTarget(Info, gc, ergo) lt;
   if (lt.is_enabled()) {
