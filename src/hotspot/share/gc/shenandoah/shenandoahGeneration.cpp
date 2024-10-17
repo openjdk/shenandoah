@@ -231,14 +231,10 @@ void ShenandoahGeneration::prepare_gc() {
 
   if (need_bitmap_reset()) {
     reset_mark_bitmap();
-  } else {
-    //For next cycle
-    set_need_bitmap_reset();
   }
+  // For next cycle
+  set_need_bitmap_reset();
 
-  if (!is_global() && ShenandoahHeap::heap()->mode()->is_generational()) {
-    ShenandoahHeap::heap()->global_generation()->set_need_bitmap_reset();
-  }
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
   parallel_region_iterate_free(&cl);
@@ -775,14 +771,14 @@ bool ShenandoahGeneration::need_bitmap_reset() {
 
 void ShenandoahGeneration::set_need_bitmap_reset() {
   _need_bitmap_reset.set();
+  if (ShenandoahHeap::heap()->mode()->is_generational() && is_global()) {
+    ShenandoahHeap::heap()->old_generation()->set_need_bitmap_reset();
+    ShenandoahHeap::heap()->young_generation()->set_need_bitmap_reset();
+  }
 }
 
 void ShenandoahGeneration::unset_need_bitmap_reset() {
   _need_bitmap_reset.unset();
-  if (ShenandoahHeap::heap()->mode()->is_generational() && is_global()) {
-    _need_bitmap_reset.unset();
-    _need_bitmap_reset.unset();
-  }
 }
 
 bool ShenandoahGeneration::is_mark_complete() {
