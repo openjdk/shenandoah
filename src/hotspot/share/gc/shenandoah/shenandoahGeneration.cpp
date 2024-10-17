@@ -67,17 +67,20 @@ class ShenandoahResetBitmapTask : public WorkerTask {
 private:
   ShenandoahRegionIterator _regions;
   ShenandoahGeneration* _generation;
+  bool const _include_not_affiliated;
 
 public:
-  ShenandoahResetBitmapTask(ShenandoahGeneration* generation) :
-    WorkerTask("Shenandoah Reset Bitmap"), _generation(generation) {}
+  ShenandoahResetBitmapTask(ShenandoahGeneration* generation, bool const include_not_affiliated = true) :
+    WorkerTask("Shenandoah Reset Bitmap"),
+    _generation(generation),
+    _include_not_affiliated(include_not_affiliated){}
 
   void work(uint worker_id) {
     ShenandoahHeapRegion* region = _regions.next();
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahMarkingContext* const ctx = heap->marking_context();
     while (region != nullptr) {
-      bool needs_reset = _generation->contains(region) || !region->is_affiliated();
+      bool needs_reset = _generation->contains(region) || (_include_not_affiliated && !region->is_affiliated());
       if (needs_reset && heap->is_bitmap_slice_committed(region)) {
         ctx->clear_bitmap(region);
       }
@@ -188,11 +191,11 @@ void ShenandoahGeneration::log_status(const char *msg) const {
                    byte_size_in_proper_unit(v_available),         proper_unit_for_byte_size(v_available));
 }
 
-void ShenandoahGeneration::reset_mark_bitmap() {
+void ShenandoahGeneration::reset_mark_bitmap(bool include_not_affiliated) {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   heap->assert_gc_workers(heap->workers()->active_workers());
 
-  ShenandoahResetBitmapTask task(this);
+  ShenandoahResetBitmapTask task(this, include_not_affiliated);
   heap->workers()->run_task(&task);
 }
 
@@ -226,9 +229,14 @@ void ShenandoahGeneration::merge_write_table() {
 }
 
 void ShenandoahGeneration::prepare_gc() {
-
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   if (need_bitmap_reset()) {
-    reset_mark_bitmap();
+    if (heap->mode()->is_generational() && is_global() && !heap->young_generation()->need_bitmap_reset()) {
+      //Only need to reset bitmap for old generation.
+      heap->old_generation()->reset_mark_bitmap(false);
+    } else {
+      reset_mark_bitmap();
+    }
   }
   // For next cycle
   set_need_bitmap_reset();

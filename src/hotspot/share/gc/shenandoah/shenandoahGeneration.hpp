@@ -159,7 +159,7 @@ private:
   void log_status(const char* msg) const;
 
   // Used directly by FullGC
-  void reset_mark_bitmap();
+  void reset_mark_bitmap(bool include_not_affiliated = true);
 
   // Used by concurrent and degenerated GC to reset remembered set.
   void swap_remembered_set();
