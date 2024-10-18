@@ -463,6 +463,10 @@ WB_ENTRY(jboolean, WB_SupportsConcurrentGCBreakpoints(JNIEnv* env, jobject o))
   return Universe::heap()->supports_concurrent_gc_breakpoints();
 WB_END
 
+WB_ENTRY(jboolean, WB_IsFullGCPromotesToOld(JNIEnv* env))
+  return Universe::heap()->full_gc_promotes_to_old();
+WB_END
+
 WB_ENTRY(void, WB_ConcurrentGCAcquireControl(JNIEnv* env, jobject o))
   ConcurrentGCBreakpoints::acquire_control();
 WB_END
@@ -2933,6 +2937,7 @@ static JNINativeMethod methods[] = {
   {CC"isGCSupportedByJVMCICompiler", CC"(I)Z",        (void*)&WB_IsGCSupportedByJVMCICompiler},
   {CC"isGCSelected",              CC"(I)Z",           (void*)&WB_IsGCSelected},
   {CC"isGCSelectedErgonomically", CC"()Z",            (void*)&WB_IsGCSelectedErgonomically},
+  {CC"isFullGCPromotesToOld",     CC"()Z",            (void*)&WB_IsFullGCPromotesToOld},
   {CC"supportsConcurrentGCBreakpoints", CC"()Z",      (void*)&WB_SupportsConcurrentGCBreakpoints},
   {CC"concurrentGCAcquireControl0", CC"()V",          (void*)&WB_ConcurrentGCAcquireControl},
   {CC"concurrentGCReleaseControl0", CC"()V",          (void*)&WB_ConcurrentGCReleaseControl},

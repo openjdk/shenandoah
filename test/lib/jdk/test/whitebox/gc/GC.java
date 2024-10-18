@@ -88,4 +88,12 @@ public enum GC {
       }
       throw new IllegalStateException("No selected GC found");
     }
+
+    /**
+     * @return true if a full gc invocation on this GC causes objects
+     *         to be promoted to the old generation (when generational)
+     */
+    public static boolean isFullGCPromotesToOld() {
+        return WB.isFullGCPromotesToOld();
+    }
 }

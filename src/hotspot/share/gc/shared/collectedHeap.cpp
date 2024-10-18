@@ -220,6 +220,12 @@ bool CollectedHeap::supports_concurrent_gc_breakpoints() const {
   return false;
 }
 
+// Default implementation, for collectors that promote to old generation
+// (when one exists) upon a full gc.
+bool CollectedHeap::full_gc_promotes_to_old() const {
+  return true;
+}
+
 bool CollectedHeap::is_oop(oop object) const {
   if (!is_object_aligned(object)) {
     return false;

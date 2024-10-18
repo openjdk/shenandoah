@@ -123,12 +123,8 @@ public class TestReferenceRefersToShenandoah {
     private static void gcUntilOld(Object o) throws Exception {
         if (!WB.isObjectInOldGen(o)) {
             WB.fullGC();
-            if (!WB.isObjectInOldGen(o)) {
-                // This is just a warning, because failing would
-                // be overspecifying for generational shenandoah,
-                // which need not necessarily promote objects upon
-                // a full GC.
-                warn("object not promoted by full gc");
+            if (WB.isFullGCPromotesToOld() && !WB.isObjectInOldGen(o)) {
+                fail("object not promoted by full gc");
             }
         }
     }
@@ -153,10 +149,6 @@ public class TestReferenceRefersToShenandoah {
 
     private static void fail(String msg) throws Exception {
         throw new RuntimeException(msg);
-    }
-
-    private static void warn(String msg) {
-        System.out.println("Warning: " + msg);
     }
 
     private static void expectCleared(Reference<TestObject> ref,
