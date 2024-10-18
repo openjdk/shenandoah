@@ -27,7 +27,7 @@
  * @test id=passive
  * @summary Check that MX notifications are reported for all cycles
  * @library /test/lib /
- * @requires vm.gc.Shenandoah
+ * @requires vm.gc.Shenandoah & vm.opt.ShenandoahGCMode != "generational"
  *
  * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=passive
@@ -44,7 +44,7 @@
  * @test id=aggressive
  * @summary Check that MX notifications are reported for all cycles
  * @library /test/lib /
- * @requires vm.gc.Shenandoah
+ * @requires vm.gc.Shenandoah & vm.opt.ShenandoahGCMode != "generational"
  *
  * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=aggressive
@@ -56,7 +56,7 @@
  * @test id=adaptive
  * @summary Check that MX notifications are reported for all cycles
  * @library /test/lib /
- * @requires vm.gc.Shenandoah
+ * @requires vm.gc.Shenandoah & vm.opt.ShenandoahGCMode != "generational"
  *
  * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=adaptive
@@ -68,7 +68,7 @@
  * @test id=static
  * @summary Check that MX notifications are reported for all cycles
  * @library /test/lib /
- * @requires vm.gc.Shenandoah
+ * @requires vm.gc.Shenandoah & vm.opt.ShenandoahGCMode != "generational"
  *
  * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=static
@@ -80,7 +80,7 @@
  * @test id=compact
  * @summary Check that MX notifications are reported for all cycles
  * @library /test/lib /
- * @requires vm.gc.Shenandoah
+ * @requires vm.gc.Shenandoah & vm.opt.ShenandoahGCMode != "generational"
  *
  * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCHeuristics=compact
@@ -89,13 +89,61 @@
  */
 
 /*
- * @test id=generational
+ * @test id=gen-default
  * @summary Check that MX notifications are reported for all cycles
  * @library /test/lib /
  * @requires vm.gc.Shenandoah
  *
  * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
+ *      -Dprecise=false -Dmem.pool=Young
+ *      TestChurnNotifications
+ */
+
+/*
+ * @test id=gen-adaptive
+ * @summary Check that MX notifications are reported for all cycles
+ * @library /test/lib /
+ * @requires vm.gc.Shenandoah
+ *
+ * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:ShenandoahGCHeuristics=adaptive
+ *      -Dprecise=false -Dmem.pool=Young
+ *      TestChurnNotifications
+ */
+
+/*
+ * @test id=gen-aggressive
+ * @summary Check that MX notifications are reported for all cycles
+ * @library /test/lib /
+ * @requires vm.gc.Shenandoah
+ *
+ * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:ShenandoahGCHeuristics=aggressive
+ *      -Dprecise=false -Dmem.pool=Young
+ *      TestChurnNotifications
+ */
+
+/*
+ * @test id=gen-compact
+ * @summary Check that MX notifications are reported for all cycles
+ * @library /test/lib /
+ * @requires vm.gc.Shenandoah
+ *
+ * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:ShenandoahGCHeuristics=compact
+ *      -Dprecise=false -Dmem.pool=Young
+ *      TestChurnNotifications
+ */
+
+/*
+ * @test id=gen-static
+ * @summary Check that MX notifications are reported for all cycles
+ * @library /test/lib /
+ * @requires vm.gc.Shenandoah
+ *
+ * @run main/othervm -Xmx128m -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:ShenandoahGCHeuristics=static
  *      -Dprecise=false -Dmem.pool=Young
  *      TestChurnNotifications
  */
