@@ -391,7 +391,7 @@ inline bool ShenandoahHeap::is_in_old(const void* p) const {
   return is_in_reserved(p) && (_affiliations[heap_region_index_containing(p)] == ShenandoahAffiliation::OLD_GENERATION);
 }
 
-inline bool ShenandoahHeap::is_not_in_active_young_collection(oop obj) const {
+inline bool ShenandoahHeap::is_in_old_during_young_collection(oop obj) const {
   return active_generation()->is_young() && is_in_old(obj);
 }
 
