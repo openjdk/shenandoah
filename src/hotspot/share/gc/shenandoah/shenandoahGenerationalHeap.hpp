@@ -57,6 +57,14 @@ public:
 
   size_t unsafe_max_tlab_alloc(Thread *thread) const override;
 
+  // --- Whitebox testing support
+  //
+  bool full_gc_promotes_to_old() const override {
+    // We don't necessarily promote objects to the old
+    // generation upon a full gc.
+    return false;
+  }
+
 private:
   // ---------- Evacuations and Promotions
   //

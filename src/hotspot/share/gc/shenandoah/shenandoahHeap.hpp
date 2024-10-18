@@ -228,10 +228,6 @@ public:
     return true;
   }
 
-  bool full_gc_promotes_to_old() const override {
-    return false;
-  }
-
 // ---------- Heap counters and metrics
 //
 private:
