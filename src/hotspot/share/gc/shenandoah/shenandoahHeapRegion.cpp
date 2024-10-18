@@ -851,6 +851,11 @@ void ShenandoahHeapRegion::set_affiliation(ShenandoahAffiliation new_affiliation
     return;
   }
 
+  if (region_affiliation == OLD_GENERATION) {
+    //Need to reset bitmap in next GC after change affiliation from OLD_GENERATION
+    heap->young_generation()->set_need_bitmap_reset();
+  }
+
   switch (new_affiliation) {
     case FREE:
       assert(!has_live(), "Free region should not have live data");
