@@ -221,7 +221,8 @@ bool CollectedHeap::supports_concurrent_gc_breakpoints() const {
 }
 
 // Default implementation, for collectors that promote to old generation
-// (when one exists) upon a full gc.
+// (when one exists) upon a full gc. Non-generational heaps should return
+// true.
 bool CollectedHeap::full_gc_promotes_to_old() const {
   return true;
 }
