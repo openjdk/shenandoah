@@ -175,7 +175,7 @@ private:
   // Cancel marking (used by Full collect and when cancelling cycle).
   virtual void cancel_marking();
 
-  virtual bool contains(ShenandoahAffiliation affiliation) const;
+  virtual bool contains(ShenandoahAffiliation affiliation) const = 0;
 
   // Return true if this region is affiliated with this generation.
   virtual bool contains(ShenandoahHeapRegion* region) const = 0;
