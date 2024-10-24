@@ -44,15 +44,17 @@
 
 class ShenandoahResetUpdateRegionStateClosure : public ShenandoahHeapRegionClosure {
 private:
-  ShenandoahHeap* _heap;
+  ShenandoahGeneration* const _generation;
+  ShenandoahHeap* const _heap;
   ShenandoahMarkingContext* const _ctx;
 public:
-  ShenandoahResetUpdateRegionStateClosure() :
+  ShenandoahResetUpdateRegionStateClosure(ShenandoahGeneration* generation) :
+    _generation(generation),
     _heap(ShenandoahHeap::heap()),
     _ctx(_heap->marking_context()) {}
 
   void heap_region_do(ShenandoahHeapRegion* r) override {
-    if (r->is_active()) {
+    if (r->is_active() && _generation->contains(r)) {
       // Reset live data and set TAMS optimistically. We would recheck these under the pause
       // anyway to capture any updates that happened since now.
       _ctx->capture_top_at_mark_start(r);
@@ -245,8 +247,8 @@ void ShenandoahGeneration::prepare_gc() {
 
   set_mark_incomplete();
 
-  // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
-  ShenandoahResetUpdateRegionStateClosure cl;
+  // Capture Top At Mark Start for this generation (typically young).
+  ShenandoahResetUpdateRegionStateClosure cl(this);
   parallel_region_iterate_free(&cl);
 }
 
