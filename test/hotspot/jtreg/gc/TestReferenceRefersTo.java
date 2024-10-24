@@ -84,7 +84,7 @@ public class TestReferenceRefersTo {
     private static void gcUntilOld(Object o) throws Exception {
         if (!WB.isObjectInOldGen(o)) {
             WB.fullGC();
-            if (!WB.isObjectInOldGen(o)) {
+            if (WB.isFullGCPromotesToOld() && !WB.isObjectInOldGen(o)) {
                 fail("object not promoted by full gc");
             }
         }

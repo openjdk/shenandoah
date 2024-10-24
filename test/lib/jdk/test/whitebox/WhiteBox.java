@@ -562,6 +562,9 @@ public class WhiteBox {
   // Force Full GC
   public native void fullGC();
 
+  // Does a full gc promote objects to the old generation (if one exists)
+  public native boolean isFullGCPromotesToOld();
+
   // Returns true if the current GC supports concurrent collection control.
   public native boolean supportsConcurrentGCBreakpoints();
 

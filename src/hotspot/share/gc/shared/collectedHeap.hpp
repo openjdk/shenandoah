@@ -480,6 +480,11 @@ protected:
   // this collector.  The default implementation returns false.
   virtual bool supports_concurrent_gc_breakpoints() const;
 
+  // Return true if full gc promotes objects to the old generation.
+  // Heaps that are non-generational should return true.
+  // The default implementation returns true.
+  virtual bool full_gc_promotes_to_old() const;
+
   // Workers used in non-GC safepoints for parallel safepoint cleanup. If this
   // method returns null, cleanup tasks are done serially in the VMThread. See
   // `SafepointSynchronize::do_cleanup_tasks` for details.

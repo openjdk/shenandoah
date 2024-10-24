@@ -106,6 +106,9 @@ public final class TestJNIWeak {
     private void gcUntilOld(Object o) {
         while (!WB.isObjectInOldGen(o)) {
             WB.fullGC();
+            if (!WB.isFullGCPromotesToOld()) {
+                break;
+            }
         }
     }
 
