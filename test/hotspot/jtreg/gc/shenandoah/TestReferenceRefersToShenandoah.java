@@ -32,7 +32,6 @@ package gc.shenandoah;
  *      -Xbootclasspath/a:.
  *      -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *      -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=satb
- *      -Xlog:gc*=info,gc+breakpoint=trace
  *      gc.shenandoah.TestReferenceRefersToShenandoah
  */
 
@@ -46,7 +45,6 @@ package gc.shenandoah;
  *      -Xbootclasspath/a:.
  *      -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *      -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=satb -XX:ShenandoahGarbageThreshold=100 -Xmx100m
- *      -Xlog:gc*=info,gc+breakpoint=trace
  *      gc.shenandoah.TestReferenceRefersToShenandoah
  */
 
@@ -59,7 +57,6 @@ package gc.shenandoah;
  *      -Xbootclasspath/a:.
  *      -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *      -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational
- *      -Xlog:gc*=info,gc+breakpoint=trace
  *      gc.shenandoah.TestReferenceRefersToShenandoah
  */
 
@@ -73,7 +70,6 @@ package gc.shenandoah;
  *      -Xbootclasspath/a:.
  *      -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *      -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational -XX:ShenandoahGarbageThreshold=100 -Xmx100m
- *      -Xlog:gc*=info,gc+breakpoint=trace
  *      gc.shenandoah.TestReferenceRefersToShenandoah
  */
 
@@ -125,22 +121,11 @@ public class TestReferenceRefersToShenandoah {
     }
 
     private static void gcUntilOld(Object o) throws Exception {
-        int i = 0;
-        while (!WB.isObjectInOldGen(o)) {
+        if (!WB.isObjectInOldGen(o)) {
             WB.fullGC();
-            if (i++ > 1000 && !WB.isObjectInOldGen(o)) {
-               if (WB.isFullGCPromotesToOld()) {
-            // if (WB.isFullGCPromotesToOld() && !WB.isObjectInOldGen(o)) {
-                  fail("Failing: object not promoted after " + i + " full gcs");
-                } else {
-                  break;
-                }
+            if (WB.isFullGCPromotesToOld() && !WB.isObjectInOldGen(o)) {
+                fail("object not promoted by full gc");
             }
-        }
-        if (WB.isObjectInOldGen(o)) {
-            System.out.println("object promoted after " + i + " full gcs");
-        } else {
-            System.out.println("Proceeding: object NOT promoted after " + i + " full gcs");
         }
     }
 
@@ -247,7 +232,6 @@ public class TestReferenceRefersToShenandoah {
             WB.concurrentGCRunToIdle();
 
             progress("verify expected clears");
-            // ysr
             expectCleared(testPhantom1, "testPhantom1");
             expectCleared(testWeak2, "testWeak2");
             expectValue(testWeak3, testObject3, "testWeak3");
