@@ -200,6 +200,8 @@ void ShenandoahGeneration::reset_mark_bitmap(bool include_not_affiliated) {
 
   ShenandoahResetBitmapTask task(this, include_not_affiliated);
   heap->workers()->run_task(&task);
+  // Always set mark incomplete after reseting mark bitmap.
+  set_mark_incomplete();
 }
 
 // The ideal is to swap the remembered set so the safepoint effort is no more than a few pointer manipulations.
@@ -238,11 +240,14 @@ void ShenandoahGeneration::prepare_gc() {
       assert(heap->young_generation()->is_bitmap_clear(), "Bitmap of young generation must be clear.");
       //Only need to reset bitmap for old generation.
       heap->old_generation()->reset_mark_bitmap(false);
+      set_mark_incomplete();
     } else {
       reset_mark_bitmap();
     }
   }
-  set_mark_incomplete();
+  assert(!is_mark_complete(), "Must not.");
+  assert(is_bitmap_clear(), "Bitmap must be clear.");
+
   // For next cycle
   set_need_bitmap_reset();
 
