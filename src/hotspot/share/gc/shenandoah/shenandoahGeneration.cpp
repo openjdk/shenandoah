@@ -238,14 +238,14 @@ void ShenandoahGeneration::prepare_gc() {
       assert(heap->young_generation()->is_bitmap_clear(), "Bitmap of young generation must be clear.");
       //Only need to reset bitmap for old generation.
       heap->old_generation()->reset_mark_bitmap(false);
+      heap->old_generation()->set_mark_incomplete();
     } else {
       reset_mark_bitmap();
+      set_mark_incomplete();
     }
   }
   // For next cycle
   set_need_bitmap_reset();
-
-  set_mark_incomplete();
 
   // Capture Top At Mark Start for this generation (typically young).
   ShenandoahResetUpdateRegionStateClosure cl(this);
