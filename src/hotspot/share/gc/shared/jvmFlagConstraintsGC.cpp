@@ -41,9 +41,6 @@
 #if INCLUDE_G1GC
 #include "gc/g1/jvmFlagConstraintsG1.hpp"
 #endif
-#if INCLUDE_PARALLELGC
-#include "gc/parallel/jvmFlagConstraintsParallel.hpp"
-#endif
 
 // Some flags that have default values that indicate that the
 // JVM should automatically determine an appropriate value
@@ -175,10 +172,13 @@ JVMFlag::Error MaxMetaspaceFreeRatioConstraintFunc(uint value, bool verbose) {
 }
 
 JVMFlag::Error InitialTenuringThresholdConstraintFunc(uint value, bool verbose) {
-#if INCLUDE_PARALLELGC
-  JVMFlag::Error status = InitialTenuringThresholdConstraintFuncParallel(value, verbose);
-  if (status != JVMFlag::SUCCESS) {
-    return status;
+#if defined(INCLUDE_PARALLELGC) || defined(INCLUDE_SHENANDOAHGC)
+  if ((UseParallelGC || UseShenandoahGC) && (value > MaxTenuringThreshold)) {
+    JVMFlag::printError(verbose,
+                        "InitialTenuringThreshold (%u) must be "
+                        "less than or equal to MaxTenuringThreshold (%u)\n",
+                        value, MaxTenuringThreshold);
+    return JVMFlag::VIOLATES_CONSTRAINT;
   }
 #endif
 
@@ -186,10 +186,13 @@ JVMFlag::Error InitialTenuringThresholdConstraintFunc(uint value, bool verbose) 
 }
 
 JVMFlag::Error MaxTenuringThresholdConstraintFunc(uint value, bool verbose) {
-#if INCLUDE_PARALLELGC
-  JVMFlag::Error status = MaxTenuringThresholdConstraintFuncParallel(value, verbose);
-  if (status != JVMFlag::SUCCESS) {
-    return status;
+#if defined(INCLUDE_PARALLELGC) || defined(INCLUDE_SHENANDOAHGC)
+  if ((UseParallelGC || UseShenandoahGC) && (value < InitialTenuringThreshold)) {
+    JVMFlag::printError(verbose,
+                        "MaxTenuringThreshold (%u) must be "
+                        "greater than or equal to InitialTenuringThreshold (%u)\n",
+                        value, InitialTenuringThreshold);
+    return JVMFlag::VIOLATES_CONSTRAINT;
   }
 #endif
 

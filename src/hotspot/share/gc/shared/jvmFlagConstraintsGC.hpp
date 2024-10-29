@@ -31,9 +31,6 @@
 #if INCLUDE_G1GC
 #include "gc/g1/jvmFlagConstraintsG1.hpp"
 #endif
-#if INCLUDE_PARALLELGC
-#include "gc/parallel/jvmFlagConstraintsParallel.hpp"
-#endif
 
 /*
  * Here we have GC arguments constraints functions, which are called automatically
@@ -74,7 +71,6 @@ JVMFlag::Error MaxPLABSizeBounds(const char* name, size_t value, bool verbose);
 
 #define GC_CONSTRAINTS(f)                      \
   SHARED_GC_CONSTRAINTS(f)                     \
-  G1GC_ONLY(G1_GC_CONSTRAINTS(f))              \
-  PARALLELGC_ONLY(PARALLEL_GC_CONSTRAINTS(f))
+  G1GC_ONLY(G1_GC_CONSTRAINTS(f))
 
 #endif // SHARE_GC_SHARED_JVMFLAGCONSTRAINTSGC_HPP
