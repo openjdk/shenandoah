@@ -30,6 +30,8 @@
 class ShenandoahCollectionSetPreselector : public StackObj {
   ShenandoahCollectionSet* _cset;
   bool* _pset;
+  ResourceMark _rm;
+
 public:
   ShenandoahCollectionSetPreselector(ShenandoahCollectionSet* cset, size_t num_regions):
     _cset(cset) {
