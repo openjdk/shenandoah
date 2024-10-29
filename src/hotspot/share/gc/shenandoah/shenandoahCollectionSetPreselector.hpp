@@ -26,6 +26,7 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHCOLLECTIONSETPRESELECTOR_HPP
 
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
+#include "memory/resourceArea.hpp"
 
 class ShenandoahCollectionSetPreselector : public StackObj {
   ShenandoahCollectionSet* _cset;
