@@ -415,7 +415,7 @@ void ShenandoahBarrierSet::arraycopy_barrier(T* src, T* dst, size_t count) {
   if (count == 0) {
     return;
   }
-  int gc_state = _heap->gc_state();
+  char gc_state = ShenandoahThreadLocalData::gc_state(Thread::current());
   if ((gc_state & ShenandoahHeap::YOUNG_MARKING) != 0) {
     arraycopy_marking(src, dst, count, false);
     return;
