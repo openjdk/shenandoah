@@ -452,7 +452,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   } else if (unaffiliated_old_regions > 0) {
     // excess_old < unaffiliated old: we can give back MIN(excess_old/region_size_bytes, unaffiliated_old_regions)
     size_t excess_regions = excess_old / region_size_bytes;
-    size_t regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
+    regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
   }
 
   if (regions_to_xfer > 0) {
