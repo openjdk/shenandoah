@@ -1607,11 +1607,11 @@ void ShenandoahFreeSet::establish_generation_sizes(size_t young_region_count, si
 
     if (new_old_capacity > original_old_capacity) {
       size_t region_count = (new_old_capacity - original_old_capacity) / region_size_bytes;
-      log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " PROPERFMT,
+      log_debug(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " PROPERFMT,
                    region_count, young_gen->name(), old_gen->name(), PROPERFMTARGS(new_old_capacity));
     } else if (new_old_capacity < original_old_capacity) {
       size_t region_count = (original_old_capacity - new_old_capacity) / region_size_bytes;
-      log_info(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " PROPERFMT,
+      log_debug(gc)("Transfer " SIZE_FORMAT " region(s) from %s to %s, yielding increased size: " PROPERFMT,
                    region_count, old_gen->name(), young_gen->name(), PROPERFMTARGS(new_young_capacity));
     }
     // This balances generations, so clear any pending request to balance.

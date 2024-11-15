@@ -403,17 +403,17 @@ void ShenandoahGenerationalControlThread::service_concurrent_normal_cycle(Shenan
       // in this case. Promoted objects should be above the TAMS in the old regions
       // they end up in, but we have to be sure we don't promote into any regions
       // that are in the cset.
-      log_info(gc, ergo)("Start GC cycle (YOUNG)");
+      log_info(gc, ergo)("Start GC cycle (Young)");
       service_concurrent_cycle(heap->young_generation(), cause, false);
       break;
     }
     case OLD: {
-      log_info(gc, ergo)("Start GC cycle (OLD)");
+      log_info(gc, ergo)("Start GC cycle (Old)");
       service_concurrent_old_cycle(heap, cause);
       break;
     }
     case GLOBAL: {
-      log_info(gc, ergo)("Start GC cycle (GLOBAL)");
+      log_info(gc, ergo)("Start GC cycle (Global)");
       service_concurrent_cycle(heap->global_generation(), cause, false);
       break;
     }
@@ -833,7 +833,7 @@ const char* ShenandoahGenerationalControlThread::gc_mode_name(ShenandoahGenerati
 
 void ShenandoahGenerationalControlThread::set_gc_mode(ShenandoahGenerationalControlThread::GCMode new_mode) {
   if (_mode != new_mode) {
-    log_info(gc)("Transition from: %s to: %s", gc_mode_name(_mode), gc_mode_name(new_mode));
+    log_debug(gc)("Transition from: %s to: %s", gc_mode_name(_mode), gc_mode_name(new_mode));
     MonitorLocker ml(&_regulator_lock, Mutex::_no_safepoint_check_flag);
     _mode = new_mode;
     ml.notify_all();

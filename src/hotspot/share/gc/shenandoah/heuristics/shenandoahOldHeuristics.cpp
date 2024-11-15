@@ -122,9 +122,9 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
 
   size_t remaining_old_evacuation_budget = old_evacuation_budget;
-  log_info(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
-               byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
-               unprocessed_old_collection_candidates());
+  log_debug(gc)("Choose old regions for mixed collection: old evacuation budget: " SIZE_FORMAT "%s, candidates: %u",
+                byte_size_in_proper_unit(old_evacuation_budget), proper_unit_for_byte_size(old_evacuation_budget),
+                unprocessed_old_collection_candidates());
 
   size_t lost_evacuation_capacity = 0;
 
@@ -209,10 +209,10 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
   }
   decrease_unprocessed_old_collection_candidates_live_memory(evacuated_old_bytes);
   if (included_old_regions > 0) {
-    log_info(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
-                 included_old_regions,
-                 byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes),
-                 byte_size_in_proper_unit(collected_old_bytes), proper_unit_for_byte_size(collected_old_bytes));
+    log_debug(gc)("Old-gen piggyback evac (" UINT32_FORMAT " regions, evacuating " SIZE_FORMAT "%s, reclaiming: " SIZE_FORMAT "%s)",
+                  included_old_regions,
+                  byte_size_in_proper_unit(evacuated_old_bytes), proper_unit_for_byte_size(evacuated_old_bytes),
+                  byte_size_in_proper_unit(collected_old_bytes), proper_unit_for_byte_size(collected_old_bytes));
   }
 
   if (unprocessed_old_collection_candidates() == 0) {
@@ -228,17 +228,17 @@ bool ShenandoahOldHeuristics::prime_collection_set(ShenandoahCollectionSet* coll
     // if they are all pinned we transition to a state that will allow us to make these uncollected
     // (pinned) regions parsable.
     if (all_candidates_are_pinned()) {
-      log_info(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
+      log_debug(gc)("All candidate regions " UINT32_FORMAT " are pinned", unprocessed_old_collection_candidates());
       _old_generation->abandon_mixed_evacuations();
     } else {
-      log_info(gc)("No regions selected for mixed collection. "
-                   "Old evacuation budget: " PROPERFMT ", Remaining evacuation budget: " PROPERFMT
-                   ", Lost capacity: " PROPERFMT
-                   ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
-                   PROPERFMTARGS(old_evacuation_reserve),
-                   PROPERFMTARGS(remaining_old_evacuation_budget),
-                   PROPERFMTARGS(lost_evacuation_capacity),
-                   _next_old_collection_candidate, _last_old_collection_candidate);
+      log_debug(gc)("No regions selected for mixed collection. "
+                    "Old evacuation budget: " PROPERFMT ", Remaining evacuation budget: " PROPERFMT
+                    ", Lost capacity: " PROPERFMT
+                    ", Next candidate: " UINT32_FORMAT ", Last candidate: " UINT32_FORMAT,
+                    PROPERFMTARGS(old_evacuation_reserve),
+                    PROPERFMTARGS(remaining_old_evacuation_budget),
+                    PROPERFMTARGS(lost_evacuation_capacity),
+                    _next_old_collection_candidate, _last_old_collection_candidate);
     }
   }
 
@@ -468,12 +468,12 @@ void ShenandoahOldHeuristics::prepare_for_old_collections() {
   const size_t mixed_evac_live = old_candidates * region_size_bytes - (candidates_garbage + unfragmented);
   set_unprocessed_old_collection_candidates_live_memory(mixed_evac_live);
 
-  log_info(gc)("Old-Gen Collectable Garbage: " PROPERFMT " consolidated with free: " PROPERFMT ", over " SIZE_FORMAT " regions",
-               PROPERFMTARGS(collectable_garbage), PROPERFMTARGS(unfragmented), old_candidates);
-  log_info(gc)("Old-Gen Immediate Garbage: " PROPERFMT " over " SIZE_FORMAT " regions",
-              PROPERFMTARGS(immediate_garbage), immediate_regions);
-  log_info(gc)("Old regions selected for defragmentation: " SIZE_FORMAT, defrag_count);
-  log_info(gc)("Old regions not selected: " SIZE_FORMAT, total_uncollected_old_regions);
+  log_debug(gc)("Old-Gen Collectable Garbage: " PROPERFMT " consolidated with free: " PROPERFMT ", over " SIZE_FORMAT " regions",
+                PROPERFMTARGS(collectable_garbage), PROPERFMTARGS(unfragmented), old_candidates);
+  log_debug(gc)("Old-Gen Immediate Garbage: " PROPERFMT " over " SIZE_FORMAT " regions",
+               PROPERFMTARGS(immediate_garbage), immediate_regions);
+  log_debug(gc)("Old regions selected for defragmentation: " SIZE_FORMAT, defrag_count);
+  log_debug(gc)("Old regions not selected: " SIZE_FORMAT, total_uncollected_old_regions);
 
   if (unprocessed_old_collection_candidates() > 0) {
     _old_generation->transition_to(ShenandoahOldGeneration::EVACUATING);
