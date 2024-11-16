@@ -154,7 +154,7 @@ void ShenandoahCardCluster::register_object(HeapWord* address) {
 void ShenandoahCardCluster::register_object_without_lock(HeapWord* address) {
   size_t card_at_start = _rs->card_index_for_addr(address);
   HeapWord* card_start_address = _rs->addr_for_card_index(card_at_start);
-  uint8_t offset_in_card = address - card_start_address;
+  uint8_t offset_in_card = checked_cast<uint8_t>(pointer_delta(address, card_start_address, 1));
 
   if (!starts_object(card_at_start)) {
     set_starts_object_bit(card_at_start);
@@ -886,7 +886,6 @@ ShenandoahRegionChunkIterator::ShenandoahRegionChunkIterator(ShenandoahHeap* hea
 
   size_t previous_group_span = _group_entries[0] * _group_chunk_size[0];
   for (size_t i = 1; i < _num_groups; i++) {
-    size_t previous_group_entries = (i == 1)? _group_entries[0]: (_group_entries[i-1] - _group_entries[i-2]);
     _group_chunk_size[i] = _group_chunk_size[i-1] / 2;
     size_t chunks_in_group = _regular_group_size;
     size_t this_group_span = _group_chunk_size[i] * chunks_in_group;
