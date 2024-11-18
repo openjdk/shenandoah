@@ -378,7 +378,7 @@ void ShenandoahOldGeneration::prepare_gc() {
 bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
-  static const char* msg = "Coalescing and filling (OLD)";
+  static const char* msg = "Coalescing and filling (Old)";
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_coalesce_and_fill);
 
   TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
