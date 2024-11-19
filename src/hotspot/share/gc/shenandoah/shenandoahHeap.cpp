@@ -60,7 +60,6 @@
 #include "gc/shenandoah/shenandoahMemoryPool.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahParallelCleaning.inline.hpp"
@@ -573,8 +572,12 @@ void ShenandoahHeap::print_on(outputStream* st) const {
 
   st->print("Status: ");
   if (has_forwarded_objects())                 st->print("has forwarded objects, ");
-  if (is_concurrent_old_mark_in_progress())    st->print("old marking, ");
-  if (is_concurrent_young_mark_in_progress())  st->print("young marking, ");
+  if (!mode()->is_generational()) {
+    if (is_concurrent_mark_in_progress())      st->print("marking,");
+  } else {
+    if (is_concurrent_old_mark_in_progress())    st->print("old marking, ");
+    if (is_concurrent_young_mark_in_progress())  st->print("young marking, ");
+  }
   if (is_evacuation_in_progress())             st->print("evacuating, ");
   if (is_update_refs_in_progress())            st->print("updating refs, ");
   if (is_degenerated_gc_in_progress())         st->print("degenerated gc, ");
@@ -2143,8 +2146,8 @@ void ShenandoahHeap::stw_process_weak_roots(bool full_gc) {
   // Cleanup weak roots
   if (has_forwarded_objects()) {
     ShenandoahForwardedIsAliveClosure is_alive;
-    ShenandoahUpdateRefsClosure keep_alive;
-    ShenandoahParallelWeakRootsCleaningTask<ShenandoahForwardedIsAliveClosure, ShenandoahUpdateRefsClosure>
+    ShenandoahNonConcUpdateRefsClosure keep_alive;
+    ShenandoahParallelWeakRootsCleaningTask<ShenandoahForwardedIsAliveClosure, ShenandoahNonConcUpdateRefsClosure>
       cleaning_task(timing_phase, &is_alive, &keep_alive, num_workers);
     _workers->run_task(&cleaning_task);
   } else {
@@ -2332,7 +2335,7 @@ public:
       do_work<ShenandoahConcUpdateRefsClosure>(worker_id);
     } else {
       ShenandoahParallelWorkerSession worker_session(worker_id);
-      do_work<ShenandoahSTWUpdateRefsClosure>(worker_id);
+      do_work<ShenandoahNonConcUpdateRefsClosure>(worker_id);
     }
   }
 

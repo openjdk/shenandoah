@@ -36,7 +36,7 @@ private:
 public:
   ShenandoahYoungGeneration(uint max_queues, size_t max_capacity, size_t max_soft_capacity);
 
-  virtual ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
+  ShenandoahHeuristics* initialize_heuristics(ShenandoahMode* gc_mode) override;
 
   const char* name() const override {
     return "YOUNG";
@@ -51,10 +51,11 @@ public:
 
   void parallel_heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
-  void parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
+  void parallel_heap_region_iterate_free(ShenandoahHeapRegionClosure* cl) override;
 
   void heap_region_iterate(ShenandoahHeapRegionClosure* cl) override;
 
+  bool contains(ShenandoahAffiliation affiliation) const override;
   bool contains(ShenandoahHeapRegion* region) const override;
   bool contains(oop obj) const override;
 
@@ -78,7 +79,7 @@ public:
 
   size_t soft_available() const override;
 
-  virtual void prepare_gc() override;
+  void prepare_gc() override;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHYOUNGGENERATION_HPP

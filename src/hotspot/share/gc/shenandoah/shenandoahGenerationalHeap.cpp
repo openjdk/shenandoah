@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 
 #include "gc/shenandoah/shenandoahAgeCensus.hpp"
+#include "gc/shenandoah/shenandoahClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGenerationalControlThread.hpp"
@@ -36,7 +37,6 @@
 #include "gc/shenandoah/shenandoahMemoryPool.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
-#include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahRegulatorThread.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
@@ -787,7 +787,7 @@ public:
       do_work<ShenandoahConcUpdateRefsClosure>(worker_id);
     } else {
       ShenandoahParallelWorkerSession worker_session(worker_id);
-      do_work<ShenandoahSTWUpdateRefsClosure>(worker_id);
+      do_work<ShenandoahNonConcUpdateRefsClosure>(worker_id);
     }
   }
 
@@ -1000,7 +1000,7 @@ void ShenandoahGenerationalHeap::update_heap_references(bool concurrent) {
   }
 }
 
-namespace ShenandoahCompositeRegionClosure {
+struct ShenandoahCompositeRegionClosure {
   template<typename C1, typename C2>
   class Closure : public ShenandoahHeapRegionClosure {
   private:
@@ -1020,12 +1020,11 @@ namespace ShenandoahCompositeRegionClosure {
     }
   };
 
-
   template<typename C1, typename C2>
-  Closure<C1, C2> of(C1 &c1, C2 &c2) {
+  static Closure<C1, C2> of(C1 &c1, C2 &c2) {
     return Closure<C1, C2>(c1, c2);
   }
-}
+};
 
 class ShenandoahUpdateRegionAges : public ShenandoahHeapRegionClosure {
 private:

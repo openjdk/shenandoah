@@ -77,7 +77,8 @@ public:
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahMarkingContext* const ctx = heap->marking_context();
     while (region != nullptr) {
-      bool needs_reset = _generation->contains(region) || !region->is_affiliated();
+      auto const affiliation = region->affiliation();
+      bool needs_reset = affiliation == FREE || _generation->contains(affiliation);
       if (needs_reset && heap->is_bitmap_slice_committed(region)) {
         ctx->clear_bitmap(region);
       }
@@ -233,10 +234,10 @@ void ShenandoahGeneration::prepare_gc() {
 
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
-  parallel_region_iterate_free(&cl);
+  parallel_heap_region_iterate_free(&cl);
 }
 
-void ShenandoahGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
+void ShenandoahGeneration::parallel_heap_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
   ShenandoahHeap::heap()->parallel_heap_region_iterate(cl);
 }
 
@@ -451,12 +452,14 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   } else if (unaffiliated_old_regions > 0) {
     // excess_old < unaffiliated old: we can give back MIN(excess_old/region_size_bytes, unaffiliated_old_regions)
     size_t excess_regions = excess_old / region_size_bytes;
-    size_t regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
+    regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
   }
 
   if (regions_to_xfer > 0) {
     bool result = ShenandoahGenerationalHeap::cast(heap)->generation_sizer()->transfer_to_young(regions_to_xfer);
-    assert(excess_old > regions_to_xfer * region_size_bytes, "Cannot xfer more than excess old");
+    assert(excess_old >= regions_to_xfer * region_size_bytes,
+           "Cannot transfer (" SIZE_FORMAT ", " SIZE_FORMAT ") more than excess old (" SIZE_FORMAT ")",
+           regions_to_xfer, region_size_bytes, excess_old);
     excess_old -= regions_to_xfer * region_size_bytes;
     log_info(gc, ergo)("%s transferred " SIZE_FORMAT " excess regions to young before start of evacuation",
                        result? "Successfully": "Unsuccessfully", regions_to_xfer);
@@ -698,7 +701,6 @@ void ShenandoahGeneration::prepare_regions_and_collection_set(bool concurrent) {
     if (is_generational) {
       // Seed the collection set with resource area-allocated
       // preselected regions, which are removed when we exit this scope.
-      ResourceMark rm;
       ShenandoahCollectionSetPreselector preselector(collection_set, heap->num_regions());
 
       // Find the amount that will be promoted, regions that will be promoted in

@@ -600,10 +600,15 @@ public:
   // Use is_in_reserved to check if object is within heap bounds.
   bool is_in(const void* p) const override;
 
+  // Returns true if the given oop belongs to a generation that is actively being collected.
   inline bool is_in_active_generation(oop obj) const;
   inline bool is_in_young(const void* p) const;
   inline bool is_in_old(const void* p) const;
-  inline bool is_old(oop pobj) const;
+
+  // Returns true iff the young generation is being collected and the given pointer
+  // is in the old generation. This is used to prevent the young collection from treating
+  // such an object as unreachable.
+  inline bool is_in_old_during_young_collection(oop obj) const;
 
   inline ShenandoahAffiliation region_affiliation(const ShenandoahHeapRegion* r);
   inline void set_affiliation(ShenandoahHeapRegion* r, ShenandoahAffiliation new_affiliation);
@@ -656,7 +661,7 @@ public:
 
 // ---------- CDS archive support
 
-  bool can_load_archived_objects() const override { return UseCompressedOops && !ShenandoahCardBarrier; }
+  bool can_load_archived_objects() const override { return !ShenandoahCardBarrier; }
   HeapWord* allocate_loaded_archive_space(size_t size) override;
   void complete_loaded_archive_space(MemRegion archive_space) override;
 
@@ -773,7 +778,7 @@ public:
   inline void conc_update_with_forwarded(T* p);
 
   template <class T>
-  inline void update_with_forwarded(T* p);
+  inline void non_conc_update_with_forwarded(T* p);
 
   static inline void atomic_update_oop(oop update,       oop* addr,       oop compare);
   static inline void atomic_update_oop(oop update, narrowOop* addr,       oop compare);
