@@ -234,10 +234,10 @@ void ShenandoahGeneration::prepare_gc() {
 
   // Capture Top At Mark Start for this generation (typically young) and reset mark bitmap.
   ShenandoahResetUpdateRegionStateClosure cl;
-  parallel_region_iterate_free(&cl);
+  parallel_heap_region_iterate_free(&cl);
 }
 
-void ShenandoahGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
+void ShenandoahGeneration::parallel_heap_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
   ShenandoahHeap::heap()->parallel_heap_region_iterate(cl);
 }
 
@@ -452,12 +452,14 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   } else if (unaffiliated_old_regions > 0) {
     // excess_old < unaffiliated old: we can give back MIN(excess_old/region_size_bytes, unaffiliated_old_regions)
     size_t excess_regions = excess_old / region_size_bytes;
-    size_t regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
+    regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
   }
 
   if (regions_to_xfer > 0) {
     bool result = ShenandoahGenerationalHeap::cast(heap)->generation_sizer()->transfer_to_young(regions_to_xfer);
-    assert(excess_old > regions_to_xfer * region_size_bytes, "Cannot xfer more than excess old");
+    assert(excess_old >= regions_to_xfer * region_size_bytes,
+           "Cannot transfer (" SIZE_FORMAT ", " SIZE_FORMAT ") more than excess old (" SIZE_FORMAT ")",
+           regions_to_xfer, region_size_bytes, excess_old);
     excess_old -= regions_to_xfer * region_size_bytes;
     log_info(gc, ergo)("%s transferred " SIZE_FORMAT " excess regions to young before start of evacuation",
                        result? "Successfully": "Unsuccessfully", regions_to_xfer);
