@@ -635,7 +635,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     const size_t old_gen_capacity = _old_generation->max_capacity();
     const size_t heap_capacity = heap->capacity();
     const double percent = percent_of(old_gen_capacity, heap_capacity);
-    log_info(gc)("Trigger (OLD): Expansion failure, current size: " SIZE_FORMAT "%s which is %.1f%% of total heap size",
+    log_trigger("Expansion failure, current size: " SIZE_FORMAT "%s which is %.1f%% of total heap size",
                  byte_size_in_proper_unit(old_gen_capacity), proper_unit_for_byte_size(old_gen_capacity), percent);
     return true;
   }
@@ -654,11 +654,11 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     const size_t span_of_old_regions = (last_old_region >= first_old_region)? last_old_region + 1 - first_old_region: 0;
     const size_t fragmented_free = used_regions_size - used;
 
-    log_info(gc)("Trigger (OLD): Old has become fragmented: "
-                 SIZE_FORMAT "%s available bytes spread between range spanned from "
-                 SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT "), density: %.1f%%",
-                 byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free),
-                 first_old_region, last_old_region, span_of_old_regions, density * 100);
+    log_trigger("Old has become fragmented: "
+                SIZE_FORMAT "%s available bytes spread between range spanned from "
+                SIZE_FORMAT " to " SIZE_FORMAT " (" SIZE_FORMAT "), density: %.1f%%",
+                byte_size_in_proper_unit(fragmented_free), proper_unit_for_byte_size(fragmented_free),
+                first_old_region, last_old_region, span_of_old_regions, density * 100);
     return true;
   }
 
@@ -673,7 +673,7 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     if ((current_usage < ignore_threshold) &&
         ((consecutive_young_cycles = heap->shenandoah_policy()->consecutive_young_gc_count())
          < ShenandoahDoNotIgnoreGrowthAfterYoungCycles)) {
-      log_debug(gc)("Ignoring Trigger (OLD): Old has overgrown: usage (" SIZE_FORMAT "%s) is below threshold ("
+      log_debug(gc)("Ignoring Trigger: Old has overgrown: usage (" SIZE_FORMAT "%s) is below threshold ("
                     SIZE_FORMAT "%s) after " SIZE_FORMAT " consecutive completed young GCs",
                     byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage),
                     byte_size_in_proper_unit(ignore_threshold), proper_unit_for_byte_size(ignore_threshold),
@@ -682,10 +682,10 @@ bool ShenandoahOldHeuristics::should_start_gc() {
     } else if (current_usage > trigger_threshold) {
       const size_t live_at_previous_old = _old_generation->get_live_bytes_after_last_mark();
       const double percent_growth = percent_of(current_usage - live_at_previous_old, live_at_previous_old);
-      log_info(gc)("Trigger (OLD): Old has overgrown, live at end of previous OLD marking: "
-                   SIZE_FORMAT "%s, current usage: " SIZE_FORMAT "%s, percent growth: %.1f%%",
-                   byte_size_in_proper_unit(live_at_previous_old), proper_unit_for_byte_size(live_at_previous_old),
-                   byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage), percent_growth);
+      log_trigger("Old has overgrown, live at end of previous OLD marking: "
+                  SIZE_FORMAT "%s, current usage: " SIZE_FORMAT "%s, percent growth: %.1f%%",
+                  byte_size_in_proper_unit(live_at_previous_old), proper_unit_for_byte_size(live_at_previous_old),
+                  byte_size_in_proper_unit(current_usage), proper_unit_for_byte_size(current_usage), percent_growth);
       return true;
     } else {
       // Mixed evacuations have decreased current_usage such that old-growth trigger is no longer relevant.

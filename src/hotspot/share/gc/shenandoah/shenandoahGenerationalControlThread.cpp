@@ -104,8 +104,6 @@ void ShenandoahGenerationalControlThread::run_service() {
 
     if (alloc_failure_pending) {
       // Allocation failure takes precedence: we have to deal with it first thing
-      log_info(gc)("Trigger: Handle Allocation Failure");
-
       cause = GCCause::_allocation_failure;
 
       // Consume the degen point, and seed it with default value
@@ -122,6 +120,8 @@ void ShenandoahGenerationalControlThread::run_service() {
       generation = _degen_generation->type();
       bool old_gen_evacuation_failed = heap->old_generation()->clear_failed_evacuation();
 
+      heuristics->log_trigger("Handle Allocation Failure");
+
       // Do not bother with degenerated cycle if old generation evacuation failed or if humongous allocation failed
       if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle() &&
           !old_gen_evacuation_failed && !humongous_alloc_failure_pending) {
@@ -136,7 +136,7 @@ void ShenandoahGenerationalControlThread::run_service() {
       }
     } else if (is_gc_requested) {
       generation = GLOBAL;
-      log_info(gc)("Trigger: GC request (%s)", GCCause::to_string(cause));
+      global_heuristics->log_trigger("GC request (%s)", GCCause::to_string(cause));
       global_heuristics->record_requested_gc();
 
       if (ShenandoahCollectorPolicy::should_run_full_gc(cause)) {

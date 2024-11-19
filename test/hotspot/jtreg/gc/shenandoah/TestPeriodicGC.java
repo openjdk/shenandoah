@@ -63,11 +63,11 @@ public class TestPeriodicGC {
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
         output.shouldHaveExitValue(0);
         if (periodic) {
-            output.shouldContain("Trigger: Time since last GC");
-            output.shouldContain("Concurrent reset (Young)");
-            output.shouldContain("Concurrent reset (Old)");
+            output.shouldContain("Trigger (Young): Time since last GC");
+            output.shouldContain("Trigger (Old): Time since last GC");
         } else {
-            output.shouldNotContain("Trigger: Time since last GC");
+            output.shouldNotContain("Trigger (Young): Time since last GC");
+            output.shouldNotContain("Trigger (Old): Time since last GC");
         }
     }
 
