@@ -188,7 +188,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   if (heap->is_evacuation_in_progress()) {
     // Concurrently evacuate
     entry_evacuate();
-
     if (check_cancellation_and_abort(ShenandoahDegenPoint::_degenerated_evac)) {
       return false;
     }
