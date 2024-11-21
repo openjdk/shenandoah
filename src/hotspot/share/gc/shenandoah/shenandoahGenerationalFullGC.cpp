@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 
+#include "gc/shared/fullGCForwarding.inline.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shenandoah/shenandoahGenerationalFullGC.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
@@ -118,7 +119,7 @@ void ShenandoahGenerationalFullGC::balance_generations_after_gc(ShenandoahHeap* 
     gen_heap->generation_sizer()->force_transfer_to_old(old_regions_deficit);
   }
 
-  log_info(gc)("FullGC done: young usage: " PROPERFMT ", old usage: " PROPERFMT,
+  log_info(gc, ergo)("FullGC done: young usage: " PROPERFMT ", old usage: " PROPERFMT,
                PROPERFMTARGS(gen_heap->young_generation()->used()),
                PROPERFMTARGS(old_gen->used()));
 }
@@ -133,7 +134,7 @@ void ShenandoahGenerationalFullGC::balance_generations_after_rebuilding_free_set
 }
 
 void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {
-  LogTarget(Info, gc) lt;
+  LogTarget(Debug, gc) lt;
   if (lt.is_enabled()) {
     size_t live_bytes_in_old = 0;
     for (size_t i = 0; i < heap->num_regions(); i++) {
@@ -142,7 +143,7 @@ void ShenandoahGenerationalFullGC::log_live_in_old(ShenandoahHeap* heap) {
         live_bytes_in_old += r->get_live_data_bytes();
       }
     }
-    log_info(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));
+    log_debug(gc)("Live bytes in old after STW mark: " PROPERFMT, PROPERFMTARGS(live_bytes_in_old));
   }
 }
 
@@ -333,7 +334,7 @@ void ShenandoahPrepareForGenerationalCompactionObjectClosure::do_object(oop p) {
     shenandoah_assert_not_forwarded(nullptr, p);
     if (_old_compact_point != cast_from_oop<HeapWord*>(p)) {
       _preserved_marks->push_if_necessary(p, p->mark());
-      p->forward_to(cast_to_oop(_old_compact_point));
+      FullGCForwarding::forward_to(p, cast_to_oop(_old_compact_point));
     }
     _old_compact_point += obj_size;
   } else {
@@ -381,7 +382,7 @@ void ShenandoahPrepareForGenerationalCompactionObjectClosure::do_object(oop p) {
 
     if (_young_compact_point != cast_from_oop<HeapWord*>(p)) {
       _preserved_marks->push_if_necessary(p, p->mark());
-      p->forward_to(cast_to_oop(_young_compact_point));
+      FullGCForwarding::forward_to(p, cast_to_oop(_young_compact_point));
     }
     _young_compact_point += obj_size;
   }
