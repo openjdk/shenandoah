@@ -270,8 +270,7 @@ inline bool ShenandoahHeap::check_cancelled_gc_and_yield(bool sts_active) {
 inline void ShenandoahHeap::clear_cancelled_gc(bool clear_oom_handler) {
   _cancelled_gc.set(CANCELLABLE);
   if (_cancel_requested_time > 0) {
-    double cancel_time = os::elapsedTime() - _cancel_requested_time;
-    log_info(gc)("GC cancellation took %.3fs", cancel_time);
+    log_debug(gc)("GC cancellation took %.3fs", (os::elapsedTime() - _cancel_requested_time));
     _cancel_requested_time = 0;
   }
 
@@ -585,7 +584,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     oop obj = cast_to_oop(cs);
     assert(oopDesc::is_oop(obj), "sanity");
     assert(ctx->is_marked(obj), "object expected to be marked");
-    size_t size = obj->size();
+    size_t size = ShenandoahForwarding::size(obj);
     cl->do_object(obj);
     cs += size;
   }

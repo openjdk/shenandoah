@@ -28,7 +28,7 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahGeneration.hpp"
 #include "gc/shenandoah/shenandoahGenerationalHeap.hpp"
-#include "gc/shenandoah/shenandoahMarkClosures.hpp"
+#include "gc/shenandoah/shenandoahHeapRegionClosures.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
@@ -122,6 +122,38 @@ public:
   }
 
   bool is_thread_safe() override { return true; }
+};
+
+// Add [TAMS, top) volume over young regions. Used to correct age 0 cohort census
+// for adaptive tenuring when census is taken during marking.
+// In non-product builds, for the purposes of verification, we also collect the total
+// live objects in young regions as well.
+class ShenandoahUpdateCensusZeroCohortClosure : public ShenandoahHeapRegionClosure {
+private:
+  ShenandoahMarkingContext* const _ctx;
+  // Population size units are words (not bytes)
+  size_t _age0_pop;                // running tally of age0 population size
+  size_t _total_pop;               // total live population size
+public:
+  explicit ShenandoahUpdateCensusZeroCohortClosure(ShenandoahMarkingContext* ctx)
+    : _ctx(ctx), _age0_pop(0), _total_pop(0) {}
+
+  void heap_region_do(ShenandoahHeapRegion* r) override {
+    if (_ctx != nullptr && r->is_active()) {
+      assert(r->is_young(), "Young regions only");
+      HeapWord* tams = _ctx->top_at_mark_start(r);
+      HeapWord* top  = r->top();
+      if (top > tams) {
+        _age0_pop += pointer_delta(top, tams);
+      }
+      // TODO: check significance of _ctx != nullptr above, can that
+      // spoof _total_pop in some corner cases?
+      NOT_PRODUCT(_total_pop += r->get_live_data_words();)
+    }
+  }
+
+  size_t get_age0_population()  const { return _age0_pop; }
+  size_t get_total_population() const { return _total_pop; }
 };
 
 void ShenandoahGeneration::confirm_heuristics_mode() {
@@ -253,10 +285,10 @@ void ShenandoahGeneration::prepare_gc() {
 
   // Capture Top At Mark Start for this generation (typically young).
   ShenandoahResetUpdateRegionStateClosure cl(this);
-  parallel_region_iterate_free(&cl);
+  parallel_heap_region_iterate_free(&cl);
 }
 
-void ShenandoahGeneration::parallel_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
+void ShenandoahGeneration::parallel_heap_region_iterate_free(ShenandoahHeapRegionClosure* cl) {
   ShenandoahHeap::heap()->parallel_heap_region_iterate(cl);
 }
 
@@ -396,7 +428,7 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   ShenandoahYoungGeneration* const young_generation = heap->young_generation();
 
   size_t old_evacuated = collection_set->get_old_bytes_reserved_for_evacuation();
-  size_t old_evacuated_committed = (size_t) (ShenandoahOldEvacWaste * old_evacuated);
+  size_t old_evacuated_committed = (size_t) (ShenandoahOldEvacWaste * double(old_evacuated));
   size_t old_evacuation_reserve = old_generation->get_evacuation_reserve();
 
   if (old_evacuated_committed > old_evacuation_reserve) {
@@ -413,10 +445,10 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   }
 
   size_t young_advance_promoted = collection_set->get_young_bytes_to_be_promoted();
-  size_t young_advance_promoted_reserve_used = (size_t) (ShenandoahPromoEvacWaste * young_advance_promoted);
+  size_t young_advance_promoted_reserve_used = (size_t) (ShenandoahPromoEvacWaste * double(young_advance_promoted));
 
   size_t young_evacuated = collection_set->get_young_bytes_reserved_for_evacuation();
-  size_t young_evacuated_reserve_used = (size_t) (ShenandoahEvacWaste * young_evacuated);
+  size_t young_evacuated_reserve_used = (size_t) (ShenandoahEvacWaste * double(young_evacuated));
 
   size_t total_young_available = young_generation->available_with_reserve();
   assert(young_evacuated_reserve_used <= total_young_available, "Cannot evacuate more than is available in young");
@@ -471,14 +503,16 @@ void ShenandoahGeneration::adjust_evacuation_budgets(ShenandoahHeap* const heap,
   } else if (unaffiliated_old_regions > 0) {
     // excess_old < unaffiliated old: we can give back MIN(excess_old/region_size_bytes, unaffiliated_old_regions)
     size_t excess_regions = excess_old / region_size_bytes;
-    size_t regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
+    regions_to_xfer = MIN2(excess_regions, unaffiliated_old_regions);
   }
 
   if (regions_to_xfer > 0) {
     bool result = ShenandoahGenerationalHeap::cast(heap)->generation_sizer()->transfer_to_young(regions_to_xfer);
-    assert(excess_old > regions_to_xfer * region_size_bytes, "Cannot xfer more than excess old");
+    assert(excess_old >= regions_to_xfer * region_size_bytes,
+           "Cannot transfer (" SIZE_FORMAT ", " SIZE_FORMAT ") more than excess old (" SIZE_FORMAT ")",
+           regions_to_xfer, region_size_bytes, excess_old);
     excess_old -= regions_to_xfer * region_size_bytes;
-    log_info(gc, ergo)("%s transferred " SIZE_FORMAT " excess regions to young before start of evacuation",
+    log_debug(gc, ergo)("%s transferred " SIZE_FORMAT " excess regions to young before start of evacuation",
                        result? "Successfully": "Unsuccessfully", regions_to_xfer);
   }
 
@@ -652,7 +686,7 @@ size_t ShenandoahGeneration::select_aged_regions(size_t old_available) {
       // We keep going even if one region is excluded from selection because we need to accumulate all eligible
       // regions that are not preselected into promo_potential
     }
-    log_info(gc)("Preselected " SIZE_FORMAT " regions containing " SIZE_FORMAT " live bytes,"
+    log_debug(gc)("Preselected " SIZE_FORMAT " regions containing " SIZE_FORMAT " live bytes,"
                  " consuming: " SIZE_FORMAT " of budgeted: " SIZE_FORMAT,
                  selected_regions, selected_live, old_consumed, old_available);
   }
@@ -772,7 +806,7 @@ bool ShenandoahGeneration::is_bitmap_clear() {
     ShenandoahHeapRegion* r = heap->get_region(idx);
     if (contains(r) && r->is_affiliated()) {
       if (heap->is_bitmap_slice_committed(r) && (context->top_at_mark_start(r) > r->bottom()) &&
-          !context->is_bitmap_clear_range(r->bottom(), r->end())) {
+          !context->is_bitmap_range_within_region_clear(r->bottom(), r->end())) {
         return false;
       }
     }

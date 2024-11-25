@@ -30,7 +30,6 @@
 #include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/collectedHeap.hpp"
-#include "gc/shenandoah/heuristics/shenandoahSpaceInfo.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahController.hpp"
@@ -121,17 +120,6 @@ public:
 typedef ShenandoahLock    ShenandoahHeapLock;
 typedef ShenandoahLocker  ShenandoahHeapLocker;
 typedef Stack<oop, mtGC>  ShenandoahScanObjectStack;
-
-class ShenandoahSynchronizePinnedRegionStates : public ShenandoahHeapRegionClosure {
-private:
-  ShenandoahHeapLock* const _lock;
-
-public:
-  ShenandoahSynchronizePinnedRegionStates();
-
-  void heap_region_do(ShenandoahHeapRegion* r) override;
-  bool is_thread_safe() override { return true; }
-};
 
 // Shenandoah GC is low-pause concurrent GC that uses Brooks forwarding pointers
 // to encode forwarding data. See BrooksPointer for details on forwarding data encoding.
@@ -751,8 +739,8 @@ private:
   ShenandoahEvacOOMHandler _oom_evac_handler;
 
   oop try_evacuate_object(oop src, Thread* thread, ShenandoahHeapRegion* from_region, ShenandoahAffiliation target_gen);
-public:
 
+public:
   static address in_cset_fast_test_addr();
 
   ShenandoahCollectionSet* collection_set() const { return _collection_set; }
